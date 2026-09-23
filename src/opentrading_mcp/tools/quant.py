@@ -80,19 +80,74 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def quant_factors() -> dict[str, Any]:
-        """Factor mining sandbox status. Use to expand the feature universe."""
-        return make_envelope(
-            {"sandbox": "local", "factors": []}, source="local", availability="empty"
-        )
+    async def quant_factors(symbol: str = "VCB") -> dict[str, Any]:
+        """Momentum, volatility and drawdown factors from candles. Use to expand features."""
+        try:
+            candles = await run_blocking(
+                functools.partial(vn_p.quote_history, symbol, 120),
+                "quant_factors",
+                timeout_secs=60.0,
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "quant_factors"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        closes = [c["c"] for c in candles if c["c"]]
+        if len(closes) < 30:
+            return make_envelope(
+                {"symbol": symbol.upper()}, source="vnstock", availability="empty"
+            )
+        rets = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
+        import statistics
+
+        window = closes[-20:]
+        factors = {
+            "symbol": symbol.upper(),
+            "momentum_20d_pct": round((closes[-1] - closes[-20]) / closes[-20] * 100, 2),
+            "vol_20d_ann_pct": round(statistics.pstdev(rets[-20:]) * (252 ** 0.5) * 100, 2),
+            "max_dd_20d_pct": round((min(window) - max(window)) / max(window) * 100, 2),
+        }
+        return make_envelope(factors, source="computed-local")
 
     @server.tool(annotations=READ_ONLY)
-    async def scenario_simulate(scenario: str) -> dict[str, Any]:
-        """What-if simulation with explicit assumptions. Use for sizing under uncertainty."""
+    async def scenario_simulate(
+        scenario: str, symbol: str = "VCB", shock_pct: float = -5.0
+    ) -> dict[str, Any]:
+        """Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing."""
+        try:
+            candles = await run_blocking(
+                functools.partial(vn_p.quote_history, symbol, 10),
+                "scenario_simulate",
+                timeout_secs=60.0,
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "scenario_simulate"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        closes = [c["c"] for c in candles if c["c"]]
+        if not closes:
+            return make_envelope(
+                {"symbol": symbol.upper()}, source="vnstock", availability="empty"
+            )
+        last = closes[-1]
+        shocked = round(last * (1 + shock_pct / 100), 2)
         return make_envelope(
-            {"scenario": scenario, "result": "stub: wire simulate.py next"},
-            source="stub",
-            availability="empty",
+            {
+                "scenario": scenario,
+                "symbol": symbol.upper(),
+                "last_close": last,
+                "shock_pct": shock_pct,
+                "shocked_price": shocked,
+                "pnl_per_1000_shares": round((shocked - last) * 1000, 0),
+                "assumptions": ["linear shock, no liquidity slippage"],
+            },
+            source="computed-local",
         )
 
     return [
