@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
@@ -13,14 +14,19 @@ def quote_history(symbol: str, days: int = 365) -> list[dict[str, Any]]:
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     symbol = symbol.upper()
+    end = date.today().isoformat()
+    start = (date.today() - timedelta(days=max(days, 5) + 30)).isoformat()
+    frame = None
     for source in ("VCI", "KBS"):
         try:
-            frame = Quote(symbol=symbol, source=source).history(start=None, end=None, interval="1D")
-            break
+            candidate = Quote(symbol=symbol, source=source).history(
+                start=start, end=end, interval="1D"
+            )
+            if candidate is not None and len(candidate) > 0:
+                frame = candidate
+                break
         except Exception:
-            frame = None
-    else:
-        frame = None
+            continue
     if frame is None or len(frame) == 0:
         raise ProviderUnavailable(f"no candles for {symbol}")
     try:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -9,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext
+from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -59,8 +60,13 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         except ImportError:
             return _na("vn_fundamentals", "vnstock not installed")
         try:
-            data = Fundamental().equity(symbol.upper()).ratio(period=period)
+            data = await run_blocking(
+                functools.partial(Fundamental().equity(symbol.upper()).ratio, period=period),
+                "vn_fundamentals",
+            )
             return make_envelope({"symbol": symbol.upper(), "ratios": str(data)}, source="vnstock")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("vn_fundamentals", str(exc))
         except Exception as exc:
             return _na("vn_fundamentals", f"upstream failed: {exc}")
 
@@ -72,10 +78,14 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         except ImportError:
             return _na("vn_retail_gold", "vnstock not installed")
         try:
-            frame = Retail().gold(source="btmc")
+            frame = await run_blocking(
+                functools.partial(Retail().gold, source="btmc"), "vn_retail_gold"
+            )
             rows = frame.to_dict(orient="records")
             keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
             return make_envelope({"rows": keep or rows}, source="vnstock-retail")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("vn_retail_gold", str(exc))
         except Exception as exc:
             return _na("vn_retail_gold", f"upstream failed: {exc}")
 
@@ -87,8 +97,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         except ImportError:
             return _na("vn_retail_fx", "vnstock not installed")
         try:
-            frame = Retail().exchange_rate()
+            frame = await run_blocking(Retail().exchange_rate, "vn_retail_fx")
             return make_envelope({"rows": frame.to_dict(orient="records")}, source="vnstock-retail")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("vn_retail_fx", str(exc))
         except Exception as exc:
             return _na("vn_retail_fx", f"upstream failed: {exc}")
 

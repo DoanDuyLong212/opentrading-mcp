@@ -80,7 +80,14 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             data = vs_p._post(
                 "/Macro/GetReportDataByIDs",
-                {"termTypeID": term_type_id, "type": "CATEGORY", "listID": [category_id]},
+                {
+                    "termTypeID": term_type_id,
+                    "subTermTypeID": "",
+                    "fromDate": "2021-06-30",
+                    "toDate": "",
+                    "type": "CATEGORY",
+                    "listID[]": category_id,
+                },
             )
             return make_envelope({"category": category_id, "data": data}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
