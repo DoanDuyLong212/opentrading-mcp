@@ -97,9 +97,7 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         closes = [c["c"] for c in candles if c["c"]]
         if len(closes) < 30:
-            return make_envelope(
-                {"symbol": symbol.upper()}, source="vnstock", availability="empty"
-            )
+            return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
         rets = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
         import statistics
 
@@ -107,7 +105,7 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         factors = {
             "symbol": symbol.upper(),
             "momentum_20d_pct": round((closes[-1] - closes[-20]) / closes[-20] * 100, 2),
-            "vol_20d_ann_pct": round(statistics.pstdev(rets[-20:]) * (252 ** 0.5) * 100, 2),
+            "vol_20d_ann_pct": round(statistics.pstdev(rets[-20:]) * (252**0.5) * 100, 2),
             "max_dd_20d_pct": round((min(window) - max(window)) / max(window) * 100, 2),
         }
         return make_envelope(factors, source="computed-local")
@@ -132,9 +130,7 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         closes = [c["c"] for c in candles if c["c"]]
         if not closes:
-            return make_envelope(
-                {"symbol": symbol.upper()}, source="vnstock", availability="empty"
-            )
+            return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
         last = closes[-1]
         shocked = round(last * (1 + shock_pct / 100), 2)
         return make_envelope(
