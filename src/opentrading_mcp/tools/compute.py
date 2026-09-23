@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 import os
@@ -355,7 +356,13 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         """GDELT event counts for a query. Use for base-rate checks."""
         try:
             return make_envelope(await _call("e", intel_p.gdelt_events, query), source="gdelt")
-        except (ProviderUnavailable, ProviderBadData) as exc:
+        except ProviderUnavailable:
+            await asyncio.sleep(10)
+            try:
+                return make_envelope(await _call("e", intel_p.gdelt_events, query), source="gdelt")
+            except (ProviderUnavailable, ProviderBadData) as exc:
+                return _na("event_stats", str(exc))
+        except ProviderBadData as exc:
             return _na("event_stats", str(exc))
 
     @server.tool(annotations=READ_ONLY)

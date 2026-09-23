@@ -214,7 +214,9 @@ def _post(path: str, payload: dict[str, Any], timeout: int = 20) -> Any:
     raise ProviderUnavailable(f"vietstock retry exhausted: {path}")
 
 
-def _post_json(path: str, payload: dict[str, Any], timeout: int = 30) -> Any:
+def _post_json(
+    path: str, payload: dict[str, Any], timeout: int = 30, referer: str | None = None
+) -> Any:
     """JSON variant for /FinancialStatement* endpoints (same cookie session)."""
     try:
         client = _session_client()
@@ -224,7 +226,7 @@ def _post_json(path: str, payload: dict[str, Any], timeout: int = 30) -> Any:
         raise ProviderUnavailable(f"vietstock session unreachable: {path}") from exc
     headers = {
         "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Referer": f"{BASE}/",
+        "Referer": referer or f"{BASE}/",
         "Content-Type": "application/json",
         "X-Requested-With": "XMLHttpRequest",
     }
@@ -294,7 +296,11 @@ def financial_values(
         {"BusinessTypeId": btype, "ReportComponentCodes": "CD,KQ,LCTT"},
     )
     norm_list = norms if isinstance(norms, list) else norms.get("data", [])
-    ids = [str(n.get("ReportNormId")) for n in norm_list if n.get("ReportNormId")]
+    ids = [
+        str(n.get("ReportNormID") or n.get("ReportNormId") or "")
+        for n in norm_list
+        if isinstance(n, dict) and (n.get("ReportNormID") or n.get("ReportNormId"))
+    ]
     if not ids:
         raise ProviderBadData("vietstock returned no norms")
     params = build_list_params(symbol, years)
@@ -321,14 +327,54 @@ def documents(symbol: str, page_size: int = 60) -> Any:
 
 
 def reports_search(symbol: str = "", page_size: int = 50) -> Any:
-    return _post(
+    return _post_json(
         "/CompanyReport/CompanyReportSearch",
-        {"stockCode": symbol.upper(), "categoryId": 2, "pageSize": min(page_size, 50)},
+        {
+            "searchModel": {
+                "stockCode": symbol.upper() or None,
+                "keywords": None,
+                "fromDate": None,
+                "toDate": None,
+                "categoryId": 2,
+                "pageSize": min(page_size, 50),
+                "pageIndex": 1,
+            }
+        },
+        referer=f"{BASE}/truy-xuat-du-lieu/tin-tuc.htm",
     )
 
 
 def industry_tree() -> Any:
-    return _post_json("/FinancialStatementSector/GetTreeViewIndustryGICS", {})
+    return _post_industry_form("/FinancialStatementSector/GetTreeViewIndustryGICS", {})
+
+
+def _post_industry_form(path: str, payload: dict[str, Any]) -> Any:
+    """Industry endpoints use form posts with the analysis-page referer."""
+    try:
+        client = _session_client()
+    except (ProviderAuthMissing, ProviderBadData):
+        raise
+    try:
+        token = client.headers.get("__RequestVerificationToken") or _form_token(client)
+        response = client.post(
+            f"{BASE}{path}",
+            data={**{k: str(v) for k, v in payload.items()}, "__RequestVerificationToken": token},
+            headers={
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": f"{BASE}/truy-xuat-du-lieu/phan-tich-nganh.htm",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            },
+            timeout=20,
+        )
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock unreachable: {path}") from exc
+    try:
+        return json.loads(response.text.encode().decode("utf-8-sig"))
+    except ValueError as exc:
+        raise ProviderBadData(
+            f"vietstock non-JSON {response.status_code}: {response.text[:80]}"
+        ) from exc
 
 
 def stock_industry(industry_id: int) -> Any:
@@ -338,7 +384,10 @@ def stock_industry(industry_id: int) -> Any:
 
 
 def industry_heatmap() -> Any:
-    return _post_json("/Data/GetHeatmapGICS", {"industryCode": 0, "detailIndustry": True})
+    return _post_industry_form(
+        "/Data/GetHeatmapGICS",
+        {"industryCode": "0", "detailIndustry": "true", "detailStockCode": "false"},
+    )
 
 
 def top_liquidity(index: str = "VNINDEX") -> Any:

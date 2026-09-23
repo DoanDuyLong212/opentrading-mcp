@@ -177,10 +177,14 @@ def reference_equity(exchange: str = "HOSE") -> list[dict[str, Any]]:
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Reference().equity.list_by_exchange(exchange.upper())
+        frame = Reference().equity.list()
     except Exception as exc:
         raise ProviderUnavailable("vnstock reference failed") from exc
-    return _records(frame)
+    rows = _records(frame)
+    query = exchange.upper()
+    if query not in ("ALL", ""):
+        rows = [r for r in rows if query in str(r.get("symbol", "")).upper()]
+    return [{"exchange": exchange.upper(), **r} for r in rows]
 
 
 def company_info(symbol: str) -> dict[str, Any]:
@@ -189,14 +193,21 @@ def company_info(symbol: str) -> dict[str, Any]:
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        info = Company(symbol.upper(), "VCI").info()
+        client = Company(source="VCI", symbol=symbol.upper())
+        info = client.info()
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock company failed: {symbol}") from exc
     try:
         rows = info.to_dict(orient="records")
-        return {"symbol": symbol.upper(), "info": rows[0] if rows else {}}
+        data: dict[str, Any] = {"symbol": symbol.upper(), "info": rows[0] if rows else {}}
     except Exception:
         return {"symbol": symbol.upper(), "info": str(info)[:2000]}
+    for key, method in (("shareholders", "shareholders"), ("officers", "officers")):
+        try:
+            data[key] = _records(getattr(client, method)())
+        except Exception:
+            continue
+    return data
 
 
 def msn_fx_gold(days: int = 35) -> list[dict[str, Any]]:
@@ -204,10 +215,14 @@ def msn_fx_gold(days: int = 35) -> list[dict[str, Any]]:
         from vnstock.explorer import msn
     except ImportError as exc:
         raise ProviderUnavailable("vnstock msn explorer not installed") from exc
+    from datetime import date, timedelta
+
+    end = date.today().isoformat()
+    start = (date.today() - timedelta(days=max(days, 5))).isoformat()
     out: list[dict[str, Any]] = []
     for symbol_id in ("USDVND", "XAUUSD"):
         try:
-            frame = msn.Quote(symbol_id).history(days, "1D")
+            frame = msn.Quote(symbol_id).history(start=start, end=end, interval="1D")
             rows = frame.to_dict(orient="records")
             out.append(
                 {"symbol": symbol_id, "points": len(rows), "last": rows[-1] if rows else None}
