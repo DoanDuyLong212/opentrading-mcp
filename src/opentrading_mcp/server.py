@@ -13,9 +13,11 @@ Gap mapping (opencode / Claude / Cursor):
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 SERVER_INSTRUCTIONS = (
     "OpenTrading market-data MCP. Timezone Asia/Ho_Chi_Minh tz-aware. "
@@ -63,6 +65,14 @@ _REGISTER_BY_MODULE = {
 }
 
 
+def transport_security() -> TransportSecuritySettings | None:
+    raw = os.environ.get("MCP_ALLOWED_HOSTS", "").strip()
+    if not raw:
+        return None
+    hosts = [h.strip() for h in raw.split(",") if h.strip()]
+    return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts)
+
+
 def create_server(preset: str = "market") -> FastMCP:
     if preset not in PRESETS:
         raise ValueError(f"unknown preset {preset!r}, expected one of {PRESETS}")
@@ -73,6 +83,7 @@ def create_server(preset: str = "market") -> FastMCP:
         streamable_http_path="/mcp",
         sse_path="/sse",
         json_response=False,
+        transport_security=transport_security(),
     )
 
 
