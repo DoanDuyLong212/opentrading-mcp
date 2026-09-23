@@ -73,7 +73,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             data = await _call("vs_nn_flow", vs_p._post, "/data/KQGDGiaoDichNDTNNChart", {})
             return make_envelope({"flow": data}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vs_nn_flow", str(exc))
+            return _na(
+                "vs_nn_flow",
+                f"{exc} (fallback: dnse_foreign_flow is the primary source)",
+            )
 
     @server.tool(annotations=READ_ONLY)
     async def vs_categories() -> dict[str, Any]:

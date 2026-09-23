@@ -175,11 +175,19 @@ def _post(path: str, payload: dict[str, Any], timeout: int = 20) -> Any:
                 continue
             raise ProviderBadData(f"vietstock HTML shell for {path} (session rejected?)")
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
         except ValueError as exc:
             raise ProviderBadData(
                 f"vietstock non-JSON {response.status_code}: {text[:120]}"
             ) from exc
+        error = parsed.get("errorModel") if isinstance(parsed, dict) else None
+        if isinstance(error, dict) and error.get("ErrorCode"):
+            code = str(error.get("ErrorCode"))
+            message = str(error.get("ErrorMessage", code))
+            if "Permission" in code or "Upgrade" in code or "Limit" in code:
+                raise ProviderAuthMissing(f"vietstock {code}: {message}")
+            raise ProviderBadData(f"vietstock {code}: {message}")
+        return parsed
     raise ProviderUnavailable(f"vietstock retry exhausted: {path}")
 
 
