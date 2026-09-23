@@ -201,12 +201,13 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
 
     @server.tool(annotations=READ_ONLY)
-    async def insider_trading(symbol: str) -> dict[str, Any]:
-        """Insider trades. Fireant insider path unverified against current API."""
-        return _na(
-            "insider_trading",
-            f"no verified insider endpoint for {symbol.upper()} (check Fireant docs)",
-        )
+    async def insider_trading(symbol: str, limit: int = 10) -> dict[str, Any]:
+        """Insider deals via vnstock Company. Use for informed-flow reads."""
+        try:
+            rows = await _call("i", vn_p.insider_trading, symbol, limit)
+            return make_envelope({"symbol": symbol.upper(), "deals": rows}, source="vnstock")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("insider_trading", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def stock_overview(symbol: str) -> dict[str, Any]:

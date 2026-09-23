@@ -223,6 +223,20 @@ def company_info(symbol: str) -> dict[str, Any]:
     return data
 
 
+def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
+    try:
+        from vnstock import Company
+    except ImportError as exc:
+        raise ProviderUnavailable("vnstock not installed") from exc
+    try:
+        client = Company(source="VCI", symbol=symbol.upper())
+        frame = client.insider_trading()
+    except Exception as exc:
+        raise ProviderUnavailable(f"vnstock insider failed: {symbol}") from exc
+    rows = _records(frame)
+    return rows[: max(limit, 1)]
+
+
 def msn_fx_gold(days: int = 35) -> list[dict[str, Any]]:
     try:
         from vnstock.explorer import msn

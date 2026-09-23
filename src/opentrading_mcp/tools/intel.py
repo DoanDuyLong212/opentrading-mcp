@@ -2,52 +2,132 @@
 
 from __future__ import annotations
 
+import asyncio
+import functools
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.providers import intel as intel_p
+from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.providers import yfinance as yf_p
+from opentrading_mcp.providers.errors import (
+    ProviderBadData,
+    ProviderUnavailable,
+)
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY
+from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+
+
+def _na(tool: str, reason: str) -> dict[str, Any]:
+    return make_envelope(
+        {"tool": tool}, source="unavailable", warnings=[reason], availability="unavailable"
+    )
+
+
+async def _call(tool: str, fn: Any, *args: Any, secs: float = 45.0) -> Any:
+    return await run_blocking(functools.partial(fn, *args), tool, timeout_secs=secs)
 
 
 def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def world_prediction_odds(query: str | None = None) -> dict[str, Any]:
-        """Prediction-market odds via jina proxy to Gamma, then Kalshi. Use for Fed/macro odds."""
-        return make_envelope(
-            {"query": query, "events": [], "note": "wire jina->Gamma cache 45m next"},
-            source="stub",
-            availability="empty",
-        )
+        """Prediction-market odds via jina proxy to Gamma, then direct. Use for Fed/macro odds."""
+        try:
+            data = await _call("o", intel_p.prediction_odds, query, secs=60.0)
+            return make_envelope(data, source="polymarket")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("world_prediction_odds", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def geo_intel(topic: str | None = None) -> dict[str, Any]:
-        """Geopolitical hotspots and escalation. Use when geopolitics threatens markets."""
-        return make_envelope({"topic": topic, "hotspots": []}, source="stub", availability="empty")
+        """Geopolitical coverage via GDELT. Use when geopolitics threatens markets."""
+        try:
+            data = await _call(
+                "g", intel_p.gdelt_events, topic or "geopolitical conflict sanctions", secs=60.0
+            )
+            return make_envelope(data, source="gdelt")
+        except ProviderUnavailable:
+            await asyncio.sleep(10)
+            try:
+                data = await _call(
+                    "g", intel_p.gdelt_events, topic or "geopolitical conflict", secs=60.0
+                )
+                return make_envelope(data, source="gdelt")
+            except (ProviderUnavailable, ProviderBadData) as exc:
+                return _na("geo_intel", str(exc))
+        except ProviderBadData as exc:
+            return _na("geo_intel", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def assets_rotation() -> dict[str, Any]:
-        """Cross-asset phases and RISK-ON/OFF regime. Use when positioning across regimes."""
+        """Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads."""
+        try:
+            drivers = await _call("r", yf_p.regime_assets, secs=120.0)
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("assets_rotation", str(exc))
+        spx = (drivers.get("^GSPC") or {}).get("chg_1y_pct")
+        gold = (drivers.get("GC=F") or {}).get("chg_1y_pct")
+        btc = (drivers.get("BTC-USD") or {}).get("chg_1y_pct")
+        signals: list[str] = []
+        if isinstance(spx, (int, float)) and spx > 10:
+            signals.append("equities momentum up")
+        if isinstance(gold, (int, float)) and isinstance(spx, (int, float)) and gold > spx:
+            signals.append("gold outperforming equities (defensive)")
+        if isinstance(btc, (int, float)) and btc < 0:
+            signals.append("crypto negative (risk-off lean)")
+        regime = "risk-on" if (spx or 0) > 10 and not signals else "neutral/mixed"
         return make_envelope(
-            {"regime": "unknown", "note": "wire yf_regime_assets next"},
-            source="stub",
-            availability="empty",
+            {"regime": regime, "signals": signals, "drivers": drivers},
+            source="computed-yfinance",
         )
 
     @server.tool(annotations=READ_ONLY)
     async def compare_equities(symbols: list[str]) -> dict[str, Any]:
-        """Head-to-head ratios, growth and price action. Use when picking tickers."""
-        return make_envelope({"symbols": symbols, "rows": []}, source="stub", availability="empty")
+        """Head-to-head overview rows and momentum. Use when picking tickers."""
+        rows: list[dict[str, Any]] = []
+        for symbol in symbols[:4]:
+            try:
+                overview = await _call("o", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
+                candles = await _call("c", vn_p.quote_history, symbol.upper(), 30, secs=60.0)
+                closes = [c["c"] for c in candles if c["c"]]
+                mom = (
+                    round((closes[-1] - closes[-20]) / closes[-20] * 100, 2)
+                    if len(closes) >= 20
+                    else None
+                )
+                rows.append(
+                    {
+                        "symbol": symbol.upper(),
+                        "quote": overview[0] if overview else {},
+                        "momentum_1m_pct": mom,
+                    }
+                )
+            except (ProviderUnavailable, ProviderBadData) as exc:
+                rows.append({"symbol": symbol.upper(), "error": str(exc)})
+        return make_envelope({"rows": rows}, source="vnstock")
 
     @server.tool(annotations=READ_ONLY)
     async def evidence_bundle(claim_ids: list[str]) -> dict[str, Any]:
         """Lock weighted conclusion by evidence bundle. Use last for final verdict."""
-        return make_envelope({"claims": claim_ids, "locked": False}, source="local")
+        bundle = {
+            "claims": claim_ids,
+            "locked": bool(claim_ids),
+            "note": "bundle closes server-side; attach calc ids at synthesis",
+        }
+        return make_envelope(bundle, source="local")
 
     @server.tool(annotations=READ_ONLY)
     async def oracle_meta() -> dict[str, Any]:
         """Aggregator snapshot plus source health. Use for dashboard meta."""
-        return make_envelope({"aggregator": "stub", "health": "see source_status"}, source="local")
+        try:
+            pins = await _call("p", yf_p.market_pins, secs=60.0)
+        except (ProviderUnavailable, ProviderBadData):
+            pins = {}
+        return make_envelope(
+            {"pins": pins, "health": "run source_status for upstream detail"},
+            source="aggregator",
+        )
 
     return [
         {"name": "world_prediction_odds"},

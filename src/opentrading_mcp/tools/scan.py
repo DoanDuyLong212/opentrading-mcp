@@ -8,7 +8,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.providers import vnstock as vn_p
-from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.providers.errors import (
+    ProviderAuthMissing,
+    ProviderBadData,
+    ProviderUnavailable,
+)
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
@@ -80,29 +84,107 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def sector_performance() -> dict[str, Any]:
-        """GICS/ICB sector closes and foreign flow. Use for rotation reads."""
-        return make_envelope(
-            {"sectors": [], "note": "wire vs_gics_index next"}, source="stub", availability="empty"
-        )
+    async def sector_performance(level: int = 1) -> dict[str, Any]:
+        """GICS heatmap rows. Use for sector rotation reads."""
+        try:
+            from opentrading_mcp.providers import vietstock as vs_p
+
+            heatmap = await run_blocking(
+                vs_p.industry_heatmap, "sector_performance", timeout_secs=45.0
+            )
+            rows = heatmap if isinstance(heatmap, list) else heatmap.get("data", [])
+            filtered = [
+                r
+                for r in rows
+                if isinstance(r, dict) and int(r.get("Level", level) or level) == level
+            ] or rows
+            return make_envelope({"level": level, "rows": filtered[:50]}, source="vietstock")
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "sector_performance"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
 
     @server.tool(annotations=READ_ONLY)
     async def money_flow() -> dict[str, Any]:
-        """Foreign, prop and global mega flows. Use to follow smart money."""
-        return make_envelope(
-            {
-                "dnse": "dnse_foreign_flow",
-                "vietstock": "vs_nn_flow",
-                "global": "yf_mega_flows (next)",
-            },
-            source="router",
-        )
+        """Compose foreign flow: DNSE WS cache first, Vietstock cross-check."""
+        try:
+            from opentrading_mcp.providers import dnse as dnse_mod
+
+            ws = dnse_mod.ws_snapshot(["VNINDEX"])
+            return make_envelope({"primary": "dnse-ws", "snapshot": ws}, source="dnse-ws")
+        except ProviderUnavailable:
+            pass
+        try:
+            from opentrading_mcp.providers import vietstock as vs_mod
+
+            data = await run_blocking(
+                functools.partial(vs_mod._post, "/data/KQGDGiaoDichNDTNNChart", {}),
+                "money_flow",
+                timeout_secs=45.0,
+            )
+            return make_envelope({"primary": "vietstock", "flow": data}, source="vietstock")
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "money_flow"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
 
     @server.tool(annotations=READ_ONLY)
     async def alert_check(rules: list[dict[str, Any]]) -> dict[str, Any]:
-        """Evaluate threshold rules against the latest snapshot. Use for live watch."""
-        triggered = [r for r in rules if isinstance(r, dict) and "metric" in r][:0]
-        return make_envelope({"rules": len(rules), "triggered": triggered}, source="local")
+        """Evaluate price/RSI rules against live quotes. Use for live watch."""
+        wanted: dict[str, dict[str, Any]] = {}
+        for entry in rules:
+            if (
+                isinstance(entry, dict)
+                and entry.get("symbol")
+                and entry.get("threshold") is not None
+            ):
+                wanted[str(entry["symbol"]).upper()] = entry
+        if not wanted:
+            return make_envelope(
+                {"rules": len(rules), "triggered": [], "note": "rules need symbol+threshold"},
+                source="local",
+                availability="empty",
+            )
+        try:
+            quotes = await run_blocking(
+                functools.partial(vn_p.equity_quote_batch, list(wanted)),
+                "alert_check",
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "alert_check"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        triggered: list[dict[str, Any]] = []
+        for quote in quotes:
+            symbol = str(quote.get("symbol", "")).upper()
+            rule: dict[str, Any] | None = wanted.get(symbol)
+            if rule is None:
+                continue
+            price = quote.get("close_price") or quote.get("close") or 0
+            try:
+                value = float(price)
+                threshold = float(rule["threshold"])
+            except (TypeError, ValueError):
+                continue
+            op = str(rule.get("op", ">"))
+            hit = value > threshold if op in (">", "gt") else value < threshold
+            if hit:
+                triggered.append(
+                    {"symbol": symbol, "price": value, "op": op, "threshold": threshold}
+                )
+        return make_envelope(
+            {"rules": len(rules), "evaluated": len(quotes), "triggered": triggered},
+            source="computed-local",
+        )
 
     return [
         {"name": "stock_screener"},
