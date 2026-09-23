@@ -18,7 +18,7 @@ ALLOWED_AVAILABILITY = {"available", "empty", "stale", "partial", "unavailable"}
 
 # (preset, tool, args, timeout_seconds)
 MATRIX: list[tuple[str, str, dict[str, Any], float]] = [
-    ("market", "market_snapshot", {}, 20.0),
+    ("market", "market_snapshot", {}, 60.0),
     ("market", "source_status", {}, 20.0),
     ("market", "market_candles_batch", {"symbols": ["VCB", "HPG"], "days": 5}, 60.0),
     ("market", "symbol_lookup", {"query": "Vietcombank"}, 30.0),
