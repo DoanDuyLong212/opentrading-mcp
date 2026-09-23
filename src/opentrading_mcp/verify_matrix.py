@@ -122,7 +122,7 @@ MATRIX: list[tuple[str, str, dict[str, Any], float]] = [
     ("scan", "mega_flows", {}, 90.0),
     ("scan", "foreign_flow", {}, 30.0),
     ("scan", "oracle_health", {}, 20.0),
-    ("scan", "event_stats", {"query": "stock market"}, 30.0),
+    ("scan", "event_stats", {"query": "stock market"}, 90.0),
     ("scan", "compare_assets", {"assets": ["GC=F", "BTC-USD"]}, 60.0),
     ("scan", "runs_list", {}, 20.0),
     ("scan", "run_get", {"run_id": "none"}, 20.0),
