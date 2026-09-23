@@ -7,6 +7,7 @@ so tools/list and smoke tests pass everywhere.
 
 from __future__ import annotations
 
+import functools
 import sys
 from typing import Any
 
@@ -23,7 +24,7 @@ from opentrading_mcp.providers.errors import (
 )
 from opentrading_mcp.providers.store import cache_get, cache_set
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext
+from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
 
 def _unavailable(tool: str, reason: str) -> dict[str, Any]:
@@ -54,7 +55,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         if ctx is not None:
             await ctx.log("info", f"market_snapshot symbols={symbols or []}")
         try:
-            quotes = vn_p.equity_quote_batch(symbols or ["VCB", "HPG", "SSI"])
+            quotes = await run_blocking(
+                functools.partial(vn_p.equity_quote_batch, symbols or ["VCB", "HPG", "SSI"]),
+                "market_snapshot",
+            )
             cache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
             return make_envelope({"quotes": quotes}, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -95,7 +99,11 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             if ctx is not None:
                 await ctx.report_progress(i, total, f"fetch {symbol}")
             try:
-                out.append({"symbol": symbol, "candles": vn_p.quote_history(symbol, days)})
+                candles = await run_blocking(
+                    functools.partial(vn_p.quote_history, symbol, days),
+                    "market_candles_batch",
+                )
+                out.append({"symbol": symbol, "candles": candles})
             except (ProviderUnavailable, ProviderBadData) as exc:
                 out.append({"symbol": symbol, "error": str(exc), "candles": []})
         if ctx is not None:
@@ -106,7 +114,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def symbol_lookup(query: str) -> dict[str, Any]:
         """Resolve company name to symbol, venue and sector. Use before any symbol-scoped call."""
         try:
-            rows = vn_p.listing_symbols()
+            rows = await run_blocking(vn_p.listing_symbols, "symbol_lookup")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("symbol_lookup", str(exc))
         query_up = query.upper()
@@ -117,7 +125,12 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def market_movers(top_n: int = 10) -> dict[str, Any]:
         """Top gainers, losers and volume leaders. Use for session pulse checks."""
         try:
-            quotes = vn_p.equity_quote_batch(["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"])
+            quotes = await run_blocking(
+                functools.partial(
+                    vn_p.equity_quote_batch, ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
+                ),
+                "market_movers",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("market_movers", str(exc))
         return make_envelope({"movers": quotes[: max(top_n, 1)]}, source="vnstock")
@@ -126,7 +139,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def breadth_scan() -> dict[str, Any]:
         """Advancers, decliners, ceiling and floor counts. Use to judge rally health."""
         try:
-            prices = vs_p.market_price()
+            prices = await run_blocking(vs_p.market_price, "breadth_scan", timeout_secs=30.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("breadth_scan", str(exc))
         rows = prices if isinstance(prices, list) else []
@@ -145,7 +158,11 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         except ProviderUnavailable:
             pass
         try:
-            trades = dnse_p.latest_trade(["VN30F1M"])
+            trades = await run_blocking(
+                functools.partial(dnse_p.latest_trade, ["VN30F1M"]),
+                "dnse_market_status",
+                timeout_secs=30.0,
+            )
             return make_envelope({"rest": trades}, source="dnse-rest")
         except (ProviderAuthMissing, ProviderUnavailable) as exc:
             return _unavailable("dnse_market_status", str(exc))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -9,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext
+from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
 
 def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
@@ -21,7 +22,11 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         if ctx is not None:
             await ctx.report_progress(0, 2, "load candles")
         try:
-            candles = vn_p.quote_history(symbol, 365)
+            candles = await run_blocking(
+                functools.partial(vn_p.quote_history, symbol, 365),
+                "quant_backtest",
+                timeout_secs=90.0,
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "quant_backtest"},

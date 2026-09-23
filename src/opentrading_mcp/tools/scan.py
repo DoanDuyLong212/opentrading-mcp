@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -9,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext
+from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
 
 def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
@@ -19,7 +20,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Screen universe by valuation and quality. Use when hunting candidates."""
         try:
-            rows = vn_p.listing_symbols()
+            rows = await run_blocking(vn_p.listing_symbols, "stock_screener")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "stock_screener"},
@@ -43,7 +44,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         if ctx is not None:
             await ctx.log("info", f"signals_technical {symbol}")
         try:
-            candles = vn_p.quote_history(symbol, 120)
+            candles = await run_blocking(
+                functools.partial(vn_p.quote_history, symbol, 120),
+                "signals_technical",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "signals_technical"},

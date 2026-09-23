@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -13,7 +14,7 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext
+from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -31,7 +32,11 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         if ctx is not None:
             await ctx.report_progress(0, 1, f"fetch {symbol}")
         try:
-            rows = dnse_p.ohlc_history(symbol=symbol, resolution=resolution)
+            rows = await run_blocking(
+                functools.partial(dnse_p.ohlc_history, symbol=symbol, resolution=resolution),
+                "dnse_ohlc_history",
+                timeout_secs=45.0,
+            )
             if ctx is not None:
                 await ctx.report_progress(1, 1, "done")
             return make_envelope({"symbol": symbol, "bars": rows}, source="dnse-rest")
@@ -42,7 +47,12 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def dnse_latest_trade(symbols: list[str]) -> dict[str, Any]:
         """Latest match price and totals per symbol. Use for realtime fallback."""
         try:
-            return make_envelope({"trades": dnse_p.latest_trade(symbols)}, source="dnse-rest")
+            data = await run_blocking(
+                functools.partial(dnse_p.latest_trade, symbols),
+                "dnse_latest_trade",
+                timeout_secs=45.0,
+            )
+            return make_envelope({"trades": data}, source="dnse-rest")
         except (ProviderAuthMissing, ProviderUnavailable) as exc:
             return _na("dnse_latest_trade", str(exc))
 

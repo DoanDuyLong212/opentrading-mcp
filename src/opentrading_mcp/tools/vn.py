@@ -28,8 +28,12 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         if ctx is not None:
             await ctx.log("info", f"vn_quote_history {symbol} {days}d")
         try:
+            candles = await run_blocking(
+                functools.partial(vn_p.quote_history, symbol, days),
+                "vn_quote_history",
+            )
             return make_envelope(
-                {"symbol": symbol.upper(), "candles": vn_p.quote_history(symbol, days)},
+                {"symbol": symbol.upper(), "candles": candles},
                 source="vnstock",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -39,7 +43,11 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_equity_quote_batch(symbols: list[str]) -> dict[str, Any]:
         """One-request price board for many symbols. Use for snapshots and movers."""
         try:
-            return make_envelope({"quotes": vn_p.equity_quote_batch(symbols)}, source="vnstock")
+            quotes = await run_blocking(
+                functools.partial(vn_p.equity_quote_batch, symbols),
+                "vn_equity_quote_batch",
+            )
+            return make_envelope({"quotes": quotes}, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_equity_quote_batch", str(exc))
 
@@ -47,7 +55,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_listing() -> dict[str, Any]:
         """Full symbol list with company names. Use for universe and lookup."""
         try:
-            rows = vn_p.listing_symbols()
+            rows = await run_blocking(vn_p.listing_symbols, "vn_listing")
             return make_envelope({"count": len(rows), "symbols": rows[:500]}, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_listing", str(exc))
