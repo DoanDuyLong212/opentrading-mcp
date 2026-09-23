@@ -209,3 +209,40 @@ def alloc_history(asset: str = "GC", timeframe: str = "1d") -> dict[str, Any]:
     except Exception as exc:
         raise ProviderBadData(f"malformed alloc series for {ticker}") from exc
     return {"asset": asset.upper(), "ticker": ticker, "points": points}
+
+
+PINS_WORLD = [
+    "^GSPC",
+    "^IXIC",
+    "^DJI",
+    "^N225",
+    "^HSI",
+    "^FTSE",
+    "BTC-USD",
+    "GC=F",
+    "CL=F",
+    "VND=X",
+]
+PINS_VN = ["VCB", "HPG", "SSI", "VIC", "VHM"]
+
+
+def market_pins() -> dict[str, Any]:
+    try:
+        import yfinance as yf
+    except ImportError as exc:
+        raise ProviderUnavailable("yfinance not installed") from exc
+    pins: list[dict[str, Any]] = []
+    for ticker in PINS_WORLD:
+        try:
+            hist = yf.Ticker(ticker).history(period="5d")
+            closes = hist["Close"].dropna()
+            pins.append(
+                {
+                    "ticker": ticker,
+                    "last": round(float(closes.iloc[-1]), 4),
+                    "spark": [round(float(v), 4) for v in closes.tail(5)],
+                }
+            )
+        except Exception:
+            continue
+    return {"world": pins, "vn": PINS_VN}

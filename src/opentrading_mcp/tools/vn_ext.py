@@ -98,6 +98,15 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_msn_fx_gold", str(exc))
 
+    @server.tool(annotations=READ_ONLY)
+    async def vn_trades(symbol: str, limit: int = 20) -> dict[str, Any]:
+        """Tick-level matched trades. Use for microstructure reads."""
+        try:
+            rows = await _call("t", vn_p.equity_trades, symbol, limit)
+            return make_envelope({"symbol": symbol.upper(), "trades": rows}, source="vnstock")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("vn_trades", str(exc))
+
     return [
         {"name": "vn_index_ohlcv"},
         {"name": "vn_equity_ohlcv"},
@@ -108,4 +117,5 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "vn_reference"},
         {"name": "vn_company"},
         {"name": "vn_msn_fx_gold"},
+        {"name": "vn_trades"},
     ]

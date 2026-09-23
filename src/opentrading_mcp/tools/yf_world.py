@@ -68,10 +68,19 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_alloc_history", str(exc))
 
+    @server.tool(annotations=READ_ONLY)
+    async def yf_market_pins() -> dict[str, Any]:
+        """5-day pins for world majors plus VN watchlist. Use for brief headers."""
+        try:
+            return make_envelope(await _call("p", yf_p.market_pins), source="yfinance")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("yf_market_pins", str(exc))
+
     return [
         {"name": "yf_world_indices"},
         {"name": "yf_oracle_markets"},
         {"name": "yf_regime_assets"},
         {"name": "yf_mega_flows"},
         {"name": "yf_alloc_history"},
+        {"name": "yf_market_pins"},
     ]

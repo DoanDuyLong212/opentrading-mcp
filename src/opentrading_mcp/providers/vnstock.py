@@ -67,6 +67,19 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     return out
 
 
+def equity_trades(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
+    try:
+        from vnstock import Market
+    except ImportError as exc:
+        raise ProviderUnavailable("vnstock not installed") from exc
+    try:
+        frame = Market().equity(symbol.upper()).trades()
+    except Exception as exc:
+        raise ProviderUnavailable(f"vnstock trades failed: {symbol}") from exc
+    rows = _records(frame)
+    return rows[: max(limit, 1)]
+
+
 def listing_symbols() -> list[dict[str, str]]:
     try:
         from vnstock import Listing
