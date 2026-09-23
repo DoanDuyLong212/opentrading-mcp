@@ -228,11 +228,18 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
         from vnstock import Company
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    try:
-        client = Company(source="VCI", symbol=symbol.upper())
-        frame = client.insider_trading()
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock insider failed: {symbol}") from exc
+    frame = None
+    for source in ("VCI", "KBS"):
+        try:
+            client = Company(source=source, symbol=symbol.upper())
+            candidate = client.insider_trading()
+            if candidate is not None:
+                frame = candidate
+                break
+        except Exception:
+            continue
+    if frame is None:
+        raise ProviderUnavailable(f"vnstock insider failed: {symbol}")
     rows = _records(frame)
     return rows[: max(limit, 1)]
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
@@ -135,12 +136,22 @@ def groq_chat(system_msg: str, user_msg: str, max_tokens: int = 300) -> str:
 
 
 def prediction_odds(query: str | None = None) -> dict[str, Any]:
-    for base in (
-        "https://r.jina.ai/https://gamma-api.polymarket.com",
-        "https://gamma-api.polymarket.com",
-    ):
+    """Polymarket events: jina reader (text mode -> raw JSON) then direct."""
+    attempts: list[tuple[str, str | None]] = [
+        ("https://r.jina.ai/https://gamma-api.polymarket.com", "text"),
+        ("https://gamma-api.polymarket.com", None),
+    ]
+    for base, return_format in attempts:
         try:
-            body = _get_json(f"{base}/events?active=true&closed=false&limit=50", timeout=25)
+            headers = {"X-Return-Format": return_format} if return_format else None
+            response = httpx.get(
+                f"{base}/events?active=true&closed=false&limit=50",
+                timeout=30,
+                headers=headers,
+            )
+            if response.status_code == 429:
+                raise ProviderUnavailable(f"rate limited: {base}")
+            body = json.loads(response.text)
             events = body if isinstance(body, list) else []
             if query:
                 query_low = query.lower()
@@ -155,7 +166,7 @@ def prediction_odds(query: str | None = None) -> dict[str, Any]:
                 for e in events[:20]
             ]
             return {"source": base, "events": rows}
-        except (ProviderUnavailable, ProviderBadData):
+        except (ProviderUnavailable, ProviderBadData, ValueError):
             continue
     raise ProviderUnavailable("polymarket unreachable via jina and direct")
 
