@@ -1,9 +1,30 @@
-"""DNSE provider (REST direct; WS snapshot served by worker via Redis)."""
+"""DNSE provider: signed REST (HTTPS-signature port, stdlib only) + WS snapshot reader.
+
+REST signing mirrors the official DNSE SDK / Trading_Agents usage:
+  Date: <rfc1123 GMT>
+  X-Signature: Signature keyId="<key>",algorithm="hmac-sha256",
+               headers="(request-target) date",signature="<base64url-quoted>",
+               nonce="<hex>"
+  x-api-key: <key>
+  version: 2026-05-07
+Signature string: "(request-target): get <path>\\ndate: <date>[\\nnonce: <nonce>]".
+HMAC-SHA256 over it with the API secret, base64, URL-quote.
+
+WS live snapshots are written by the worker (loops.dnse_ws_loop); the tools
+here only read the shared Redis keys, so web + worker stay decoupled.
+"""
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import os
+from datetime import UTC, datetime
 from typing import Any
+from urllib import parse
+from uuid import uuid4
 
 import httpx
 
@@ -14,14 +35,62 @@ from opentrading_mcp.providers.errors import (
 )
 
 BASE = "https://openapi.dnse.com.vn"
+WS_URL = "wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json"
 API_VERSION = "2026-05-07"
 
 
-def _headers() -> dict[str, str]:
-    key = os.environ.get("DNSE_API_KEY")
-    if not key:
-        raise ProviderAuthMissing("DNSE_API_KEY is not set")
-    return {"Authorization": f"Bearer {key}", "API-Version": API_VERSION}
+def _creds() -> tuple[str, str]:
+    key = os.environ.get("DNSE_API_KEY", "").strip()
+    secret = os.environ.get("DNSE_SECRET", "").strip()
+    if not key or not secret:
+        raise ProviderAuthMissing("DNSE_API_KEY/DNSE_SECRET are not set")
+    return key, secret
+
+
+def build_signature(
+    secret: str, method: str, path: str, date_value: str, nonce: str | None = None
+) -> tuple[str, str]:
+    headers = "(request-target) date"
+    text = f"(request-target): {method.lower()} {path}\ndate: {date_value}"
+    if nonce:
+        text += f"\nnonce: {nonce}"
+    mac = hmac.new(secret.encode(), text.encode(), hashlib.sha256)
+    return headers, parse.quote(base64.b64encode(mac.digest()).decode(), safe="")
+
+
+def signed_headers(method: str, path: str) -> dict[str, str]:
+    key, secret = _creds()
+    date_value = datetime.now(UTC).strftime("%a, %d %b %Y %H:%M:%S %z")
+    nonce = uuid4().hex
+    _, signature = build_signature(secret, method, path, date_value, nonce)
+    return {
+        "Date": date_value,
+        "X-Signature": (
+            f'Signature keyId="{key}",algorithm="hmac-sha256",'
+            f'headers="(request-target) date",signature="{signature}",nonce="{nonce}"'
+        ),
+        "x-api-key": key,
+        "version": API_VERSION,
+    }
+
+
+def _get(path: str, params: dict[str, Any] | None = None, timeout: int = 20) -> Any:
+    try:
+        headers = signed_headers("get", path)
+    except ProviderAuthMissing:
+        raise
+    try:
+        response = httpx.get(f"{BASE}{path}", headers=headers, params=params, timeout=timeout)
+    except httpx.TimeoutException as exc:
+        raise ProviderUnavailable(f"dnse timeout: {path}") from exc
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"dnse unreachable: {path}") from exc
+    if response.status_code == 401:
+        raise ProviderAuthMissing("dnse rejected api key")
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise ProviderBadData(f"dnse bad json: {path}") from exc
 
 
 def ohlc_history(
@@ -31,52 +100,44 @@ def ohlc_history(
     from_date: str = "2018-08-01",
     page_size: int = 10000,
 ) -> list[dict[str, Any]]:
-    params: dict[str, Any] = {
-        "type": bar_type,
-        "symbol": symbol,
-        "resolution": resolution,
-        "from": from_date,
-        "pageSize": page_size,
-    }
-    try:
-        response = httpx.get(f"{BASE}/price/ohlc", headers=_headers(), params=params, timeout=20)
-    except httpx.TimeoutException as exc:
-        raise ProviderUnavailable("dnse ohlc timeout") from exc
-    except httpx.HTTPError as exc:
-        raise ProviderUnavailable("dnse ohlc unreachable") from exc
-    if response.status_code == 401:
-        raise ProviderAuthMissing("dnse rejected api key")
-    try:
-        body = response.json()
-    except ValueError as exc:
-        raise ProviderBadData("dnse ohlc bad json") from exc
-    rows = body.get("data") or body.get("ohlc") or []
-    return [
+    body = _get(
+        "/price/ohlc",
         {
-            "t": r.get("t"),
-            "o": r.get("o"),
-            "h": r.get("h"),
-            "l": r.get("l"),
-            "c": r.get("c"),
-            "v": r.get("v"),
-        }
-        for r in rows
-    ]
+            "type": bar_type,
+            "symbol": symbol,
+            "resolution": resolution,
+            "from": from_date,
+            "pageSize": page_size,
+        },
+    )
+    if isinstance(body, dict) and isinstance(body.get("t"), list):
+        keys = ("t", "o", "h", "l", "c", "v")
+        cols = [body.get(k, []) for k in keys]
+        width = min(len(c) for c in cols)
+        return [{k: cols[i][n] for i, k in enumerate(keys)} for n in range(width)]
+    rows = body.get("data") or body.get("ohlc") or []
+    if isinstance(rows, list):
+        return [
+            {
+                "t": r.get("t"),
+                "o": r.get("o"),
+                "h": r.get("h"),
+                "l": r.get("l"),
+                "c": r.get("c"),
+                "v": r.get("v"),
+            }
+            for r in rows
+            if isinstance(r, dict)
+        ]
+    return []
 
 
 def latest_trade(symbols: list[str]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    try:
-        for symbol in symbols:
-            response = httpx.get(
-                f"{BASE}/price/{symbol}/trades/latest", headers=_headers(), timeout=10
-            )
-            if response.status_code == 200:
-                out.append({"symbol": symbol, **response.json()})
-    except ProviderAuthMissing:
-        raise
-    except httpx.HTTPError as exc:
-        raise ProviderUnavailable("dnse latest trade unreachable") from exc
+    for symbol in symbols:
+        body = _get(f"/price/{symbol}/trades/latest")
+        if isinstance(body, dict):
+            out.append({"symbol": symbol, **body})
     return out
 
 
@@ -87,9 +148,23 @@ def ws_snapshot(symbols: list[str]) -> dict[str, Any]:
     for symbol in symbols:
         hit = cache_get(f"mcp:market:dnse_ws_snapshot:{symbol}")
         if hit is not None:
-            import json
-
             data[symbol] = json.loads(hit)
     if not data:
         raise ProviderUnavailable("ws worker has not published yet")
     return data
+
+
+def build_ws_auth(api_key: str, api_secret: str, timestamp: int, nonce: str) -> dict[str, Any]:
+    message = f"{api_key}:{timestamp}:{nonce}"
+    signature = hmac.new(api_secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    return {
+        "action": "auth",
+        "api_key": api_key,
+        "signature": signature,
+        "timestamp": timestamp,
+        "nonce": nonce,
+    }
+
+
+def build_ws_subscribe(channel: str, symbols: list[str]) -> dict[str, Any]:
+    return {"action": "subscribe", "channels": [{"name": channel, "symbols": symbols}]}
