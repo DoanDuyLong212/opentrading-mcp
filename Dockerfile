@@ -8,4 +8,4 @@ COPY src/ src/
 RUN pip install --no-cache-dir "."
 
 EXPOSE 8102
-CMD ["opentrading-mcp", "serve", "--preset", "market", "--http", "--port", "8102"]
+CMD ["sh", "-c", "opentrading-mcp serve --preset market --http --port ${PORT:-8102}"]

@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.server import PRESETS, create_server, register_preset
+
+
+def default_port() -> int:
+    try:
+        return int(os.environ.get("PORT", "8102"))
+    except ValueError:
+        return 8102
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--http", action="store_true", help="serve Streamable HTTP instead of stdio"
     )
-    parser.add_argument("--port", type=int, default=8102)
+    parser.add_argument("--port", type=int, default=default_port())
     parser.add_argument("--path", default="/mcp")
     return parser
 
