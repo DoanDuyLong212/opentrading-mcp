@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "opentrading": {
+      "command": "uvx",
+      "args": ["opentrading-mcp", "serve", "--preset", "market"],
+      "env": {}
+    }
+  }
+}

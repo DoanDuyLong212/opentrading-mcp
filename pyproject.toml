@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opentrading-mcp"
+dynamic = ["version"]
+description = "Shareable MCP-server for Vietnamese market research (team -> public)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp>=1.9,<2",
+  "httpx>=0.27,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "uvicorn>=0.30",
+  "redis>=5.0",
+  "psycopg[binary]>=3.1",
+  "vnstock>=3.0",
+  "yfinance>=0.2",
+  "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.25",
+  "ruff>=0.9",
+  "mypy>=1.14",
+]
+
+[project.scripts]
+opentrading-mcp = "opentrading_mcp.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opentrading_mcp"]
+
+[tool.hatch.version]
+path = "src/opentrading_mcp/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["opentrading_mcp"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["vnstock.*", "yfinance.*"]
+ignore_missing_imports = true

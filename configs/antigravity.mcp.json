@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "opentrading": {
+      "command": "uvx",
+      "args": ["opentrading-mcp", "serve", "--preset", "market"],
+      "env": {}
+    },
+    "opentrading-remote": {
+      "serverUrl": "https://mcp.donganhcapital.vn/mcp",
+      "headers": {
+        "Authorization": "Bearer REPLACE-ME"
+      }
+    }
+  }
+}

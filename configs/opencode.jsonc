@@ -1,0 +1,13 @@
+{
+  // opencode: key is `mcp` (NOT mcpServers), command is an array, env key is `environment`.
+  "mcp": {
+    "servers": {
+      "opentrading": {
+        "type": "local",
+        "command": ["uvx", "opentrading-mcp", "serve", "--preset", "market"],
+        "environment": {},
+        "timeout": 30000
+      }
+    }
+  }
+}

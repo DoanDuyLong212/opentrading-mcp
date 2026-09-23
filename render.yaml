@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: opentrading-mcp-web
+    runtime: docker
+    region: singapore
+    plan: starter
+    healthCheckPath: /healthz
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: opentrading-mcp-pg
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: MCP_BEARER_TEAM
+        sync: false
+      - key: VIETSTOCK_EMAIL
+        sync: false
+      - key: VIETSTOCK_PASSWORD
+        sync: false
+      - key: DNSE_API_KEY
+        sync: false
+      - key: DNSE_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+
+  - type: worker
+    name: opentrading-mcp-worker
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m opentrading_mcp.loops
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: opentrading-mcp-pg
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+
+databases:
+  - name: opentrading-mcp-pg
+    databaseName: mcp
+    user: trading
+    region: singapore
+    plan: starter
