@@ -44,21 +44,55 @@ TIMEOUT_MATRIX: dict[str, int] = {
 PRESETS = ("market", "scan", "quant", "brief", "intel", "all")
 
 PRESET_MODULES: dict[str, tuple[str, ...]] = {
-    "market": ("market", "vn", "vs", "yf", "dnse_tools"),
-    "scan": ("scan",),
+    "market": (
+        "market",
+        "vn",
+        "vs",
+        "vs_bctc",
+        "vn_ext",
+        "yf",
+        "yf_world",
+        "dnse_tools",
+        "dnse_ext",
+    ),
+    "scan": ("scan", "compute"),
     "quant": ("quant",),
     "brief": ("brief",),
     "intel": ("intel",),
-    "all": ("market", "vn", "vs", "yf", "dnse_tools", "scan", "quant", "brief", "intel"),
+    "all": (
+        "market",
+        "vn",
+        "vs",
+        "vs_bctc",
+        "vn_ext",
+        "yf",
+        "yf_world",
+        "dnse_tools",
+        "dnse_ext",
+        "scan",
+        "compute",
+        "quant",
+        "brief",
+        "intel",
+    ),
 }
+
+# Market-data agent scope per spec needs the full vs/vn/dnse/yf set in one
+# preset; every other preset stays under 50 to keep tools/list fast.
+PRESET_CAPS = {"market": 70, "scan": 50, "quant": 50, "brief": 50, "intel": 50}
 
 _REGISTER_BY_MODULE = {
     "market": "register_market_tools",
     "vn": "register_vn_tools",
     "vs": "register_vs_tools",
+    "vs_bctc": "register_vs_bctc_tools",
+    "vn_ext": "register_vn_ext_tools",
     "yf": "register_yf_tools",
+    "yf_world": "register_yf_world_tools",
     "dnse_tools": "register_dnse_tools",
+    "dnse_ext": "register_dnse_ext_tools",
     "scan": "register_scan_tools",
+    "compute": "register_compute_tools",
     "quant": "register_quant_tools",
     "brief": "register_brief_tools",
     "intel": "register_intel_tools",
@@ -99,6 +133,6 @@ def register_preset(server: FastMCP, preset: str = "market") -> list[dict[str, A
     names = [t["name"] for t in collected]
     if len(names) != len(set(names)):
         raise ValueError(f"duplicate tool names in preset {preset!r}")
-    if preset != "all" and len(collected) > 50:
-        raise ValueError(f"preset {preset!r} has {len(collected)} tools, cap is 50")
+    if preset != "all" and len(collected) > PRESET_CAPS.get(preset, 50):
+        raise ValueError(f"preset {preset!r} has {len(collected)} tools over cap")
     return collected

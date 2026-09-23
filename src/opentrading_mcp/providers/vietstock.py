@@ -54,8 +54,31 @@ def _env(name: str) -> str:
     return os.environ.get(name, "").strip()
 
 
+def _seed_token_from_trading_agents() -> str:
+    """Extra JWT seed from the Trading_Agents repo session (team-shared login).
+
+    Priority: VIETSTOCK_COOKIE_LOGIN env -> Trading_Agents session.json ->
+    "" (caller falls back to EMAIL/PASSWORD re-login).
+    """
+    for candidate in (
+        _env("VIETSTOCK_SESSION_FILE"),
+        "/home/doanlong/Trading_Agents/backend/mcp/tools/vietstock/session.json",
+    ):
+        if not candidate:
+            continue
+        try:
+            with open(candidate, encoding="utf-8") as fh:
+                saved = json.load(fh)
+            token = str((saved.get("cookies") or {}).get("CookieLogin", ""))
+            if token and _decode_jwt_exp(token) > time.time() + 300:
+                return token
+        except (OSError, ValueError):
+            continue
+    return ""
+
+
 def auth_status() -> dict[str, Any]:
-    token = _env("VIETSTOCK_COOKIE_LOGIN")
+    token = _env("VIETSTOCK_COOKIE_LOGIN") or _seed_token_from_trading_agents()
     if not token:
         return {"authenticated": False, "reason": "no jwt configured"}
     exp = _decode_jwt_exp(token)
@@ -114,7 +137,7 @@ def _session_client() -> httpx.Client:
             "Accept-Language": "en-US,en;q=0.5",
         },
     )
-    jwt = _env("VIETSTOCK_COOKIE_LOGIN")
+    jwt = _env("VIETSTOCK_COOKIE_LOGIN") or _seed_token_from_trading_agents()
     exp = _decode_jwt_exp(jwt)
     if jwt and (not exp or exp > now + 300):
         client.cookies.set("CookieLogin", jwt, domain="finance.vietstock.vn")
@@ -189,6 +212,168 @@ def _post(path: str, payload: dict[str, Any], timeout: int = 20) -> Any:
             raise ProviderBadData(f"vietstock {code}: {message}")
         return parsed
     raise ProviderUnavailable(f"vietstock retry exhausted: {path}")
+
+
+def _post_json(path: str, payload: dict[str, Any], timeout: int = 30) -> Any:
+    """JSON variant for /FinancialStatement* endpoints (same cookie session)."""
+    try:
+        client = _session_client()
+    except (ProviderAuthMissing, ProviderBadData):
+        raise
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock session unreachable: {path}") from exc
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Referer": f"{BASE}/",
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    try:
+        response = client.post(f"{BASE}{path}", json=payload, headers=headers, timeout=timeout)
+    except httpx.TimeoutException as exc:
+        raise ProviderUnavailable(f"vietstock timeout: {path}") from exc
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock unreachable: {path}") from exc
+    if response.status_code == 401:
+        raise ProviderAuthMissing("vietstock session rejected")
+    try:
+        parsed = json.loads(response.text.encode().decode("utf-8-sig"))
+    except ValueError as exc:
+        raise ProviderBadData(f"vietstock non-JSON {response.status_code}") from exc
+    error = parsed.get("errorModel") if isinstance(parsed, dict) else None
+    if isinstance(error, dict) and error.get("ErrorCode"):
+        raise ProviderAuthMissing(
+            f"vietstock {error.get('ErrorCode')}: {error.get('ErrorMessage')}"
+        )
+    return parsed
+
+
+BCTC_TIDS = (2, 3, 4, 5, 9)
+BCTC_TIDS_FULL = (1, 2, 3, 4, 5, 9, 12)
+
+
+def build_list_params(symbol: str, years: int = 3, full: bool = False) -> list[dict[str, Any]]:
+    current = time.gmtime().tm_year
+    tids = BCTC_TIDS_FULL if full else BCTC_TIDS
+    params: list[dict[str, Any]] = []
+    index = 1
+    for year in range(current, current - years, -1):
+        for tid in tids:
+            params.append(
+                {
+                    "Index": index,
+                    "YearPeriod": year,
+                    "AuditedStatusId": "-1",
+                    "UnitedId": "-1",
+                    "ReportTermId": tid,
+                    "StockCode": symbol.upper(),
+                    "Unit": "1",
+                    "ColumnIndex": index,
+                }
+            )
+            index += 1
+    return params
+
+
+def financial_terms() -> Any:
+    return _post_json("/financedata/GetListReportTerm", {})
+
+
+def financial_norms(btype: int = 1) -> Any:
+    return _post_json(
+        "/FinancialStatement/BCTC_GetChiTieuForTable",
+        {"BusinessTypeId": btype, "ReportComponentCodes": "CD,KQ,LCTT"},
+    )
+
+
+def financial_values(
+    symbol: str, btype: int = 1, years: int = 3, tids: list[int] | None = None
+) -> Any:
+    norms = _post_json(
+        "/FinancialStatement/BCTC_GetChiTieuForTable",
+        {"BusinessTypeId": btype, "ReportComponentCodes": "CD,KQ,LCTT"},
+    )
+    norm_list = norms if isinstance(norms, list) else norms.get("data", [])
+    ids = [str(n.get("ReportNormId")) for n in norm_list if n.get("ReportNormId")]
+    if not ids:
+        raise ProviderBadData("vietstock returned no norms")
+    params = build_list_params(symbol, years)
+    if tids:
+        params = [p for p in params if p["ReportTermId"] in tids]
+    body = _post_json(
+        "/FinancialStatement/BCTC_LoadReportData_Async",
+        {"ReportNormIds": ",".join(ids), "ListParams": params},
+        timeout=60,
+    )
+    return {"symbol": symbol.upper(), "norms": len(ids), "rows": body.get("data", body)}
+
+
+def company_info(symbol: str) -> Any:
+    return _post_json("/FinancialStatement/BCTC_CompanyByCodes", {"stockCodes": symbol.upper()})
+
+
+def overview_trading(symbol: str) -> Any:
+    return _post("/data/GetStockDeal_OverviewTrading", {"stockCode": symbol.upper()})
+
+
+def documents(symbol: str, page_size: int = 60) -> Any:
+    return _post("/data/GetDocument", {"code": symbol.upper(), "page": 1, "pageSize": page_size})
+
+
+def reports_search(symbol: str = "", page_size: int = 50) -> Any:
+    return _post(
+        "/CompanyReport/CompanyReportSearch",
+        {"stockCode": symbol.upper(), "categoryId": 2, "pageSize": min(page_size, 50)},
+    )
+
+
+def industry_tree() -> Any:
+    return _post_json("/FinancialStatementSector/GetTreeViewIndustryGICS", {})
+
+
+def stock_industry(industry_id: int) -> Any:
+    return _post_json(
+        "/FinancialStatementSector/GetBusinessTypeIDCompanyByGICS", {"IndustryID": industry_id}
+    )
+
+
+def industry_heatmap() -> Any:
+    return _post_json("/Data/GetHeatmapGICS", {"industryCode": 0, "detailIndustry": True})
+
+
+def top_liquidity(index: str = "VNINDEX") -> Any:
+    return _post("/Data/GetTopStockLiquidity", {"index": index})
+
+
+def gics_index() -> Any:
+    return _post("/data/GetGICSIndexMain", {})
+
+
+def currency() -> Any:
+    return _post("/data/GetCurrency", {})
+
+
+def market_info(symbol: str = "") -> Any:
+    return _post("/data/marketinfo", {"symbol": symbol.upper()} if symbol else {})
+
+
+def news_search(query: str, page_size: int = 20) -> Any:
+    try:
+        response = httpx.post(
+            "https://dc.vietstock.vn/api/Search/SearchArticleNewAsync",
+            json={"keySearch": query, "pageSize": min(page_size, 50), "filterTime": "all"},
+            timeout=20,
+        )
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable("vietstock search unreachable") from exc
+    try:
+        return json.loads(response.text.encode().decode("utf-8-sig"))
+    except ValueError as exc:
+        raise ProviderBadData("vietstock search bad json") from exc
+
+
+def selftrading() -> Any:
+    return _post("/data/KQGDGiaoDichTuDoanhChart", {})
 
 
 def financeinfo(symbol: str, period: str = "quarter") -> dict[str, Any]:

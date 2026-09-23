@@ -141,6 +141,30 @@ def latest_trade(symbols: list[str]) -> list[dict[str, Any]]:
     return out
 
 
+def orderbook(symbol: str, depth: int = 3) -> dict[str, Any]:
+    for path in (f"/price/{symbol}/quotes/latest", f"/price/{symbol}/quotes"):
+        try:
+            body = _get(path)
+        except (ProviderUnavailable, ProviderBadData):
+            continue
+        if isinstance(body, dict) and body:
+            bids = body.get("bids") or body.get("bid") or []
+            asks = body.get("asks") or body.get("ask") or []
+            return {"symbol": symbol, "bids": bids[:depth], "asks": asks[:depth]}
+    raise ProviderUnavailable(f"no orderbook for {symbol}")
+
+
+def foreign_rest(symbol: str) -> dict[str, Any]:
+    body = _get(f"/price/{symbol}/foreign-trading")
+    if not body:
+        raise ProviderUnavailable(f"no foreign data for {symbol}")
+    return {"symbol": symbol, "foreign": body}
+
+
+def working_dates() -> Any:
+    return _get("/market/working-dates")
+
+
 def ws_snapshot(symbols: list[str]) -> dict[str, Any]:
     from opentrading_mcp.providers.store import cache_get
 
