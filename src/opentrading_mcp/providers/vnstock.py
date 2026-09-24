@@ -184,6 +184,97 @@ def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]
     return _records(frame)
 
 
+def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
+    """Best-effort numeric pick from a vnstock ratio DataFrame.
+
+    Handles both layouts: indicator as column or as index row.
+    Returns the last non-null numeric value, else None.
+    """
+    try:
+        cols = {str(c).lower(): c for c in frame.columns}
+        for needle in needles:
+            for key, col in cols.items():
+                if needle in key:
+                    try:
+                        series = frame[col].dropna()
+                    except Exception:
+                        continue
+                    if len(series):
+                        try:
+                            return float(series.iloc[-1])
+                        except (TypeError, ValueError):
+                            continue
+        try:
+            idx = {str(i).lower(): i for i in frame.index}
+        except Exception:
+            return None
+        for needle in needles:
+            for key, ix in idx.items():
+                if needle in key:
+                    try:
+                        row = frame.loc[ix].dropna()
+                    except Exception:
+                        continue
+                    if len(row):
+                        try:
+                            return float(row.iloc[-1])
+                        except (TypeError, ValueError):
+                            continue
+    except Exception:
+        return None
+    return None
+
+
+def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
+    """Per-symbol PE/ROE/market-cap via vnstock Fundamental ratio.
+
+    Best-effort parse: missing metrics come back as None, never raises
+    for malformed frames (raises ProviderUnavailable only when the
+    upstream call itself fails or vnstock is missing).
+    """
+    try:
+        from vnstock import Fundamental
+    except ImportError as exc:
+        raise ProviderUnavailable("vnstock not installed") from exc
+    try:
+        data = Fundamental().equity(symbol.upper()).ratio(period=period)
+    except Exception as exc:
+        raise ProviderUnavailable(f"vnstock fundamentals failed: {symbol}") from exc
+    pe: float | None = None
+    roe: float | None = None
+    market_cap: float | None = None
+    try:
+        import pandas as pd  # type: ignore[import]
+
+        if isinstance(data, pd.DataFrame) and len(data):
+            pe = _pick_ratio_number(data, "pe", "p/e")
+            roe = _pick_ratio_number(data, "roe")
+            market_cap = _pick_ratio_number(
+                data, "market_cap", "market cap", "von hoa", "vốn hóa"
+            )
+    except Exception:
+        pass
+    if isinstance(data, dict):
+        lowered = {str(k).lower(): v for k, v in data.items()}
+        for key, val in lowered.items():
+            try:
+                num = float(val)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                continue
+            if pe is None and ("pe" in key or "p/e" in key):
+                pe = num
+            elif roe is None and "roe" in key:
+                roe = num
+            elif market_cap is None and ("market_cap" in key or "market cap" in key):
+                market_cap = num
+    if roe is not None and abs(roe) > 1:
+        roe = roe / 100.0
+    return {"symbol": symbol.upper(), "pe": pe, "roe": roe, "market_cap": market_cap}
+
+
+_EXCHANGE_KEYS = ("exchange", "san", "floor", "exchangecode", "exchange_code")
+
+
 def reference_equity(exchange: str = "HOSE") -> list[dict[str, Any]]:
     try:
         from vnstock import Reference
@@ -196,8 +287,11 @@ def reference_equity(exchange: str = "HOSE") -> list[dict[str, Any]]:
     rows = _records(frame)
     query = exchange.upper()
     if query not in ("ALL", ""):
-        rows = [r for r in rows if query in str(r.get("symbol", "")).upper()]
-    return [{"exchange": exchange.upper(), **r} for r in rows]
+        lowered_keys = {k.lower(): k for r in rows for k in r}
+        hit_key = next((lowered_keys[k] for k in _EXCHANGE_KEYS if k in lowered_keys), None)
+        if hit_key is not None:
+            rows = [r for r in rows if str(r.get(hit_key, "")).strip().upper() == query]
+    return [{**r, "exchange": str(r.get("exchange") or exchange.upper()).upper()} for r in rows]
 
 
 def company_info(symbol: str) -> dict[str, Any]:

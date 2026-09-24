@@ -20,9 +20,19 @@ from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def stock_screener(
-        max_pe: float | None = None, min_roe: float | None = None, limit: int = 20
+        filters: dict[str, Any] | None = None,
+        max_pe: float | None = None,
+        min_roe: float | None = None,
+        limit: int = 20,
     ) -> dict[str, Any]:
         """Screen universe by valuation and quality. Use when hunting candidates."""
+        from opentrading_mcp.providers import screener as sc_p
+
+        eff: dict[str, Any] = dict(filters or {})
+        if max_pe is not None and "pe" not in eff:
+            eff["pe"] = [None, max_pe]
+        if min_roe is not None and "roe" not in eff:
+            eff["roe"] = [min_roe, None]
         try:
             rows = await run_blocking(vn_p.listing_symbols, "stock_screener")
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -32,14 +42,67 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
+        warnings: list[str] = []
+        enrich_n = min(len(rows), max(max(limit, 1) * 2, 20), 30)
+        enriched = 0
+        for entry in rows[:enrich_n]:
+            sym = str(entry.get("symbol", "")).upper()
+            if not sym:
+                continue
+            try:
+                info = await run_blocking(
+                    functools.partial(vn_p.equity_fundamentals, sym),
+                    "stock_screener",
+                    timeout_secs=10.0,
+                )
+            except Exception:
+                continue
+            if isinstance(info, dict):
+                hit = False
+                for key in ("pe", "roe", "market_cap"):
+                    if info.get(key) is not None:
+                        entry[key] = info[key]
+                        hit = True
+                if hit:
+                    enriched += 1
+        if rows and enrich_n and enriched < enrich_n:
+            warnings.append(f"fundamentals best-effort: {enriched}/{enrich_n} enriched")
+        try:
+            candidates = sc_p.apply_filters(rows, eff)
+        except Exception as exc:
+            return make_envelope(
+                {"tool": "stock_screener"},
+                source="unavailable",
+                warnings=[f"filter error: {exc}"],
+                availability="unavailable",
+            )
         return make_envelope(
             {
                 "universe": len(rows),
-                "filters": {"max_pe": max_pe, "min_roe": min_roe},
-                "candidates": rows[: max(limit, 1)],
+                "filters": eff,
+                "candidates": candidates[: max(limit, 1)],
             },
             source="vnstock",
-            warnings=["ratio filter wired next: vn_fundamentals per candidate"],
+            warnings=warnings,
+        )
+
+    @server.tool(annotations=READ_ONLY)
+    async def signals_screener_columns(
+        group: str | None = None, search: str | None = None
+    ) -> dict[str, Any]:
+        """Screener column catalog (groups valuation/quality/universe/price). Use to build filters."""
+        from opentrading_mcp.providers import screener as sc_p
+
+        cols = sc_p.screener_columns(group=group, search=search)
+        if not cols:
+            return make_envelope(
+                {"count": 0, "group": group, "search": search, "columns": {}},
+                source="local",
+                availability="empty",
+            )
+        return make_envelope(
+            {"count": len(cols), "group": group, "search": search, "columns": cols},
+            source="local",
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -188,6 +251,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     return [
         {"name": "stock_screener"},
+        {"name": "signals_screener_columns"},
         {"name": "signals_technical"},
         {"name": "sector_performance"},
         {"name": "money_flow"},
