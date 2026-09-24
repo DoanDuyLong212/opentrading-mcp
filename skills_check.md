@@ -302,214 +302,207 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 
 * Web research mirror opencode 1:1: `providers/webfetch.py` (no key) + `providers/websearch.py` (Exa/Parallel, `WEBSEARCH_PROVIDER`, hash-query A/B thay checksum session) + `tools/web.py` (`web_fetch` luôn hiện, `web_search` gạt khỏi list khi thiếu key) + skill `web-research` + preset `intel` (59 skills, Bảng 2b mới).
 * Deps mới: `markdownify`, `beautifulsoup4`. Quy ước tên: `web_fetch`/`web_search` theo rule `snake_case` repo (opencode gốc là `webfetch`/`websearch`).
-## Phụ lục A — Descriptor từng tool (đúng cái LLM nhìn thấy qua `tools/list`)
 
-> Cách đọc: mỗi tool LLM chỉ thấy 4 thứ — **tên** (tên function), **description** (dòng đầu docstring), **params** (signature trừ `ctx` framework tự nhét), **read-only badge** (`annotations=READ_ONLY`). Logic chạy thật nằm ở `providers/` (LLM không thấy). File nguồn: `src/opentrading_mcp/tools/<module>.py`, đăng ký preset ở `server.py:46-101`. Trích tự động từ code ngày 2026-09-24 — sửa docstring/signature là descriptor đổi theo.
+## Phụ lục A — Descriptor từng tool: tên · descriptor · params · quyền · data source (v2, 2026-09-24)
 
-### market.py → preset `market`
+> Cách đọc: LLM nhìn thấy 4 thứ qua `tools/list` — **tên**, **descriptor** (docstring dòng đầu), **params** (signature trừ `ctx`), **quyền** (`annotations`). Cột **Data source** là logic chạy thật ở `providers/` (LLM không thấy). Trích từ code `main @ 1b97c88` + verified runtime. Quyền: `RO` = READ_ONLY (`readOnlyHint=true, idempotentHint=true`), `RW` = READ_WRITE (`readOnlyHint=false, destructiveHint=false, idempotentHint=true`). Preset chứa tool ghi ở tiêu đề từng mục. Envelope mọi tool: `{data, provenance{source, as_of UTC, timezone: Asia/Ho_Chi_Minh}, warnings[], availability: available|empty|stale|partial|unavailable}`.
+>
+> Fallback tự động (tool tự gọi nguồn khác khi nguồn chính chết): `vn_quote_history`/`insider_trading` (VCI→KBS), `money_flow` (DNSE WS→Vietstock), `sentiment_score` (Groq→heuristic), watchlist/alert (PG→file JSON), `news_market`+`brief_build` (Vietstock→GDELT), `web_fetch` (UA retry), `geo_intel`/`event_stats` (retry 1 lần), DNSE orderbook (path `/quotes/latest`→`/quotes`). Tool còn lại fail → envelope `unavailable` graceful.
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `market_snapshot` | Snapshot of VN market with provenance. Use when a broad market picture is needed. | `symbols: list[str] | None = None` |
-| `source_status` | Health of every upstream plus TTL state. Use to debug stale data. | — |
-| `market_candles_batch` | Batch OHLCV for symbols, one request per symbol. Use for multi-chart context. | `symbols: list[str], days: int = 30, summary: bool = False, columns: list[str] \| None = None` |
-| `symbol_lookup` | Resolve company name to symbol, venue and sector. Use before any symbol-scoped call. | `query: str` |
-| `market_movers` | Top gainers, losers and volume leaders. Use for session pulse checks. | `top_n: int = 10` |
-| `breadth_scan` | Advancers, decliners, ceiling and floor counts. Use to judge rally health. | — |
-| `dnse_market_status` | DNSE session state plus latest index snapshot. Use for open/close checks. | — |
+### market.py → preset `market`, `all` — 7 tools
 
-### vn.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `market_snapshot` | Snapshot of VN market with provenance. Use when a broad market picture is needed. | `symbols: list[str] \| None = None` | RO | vnstock `equity_quote_batch` + `yf_global_indices`; cache Redis TTL 60s (fallback memory) |
+| `source_status` | Health of every upstream plus TTL state. Use to debug stale data. | — | RO | local: JWT Vietstock + Redis keys + env check |
+| `market_candles_batch` | Batch OHLCV for symbols, one request per symbol. Use for multi-chart context. | `symbols: list[str], days: int = 30, summary: bool = False, columns: list[str] \| None = None` | RO | vnstock VCI→KBS per symbol; cap 50 + warning khi cắt; lỗi vào `missing[]`, availability `partial` |
+| `symbol_lookup` | Resolve company name to symbol, venue and sector. Use before any symbol-scoped call. | `query: str` | RO | vnstock `Listing.all_symbols` + `Reference` |
+| `market_movers` | Top gainers, losers and volume leaders. Use for session pulse checks. | `top_n: int = 10` | RO | snapshot local (universe VN30 hardcode) |
+| `breadth_scan` | Advancers, decliners, ceiling and floor counts. Use to judge rally health. | — | RO | Vietstock `getmarketprice` + `marketinfo` |
+| `dnse_market_status` | DNSE session state plus latest index snapshot. Use for open/close checks. | — | RO | DNSE WS cache → DNSE REST `/price/VN30F1M/trades/latest` → unavailable |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `vn_quote_history` | Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history. | `symbol: str, days: int = 365, summary: bool = False, columns: list[str] \| None = None` |
-| `vn_equity_quote_batch` | One-request price board for many symbols. Use for snapshots and movers. | `symbols: list[str], summary: bool = False, columns: list[str] \| None = None` |
-| `vn_listing` | Full symbol list with company names. Use for universe and lookup. | — |
-| `vn_fundamentals` | Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation. | `symbol: str, period: str = "year"` |
-| `vn_retail_gold` | SJC and ring gold buy/sell from BTMC retail. Use for local gold premium. | — |
-| `vn_retail_fx` | VCB USD buy/sell rates. Use for currency conversion context. | — |
+### web.py → preset `market` + `intel` — 2 tools
 
-### vs.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `web_fetch` | Fetch a URL and convert to markdown, text or html. Use for reading web content. | `url: str, format: str = "markdown", timeout_seconds: int = 30` | RO | direct httpx browser-UA, cap 5MB; CF 403 → retry UA "opencode"; HTML→markdownify/BS4 |
+| `web_search` | Search the web via Exa/Parallel providers. Use for up-to-date information. | `query: str, num_results: int = 8, livecrawl: str = "fallback", search_type: str = "auto"` | RO | Exa hoặc Parallel (env `WEBSEARCH_PROVIDER` hoặc hash query chẵn/lẻ); **ẨN khỏi tools/list khi thiếu key** |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `vs_auth_status` | Vietstock JWT state and expiry. Use before any paid BCTC call. | — |
-| `vs_financeinfo` | Free-mirror statements, 12 quarters or years. Use when JWT is absent. | `symbol: str, period: str = "quarter"` |
-| `vs_market_price` | Live board snapshot from Vietstock. Use as secondary quote source. | — |
-| `vs_market_index` | Index closes with 1M and YTD change. Use for index context. | — |
-| `vs_nn_flow` | Foreign investor buy/sell chart. Use to cross-check DNSE WS flows. | — |
-| `vs_categories` | Macro indicator catalogue (~60 categories). Use before indicator queries. | — |
-| `vs_indicator_data` | Macro series for a category and term type. Use for GDP, CPI, trade context. | `category_id: int, term_type_id: int = 3` |
-| `vs_trading_info` | Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot. | `symbol: str` |
+### vn.py → preset `market` — 6 tools
 
-### vs_bctc.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `vn_quote_history` | Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history. | `symbol: str, days: int = 365, summary: bool = False, columns: list[str] \| None = None` | RO | vnstock `Quote(VCI→KBS)` tự fallback; `summary` = `{count,last,high,low}` thay candles |
+| `vn_equity_quote_batch` | One-request price board for many symbols. Use for snapshots and movers. | `symbols: list[str], summary: bool = False, columns: list[str] \| None = None` | RO | vnstock `Market.equity(list).quote()` 1 request |
+| `vn_listing` | Full symbol list with company names. Use for universe and lookup. | — | RO | vnstock `Listing.all_symbols()` |
+| `vn_fundamentals` | Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation. | `symbol: str, period: str = "year"` | RO | vnstock `Fundamental.ratio` + `Finance` |
+| `vn_retail_gold` | SJC and ring gold buy/sell from BTMC retail. Use for local gold premium. | — | RO | vnstock `Retail.gold(btmc)` SJC/NHẪN |
+| `vn_retail_fx` | VCB USD buy/sell rates. Use for currency conversion context. | — | RO | vnstock `Retail.exchange_rate()` VCB |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `vs_financial_terms` | Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries. | — |
-| `vs_financial_norms` | 190+ BCTC line items for a business type. Use to resolve norm ids. | `btype: int = 1` |
-| `vs_financial_values` | Paid BCTC values matrix (norms x 3y x 5 terms). Use for statements. | `symbol: str, btype: int = 1, years: int = 3` |
-| `vs_company_info` | Company names, exchange and description. Use for profiles. | `symbol: str` |
-| `vs_overview_trading` | EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs. | `symbol: str` |
-| `vs_documents` | Filings and disclosures with links. Use for corporate actions. | `symbol: str` |
-| `vs_reports_search` | Analyst reports search. Use for external views on a name. | `symbol: str = ""` |
-| `vs_industry_tree` | GICS industry tree. Use before sector mapping. | — |
-| `vs_stock_industry` | Companies under a GICS industry node. Use for peer universes. | `industry_id: int` |
-| `vs_industry_heatmap` | Live sector heatmap. Use for intraday rotation. | — |
-| `vs_selftrading` | Prop-desk flow chart. Use alongside foreign flows. | — |
-| `vs_top_liquidity` | Most liquid names per index. Use for liquidity screens. | `index: str = "VNINDEX"` |
-| `vs_gics_index` | GICS index closes with foreign flow. Use for sector context. | — |
-| `vs_currency` | Reference FX table. Use as fallback FX source. | — |
-| `vs_market_info` | Compact market line per symbol. Use for 5s snapshots in hours. | `symbol: str = ""` |
-| `vs_news_search` | Vietstock article search. Use for catalyst lookup. | `query: str` |
-| `vs_xnk_detail` | Import/export by country. Use for trade structure (termType 2). | `direction: str = "xk"` |
+### vs.py → preset `market` — 8 tools (Vietstock)
 
-### vn_ext.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `vs_auth_status` | Vietstock JWT state and expiry. Use before any paid BCTC call. | — | RO | Vietstock session: env `VIETSTOCK_COOKIE_LOGIN` → seed session.json → login Email/Password |
+| `vs_financeinfo` | Free-mirror statements, 12 quarters or years. Use when JWT is absent. | `symbol: str, period: str = "quarter"` | RO | Vietstock `POST /data/financeinfo` (mirror free, 12 kỳ) |
+| `vs_market_price` | Live board snapshot from Vietstock. Use as secondary quote source. | — | RO | Vietstock `POST /data/getmarketprice` |
+| `vs_market_index` | Index closes with 1M and YTD change. Use for index context. | — | RO | Vietstock `GeneralMarket_GetMarketIndexVNData` |
+| `vs_nn_flow` | Foreign investor buy/sell chart. Use to cross-check DNSE WS flows. | — | RO | Vietstock `KQGDGiaoDichNDTNNChart` |
+| `vs_categories` | Macro indicator catalogue (~60 categories). Use before indicator queries. | — | RO | Vietstock `Macro/GetIndicatorCategoryData` |
+| `vs_indicator_data` | Macro series for a category and term type. Use for GDP, CPI, trade context. | `category_id: int, term_type_id: int = 3` | RO | Vietstock `Macro/GetReportDataByIDs` (termTypeID 1-8) |
+| `vs_trading_info` | Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot. | `symbol: str` | RO | Vietstock `POST /company/tradinginfo` |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `vn_index_ohlcv` | Index bars for VN tickers. Use for index history and breadth. | `symbol: str = "VNINDEX", count: int = 100, summary: bool = False, columns: list[str] \| None = None` |
-| `vn_equity_ohlcv` | Equity bars via Market API. Use as OHLCV alternative to quotes. | `symbol: str, count: int = 100, summary: bool = False, columns: list[str] \| None = None` |
-| `vn_futures_ohlcv` | Futures bars. Use for derivatives backtest input. | `symbol: str = "VN30F1M", count: int = 100, summary: bool = False, columns: list[str] \| None = None` |
-| `vn_forex_ohlcv` | FX bars. Use for currency context. | `pair: str = "USDVND", count: int = 30` |
-| `vn_crypto_ohlv` | Crypto bars. Use for digital-asset regime reads. | `symbol: str = "BTCUSDT", count: int = 30` |
-| `vn_global_index` | Global index bars. Use as yfinance fallback. | `symbol: str = "USA30", count: int = 30` |
-| `vn_reference` | ICB reference by exchange. Use for universe construction. | `exchange: str = "HOSE"` |
-| `vn_company` | Profile, holders and officers. Use for company research. | `symbol: str` |
-| `vn_msn_fx_gold` | USDVND and XAUUSD via MSN. Use for gold-basis math. | — |
-| `vn_trades` | Tick-level matched trades. Use for microstructure reads. | `symbol: str, limit: int = 20` |
+### vs_bctc.py → preset `market` — 17 tools (Vietstock trả phí + GICS)
 
-### yf.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `vs_financial_terms` | Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries. | — | RO | Vietstock `GetListReportTerm` (ReportTermId 1,2,3,4,5,9,12) |
+| `vs_financial_norms` | 190+ BCTC line items for a business type. Use to resolve norm ids. | `btype: int = 1` | RO | Vietstock `BCTC_GetChiTieuForTable` (btype 1 CTCP/2 CK/3 Bank/5 BH) |
+| `vs_financial_values` | Paid BCTC values matrix (norms x 3y x 5 terms). Use for statements. | `symbol: str, btype: int = 1, years: int = 3` | RO | Vietstock `BCTC_LoadReportData_Async` (JWT bắt buộc) |
+| `vs_company_info` | Company names, exchange and description. Use for profiles. | `symbol: str` | RO | Vietstock `BCTC_CompanyByCodes` |
+| `vs_overview_trading` | EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs. | `symbol: str` | RO | Vietstock `GetStockDeal_OverviewTrading` + tradinginfo |
+| `vs_documents` | Filings and disclosures with links. Use for corporate actions. | `symbol: str` | RO | Vietstock `POST /data/GetDocument` |
+| `vs_reports_search` | Analyst reports search. Use for external views on a name. | `symbol: str = ""` | RO | Vietstock `CompanyReportSearch` categoryId=2 |
+| `vs_industry_tree` | GICS industry tree. Use before sector mapping. | — | RO | Vietstock `GetTreeViewIndustryGICS` |
+| `vs_stock_industry` | Companies under a GICS industry node. Use for peer universes. | `industry_id: int` | RO | Vietstock `GetBusinessTypeIDCompanyByGICS` |
+| `vs_industry_heatmap` | Live sector heatmap. Use for intraday rotation. | — | RO | Vietstock `GetHeatmapGICS` (live) |
+| `vs_selftrading` | Prop-desk flow chart. Use alongside foreign flows. | — | RO | Vietstock `KQGDGiaoDichTuDoanhChart` |
+| `vs_top_liquidity` | Most liquid names per index. Use for liquidity screens. | `index: str = "VNINDEX"` | RO | Vietstock `GetTopStockLiquidity` |
+| `vs_gics_index` | GICS index closes with foreign flow. Use for sector context. | — | RO | Vietstock `GetGICSIndexMain` |
+| `vs_currency` | Reference FX table. Use as fallback FX source. | — | RO | Vietstock `GetCurrency` |
+| `vs_market_info` | Compact market line per symbol. Use for 5s snapshots in hours. | `symbol: str = ""` | RO | Vietstock `POST /data/marketinfo` |
+| `vs_news_search` | Vietstock article search. Use for catalyst lookup. | `query: str` | RO | `dc.vietstock.vn SearchArticleNewAsync` (không cần cookie) |
+| `vs_xnk_detail` | Import/export by country. Use for trade structure (termType 2). | `direction: str = "xk"` | RO | Vietstock macro listID 64 (XK)/65 (NK), termType 2 |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `yf_global_indices` | 9 global benchmarks, 2d daily. Use for overnight context. | — |
-| `yf_commodities` | Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context. | — |
-| `yf_yield_curve` | US 2Y/10Y and inversion flag. Use for rates and regime context. | — |
+### vn_ext.py → preset `market` — 10 tools
 
-### yf_world.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `vn_index_ohlcv` | Index bars for VN tickers. Use for index history and breadth. | `symbol: str = "VNINDEX", count: int = 100, summary: bool = False, columns: list[str] \| None = None` | RO | vnstock `Market.index(VCI).ohlcv` |
+| `vn_equity_ohlcv` | Equity bars via Market API. Use as OHLCV alternative to quotes. | `symbol: str, count: int = 100, summary: bool = False, columns: list[str] \| None = None` | RO | vnstock `Market.equity(VCI).ohlcv` |
+| `vn_futures_ohlcv` | Futures bars. Use for derivatives backtest input. | `symbol: str = "VN30F1M", count: int = 100, summary: bool = False, columns: list[str] \| None = None` | RO | vnstock `Market.futures.ohlcv` |
+| `vn_forex_ohlcv` | FX bars. Use for currency context. | `pair: str = "USDVND", count: int = 30` | RO | vnstock `Market.forex.ohlcv` |
+| `vn_crypto_ohlv` | Crypto bars. Use for digital-asset regime reads. | `symbol: str = "BTCUSDT", count: int = 30` | RO | vnstock `Market.crypto.ohlcv` |
+| `vn_global_index` | Global index bars. Use as yfinance fallback. | `symbol: str = "USA30", count: int = 30` | RO | vnstock `Market.index(scope=global)` |
+| `vn_reference` | ICB reference by exchange. Use for universe construction. | `exchange: str = "HOSE"` | RO | vnstock `Reference.equity.list` — fail-closed khi schema thiếu exchange key |
+| `vn_company` | Profile, holders and officers. Use for company research. | `symbol: str` | RO | vnstock `Company(VCI).info/shareholders/officers` |
+| `vn_msn_fx_gold` | USDVND and XAUUSD via MSN. Use for gold-basis math. | — | RO | vnstock `explorer.msn Quote.history` |
+| `vn_trades` | Tick-level matched trades. Use for microstructure reads. | `symbol: str, limit: int = 20` | RO | vnstock `Market.equity.trades` |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `yf_world_indices` | 24 world benchmarks. Use for global breadth. | — |
-| `yf_oracle_markets` | 40 markets in 6 groups with 30d stats. Use for cross-asset state. | — |
-| `yf_regime_assets` | 7 regime drivers with 2y history. Use for RISK-ON/OFF calls. | — |
-| `yf_mega_flows` | Mega-cap leader flows. Use to follow global smart money. | — |
-| `yf_alloc_history` | Long allocation history per asset. Use for regime backtests. | `asset: str = "GC", timeframe: str = "1d"` |
-| `yf_market_pins` | 5-day pins for world majors plus VN watchlist. Use for brief headers. | — |
+### yf.py + yf_world.py → preset `market` — 9 tools (yfinance)
 
-### dnse_tools.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `yf_global_indices` | 9 global benchmarks, 2d daily. Use for overnight context. | — | RO | yfinance GLOBAL_9 (`^GSPC,^IXIC,^DJI,^N225,^HSI,000001.SS,^KS11,^GDAXI,^FTSE`) |
+| `yf_commodities` | Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context. | — | RO | yfinance COMMO_13 (`GC=F...VND=X,DX-Y.NYB`) |
+| `yf_yield_curve` | US 2Y/10Y and inversion flag. Use for rates and regime context. | — | RO | yfinance `^TNX` + `2YY=F` |
+| `yf_world_indices` | 24 world benchmarks. Use for global breadth. | — | RO | yfinance batch download 2d |
+| `yf_oracle_markets` | 40 markets in 6 groups with 30d stats. Use for cross-asset state. | — | RO | yfinance ~40 ticker 1mo |
+| `yf_regime_assets` | 7 regime drivers with 2y history. Use for RISK-ON/OFF calls. | — | RO | yfinance 2y (`^GSPC,^VIX,DX-Y.NYB,^TNX,BTC-USD,GC=F,CL=F`) + rule local |
+| `yf_mega_flows` | Mega-cap leader flows. Use to follow global smart money. | — | RO | yfinance 15 mega-cap leaders |
+| `yf_alloc_history` | Long allocation history per asset. Use for regime backtests. | `asset: str = "GC", timeframe: str = "1d"` | RO | yfinance 5y |
+| `yf_market_pins` | 5-day pins for world majors plus VN watchlist. Use for brief headers. | — | RO | yfinance world majors 5d |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `dnse_ohlc_history` | Paginated futures/index bars via cursor. Use for VN30F1M backtest input. | `symbol: str = "VN30F1M", resolution: int = 15, bar_type: str = "derivative", from_date: str = "2018-08-01", summary: bool = False, columns: list[str] \| None = None` |
-| `dnse_latest_trade` | Latest match price and totals per symbol. Use for realtime fallback. | `symbols: list[str]` |
-| `dnse_foreign_flow` | Net foreign flow from WS cache. Use as primary smart-money read. | — |
-| `dnse_ws_snapshot` | Raw worker snapshot for symbols. Use to debug realtime staleness. | `symbols: list[str] | None = None` |
+### dnse_tools.py + dnse_ext.py → preset `market` — 10 tools (DNSE)
 
-### dnse_ext.py → preset `market`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `dnse_ohlc_history` | Paginated futures/index bars via cursor. Use for VN30F1M backtest input. | `symbol: str = "VN30F1M", resolution: int = 15, bar_type: str = "derivative", from_date: str = "2018-08-01", summary: bool = False, columns: list[str] \| None = None` | RO | DNSE REST `GET /price/ohlc` HMAC (v2026-05-07) |
+| `dnse_latest_trade` | Latest match price and totals per symbol. Use for realtime fallback. | `symbols: list[str]` | RO | DNSE REST `/price/{s}/trades/latest` |
+| `dnse_foreign_flow` | Net foreign flow from WS cache. Use as primary smart-money read. | — | RO | Redis `mcp:market:dnse_ws_snapshot:*` (worker DNSE WS publish TTL 30s); chết → unavailable + warning hướng `vs_nn_flow` |
+| `dnse_ws_snapshot` | Raw worker snapshot for symbols. Use to debug realtime staleness. | `symbols: list[str] \| None = None` | RO | Redis worker snapshot (flag `stale` ngoài giờ) |
+| `dnse_orderbook` | Bid/ask depth. Use for microstructure reads. | `symbol: str, depth: int = 3` | RO | DNSE REST `/price/{s}/quotes/latest` → fallback `/quotes` |
+| `dnse_foreign_rest` | Per-symbol foreign trading. Use when WS cache is cold. | `symbol: str` | RO | DNSE REST `/price/{s}/foreign-trading` |
+| `dnse_indices` | Index snapshots from WS cache. Use for live index reads. | — | RO | Redis WS `market_index.*` (warning hướng `vs_market_index`) |
+| `dnse_vn30f1m_live` | VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday. | — | RO | DNSE REST 1m (7 ngày) → aggregate 15m local, remap `14:30→14:45` |
+| `dnse_working_dates` | Trading calendar. Use for session planning. | — | RO | DNSE REST `/market/working-dates` |
+| `exchange_calendar` | HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics. | — | RO | static local (không upstream) |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `dnse_orderbook` | Bid/ask depth. Use for microstructure reads. | `symbol: str, depth: int = 3` |
-| `dnse_foreign_rest` | Per-symbol foreign trading. Use when WS cache is cold. | `symbol: str` |
-| `dnse_indices` | Index snapshots from WS cache. Use for live index reads. | — |
-| `dnse_vn30f1m_live` | VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday. | — |
-| `dnse_working_dates` | Trading calendar. Use for session planning. | — |
-| `exchange_calendar` | HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics. | — |
+### scan.py → preset `scan` — 6 tools
 
-### scan.py → preset `scan`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `stock_screener` | Screen universe by valuation and quality. Use when hunting candidates. | `filters: dict \| None = None, max_pe: float \| None = None, min_roe: float \| None = None, limit: int = 20` | RO | vnstock Listing + `equity_fundamentals` enrich (gather semaphore 5, 10s/symbol) + local `apply_filters` |
+| `signals_technical` | Full technicals rating from local candles (daily only). Use for timing entries. | `symbol: str, interval: str = "1D"` (≠1D → warning) | RO | vnstock candles → `providers/technicals.py` pandas: RSI14 Wilder, Stoch, CCI20, ADX14, MACD, MOM10, AO, EMA/SMA, VWMA, Hull9, BB, ATR14, recommend vote |
+| `signals_screener_columns` | Screener column catalog (valuation/quality/universe/price). Use to build filters. | `group: str \| None = None, search: str \| None = None` | RO | local catalog `providers/screener.py` (close/change_pct/sector/industry/index non-filterable) |
+| `sector_performance` | GICS heatmap rows. Use for sector rotation reads. | `level: int = 1` | RO | Vietstock `GetHeatmapGICS` |
+| `money_flow` | Compose foreign flow: DNSE WS cache first, Vietstock cross-check. | — | RO | DNSE WS cache → Vietstock `KQGDGiaoDichNDTNNChart` → unavailable |
+| `alert_check` | Evaluate price/RSI rules against live quotes. Use for live watch. | `rules: list[dict]` (`{symbol, metric: price\|rsi14, op: >,>=,<,<=,cross_up,cross_down, threshold}`) | RO | metric price: vnstock quote; rsi14: candles → technicals local; cross-state Redis TTL 3600s; unknown op → legacy `>` (giữ compat) |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `stock_screener` | Screen universe by valuation and quality. Use when hunting candidates. | `filters: dict[str, Any] \| None = None, max_pe: float \| None = None, min_roe: float \| None = None, limit: int = 20` |
-| `signals_technical` | Full technicals rating from local candles (daily only). Use for timing entries. | `symbol: str, interval: str = "1D"` |
-| `signals_screener_columns` | Screener column catalog (valuation/quality/universe/price). Use to build filters. | `group: str \| None = None, search: str \| None = None` |
-| `sector_performance` | GICS heatmap rows. Use for sector rotation reads. | `level: int = 1` |
-| `money_flow` | Compose foreign flow: DNSE WS cache first, Vietstock cross-check. | — |
-| `alert_check` | Evaluate price/RSI rules against live quotes. Use for live watch. | `rules: list[dict[str, Any]]` |
+### compute.py → preset `scan` — 24 tools
 
-### compute.py → preset `scan`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `stock_forensic` | M-Score and Piotroski from mirror statements. Use for earnings-quality flags. | `symbol: str` | RO | Vietstock mirror → tính local (M-Score/Piotroski) |
+| `valuation_run` | PER/PB ensemble with DCF-lite. Use for fair-value ranges. | `symbol: str, btype: int = 1` | RO | vs_overview + vn quote → local |
+| `fred_series` | FRED observations. Use for US macro context. | `series_id: str, limit: int = 60` | RO | FRED API (`FRED_API_KEY`) |
+| `world_macro_country` | WorldBank series per country. Use for global GDP/CPI/debt context. | `iso3: str, indicator: str` | RO | WorldBank v2 API |
+| `world_fear_greed` | Crypto fear/greed index. Use for risk-appetite reads. | — | RO | alternative.me `/fng/` |
+| `sentiment_score` | Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk. | `symbol: str` | RO | Fireant `/posts` → Groq LLM; Groq chết → heuristic likes clamp ±1 |
+| `insider_trading` | Insider deals via vnstock Company. Use for informed-flow reads. | `symbol: str, limit: int = 10` | RO | vnstock Company VCI→KBS tự fallback |
+| `stock_overview` | Trading info plus company profile. Use for quick dossiers. | `symbol: str` | RO | vs_trading_info + vs_overview + vn_company |
+| `company_events` | Disclosures and corporate actions. Use for event calendars. | `symbol: str` | RO | vs_documents + company |
+| `financial_statements` | Mirror statements alias (v3 compat). Use for statement reads. | `symbol: str, period: str = "quarter"` | RO | vs_financeinfo |
+| `financial_ratios` | Overview plus vnstock ratios merged. Use for ratio screens. | `symbol: str` | RO | vs_overview + vn_fundamentals |
+| `peer_compare` | Head-to-head overview rows. Use when picking tickers. | `symbol: str, peers: list[str]` | RO | overview batch (cap 6 peers) |
+| `signals_scan` | Donchian breakout scan over VN30 names. Use to hunt momentum. | `limit: int = 10` | RO | vnstock candles VN30 (hardcode 10 mã) → local Donchian 20d |
+| `pattern_match` | Self-similarity of return windows by correlation. Use for analogies. | `symbol: str, lookback: int = 60` | RO | vnstock candles → local correlation |
+| `signals_trade_log` | Local trade log. Use for label building. | — | RO | file `trade_log.json` → `data/trade_log.json` |
+| `macro_reports` | Research PDFs metadata. Use for report discovery. | `symbol: str = ""` | RO | Vietstock CompanyReport |
+| `mega_flows` | Alias of yf_mega_flows (Nasdaq/global, not DNSE). Use for global flows. | — | RO | yfinance |
+| `foreign_flow` | Alias of dnse_foreign_flow (primary). Use for smart-money reads. | — | RO | Redis WS cache |
+| `oracle_health` | Alias of source_status. Use for health checks. | — | RO | local |
+| `event_stats` | GDELT event counts for a query. Use for base-rate checks. | `query: str = "stock market"` | RO | GDELT API (retry 1 lần sau 10s) |
+| `compare_assets` | Cross-asset last prices via yfinance. Use for allocation reads. | `assets: list[str]` (cap 10) | RO | yfinance |
+| `runs_list` | Local run registry. Use to resume analysis sessions. | — | RO | file `data/runs.jsonl` (env `MCP_RUNS_FILE`) |
+| `run_get` | Fetch one run by id. Use to inspect past outputs. | `run_id: str` | RO | file runs.jsonl |
+| `doctor` | Local self-check: env keys present, package versions. Use before handoff. | — | RO | local |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `stock_forensic` | M-Score and Piotroski from mirror statements. Use for earnings-quality flags. | `symbol: str` |
-| `valuation_run` | PER/PB ensemble with DCF-lite. Use for fair-value ranges. | `symbol: str, btype: int = 1` |
-| `fred_series` | FRED observations. Use for US macro context. | `series_id: str, limit: int = 60` |
-| `world_macro_country` | WorldBank series per country. Use for global GDP/CPI/debt context. | `iso3: str, indicator: str` |
-| `world_fear_greed` | Crypto fear/greed index. Use for risk-appetite reads. | — |
-| `sentiment_score` | Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk. | `symbol: str` |
-| `insider_trading` | Insider deals via vnstock Company. Use for informed-flow reads. | `symbol: str, limit: int = 10` |
-| `stock_overview` | Trading info plus company profile. Use for quick dossiers. | `symbol: str` |
-| `company_events` | Disclosures and corporate actions. Use for event calendars. | `symbol: str` |
-| `financial_statements` | Mirror statements alias (v3 compat). Use for statement reads. | `symbol: str, period: str = "quarter"` |
-| `financial_ratios` | Overview plus vnstock ratios merged. Use for ratio screens. | `symbol: str` |
-| `peer_compare` | Head-to-head overview rows. Use when picking tickers. | `symbol: str, peers: list[str]` |
-| `signals_scan` | Donchian breakout scan over VN30 names. Use to hunt momentum. | `limit: int = 10` |
-| `pattern_match` | Self-similarity of return windows by correlation. Use for analogies. | `symbol: str, lookback: int = 60` |
-| `signals_trade_log` | Local trade log. Use for label building. | — |
-| `macro_reports` | Research PDFs metadata. Use for report discovery. | `symbol: str = ""` |
-| `mega_flows` | Alias of yf_mega_flows (Nasdaq/global, not DNSE). Use for global flows. | — |
-| `foreign_flow` | Alias of dnse_foreign_flow (primary). Use for smart-money reads. | — |
-| `oracle_health` | Alias of source_status. Use for health checks. | — |
-| `event_stats` | GDELT event counts for a query. Use for base-rate checks. | `query: str = "stock market"` |
-| `compare_assets` | Cross-asset last prices via yfinance. Use for allocation reads. | `assets: list[str]` |
-| `runs_list` | Local run registry. Use to resume analysis sessions. | — |
-| `run_get` | Fetch one run by id. Use to inspect past outputs. | `run_id: str` |
-| `doctor` | Local self-check: env keys present, package versions. Use before handoff. | — |
+### watchlist.py → preset `scan` — 12 tools (MỚI v5: P4)
 
-### watchlist.py → preset `scan`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `watchlist_create` | Create a named watchlist. Use to start tracking a symbol group. | `name: str` | **RW** | Postgres `watchlists` (psycopg, connect_timeout 5) → fallback file `data/watchlists.json` (atomic tmp+replace) |
+| `watchlist_list` | List all watchlists with their symbols. Use to recall tracking state. | — | RO | PG/file |
+| `watchlist_get` | Get one watchlist's symbols by id. Use before quoting a saved set. | `list_id: int` | RO | PG/file |
+| `watchlist_add` | Add symbols (deduped, uppercase) to a watchlist. Use to track more. | `list_id: int, symbols: list[str]` | **RW** | PG/file |
+| `watchlist_remove` | Remove symbols from a watchlist. Use to trim tracking. | `list_id: int, symbols: list[str]` | **RW** | PG (transaction + `= ANY(%s)`, fail → raise KHÔNG fallback file) |
+| `watchlist_delete` | Delete a watchlist and its items (cascade). Use to clean up. | `list_id: int` | **RW** | PG/file |
+| `watchlist_update` | Rename a watchlist. Use sparingly; names are unique labels. | `list_id: int, name: str` | **RW** | PG/file (duplicate name → warning "already exists") |
+| `alert_create` | Create a stored alert rule (input to alert_check). Use for live watch. | `symbol: str, op: str = ">", threshold: float = 0.0, metric: str = "price"` | **RW** | PG/file `alert_rules`; validate op ∈ {>,>=,<,<=,cross_up,cross_down} — invalid → không lưu |
+| `alert_list` | List stored alert rules (active and paused). Use before alert_check. | — | RO | PG/file |
+| `alert_delete` | Delete a stored alert rule by id. Use to clean up alerts. | `rule_id: int` | **RW** | PG/file |
+| `alert_pause` | Pause a stored alert rule (active=false). Use to silence alerts. | `rule_id: int` | **RW** | PG/file |
+| `alert_resume` | Resume a paused alert rule (active=true). Use to re-enable alerts. | `rule_id: int` | **RW** | PG/file |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `watchlist_create` | Create a named watchlist. Use to start tracking a symbol group. | `name: str` |
-| `watchlist_list` | List all watchlists with their symbols. Use to recall tracking state. | — |
-| `watchlist_get` | Get one watchlist's symbols by id. Use before quoting a saved set. | `list_id: int` |
-| `watchlist_add` | Add symbols (deduped, uppercase) to a watchlist. Use to track more. | `list_id: int, symbols: list[str]` |
-| `watchlist_remove` | Remove symbols from a watchlist. Use to trim tracking. | `list_id: int, symbols: list[str]` |
-| `watchlist_delete` | Delete a watchlist and its items (cascade). Use to clean up. | `list_id: int` |
-| `watchlist_update` | Rename a watchlist. Use sparingly; names are unique labels. | `list_id: int, name: str` |
-| `alert_create` | Create a stored alert rule (input to alert_check). Use for live watch. | `symbol: str, op: str = ">", threshold: float = 0.0, metric: str = "price"` |
-| `alert_list` | List stored alert rules (active and paused). Use before alert_check. | — |
-| `alert_delete` | Delete a stored alert rule by id. Use to clean up alerts. | `rule_id: int` |
-| `alert_pause` | Pause a stored alert rule (active=false). Use to silence alerts. | `rule_id: int` |
-| `alert_resume` | Resume a paused alert rule (active=true). Use to re-enable alerts. | `rule_id: int` |
+### quant.py → preset `quant` — 4 tools
 
-### quant.py → preset `quant`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `quant_backtest` | Buy-and-hold backtest with costs over available history. Use for baseline stats. | `symbol: str, cost_bps: float = 10.0` | RO | vnstock candles → local backtest |
+| `quant_risk` | Sharpe, max drawdown and win rate from a return series. Use to gate models. | `returns: list[float]` | RO | thuần local (statistics) |
+| `quant_factors` | Momentum, volatility and drawdown factors from candles. Use to expand features. | `symbol: str = "VCB"` | RO | vnstock candles → local |
+| `scenario_simulate` | Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing. | `scenario: str, symbol: str = "VCB", shock_pct: float = -5.0` | RO | vnstock candles → local |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `quant_backtest` | Buy-and-hold backtest with costs over available history. Use for baseline stats. | `symbol: str, cost_bps: float = 10.0` |
-| `quant_risk` | Sharpe, max drawdown and win rate from a return series. Use to gate models. | `returns: list[float]` |
-| `quant_factors` | Momentum, volatility and drawdown factors from candles. Use to expand features. | `symbol: str = "VCB"` |
-| `scenario_simulate` | Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing. | `scenario: str, symbol: str = "VCB", shock_pct: float = -5.0` |
+### brief.py → preset `brief` — 5 tools
 
-### brief.py → preset `brief`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `brief_build` | Compose morning brief from news, odds and calendars. Use at session start. | `scope: str = "vn"` (vn\|world) | RO | fear_greed + Vietstock news → GDELT fallback + vs_categories + world pins |
+| `news_market` | Market news: Vietstock first, GDELT fallback. Use for catalyst checks. | `limit: int = 10` | RO | Vietstock dc.vietstock.vn → GDELT → unavailable |
+| `news_symbol` | Symbol news via Vietstock search. Use to verify rumors. | `symbol: str, limit: int = 10` | RO | Vietstock dc (không fallback) |
+| `economic_calendar` | Macro series catalogue as event proxy. Use for data-availability checks. | `scope: str = "vn"` (≠vn → empty + warning) | RO | vs_categories |
+| `corporate_calendar` | Disclosures feed as corporate actions. Use for dividend/meeting scans. | `symbol: str \| None = None` (default "VCB") | RO | Vietstock GetDocument |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `brief_build` | Compose morning brief from news, odds and calendars. Use at session start. | `scope: str = "vn"` |
-| `news_market` | Market news: Vietstock first, GDELT fallback. Use for catalyst checks. | `limit: int = 10` |
-| `news_symbol` | Symbol news via Vietstock search. Use to verify rumors. | `symbol: str, limit: int = 10` |
-| `economic_calendar` | Macro series catalogue as event proxy. Use for data-availability checks. | `scope: str = "vn"` |
-| `corporate_calendar` | Disclosures feed as corporate actions. Use for dividend/meeting scans. | `symbol: str | None = None` |
+### intel.py → preset `intel` — 6 tools
 
-### intel.py → preset `intel`
+| Tool | Descriptor (client thấy) | Params | Quyền | Data source |
+|---|---|---|---|---|
+| `world_prediction_odds` | Prediction-market odds via jina proxy to Gamma, then direct. Use for Fed/macro odds. | `query: str \| None = None` | RO | jina `r.jina.ai` → Gamma API direct (Kalshi/Manifold chưa implement) |
+| `geo_intel` | Geopolitical coverage via GDELT. Use when geopolitics threatens markets. | `topic: str \| None = None` | RO | GDELT API (retry 1 lần) |
+| `assets_rotation` | Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads. | — | RO | yfinance 2y → local rule classify |
+| `compare_equities` | Head-to-head overview rows and momentum. Use when picking tickers. | `symbols: list[str]` (cap 4) | RO | vs_overview + vn quote |
+| `evidence_bundle` | Lock weighted conclusion by evidence bundle. Use last for final verdict. | `claim_ids: list[str]` | RO | local (không upstream) |
+| `oracle_meta` | Aggregator snapshot plus source health. Use for dashboard meta. | — | RO | yf_market_pins + source_status |
 
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `world_prediction_odds` | Prediction-market odds via jina proxy to Gamma, then direct. Use for Fed/macro odds. | `query: str | None = None` |
-| `geo_intel` | Geopolitical coverage via GDELT. Use when geopolitics threatens markets. | `topic: str | None = None` |
-| `assets_rotation` | Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads. | — |
-| `compare_equities` | Head-to-head overview rows and momentum. Use when picking tickers. | `symbols: list[str]` |
-| `evidence_bundle` | Lock weighted conclusion by evidence bundle. Use last for final verdict. | `claim_ids: list[str]` |
-| `oracle_meta` | Aggregator snapshot plus source health. Use for dashboard meta. | — |
-
-### web.py → preset `market+intel`
-
-| Tool | Descriptor (docstring dòng đầu) | Params |
-|---|---|---|
-| `web_fetch` | Fetch a URL and convert to markdown, text or html. Use for reading web content. | `url: str, format: str = "markdown", timeout_seconds: int = 30` |
-| `web_search` | Search the web via Exa/Parallel providers. Use for up-to-date information. | `query: str, num_results: int = 8, livecrawl: str = "fallback", search_type: str = "auto"` |
-
-> Ghi chú gating: `web_search` chỉ xuất hiện trong `tools/list` khi có `EXA_API_KEY` hoặc `PARALLEL_API_KEY` (`tools/web.py:52`); `web_fetch` luôn hiện. `ctx: AnyContext` bị FastMCP loại khỏi schema nên không liệt kê ở cột Params.
+> Ghi chú gating: `web_search` chỉ xuất hiện khi có `EXA_API_KEY`/`PARALLEL_API_KEY` → market = 68/69, intel = 7/8, all = 125/126 khi không có key. Đếm chuẩn: **126 tools unique · 117 RO / 9 RW · market 69/70 · scan 42/50 · quant 4 · brief 5 · intel 8/50 · all 126**. `ctx: AnyContext` bị FastMCP loại khỏi schema nên không liệt kê ở cột Params.
