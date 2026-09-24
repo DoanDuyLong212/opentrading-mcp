@@ -10,7 +10,16 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import (
+    CLOSE_KEYS,
+    HIGH_KEYS,
+    LOW_KEYS,
+    READ_ONLY,
+    pick_value,
+    project_rows,
+    run_blocking,
+    summarize_rows,
+)
 from opentrading_mcp.tools.vn import _na
 
 
@@ -18,46 +27,22 @@ async def _call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
     return await run_blocking(functools.partial(fn, *args, **kwargs), tool, timeout_secs=60.0)
 
 
-_CLOSE_KEYS = ("c", "close", "Close", "CLOSE")
-_HIGH_KEYS = ("h", "high", "High", "HIGH")
-_LOW_KEYS = ("l", "low", "Low", "LOW")
+# Backward-compat aliases: logic lives in shared.py, names kept for imports.
+_CLOSE_KEYS = CLOSE_KEYS
+_HIGH_KEYS = HIGH_KEYS
+_LOW_KEYS = LOW_KEYS
 
 
 def _project(rows: list[dict[str, Any]], columns: list[str] | None) -> list[dict[str, Any]]:
-    if not columns:
-        return rows
-    return [{k: r[k] for k in columns if k in r} for r in rows]
+    return project_rows(rows, columns)
 
 
 def _pick(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
-    for k in keys:
-        if k in row:
-            return row[k]
-    return None
+    return pick_value(row, keys)
 
 
 def _summarize(symbol: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
-    if not rows:
-        return {"symbol": symbol.upper(), "count": 0, "last": None, "high": None, "low": None}
-    closes = [_pick(r, _CLOSE_KEYS) for r in rows]
-    highs = [_pick(r, _HIGH_KEYS) for r in rows]
-    lows = [_pick(r, _LOW_KEYS) for r in rows]
-    last_close = closes[-1] if closes[-1] is not None else rows[-1]
-    try:
-        high = max(h for h in highs if isinstance(h, (int, float)))
-    except ValueError:
-        high = None
-    try:
-        low = min(lo for lo in lows if isinstance(lo, (int, float)))
-    except ValueError:
-        low = None
-    return {
-        "symbol": symbol.upper(),
-        "count": len(rows),
-        "last": last_close,
-        "high": high,
-        "low": low,
-    }
+    return summarize_rows(symbol, rows, uppercase=True)
 
 
 def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
