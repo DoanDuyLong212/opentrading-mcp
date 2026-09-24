@@ -40,6 +40,39 @@ def _log_stderr(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
+def _pick(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for k in keys:
+        if k in row:
+            return row[k]
+    return None
+
+
+def _summarize_candles(symbol: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"symbol": symbol, "count": 0, "last": None, "high": None, "low": None}
+    closes = [_pick(r, ("c", "close", "Close", "CLOSE")) for r in rows]
+    highs = [_pick(r, ("h", "high", "High", "HIGH")) for r in rows]
+    lows = [_pick(r, ("l", "low", "Low", "LOW")) for r in rows]
+    last_close = closes[-1] if closes[-1] is not None else rows[-1]
+    try:
+        high = max(h for h in highs if isinstance(h, (int, float)))
+    except ValueError:
+        high = None
+    try:
+        low = min(lo for lo in lows if isinstance(lo, (int, float)))
+    except ValueError:
+        low = None
+    return {"symbol": symbol, "count": len(rows), "last": last_close, "high": high, "low": low}
+
+
+def _project_rows(
+    rows: list[dict[str, Any]], columns: list[str] | None
+) -> list[dict[str, Any]]:
+    if not columns:
+        return rows
+    return [{k: r[k] for k in columns if k in r} for r in rows]
+
+
 def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def market_snapshot(
@@ -90,12 +123,16 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def market_candles_batch(
         symbols: list[str],
         days: int = 30,
+        summary: bool = False,
+        columns: list[str] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Batch OHLCV for symbols, one request per symbol. Use for multi-chart context."""
-        total = max(len(symbols), 1)
-        out: list[dict[str, Any]] = []
-        for i, symbol in enumerate(symbols):
+        capped = symbols[:50]
+        total = max(len(capped), 1)
+        series: list[dict[str, Any]] = []
+        missing: list[dict[str, Any]] = []
+        for i, symbol in enumerate(capped):
             if ctx is not None:
                 await ctx.report_progress(i, total, f"fetch {symbol}")
             try:
@@ -103,12 +140,23 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                     functools.partial(vn_p.quote_history, symbol, days),
                     "market_candles_batch",
                 )
-                out.append({"symbol": symbol, "candles": candles})
+                if summary:
+                    series.append(_summarize_candles(symbol, candles))
+                else:
+                    series.append({"symbol": symbol, "candles": _project_rows(candles, columns)})
             except (ProviderUnavailable, ProviderBadData) as exc:
-                out.append({"symbol": symbol, "error": str(exc), "candles": []})
+                missing.append({"symbol": symbol, "error": str(exc)})
         if ctx is not None:
             await ctx.report_progress(total, total, "done")
-        return make_envelope({"series": out}, source="vnstock")
+        if missing and series:
+            availability: str | None = "partial"
+        elif not series and missing:
+            availability = "unavailable"
+        else:
+            availability = None
+        return make_envelope(
+            {"series": series, "missing": missing}, source="vnstock", availability=availability
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def symbol_lookup(query: str) -> dict[str, Any]:
