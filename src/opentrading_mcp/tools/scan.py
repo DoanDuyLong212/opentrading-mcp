@@ -19,6 +19,13 @@ from opentrading_mcp.providers.errors import (
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
+ALERT_STATE_KEY = "mcp:scan:alert_state"
+# Cross state must outlive a single scan cycle, otherwise cross_up/cross_down
+# lose their prev value and re-fire every call (or silently reset). One hour
+# covers normal scheduler gaps; a fresh state only costs one seeded first
+# observation.
+ALERT_STATE_TTL = 3600
+
 
 def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
@@ -271,33 +278,34 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         if needs_history:
             from opentrading_mcp.providers import store as st_p
 
-            raw_state = st_p.cache_get("mcp:scan:alert_state")
+            raw_state = st_p.cache_get(ALERT_STATE_KEY)
             if isinstance(raw_state, (str, bytes)):
                 try:
                     prev_state = json.loads(raw_state)
-                except Exception:
+                except Exception as exc:
+                    warnings_list.append(f"alert state unreadable, reset: {exc}")
                     prev_state = {}
             elif isinstance(raw_state, dict):
                 prev_state = raw_state
             symbol_list = sorted(
                 {str(q.get("symbol", "")).upper() for q in quotes if q.get("symbol")}
             )
-            try:
-                results = await asyncio.gather(
-                    *(
-                        run_blocking(
-                            functools.partial(vn_p.quote_history, sym, 30),
-                            "alert_check_rsi",
-                            timeout_secs=20.0,
-                        )
-                        for sym in symbol_list
+            results = await asyncio.gather(
+                *(
+                    run_blocking(
+                        functools.partial(vn_p.quote_history, sym, 30),
+                        "alert_check_rsi",
+                        timeout_secs=20.0,
                     )
-                )
-                for sym, rows in zip(symbol_list, results, strict=True):
-                    if isinstance(rows, list) and rows:
-                        history[sym] = rows
-            except Exception as exc:
-                warnings_list.append(f"history fetch partial: {exc}")
+                    for sym in symbol_list
+                ),
+                return_exceptions=True,
+            )
+            for sym, res in zip(symbol_list, results, strict=True):
+                if isinstance(res, BaseException):
+                    warnings_list.append(f"{sym}: history fetch failed: {res}")
+                elif isinstance(res, list) and res:
+                    history[sym] = res
 
         triggered: list[dict[str, Any]] = []
         for quote in quotes:
@@ -364,7 +372,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                      "op": op, "threshold": threshold}
                 )
         if needs_history and prev_state:
-            st_p.cache_set("mcp:scan:alert_state", prev_state, ttl_seconds=60)
+            st_p.cache_set(ALERT_STATE_KEY, prev_state, ttl_seconds=ALERT_STATE_TTL)
         return make_envelope(
             {"rules": len(rules), "evaluated": len(quotes), "triggered": triggered},
             source="computed-local",

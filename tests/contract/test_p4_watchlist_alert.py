@@ -364,3 +364,132 @@ def test_cross_state_cache_key_present(monkeypatch):
     monkeypatch.delenv("REDIS_URL", raising=False)
     store.cache_set("mcp:scan:alert_state", {"a": 1}, ttl_seconds=60)
     assert store.cache_get("mcp:scan:alert_state") == '{"a": 1}'
+
+
+# ------------------------------------------------------------ review fixes
+
+
+async def test_alert_create_rejects_invalid_op(file_store: Path):
+    """Invalid op must not be stored: warning envelope, availability empty."""
+    fn_create = _wl_tool_fn("alert_create")
+    fn_list = _wl_tool_fn("alert_list")
+
+    env = await fn_create("VCB", "bananas", 100.0)
+    assert env["availability"] == "empty"
+    assert "op" in str(env["warnings"]).lower()
+    # alias ops still normalize to canonical form and get stored
+    env2 = await fn_create("HPG", "gt", 10.0)
+    assert env2["data"]["op"] == ">"
+    assert (await fn_list())["data"]["rules"][0]["op"] == ">"
+
+
+async def test_alert_create_duplicate_warns_already_exists(file_store: Path):
+    fn_create = _wl_tool_fn("alert_create")
+    fn_list = _wl_tool_fn("alert_list")
+
+    first = (await fn_create("VCB", ">", 50000.0))["data"]
+    env = await fn_create("VCB", ">", 50000.0)
+    assert "already exists" in str(env["warnings"]).lower()
+    assert env["data"]["id"] == first["id"]
+    ids = [r["id"] for r in (await fn_list())["data"]["rules"]]
+    assert ids.count(first["id"]) == 1, "duplicate must not create a second rule"
+
+
+def test_alert_state_ttl_is_durable():
+    """Cross state must outlive one scan cycle so it never re-fires."""
+    from opentrading_mcp.tools.scan import ALERT_STATE_KEY, ALERT_STATE_TTL
+
+    assert ALERT_STATE_KEY == "mcp:scan:alert_state"
+    assert ALERT_STATE_TTL >= 3600
+
+
+def test_pg_label_is_env_only_no_connect(monkeypatch: pytest.MonkeyPatch):
+    """Label check must read DATABASE_URL only, never open a connection."""
+    from opentrading_mcp.tools import watchlist as wl_store
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/x")
+    assert wl_store._pg_configured() is True
+    monkeypatch.delenv("DATABASE_URL")
+    assert wl_store._pg_configured() is False
+
+
+async def test_watchlist_remove_pg_failure_no_file_fallback(
+    file_store: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """PG failure mid-transaction must roll back + raise, not write the file."""
+    from opentrading_mcp.tools import watchlist as wl_store
+
+    class _FakeTx:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: Any):
+            return False
+
+    class _FakeCur:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: Any):
+            return False
+
+        def execute(self, *args: Any, **kwargs: Any):
+            raise RuntimeError("boom mid-delete")
+
+    class _FakeConn:
+        def transaction(self):
+            return _FakeTx()
+
+        def cursor(self):
+            return _FakeCur()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(wl_store, "_pg", lambda: _FakeConn())
+    fn_remove = _wl_tool_fn("watchlist_remove")
+    env = await fn_remove(1, ["VCB"])
+    assert env["availability"] == "unavailable"
+    assert "remove failed" in str(env["warnings"])
+    assert not (file_store / "watchlists.json").exists(), (
+        "must not fall back to file after a failed PG transaction"
+    )
+
+
+async def test_alert_check_history_partial_failure_warns(
+    file_store: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """One symbol's history failure must not kill the whole gather."""
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    fn = _wl_tool_fn("alert_check")
+    _patch_quotes(monkeypatch, [_quote("AAA", 10.0), _quote("BBB", 20.0)])
+
+    def fake_history(symbol: str, days: int = 365):
+        if symbol == "AAA":
+            raise RuntimeError("provider down")
+        return [
+            {"t": f"2026-06-{i % 28 + 1:02d}", "o": 10, "h": 11, "l": 9, "c": 10.5,
+             "v": 1000.0}
+            for i in range(30)
+        ]
+
+    monkeypatch.setattr(vn_p, "quote_history", fake_history)
+    env = await fn(
+        [
+            {"symbol": "AAA", "metric": "rsi14", "op": ">", "threshold": 5.0},
+            {"symbol": "BBB", "metric": "rsi14", "op": ">", "threshold": 5.0},
+        ]
+    )
+    _check_envelope(env, "alert_check")
+    assert any("AAA" in w and "failed" in w for w in env["warnings"])
+    assert env["data"]["evaluated"] == 2
+
+
+def test_file_dump_leaves_no_tmp(file_store: Path):
+    """Atomic write: tmp file is consumed by os.replace."""
+    from opentrading_mcp.tools import watchlist as wl_store
+
+    wl_store._upsert_list("t1", "atomic")
+    assert (file_store / "watchlists.json").exists()
+    assert not (file_store / "watchlists.json.tmp").exists()

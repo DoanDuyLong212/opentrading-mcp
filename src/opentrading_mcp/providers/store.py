@@ -54,14 +54,3 @@ def cache_set(key: str, value: str | dict[str, Any], ttl_seconds: int) -> None:
         except Exception:
             pass
     _memory[key] = (time.time() + ttl_seconds, payload)
-
-
-def cache_delete(key: str) -> None:
-    """Invalidate a cache key from both tiers (P4 watchlist writes)."""
-    client = _redis()
-    if client is not None:
-        try:
-            client.delete(key)
-        except Exception:
-            pass
-    _memory.pop(key, None)

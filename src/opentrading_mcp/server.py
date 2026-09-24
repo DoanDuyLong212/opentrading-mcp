@@ -41,6 +41,8 @@ TIMEOUT_MATRIX: dict[str, int] = {
     "quant_factors": 120,
     "stock_screener": 60,
     "signals_screener_columns": 30,
+    "watchlist_get": 30,
+    "alert_check": 30,
 }
 
 PRESETS = ("market", "scan", "quant", "brief", "intel", "all")
