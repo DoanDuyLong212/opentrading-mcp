@@ -52,9 +52,11 @@ def test_apply_filters_min_max_null():
     # both bounds
     out3 = apply_filters(rows, {"pe": [5, 15], "roe": [0.1, 0.25]})
     assert [r["symbol"] for r in out3] == ["A"]
-    # equality
-    out4 = apply_filters(rows, {"sector": "Bank"})
-    assert sorted(r["symbol"] for r in out4) == ["A", "C"]
+    # equality (symbol/exchange)
+    out4 = apply_filters(rows, {"symbol": "A"})
+    assert [r["symbol"] for r in out4] == ["A"]
+    # sector/industry/index non-filterable (not enriched in universe rows) → ignored
+    assert len(apply_filters(rows, {"sector": "Bank"})) == 3
     # empty filters -> all
     assert len(apply_filters(rows, None)) == 3
     assert len(apply_filters(rows, {})) == 3
@@ -163,7 +165,7 @@ def test_price_fields_non_filterable_catalog():
     from opentrading_mcp.providers import screener as sc
     from opentrading_mcp.providers.screener import apply_filters
 
-    for field in ("close", "change_pct"):
+    for field in ("close", "change_pct", "sector", "industry", "index"):
         assert "non-filterable" in sc.COLUMNS[field]["desc"].lower()
     rows = [{"symbol": "A"}, {"symbol": "B", "close": 50.0}]
     # price filters are ignored (no live price enrichment) → all rows kept
@@ -176,7 +178,6 @@ def test_pick_ratio_number_exact_no_substring():
 
     from opentrading_mcp.providers.vnstock import (
         _pick_ratio_number,
-        equity_fundamentals,
     )
 
     # "pe" must NOT match an "open" column (old substring bug)
@@ -197,7 +198,6 @@ def test_pick_ratio_number_exact_no_substring():
 
     real_fund = None
     try:
-        from vnstock import Fundamental as _F
 
         class _FakeEq:
             def ratio(self, period="year"):

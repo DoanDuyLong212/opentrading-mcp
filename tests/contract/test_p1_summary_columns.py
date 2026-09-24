@@ -148,7 +148,10 @@ async def test_market_candles_batch_summary_no_candles(monkeypatch):
 async def test_vn_equity_quote_batch_columns(monkeypatch):
     from opentrading_mcp.providers import vnstock as vn_p
 
-    fake_quotes = [{"symbol": "VCB", "price": 10.0, "volume": 5}, {"symbol": "HPG", "price": 20.0, "volume": 7}]
+    fake_quotes = [
+        {"symbol": "VCB", "price": 10.0, "volume": 5},
+        {"symbol": "HPG", "price": 20.0, "volume": 7},
+    ]
     monkeypatch.setattr(vn_p, "equity_quote_batch", lambda *a, **k: list(fake_quotes))
     fn = _tool_fn("vn_equity_quote_batch")
     env = await fn(symbols=["VCB", "HPG"], columns=["symbol", "price"])

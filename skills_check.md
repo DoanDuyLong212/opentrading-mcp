@@ -312,7 +312,7 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 |---|---|---|
 | `market_snapshot` | Snapshot of VN market with provenance. Use when a broad market picture is needed. | `symbols: list[str] | None = None` |
 | `source_status` | Health of every upstream plus TTL state. Use to debug stale data. | — |
-| `market_candles_batch` | Batch OHLCV for symbols, one request per symbol. Use for multi-chart context. | `symbols: list[str], days: int = 30` |
+| `market_candles_batch` | Batch OHLCV for symbols, one request per symbol. Use for multi-chart context. | `symbols: list[str], days: int = 30, summary: bool = False, columns: list[str] \| None = None` |
 | `symbol_lookup` | Resolve company name to symbol, venue and sector. Use before any symbol-scoped call. | `query: str` |
 | `market_movers` | Top gainers, losers and volume leaders. Use for session pulse checks. | `top_n: int = 10` |
 | `breadth_scan` | Advancers, decliners, ceiling and floor counts. Use to judge rally health. | — |
@@ -322,8 +322,8 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 
 | Tool | Descriptor (docstring dòng đầu) | Params |
 |---|---|---|
-| `vn_quote_history` | Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history. | `symbol: str, days: int = 365` |
-| `vn_equity_quote_batch` | One-request price board for many symbols. Use for snapshots and movers. | `symbols: list[str]` |
+| `vn_quote_history` | Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history. | `symbol: str, days: int = 365, summary: bool = False, columns: list[str] \| None = None` |
+| `vn_equity_quote_batch` | One-request price board for many symbols. Use for snapshots and movers. | `symbols: list[str], summary: bool = False, columns: list[str] \| None = None` |
 | `vn_listing` | Full symbol list with company names. Use for universe and lookup. | — |
 | `vn_fundamentals` | Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation. | `symbol: str, period: str = "year"` |
 | `vn_retail_gold` | SJC and ring gold buy/sell from BTMC retail. Use for local gold premium. | — |
@@ -368,9 +368,9 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 
 | Tool | Descriptor (docstring dòng đầu) | Params |
 |---|---|---|
-| `vn_index_ohlcv` | Index bars for VN tickers. Use for index history and breadth. | `symbol: str = "VNINDEX", count: int = 100` |
-| `vn_equity_ohlcv` | Equity bars via Market API. Use as OHLCV alternative to quotes. | `symbol: str, count: int = 100` |
-| `vn_futures_ohlcv` | Futures bars. Use for derivatives backtest input. | `symbol: str = "VN30F1M", count: int = 100` |
+| `vn_index_ohlcv` | Index bars for VN tickers. Use for index history and breadth. | `symbol: str = "VNINDEX", count: int = 100, summary: bool = False, columns: list[str] \| None = None` |
+| `vn_equity_ohlcv` | Equity bars via Market API. Use as OHLCV alternative to quotes. | `symbol: str, count: int = 100, summary: bool = False, columns: list[str] \| None = None` |
+| `vn_futures_ohlcv` | Futures bars. Use for derivatives backtest input. | `symbol: str = "VN30F1M", count: int = 100, summary: bool = False, columns: list[str] \| None = None` |
 | `vn_forex_ohlcv` | FX bars. Use for currency context. | `pair: str = "USDVND", count: int = 30` |
 | `vn_crypto_ohlv` | Crypto bars. Use for digital-asset regime reads. | `symbol: str = "BTCUSDT", count: int = 30` |
 | `vn_global_index` | Global index bars. Use as yfinance fallback. | `symbol: str = "USA30", count: int = 30` |
@@ -402,7 +402,7 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 
 | Tool | Descriptor (docstring dòng đầu) | Params |
 |---|---|---|
-| `dnse_ohlc_history` | Paginated futures/index bars via cursor. Use for VN30F1M backtest input. | `symbol: str = "VN30F1M", resolution: int = 15` |
+| `dnse_ohlc_history` | Paginated futures/index bars via cursor. Use for VN30F1M backtest input. | `symbol: str = "VN30F1M", resolution: int = 15, bar_type: str = "derivative", from_date: str = "2018-08-01", summary: bool = False, columns: list[str] \| None = None` |
 | `dnse_latest_trade` | Latest match price and totals per symbol. Use for realtime fallback. | `symbols: list[str]` |
 | `dnse_foreign_flow` | Net foreign flow from WS cache. Use as primary smart-money read. | — |
 | `dnse_ws_snapshot` | Raw worker snapshot for symbols. Use to debug realtime staleness. | `symbols: list[str] | None = None` |
@@ -422,8 +422,9 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 
 | Tool | Descriptor (docstring dòng đầu) | Params |
 |---|---|---|
-| `stock_screener` | Screen universe by valuation and quality. Use when hunting candidates. | `max_pe: float | None = None, min_roe: float | None = None, limit: int = 20` |
-| `signals_technical` | RSI, MACD, Bollinger, MA, ATR from local candles. Use for timing entries. | `symbol: str` |
+| `stock_screener` | Screen universe by valuation and quality. Use when hunting candidates. | `filters: dict[str, Any] \| None = None, max_pe: float \| None = None, min_roe: float \| None = None, limit: int = 20` |
+| `signals_technical` | Full technicals rating from local candles (daily only). Use for timing entries. | `symbol: str, interval: str = "1D"` |
+| `signals_screener_columns` | Screener column catalog (valuation/quality/universe/price). Use to build filters. | `group: str \| None = None, search: str \| None = None` |
 | `sector_performance` | GICS heatmap rows. Use for sector rotation reads. | `level: int = 1` |
 | `money_flow` | Compose foreign flow: DNSE WS cache first, Vietstock cross-check. | — |
 | `alert_check` | Evaluate price/RSI rules against live quotes. Use for live watch. | `rules: list[dict[str, Any]]` |
@@ -456,6 +457,23 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 | `runs_list` | Local run registry. Use to resume analysis sessions. | — |
 | `run_get` | Fetch one run by id. Use to inspect past outputs. | `run_id: str` |
 | `doctor` | Local self-check: env keys present, package versions. Use before handoff. | — |
+
+### watchlist.py → preset `scan`
+
+| Tool | Descriptor (docstring dòng đầu) | Params |
+|---|---|---|
+| `watchlist_create` | Create a named watchlist. Use to start tracking a symbol group. | `name: str` |
+| `watchlist_list` | List all watchlists with their symbols. Use to recall tracking state. | — |
+| `watchlist_get` | Get one watchlist's symbols by id. Use before quoting a saved set. | `list_id: int` |
+| `watchlist_add` | Add symbols (deduped, uppercase) to a watchlist. Use to track more. | `list_id: int, symbols: list[str]` |
+| `watchlist_remove` | Remove symbols from a watchlist. Use to trim tracking. | `list_id: int, symbols: list[str]` |
+| `watchlist_delete` | Delete a watchlist and its items (cascade). Use to clean up. | `list_id: int` |
+| `watchlist_update` | Rename a watchlist. Use sparingly; names are unique labels. | `list_id: int, name: str` |
+| `alert_create` | Create a stored alert rule (input to alert_check). Use for live watch. | `symbol: str, op: str = ">", threshold: float = 0.0, metric: str = "price"` |
+| `alert_list` | List stored alert rules (active and paused). Use before alert_check. | — |
+| `alert_delete` | Delete a stored alert rule by id. Use to clean up alerts. | `rule_id: int` |
+| `alert_pause` | Pause a stored alert rule (active=false). Use to silence alerts. | `rule_id: int` |
+| `alert_resume` | Resume a paused alert rule (active=true). Use to re-enable alerts. | `rule_id: int` |
 
 ### quant.py → preset `quant`
 

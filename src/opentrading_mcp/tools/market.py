@@ -118,6 +118,9 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Batch OHLCV for symbols, one request per symbol. Use for multi-chart context."""
         capped = symbols[:50]
+        warnings: list[str] = []
+        if len(symbols) > 50:
+            warnings.append(f"capped 50 symbols, {len(symbols) - 50} dropped")
         total = max(len(capped), 1)
         series: list[dict[str, Any]] = []
         missing: list[dict[str, Any]] = []
@@ -144,7 +147,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         else:
             availability = None
         return make_envelope(
-            {"series": series, "missing": missing}, source="vnstock", availability=availability
+            {"series": series, "missing": missing},
+            source="vnstock",
+            availability=availability,
+            warnings=warnings,
         )
 
     @server.tool(annotations=READ_ONLY)

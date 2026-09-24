@@ -13,9 +13,21 @@ COLUMNS: dict[str, dict[str, str]] = {
     "pe": {"group": "valuation", "desc": "Price / trailing earnings (P/E). Lower is cheaper."},
     "roe": {"group": "quality", "desc": "Return on equity, ratio 0..1 (e.g. 0.18 = 18%)."},
     "market_cap": {"group": "valuation", "desc": "Market capitalization in VND."},
-    "sector": {"group": "universe", "desc": "Sector / ICB industry group name."},
-    "industry": {"group": "universe", "desc": "Detailed industry name."},
-    "index": {"group": "universe", "desc": "Index membership (e.g. VN30, VNMID)."},
+    "sector": {
+        "group": "universe",
+        "desc": "Sector / ICB industry group name. Non-filterable "
+        "(universe rows are not enriched with sector yet; sector filters are ignored).",
+    },
+    "industry": {
+        "group": "universe",
+        "desc": "Detailed industry name. Non-filterable "
+        "(universe rows are not enriched with industry yet; industry filters are ignored).",
+    },
+    "index": {
+        "group": "universe",
+        "desc": "Index membership (e.g. VN30, VNMID). Non-filterable "
+        "(universe rows are not enriched with index membership yet; index filters are ignored).",
+    },
     "close": {
         "group": "price",
         "desc": "Latest close price in VND. Catalog-only, non-filterable "
@@ -33,9 +45,11 @@ EQUALITY_FIELDS = {"sector", "industry", "index", "symbol", "exchange"}
 RANGE_FIELDS = {"pe", "roe", "market_cap", "close", "change_pct"}
 
 # Price group is catalog-only (no live quote enrichment in stock_screener),
-# so price filters would be dead-filters. They are documented non-filterable
-# and ignored by apply_filters instead of excluding every row.
-NON_FILTERABLE_FIELDS = {"close", "change_pct"}
+# so price filters would be dead-filters. Equality fields sector/industry/index
+# are documented in the catalog but universe data is not enriched with them yet,
+# so matching would silently drop every row. Both are non-filterable: apply_filters
+# ignores them instead of excluding every row.
+NON_FILTERABLE_FIELDS = {"close", "change_pct", "sector", "industry", "index"}
 
 KNOWN_FIELDS = set(COLUMNS) | EQUALITY_FIELDS | RANGE_FIELDS
 
@@ -73,10 +87,10 @@ def apply_filters(
     """Filter rows locally.
 
     Range form: {field: [min, max]} with None as unbounded side.
-    Equality form (sector/industry/index/symbol/exchange): plain string,
-    case-insensitive. Unknown fields, and catalog-only price fields
-    (close/change_pct, non-filterable), are ignored. Rows missing a filtered
-    numeric value are excluded.
+    Equality form (symbol/exchange): plain string, case-insensitive. Unknown
+    fields, and non-filterable fields (catalog-only price fields close/change_pct;
+    sector/industry/index not yet present in universe rows) are ignored. Rows
+    missing a filtered numeric value are excluded.
     """
     if not filters:
         return list(rows)

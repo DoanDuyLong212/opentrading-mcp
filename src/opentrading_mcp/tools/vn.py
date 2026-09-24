@@ -86,7 +86,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "vn_equity_quote_batch",
             )
             if summary:
-                names = [q.get("symbol", s) if isinstance(q, dict) else s for q, s in zip(quotes, symbols)]
+                names = [
+                    q.get("symbol", s) if isinstance(q, dict) else s
+                    for q, s in zip(quotes, symbols, strict=False)
+                ]
                 return make_envelope(
                     {"count": len(quotes), "symbols": names}, source="vnstock"
                 )

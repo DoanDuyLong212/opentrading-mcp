@@ -116,7 +116,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def signals_screener_columns(
         group: str | None = None, search: str | None = None
     ) -> dict[str, Any]:
-        """Screener column catalog (groups valuation/quality/universe/price). Use to build filters."""
+        """Screener column catalog (valuation/quality/universe/price). Use to build filters."""
         from opentrading_mcp.providers import screener as sc_p
 
         cols = sc_p.screener_columns(group=group, search=search)

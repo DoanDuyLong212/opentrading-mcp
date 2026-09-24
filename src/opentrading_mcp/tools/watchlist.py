@@ -57,7 +57,10 @@ def _file_path(kind: str) -> Path:
 def _file_load(kind: str) -> list[dict[str, Any]]:
     path = _file_path(kind)
     try:
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
+        if isinstance(data, list):
+            return [r for r in data if isinstance(r, dict)]
+        return []
     except FileNotFoundError:
         return []
     except Exception as exc:
@@ -159,7 +162,7 @@ def _delete_list(list_id: str) -> bool:
         try:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM watchlists WHERE id = %s", (int(list_id),))
-                return cur.rowcount > 0
+                return bool(cur.rowcount > 0)
         except Exception:
             return False
         finally:
@@ -259,7 +262,7 @@ def _remove_symbols_file(list_id: str, drop: set[str]) -> list[str]:
         if row["id"] == list_id:
             row["symbols"] = [s for s in row.get("symbols", []) if s not in drop]
             _file_dump("lists", rows)
-            return row["symbols"]
+            return list(row["symbols"])
     return []
 
 
@@ -342,7 +345,7 @@ def _delete_rule(rule_id: str) -> bool:
         try:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM alert_rules WHERE id = %s", (int(rule_id),))
-                return cur.rowcount > 0
+                return bool(cur.rowcount > 0)
         except Exception:
             return False
         finally:

@@ -29,6 +29,7 @@ dev = [
   "pytest-asyncio>=0.25",
   "ruff>=0.9",
   "mypy>=1.14",
+  "pandas-stubs>=2.2",
 ]
 
 [project.scripts]

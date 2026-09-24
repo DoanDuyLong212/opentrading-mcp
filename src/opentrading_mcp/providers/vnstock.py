@@ -229,7 +229,6 @@ def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
     """
     want = _expand_aliases({_norm_label(n) for n in needles})
     try:
-        cols = {str(c).lower(): c for c in frame.columns}
         norm_cols = {_norm_label(c): c for c in frame.columns}
         for alias in want:
             col = norm_cols.get(alias)
@@ -285,7 +284,7 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     roe: float | None = None
     market_cap: float | None = None
     try:
-        import pandas as pd  # type: ignore[import]
+        import pandas as pd
 
         if isinstance(data, pd.DataFrame) and len(data):
             pe = _pick_ratio_number(data, "pe", "p/e")
@@ -298,7 +297,7 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     if isinstance(data, dict):
         for raw_key, val in data.items():
             try:
-                num = float(val)  # type: ignore[arg-type]
+                num = float(val)
             except (TypeError, ValueError):
                 continue
             norm = _norm_label(raw_key)
