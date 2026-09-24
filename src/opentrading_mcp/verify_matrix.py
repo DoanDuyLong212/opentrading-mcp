@@ -66,6 +66,7 @@ MATRIX: list[tuple[str, str, dict[str, Any], float]] = [
     ("intel", "compare_equities", {"symbols": ["VCB", "HPG"]}, 120.0),
     ("intel", "evidence_bundle", {"claim_ids": ["c1"]}, 20.0),
     ("intel", "oracle_meta", {}, 90.0),
+    ("intel", "web_fetch", {"url": "https://example.com", "format": "text"}, 60.0),
     ("market", "vs_financial_terms", {}, 30.0),
     ("market", "vs_financial_norms", {"btype": 1}, 30.0),
     ("market", "vs_financial_values", {"symbol": "VCB", "btype": 1, "years": 1}, 120.0),

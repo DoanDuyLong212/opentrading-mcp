@@ -46,6 +46,7 @@ PRESETS = ("market", "scan", "quant", "brief", "intel", "all")
 PRESET_MODULES: dict[str, tuple[str, ...]] = {
     "market": (
         "market",
+        "web",
         "vn",
         "vs",
         "vs_bctc",
@@ -58,7 +59,7 @@ PRESET_MODULES: dict[str, tuple[str, ...]] = {
     "scan": ("scan", "compute"),
     "quant": ("quant",),
     "brief": ("brief",),
-    "intel": ("intel",),
+    "intel": ("intel", "web"),
     "all": (
         "market",
         "vn",
@@ -74,6 +75,7 @@ PRESET_MODULES: dict[str, tuple[str, ...]] = {
         "quant",
         "brief",
         "intel",
+        "web",
     ),
 }
 
@@ -96,6 +98,7 @@ _REGISTER_BY_MODULE = {
     "quant": "register_quant_tools",
     "brief": "register_brief_tools",
     "intel": "register_intel_tools",
+    "web": "register_web_tools",
 }
 
 

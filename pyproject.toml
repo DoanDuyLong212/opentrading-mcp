@@ -19,6 +19,8 @@ dependencies = [
   "vnstock>=3.0",
   "yfinance>=0.2",
   "pandas>=2.0",
+  "markdownify>=1.2.3",
+  "beautifulsoup4>=4.15.0",
 ]
 
 [project.optional-dependencies]

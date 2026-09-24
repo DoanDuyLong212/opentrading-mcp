@@ -35,7 +35,7 @@
 | Forensic | `forensic.py` tính local từ BCTC (13 trường output) | Port nguyên module, tính local |
 | Cache | PG ohlcv/macro + Redis `dash:ohlc/index/foreign/market_status/last_update/spark/yf (TTL 12h, yf 60-300s)` + Mongo news | Cache riêng MCP-server (SQLite/PG + TTL: 5s/60s/300s/3600s) |
 
-## Bảng 1 — Skills v4 (10 nhóm × 58 skills, Descriptor = frontmatter SKILL.md)
+## Bảng 1 — Skills v4 (11 nhóm × 59 skills, Descriptor = frontmatter SKILL.md)
 
 | Nhóm | Skill | Descriptor (frontmatter description) | Tools gọi (v4) | Nguồn trực tiếp |
 |---|---|---|---|---|
@@ -94,6 +94,7 @@
 |  | `forensic-terms` | Explain accruals, channel stuffing, DSO, DIO, and Beneish inputs. Use when reading forensic output. | — | references + forensic.py |
 |  | `prediction-terms` | Explain liquidity, volume, and UMA resolution in prediction markets. Use when reading odds. | — | Gamma/Kalshi docs |
 | engineering | `tdd-workflow` | Enforce test-first development with 80%+ coverage. Use when writing new features, fixes, or refactors. | `runs_list, run_get` | session store local |
+| web | `web-research` | Search the web first, then fetch results recursively until done. Use when facts beyond cutoff or local data are needed. | `web_search, web_fetch` | Exa/Parallel (paid) + direct HTTP (free) |
 |  | `systematic-debugging` | Debug systematically before proposing fixes. Use on any bug, failure, or surprise. | `run_get, doctor` | session store + doctor |
 |  | `verification-loop` | Verify outputs against checklists before claiming done. Use before handoff or commit. | `doctor` | local |
 |  | `skill-authoring` | Author new skills following naming, frontmatter, and disclosure rules. Use when expanding the library. | — | local |
@@ -240,6 +241,15 @@
 | `run_get` | `id` | session store local | — |
 | `doctor` | — | local validate | — |
 
+## Bảng 2b — Web research (mirror opencode 1:1, không qua 8010)
+
+| Tool | Parameters | Làm giống opencode như nào | TTL/cache | Fallback |
+|---|---|---|---|---|
+| `web_fetch` | `url, format?=markdown\|text\|html, timeout_seconds?≤120` | `webfetch.ts`: browser UA + `Accept` theo format → cap 5MB (header+body) → CF 403-challenge retry UA thật → ảnh trả attachment base64 → HTML→markdown (turndown atx/fenced) / HTML→text (bỏ script/style) | không (live) | — |
+| `web_search` | `query, num_results?=8, livecrawl?=fallback, search_type?=auto` | `websearch.ts + mcp-websearch.ts`: POST JSON-RPC `tools/call` tới Exa (`web_search_exa`, key nhúng URL) / Parallel (`web_search`, Bearer) → parse JSON trực tiếp + dòng `data:` SSE → timeout 25s die | không (live) | provider còn lại (qua `WEBSEARCH_PROVIDER`) |
+
+Chọn provider: env `WEBSEARCH_PROVIDER=exa\|parallel` → không có thì hash query chẵn/lẻ (thay checksum sessionID vì MCP stateless — điểm thích ứng duy nhất). Không key nào → `web_search` bị gạt khỏi `tools/list` (giống `registry.ts:293`). Preset: `intel`. Skill kèm: `web-research` (search trước → fetch từng kết quả → đệ quy theo link → bám redirect khác host).
+
 ## Bảng 3 — Nguồn trực tiếp + fallback (v4)
 
 | Tầng | Lấy trực tiếp (chính) | Fallback 1 | Fallback 2 | Cảnh báo |
@@ -287,3 +297,8 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
   pure-read 10 (`symbol_lookup/market_snapshot/movers/sector/breadth/exchange/economic/corporate/source_status/candles_batch`).
 * Xóa/sửa sai: `investor_flow`, `TCBS/vn-stock-sdk`, `feat:*`, `Vietstock gold`, `price_board` string, `mega_flows=DNSE` (thực chất Nasdaq+yf).
 * Skills Bảng 1 giữ 58, cập nhật cột Tools gọi sang tên v4 + fix `money-flow`, `gold-vn`, `derivatives`, `brief-*`, `history`.
+
+## Changelog v4 → v5
+
+* Web research mirror opencode 1:1: `providers/webfetch.py` (no key) + `providers/websearch.py` (Exa/Parallel, `WEBSEARCH_PROVIDER`, hash-query A/B thay checksum session) + `tools/web.py` (`web_fetch` luôn hiện, `web_search` gạt khỏi list khi thiếu key) + skill `web-research` + preset `intel` (59 skills, Bảng 2b mới).
+* Deps mới: `markdownify`, `beautifulsoup4`. Quy ước tên: `web_fetch`/`web_search` theo rule `snake_case` repo (opencode gốc là `webfetch`/`websearch`).
