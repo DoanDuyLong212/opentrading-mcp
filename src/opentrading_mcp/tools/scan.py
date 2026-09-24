@@ -123,13 +123,17 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def signals_technical(symbol: str, ctx: AnyContext | None = None) -> dict[str, Any]:
-        """RSI, MACD, Bollinger, MA, ATR from local candles. Use for timing entries."""
+    async def signals_technical(
+        symbol: str, interval: str = "1D", ctx: AnyContext | None = None
+    ) -> dict[str, Any]:
+        """Full technicals rating from local candles. Use for timing entries."""
+        from opentrading_mcp.providers import technicals as tech_p
+
         if ctx is not None:
-            await ctx.log("info", f"signals_technical {symbol}")
+            await ctx.log("info", f"signals_technical {symbol} {interval}")
         try:
             candles = await run_blocking(
-                functools.partial(vn_p.quote_history, symbol, 120),
+                functools.partial(vn_p.quote_history, symbol, 250),
                 "signals_technical",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -139,27 +143,28 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        closes = [c["c"] for c in candles if c["c"]]
-        if len(closes) < 15:
+        if not isinstance(candles, list) or len(candles) < 30:
             return make_envelope(
-                {"symbol": symbol.upper(), "note": "insufficient history"},
+                {
+                    "symbol": symbol.upper(),
+                    "interval": interval,
+                    "note": "insufficient history",
+                    "n": len(candles) if isinstance(candles, list) else 0,
+                },
                 source="vnstock",
                 availability="empty",
             )
-        gains = [max(closes[i] - closes[i - 1], 0) for i in range(1, len(closes))]
-        losses = [max(closes[i - 1] - closes[i], 0) for i in range(1, len(closes))]
-        avg_g = sum(gains[-14:]) / 14
-        avg_l = sum(losses[-14:]) / 14 or 1e-9
-        rsi = 100 - 100 / (1 + avg_g / avg_l)
-        ma20 = sum(closes[-20:]) / min(len(closes), 20)
+        try:
+            out = tech_p.compute(candles)
+        except Exception as exc:
+            return make_envelope(
+                {"tool": "signals_technical"},
+                source="unavailable",
+                warnings=[f"technicals compute failed: {exc}"],
+                availability="unavailable",
+            )
         return make_envelope(
-            {
-                "symbol": symbol.upper(),
-                "rsi14": round(rsi, 2),
-                "ma20": round(ma20, 2),
-                "last": closes[-1],
-                "n": len(closes),
-            },
+            {"symbol": symbol.upper(), "interval": interval, **out},
             source="computed-local",
         )
 
