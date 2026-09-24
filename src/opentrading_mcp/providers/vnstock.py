@@ -184,42 +184,83 @@ def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]
     return _records(frame)
 
 
+def _norm_label(value: Any) -> str:
+    """Normalize a frame label for exact matching: lower + non-alnum → '_'."""
+    import re
+
+    text = str(value).lower().strip()
+    norm = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+    return norm or text
+
+
+# Canonical alias sets (normalized form). Exact match only — never substring,
+# so "pe" must NOT match "open" and "roe" must NOT match "growth".
+PE_ALIASES = {"pe", "p_e", "pe_ttm", "pe_ratio", "price_earnings"}
+ROE_ALIASES = {"roe", "roe_ttm", "return_on_equity"}
+MARKET_CAP_ALIASES = {
+    "market_cap",
+    "marketcap",
+    "total_market_cap",
+    "market_capitalization",
+    "von_hoa",
+    "vonhoa",
+    "v_n_h_a",
+}
+
+
+def _expand_aliases(want: set[str]) -> set[str]:
+    out = set(want)
+    if out & {"pe", "p_e"}:
+        out |= PE_ALIASES
+    if out & ROE_ALIASES:
+        out |= ROE_ALIASES
+    if out & MARKET_CAP_ALIASES:
+        out |= MARKET_CAP_ALIASES
+    return out
+
+
 def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
     """Best-effort numeric pick from a vnstock ratio DataFrame.
 
     Handles both layouts: indicator as column or as index row.
-    Returns the last non-null numeric value, else None.
+    Label matching is exact on the normalized label (lower, non-alnum → '_')
+    against the needle alias set — never substring, so e.g. "pe" does not
+    match an "open" column. Returns the last non-null numeric value, else None.
     """
+    want = _expand_aliases({_norm_label(n) for n in needles})
     try:
         cols = {str(c).lower(): c for c in frame.columns}
-        for needle in needles:
-            for key, col in cols.items():
-                if needle in key:
-                    try:
-                        series = frame[col].dropna()
-                    except Exception:
-                        continue
-                    if len(series):
-                        try:
-                            return float(series.iloc[-1])
-                        except (TypeError, ValueError):
-                            continue
+        norm_cols = {_norm_label(c): c for c in frame.columns}
+        for alias in want:
+            col = norm_cols.get(alias)
+            if col is None:
+                continue
+            try:
+                series = frame[col].dropna()
+            except Exception:
+                continue
+            if len(series):
+                try:
+                    return float(series.iloc[-1])
+                except (TypeError, ValueError):
+                    continue
         try:
-            idx = {str(i).lower(): i for i in frame.index}
+            norm_idx = {_norm_label(i): i for i in frame.index}
         except Exception:
             return None
-        for needle in needles:
-            for key, ix in idx.items():
-                if needle in key:
-                    try:
-                        row = frame.loc[ix].dropna()
-                    except Exception:
-                        continue
-                    if len(row):
-                        try:
-                            return float(row.iloc[-1])
-                        except (TypeError, ValueError):
-                            continue
+        for alias in want:
+            ix = norm_idx.get(alias)
+            if ix is None:
+                continue
+            try:
+                row = frame.loc[ix].dropna()
+            except Exception:
+                continue
+            if len(row):
+                try:
+                    return float(row.iloc[-1])
+                except (TypeError, ValueError):
+                    continue
     except Exception:
         return None
     return None
@@ -255,17 +296,17 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     except Exception:
         pass
     if isinstance(data, dict):
-        lowered = {str(k).lower(): v for k, v in data.items()}
-        for key, val in lowered.items():
+        for raw_key, val in data.items():
             try:
                 num = float(val)  # type: ignore[arg-type]
             except (TypeError, ValueError):
                 continue
-            if pe is None and ("pe" in key or "p/e" in key):
+            norm = _norm_label(raw_key)
+            if pe is None and norm in PE_ALIASES:
                 pe = num
-            elif roe is None and "roe" in key:
+            elif roe is None and norm in ROE_ALIASES:
                 roe = num
-            elif market_cap is None and ("market_cap" in key or "market cap" in key):
+            elif market_cap is None and norm in MARKET_CAP_ALIASES:
                 market_cap = num
     if roe is not None and abs(roe) > 1:
         roe = roe / 100.0
@@ -289,8 +330,14 @@ def reference_equity(exchange: str = "HOSE") -> list[dict[str, Any]]:
     if query not in ("ALL", ""):
         lowered_keys = {k.lower(): k for r in rows for k in r}
         hit_key = next((lowered_keys[k] for k in _EXCHANGE_KEYS if k in lowered_keys), None)
-        if hit_key is not None:
-            rows = [r for r in rows if str(r.get(hit_key, "")).strip().upper() == query]
+        if hit_key is None:
+            # Fail-closed: never return unfiltered rows on schema drift.
+            # The vn_reference tool maps ProviderBadData → unavailable envelope
+            # with a warning, instead of silently returning the whole market.
+            raise ProviderBadData(
+                "reference frame has no exchange key; refusing unfiltered fallback"
+            )
+        rows = [r for r in rows if str(r.get(hit_key, "")).strip().upper() == query]
     return [{**r, "exchange": str(r.get("exchange") or exchange.upper()).upper()} for r in rows]
 
 

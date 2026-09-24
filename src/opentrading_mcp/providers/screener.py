@@ -16,13 +16,28 @@ COLUMNS: dict[str, dict[str, str]] = {
     "sector": {"group": "universe", "desc": "Sector / ICB industry group name."},
     "industry": {"group": "universe", "desc": "Detailed industry name."},
     "index": {"group": "universe", "desc": "Index membership (e.g. VN30, VNMID)."},
-    "close": {"group": "price", "desc": "Latest close price in VND."},
-    "change_pct": {"group": "price", "desc": "Day change percent vs previous close."},
+    "close": {
+        "group": "price",
+        "desc": "Latest close price in VND. Catalog-only, non-filterable "
+        "(stock_screener has no live price enrichment; price filters are ignored).",
+    },
+    "change_pct": {
+        "group": "price",
+        "desc": "Day change percent vs previous close. Catalog-only, non-filterable "
+        "(stock_screener has no live price enrichment; price filters are ignored).",
+    },
 }
 
 EQUALITY_FIELDS = {"sector", "industry", "index", "symbol", "exchange"}
 
 RANGE_FIELDS = {"pe", "roe", "market_cap", "close", "change_pct"}
+
+# Price group is catalog-only (no live quote enrichment in stock_screener),
+# so price filters would be dead-filters. They are documented non-filterable
+# and ignored by apply_filters instead of excluding every row.
+NON_FILTERABLE_FIELDS = {"close", "change_pct"}
+
+KNOWN_FIELDS = set(COLUMNS) | EQUALITY_FIELDS | RANGE_FIELDS
 
 
 def screener_columns(
@@ -59,7 +74,8 @@ def apply_filters(
 
     Range form: {field: [min, max]} with None as unbounded side.
     Equality form (sector/industry/index/symbol/exchange): plain string,
-    case-insensitive. Unknown fields are ignored. Rows missing a filtered
+    case-insensitive. Unknown fields, and catalog-only price fields
+    (close/change_pct, non-filterable), are ignored. Rows missing a filtered
     numeric value are excluded.
     """
     if not filters:
@@ -69,6 +85,10 @@ def apply_filters(
         keep = True
         for field, cond in filters.items():
             if cond is None:
+                continue
+            if field in NON_FILTERABLE_FIELDS:
+                continue
+            if field not in KNOWN_FIELDS:
                 continue
             if isinstance(cond, (list, tuple)) and len(cond) == 2:
                 lo, hi = cond

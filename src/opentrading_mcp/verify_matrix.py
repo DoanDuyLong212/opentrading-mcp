@@ -47,6 +47,7 @@ MATRIX: list[tuple[str, str, dict[str, Any], float]] = [
     ("market", "dnse_foreign_flow", {}, 30.0),
     ("market", "dnse_ws_snapshot", {}, 30.0),
     ("scan", "stock_screener", {"limit": 5}, 60.0),
+    ("scan", "signals_screener_columns", {}, 30.0),
     ("scan", "signals_technical", {"symbol": "VCB"}, 60.0),
     ("scan", "sector_performance", {"level": 1}, 45.0),
     ("scan", "money_flow", {}, 60.0),

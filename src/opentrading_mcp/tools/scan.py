@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 from typing import Any
 
@@ -43,28 +44,44 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         warnings: list[str] = []
-        enrich_n = min(len(rows), max(max(limit, 1) * 2, 20), 30)
+        # Bounded enrich: full width (≤30) only when a valuation filter needs
+        # fundamentals; otherwise cap at 10 for display. Concurrent via
+        # asyncio.gather + semaphore(5), 10s per symbol (run_blocking timeout).
+        needs_valuation = any(k in eff for k in ("pe", "roe", "market_cap"))
+        if needs_valuation:
+            enrich_n = min(len(rows), max(max(limit, 1) * 2, 20), 30)
+        else:
+            enrich_n = min(len(rows), 10)
         enriched = 0
-        for entry in rows[:enrich_n]:
+        sem = asyncio.Semaphore(5)
+
+        async def _enrich_one(entry: dict[str, Any]) -> bool:
             sym = str(entry.get("symbol", "")).upper()
             if not sym:
-                continue
-            try:
-                info = await run_blocking(
-                    functools.partial(vn_p.equity_fundamentals, sym),
-                    "stock_screener",
-                    timeout_secs=10.0,
-                )
-            except Exception:
-                continue
+                return False
+            async with sem:
+                try:
+                    info = await run_blocking(
+                        functools.partial(vn_p.equity_fundamentals, sym),
+                        "stock_screener",
+                        timeout_secs=10.0,
+                    )
+                except Exception:
+                    return False
             if isinstance(info, dict):
                 hit = False
                 for key in ("pe", "roe", "market_cap"):
                     if info.get(key) is not None:
                         entry[key] = info[key]
                         hit = True
-                if hit:
-                    enriched += 1
+                return hit
+            return False
+
+        if enrich_n:
+            results = await asyncio.gather(
+                *(_enrich_one(entry) for entry in rows[:enrich_n])
+            )
+            enriched = sum(1 for r in results if r)
         if rows and enrich_n and enriched < enrich_n:
             warnings.append(f"fundamentals best-effort: {enriched}/{enrich_n} enriched")
         try:

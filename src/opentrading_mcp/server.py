@@ -39,6 +39,8 @@ TIMEOUT_MATRIX: dict[str, int] = {
     "dnse_ohlc_history": 60,
     "quant_backtest": 120,
     "quant_factors": 120,
+    "stock_screener": 60,
+    "signals_screener_columns": 30,
 }
 
 PRESETS = ("market", "scan", "quant", "brief", "intel", "all")

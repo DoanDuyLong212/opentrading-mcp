@@ -141,3 +141,134 @@ def test_scan_preset_cap():
     names = [t["name"] for t in tools]
     assert "stock_screener" in names
     assert "signals_screener_columns" in names
+
+
+def test_apply_filters_ignores_unknown_fields():
+    from opentrading_mcp.providers.screener import apply_filters
+
+    rows = [
+        {"symbol": "A", "pe": 10.0},
+        {"symbol": "B", "pe": 30.0},
+    ]
+    # unknown string-equality form must keep all rows (was: excluded all)
+    assert len(apply_filters(rows, {"foo": "bar"})) == 2
+    # unknown range form must also keep all rows
+    assert len(apply_filters(rows, {"foo": [1, 2]})) == 2
+    # unknown mixed with a real filter: only the real one applies
+    out = apply_filters(rows, {"foo": "bar", "pe": [None, 20]})
+    assert [r["symbol"] for r in out] == ["A"]
+
+
+def test_price_fields_non_filterable_catalog():
+    from opentrading_mcp.providers import screener as sc
+    from opentrading_mcp.providers.screener import apply_filters
+
+    for field in ("close", "change_pct"):
+        assert "non-filterable" in sc.COLUMNS[field]["desc"].lower()
+    rows = [{"symbol": "A"}, {"symbol": "B", "close": 50.0}]
+    # price filters are ignored (no live price enrichment) → all rows kept
+    assert len(apply_filters(rows, {"close": [None, 100]})) == 2
+    assert len(apply_filters(rows, {"change_pct": [0, 10]})) == 2
+
+
+def test_pick_ratio_number_exact_no_substring():
+    import pandas as pd
+
+    from opentrading_mcp.providers.vnstock import (
+        _pick_ratio_number,
+        equity_fundamentals,
+    )
+
+    # "pe" must NOT match an "open" column (old substring bug)
+    frame = pd.DataFrame({"open": [100.0, 101.0], "close": [102.0, 103.0]})
+    assert _pick_ratio_number(frame, "pe", "p/e") is None
+    assert _pick_ratio_number(frame, "roe") is None
+    # exact + alias match still works (column layout and P/E spelling)
+    frame2 = pd.DataFrame({"P/E": [12.5, 13.5], "ROE": [0.18, 0.20]})
+    assert _pick_ratio_number(frame2, "pe", "p/e") == 13.5
+    assert _pick_ratio_number(frame2, "roe") == 0.20
+    # index-row layout with alias price_earnings
+    frame3 = pd.DataFrame(
+        [[10.0, 11.0]], index=["price_earnings"], columns=["2023", "2024"]
+    )
+    assert _pick_ratio_number(frame3, "pe", "p/e") == 11.0
+    # dict fallback: "open" must not feed pe
+    import opentrading_mcp.providers.vnstock as vn_p
+
+    real_fund = None
+    try:
+        from vnstock import Fundamental as _F
+
+        class _FakeEq:
+            def ratio(self, period="year"):
+                return {"open": 999.0, "close": 50.0}
+
+        class _FakeF:
+            def equity(self, symbol):
+                return _FakeEq()
+
+        import vnstock as _vs
+
+        real_fund = _vs.Fundamental
+        _vs.Fundamental = _FakeF
+        out = vn_p.equity_fundamentals("VCB")
+        assert out["pe"] is None
+        assert out["roe"] is None
+        assert out["market_cap"] is None
+    finally:
+        if real_fund is not None:
+            import vnstock as _vs2
+
+            _vs2.Fundamental = real_fund
+
+
+def test_reference_equity_fail_closed_no_exchange_key(monkeypatch):
+    from opentrading_mcp.providers import vnstock as vn_p
+    from opentrading_mcp.providers.errors import ProviderBadData
+
+    class FakeFrame:
+        def to_dict(self, orient="records"):
+            return [{"symbol": "VCB"}, {"symbol": "HPG"}]
+
+    class FakeRef:
+        class equity:
+            @staticmethod
+            def list():
+                return FakeFrame()
+
+    import vnstock as _vs
+
+    monkeypatch.setattr(_vs, "Reference", lambda: FakeRef())
+    try:
+        rows = vn_p.reference_equity("HOSE")
+    except ProviderBadData:
+        return
+    # fail-closed alternative: empty list is acceptable, unfiltered is not
+    assert rows == [], "must not return unfiltered rows when no exchange key"
+
+
+async def test_stock_screener_bounded_enrich_no_valuation_filter(monkeypatch):
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    fake_universe = [{"symbol": f"S{i:03d}"} for i in range(20)]
+    calls: list[str] = []
+
+    monkeypatch.setattr(vn_p, "listing_symbols", lambda: list(fake_universe))
+
+    def fake_ratio(symbol: str, period: str = "year"):
+        calls.append(symbol)
+        return {"symbol": symbol, "pe": 10.0, "roe": 0.2, "market_cap": 1000.0}
+
+    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_ratio)
+    fn = _scan_tool_fn("stock_screener")
+    # no valuation filter → enrich capped at 10
+    env = await fn(limit=5)
+    _check_envelope(env, "stock_screener")
+    assert len(calls) <= 10, f"unbounded enrich: {len(calls)} calls"
+    assert env["data"]["universe"] == 20
+
+    # valuation filter → wider enrich (up to 30, here 20 rows, limit 5 → 20)
+    calls.clear()
+    env2 = await fn(filters={"pe": [None, 20]}, limit=5)
+    assert len(calls) > 10, "valuation filter should enrich beyond the no-filter cap"
+    assert len(env2["data"]["candidates"]) >= 1
