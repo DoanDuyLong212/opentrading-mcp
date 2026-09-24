@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.providers import technicals as tech_p
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
@@ -244,6 +246,12 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 source="local",
                 availability="empty",
             )
+        needs_history = any(
+            str(e.get("metric", "price")) == "rsi14" for e in wanted.values()
+        ) or any(
+            str(e.get("op", ">")) in ("cross_up", "cross_down")
+            for e in wanted.values()
+        )
         try:
             quotes = await run_blocking(
                 functools.partial(vn_p.equity_quote_batch, list(wanted)),
@@ -256,27 +264,111 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
+        # rsi14 metric needs candle history; cross ops need previous values
+        history: dict[str, list[dict[str, Any]]] = {}
+        prev_state: dict[str, Any] = {}
+        warnings_list: list[str] = []
+        if needs_history:
+            from opentrading_mcp.providers import store as st_p
+
+            raw_state = st_p.cache_get("mcp:scan:alert_state")
+            if isinstance(raw_state, (str, bytes)):
+                try:
+                    prev_state = json.loads(raw_state)
+                except Exception:
+                    prev_state = {}
+            elif isinstance(raw_state, dict):
+                prev_state = raw_state
+            symbol_list = sorted(
+                {str(q.get("symbol", "")).upper() for q in quotes if q.get("symbol")}
+            )
+            try:
+                results = await asyncio.gather(
+                    *(
+                        run_blocking(
+                            functools.partial(vn_p.quote_history, sym, 30),
+                            "alert_check_rsi",
+                            timeout_secs=20.0,
+                        )
+                        for sym in symbol_list
+                    )
+                )
+                for sym, rows in zip(symbol_list, results, strict=True):
+                    if isinstance(rows, list) and rows:
+                        history[sym] = rows
+            except Exception as exc:
+                warnings_list.append(f"history fetch partial: {exc}")
+
         triggered: list[dict[str, Any]] = []
         for quote in quotes:
             symbol = str(quote.get("symbol", "")).upper()
             rule: dict[str, Any] | None = wanted.get(symbol)
             if rule is None:
                 continue
-            price = quote.get("close_price") or quote.get("close") or 0
+            metric = str(rule.get("metric", "price"))
+            if metric == "rsi14":
+                candles = history.get(symbol)
+                if not candles:
+                    warnings_list.append(f"{symbol}: no history for rsi14")
+                    continue
+                try:
+                    out = tech_p.compute(candles)
+                    value = float(out["rsi14"])
+                except Exception as exc:
+                    warnings_list.append(f"{symbol}: rsi14 compute failed: {exc}")
+                    continue
+            else:
+                price = quote.get("close_price") or quote.get("close") or 0
+                try:
+                    value = float(price)
+                except (TypeError, ValueError):
+                    continue
             try:
-                value = float(price)
                 threshold = float(rule["threshold"])
             except (TypeError, ValueError):
                 continue
             op = str(rule.get("op", ">"))
-            hit = value > threshold if op in (">", "gt") else value < threshold
+            state_key = f"{symbol}:{metric}"
+            if op.startswith("cross"):
+                prev = prev_state.get(state_key)
+                if prev is None:
+                    # first observation: standing beyond threshold fires and seeds
+                    hit = value > threshold if op == "cross_up" else value < threshold
+                    if hit:
+                        warnings_list.append(
+                            f"{symbol}: first state seeded for {op}"
+                        )
+                else:
+                    try:
+                        prev_f = float(prev)
+                    except (TypeError, ValueError):
+                        continue
+                    if op == "cross_up":
+                        hit = prev_f <= threshold and value > threshold
+                    else:
+                        hit = prev_f >= threshold and value < threshold
+                prev_state[state_key] = value
+            elif op in (">", "gt"):
+                hit = value > threshold
+            elif op in (">=", "gte"):
+                hit = value >= threshold
+            elif op in ("<", "lt"):
+                hit = value < threshold
+            elif op in ("<=", "lte"):
+                hit = value <= threshold
+            else:
+                hit = value < threshold
             if hit:
                 triggered.append(
-                    {"symbol": symbol, "price": value, "op": op, "threshold": threshold}
+                    {"symbol": symbol, "metric": metric, "price": value,
+                     "op": op, "threshold": threshold}
                 )
+        if needs_history and prev_state:
+            st_p.cache_set("mcp:scan:alert_state", prev_state, ttl_seconds=60)
         return make_envelope(
             {"rules": len(rules), "evaluated": len(quotes), "triggered": triggered},
             source="computed-local",
+            warnings=warnings_list,
         )
 
     return [

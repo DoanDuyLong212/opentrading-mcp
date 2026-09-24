@@ -60,3 +60,24 @@ CREATE TABLE IF NOT EXISTS mcp_tool_usage (
   total_ms BIGINT NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, tool, day)
 );
+
+-- P4 watchlist/alert persist. Still no MongoDB.
+CREATE TABLE IF NOT EXISTS watchlists (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS watchlist_items (
+  watchlist_id INT NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  UNIQUE(watchlist_id, symbol)
+);
+
+CREATE TABLE IF NOT EXISTS alert_rules (
+  id SERIAL PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  metric TEXT NOT NULL DEFAULT 'price',
+  op TEXT NOT NULL DEFAULT '>',
+  threshold DOUBLE PRECISION NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE
+);
