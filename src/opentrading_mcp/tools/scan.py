@@ -126,11 +126,17 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def signals_technical(
         symbol: str, interval: str = "1D", ctx: AnyContext | None = None
     ) -> dict[str, Any]:
-        """Full technicals rating from local candles. Use for timing entries."""
+        """Full technicals rating from local candles (daily only). Use for timing entries."""
         from opentrading_mcp.providers import technicals as tech_p
 
         if ctx is not None:
             await ctx.log("info", f"signals_technical {symbol} {interval}")
+        warnings_list: list[str] = []
+        if interval != "1D":
+            # Daily-only compute; other intervals are not resampled.
+            warnings_list.append(
+                f"daily-only: interval {interval!r} ignored, returning 1D daily data"
+            )
         try:
             candles = await run_blocking(
                 functools.partial(vn_p.quote_history, symbol, 250),
@@ -147,11 +153,12 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             return make_envelope(
                 {
                     "symbol": symbol.upper(),
-                    "interval": interval,
+                    "interval": "1D",
                     "note": "insufficient history",
                     "n": len(candles) if isinstance(candles, list) else 0,
                 },
                 source="vnstock",
+                warnings=warnings_list,
                 availability="empty",
             )
         try:
@@ -164,8 +171,9 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         return make_envelope(
-            {"symbol": symbol.upper(), "interval": interval, **out},
+            {"symbol": symbol.upper(), "interval": "1D", **out},
             source="computed-local",
+            warnings=warnings_list,
         )
 
     @server.tool(annotations=READ_ONLY)
