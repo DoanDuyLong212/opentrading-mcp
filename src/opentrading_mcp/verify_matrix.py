@@ -29,7 +29,7 @@ MATRIX: list[tuple[str, str, dict[str, Any], float]] = [
     ("market", "vn_equity_quote_batch", {"symbols": ["VCB", "HPG"]}, 30.0),
     ("market", "vn_listing", {}, 60.0),
     ("market", "vn_fundamentals", {"symbol": "VCB"}, 60.0),
-    ("market", "vn_retail_gold", {}, 30.0),
+    ("market", "vn_retail_gold", {}, 90.0),
     ("market", "vn_retail_fx", {}, 30.0),
     ("market", "vs_auth_status", {}, 20.0),
     ("market", "vs_financeinfo", {"symbol": "VCB", "period": "quarter"}, 60.0),

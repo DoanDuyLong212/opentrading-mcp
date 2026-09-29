@@ -43,10 +43,12 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_financial_norms", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_financial_values(symbol: str, btype: int = 1, years: int = 3) -> dict[str, Any]:
-        """Paid BCTC values matrix (norms x 3y x 5 terms). Use for statements."""
+    async def vs_financial_values(
+        symbol: str, btype: int = 1, years: int = 3, tids: list[int] | None = None
+    ) -> dict[str, Any]:
+        """Paid BCTC values matrix (default tids [2,3,4,5,9]). Use for statements."""
         try:
-            data = await _call("v", vs_p.financial_values, symbol, btype, years)
+            data = await _call("v", vs_p.financial_values, symbol, btype, years, tids)
             return make_envelope(data, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financial_values", str(exc))
@@ -73,21 +75,25 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_overview_trading", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_documents(symbol: str) -> dict[str, Any]:
+    async def vs_documents(symbol: str, page_size: int = 60) -> dict[str, Any]:
         """Filings and disclosures with links. Use for corporate actions."""
         try:
             return make_envelope(
-                {"docs": await _call("d", vs_p.documents, symbol)}, source="vietstock"
+                {"docs": await _call("d", vs_p.documents, symbol, page_size)},
+                source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_documents", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_reports_search(symbol: str = "") -> dict[str, Any]:
+    async def vs_reports_search(
+        symbol: str = "", keywords: str | None = None, page_size: int = 50
+    ) -> dict[str, Any]:
         """Analyst reports search. Use for external views on a name."""
         try:
             return make_envelope(
-                {"reports": await _call("r", vs_p.reports_search, symbol)}, source="vietstock"
+                {"reports": await _call("r", vs_p.reports_search, symbol, page_size, keywords)},
+                source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_reports_search", str(exc))
@@ -128,12 +134,13 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_selftrading", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_top_liquidity(index: str = "VNINDEX") -> dict[str, Any]:
+    async def vs_top_liquidity(index: str = "VNINDEX", top_n: int = 20) -> dict[str, Any]:
         """Most liquid names per index. Use for liquidity screens."""
         try:
-            return make_envelope(
-                {"rows": await _call("l", vs_p.top_liquidity, index)}, source="vietstock"
-            )
+            rows = await _call("l", vs_p.top_liquidity, index)
+            if isinstance(rows, list):
+                rows = rows[: max(int(top_n), 1)]
+            return make_envelope({"rows": rows}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_top_liquidity", str(exc))
 
@@ -164,17 +171,22 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_market_info", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_news_search(query: str) -> dict[str, Any]:
+    async def vs_news_search(query: str, page_size: int = 20, page: int = 1) -> dict[str, Any]:
         """Vietstock article search. Use for catalyst lookup."""
         try:
-            return make_envelope(
-                {"articles": await _call("n", vs_p.news_search, query)}, source="vietstock"
-            )
+            window = max(int(page_size), 1) * max(int(page), 1)
+            data = await _call("n", vs_p.news_search, query, window)
+            if isinstance(data, list) and page > 1:
+                start = (page - 1) * page_size
+                data = data[start : start + page_size]
+            return make_envelope({"articles": data}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_news_search", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_xnk_detail(direction: str = "xk") -> dict[str, Any]:
+    async def vs_xnk_detail(
+        direction: str = "xk", from_date: str | None = None, to_date: str | None = None
+    ) -> dict[str, Any]:
         """Import/export by country. Use for trade structure (termType 2)."""
         list_id = 64 if direction == "xk" else 65
         try:
@@ -185,8 +197,8 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
                 {
                     "termTypeID": 2,
                     "subTermTypeID": "",
-                    "fromDate": "2021-01-01",
-                    "toDate": "",
+                    "fromDate": from_date or "2021-01-01",
+                    "toDate": to_date or "",
                     "type": "CATEGORY",
                     "listID[]": list_id,
                 },

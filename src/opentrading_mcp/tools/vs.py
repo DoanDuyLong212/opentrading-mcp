@@ -47,10 +47,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_financeinfo", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_market_price() -> dict[str, Any]:
+    async def vs_market_price(type: int = 2) -> dict[str, Any]:
         """Live board snapshot from Vietstock. Use as secondary quote source."""
         try:
-            data = await _call("vs_market_price", vs_p.market_price)
+            data = await _call("vs_market_price", vs_p.market_price, type)
             return make_envelope({"rows": data}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_market_price", str(exc))
@@ -67,10 +67,13 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_market_index", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_nn_flow() -> dict[str, Any]:
+    async def vs_nn_flow(days: int = 90) -> dict[str, Any]:
         """Foreign investor buy/sell chart. Use to cross-check DNSE WS flows."""
         try:
             data = await _call("vs_nn_flow", vs_p._post, "/data/KQGDGiaoDichNDTNNChart", {})
+            if isinstance(data, list) and len(data) == 2 and all(isinstance(p, list) for p in data):
+                tail = max(int(days), 1)
+                data = [data[0][-tail:], data[1][-tail:]]
             return make_envelope({"flow": data}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na(
@@ -88,7 +91,13 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_categories", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_indicator_data(category_id: int, term_type_id: int = 3) -> dict[str, Any]:
+    async def vs_indicator_data(
+        category_id: int,
+        term_type_id: int = 3,
+        sub_term_type_id: str | None = None,
+        from_date: str = "2021-06-30",
+        to_date: str | None = None,
+    ) -> dict[str, Any]:
         """Macro series for a category and term type. Use for GDP, CPI, trade context."""
         try:
             data = await _call(
@@ -97,9 +106,9 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "/Macro/GetReportDataByIDs",
                 {
                     "termTypeID": term_type_id,
-                    "subTermTypeID": "",
-                    "fromDate": "2021-06-30",
-                    "toDate": "",
+                    "subTermTypeID": sub_term_type_id or "",
+                    "fromDate": from_date,
+                    "toDate": to_date or "",
                     "type": "CATEGORY",
                     "listID[]": category_id,
                 },

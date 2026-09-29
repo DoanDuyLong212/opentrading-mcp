@@ -58,6 +58,7 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
             num_results: int = 8,
             livecrawl: str = "fallback",
             search_type: str = "auto",
+            context_max_chars: int | None = None,
         ) -> dict[str, Any]:
             """Search the web via Exa/Parallel providers. Use for up-to-date information."""
             try:
@@ -68,6 +69,7 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
                     num_results,
                     livecrawl,
                     search_type,
+                    context_max_chars,
                     secs=60.0,
                 )
                 return make_envelope(data, source=data.get("provider", "web"))

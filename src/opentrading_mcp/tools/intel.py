@@ -31,22 +31,61 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 45.0) -> Any:
 
 def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
-    async def world_prediction_odds(query: str | None = None) -> dict[str, Any]:
+    async def world_prediction_odds(
+        query: str | None = None,
+        limit: int = 20,
+        status: str | None = None,
+        tag: str | None = None,
+    ) -> dict[str, Any]:
         """Prediction-market odds via jina proxy to Gamma, then direct. Use for Fed/macro odds."""
         try:
             data = await _call("o", intel_p.prediction_odds, query, secs=60.0)
-            return make_envelope(data, source="polymarket")
+            events = data.get("events", []) if isinstance(data, dict) else []
+            if status is not None or tag is not None:
+                filters = [f.lower() for f in (status, tag) if f]
+                kept = []
+                for event in events:
+                    if not isinstance(event, dict):
+                        continue
+                    haystacks = [str(event.get("title", "")).lower()] + [
+                        str(event.get(k, "")).lower()
+                        for k in ("status", "tag", "state", "closed", "active")
+                        if k in event
+                    ]
+                    if all(any(f in hay for hay in haystacks) for f in filters):
+                        kept.append(event)
+                events = kept
+            return make_envelope(
+                {"source": data.get("source"), "events": events[: max(int(limit), 1)]},
+                source="polymarket",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("world_prediction_odds", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def geo_intel(topic: str | None = None) -> dict[str, Any]:
+    async def geo_intel(
+        topic: str | None = None, limit: int = 20, days: int | None = None
+    ) -> dict[str, Any]:
         """Geopolitical coverage via GDELT. Use when geopolitics threatens markets."""
         try:
             data = await _call(
                 "g", intel_p.gdelt_events, topic or "geopolitical conflict sanctions", secs=60.0
             )
-            return make_envelope(data, source="gdelt")
+            articles = data.get("articles", []) if isinstance(data, dict) else []
+            if days is not None:
+                from datetime import date, timedelta
+
+                cutoff = (date.today() - timedelta(days=max(int(days), 0))).isoformat()
+                dated = []
+                for article in articles:
+                    stamp = str(article.get("date", ""))[:10] if isinstance(article, dict) else ""
+                    if not stamp or stamp >= cutoff:
+                        dated.append(article)
+                articles = dated
+            return make_envelope(
+                {"query": data.get("query"), "articles": articles[: max(int(limit), 1)]},
+                source="gdelt",
+            )
         except ProviderUnavailable:
             await asyncio.sleep(10)
             try:
@@ -83,8 +122,11 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def compare_equities(symbols: list[str]) -> dict[str, Any]:
+    async def compare_equities(
+        symbols: list[str], metrics: list[str] | None = None
+    ) -> dict[str, Any]:
         """Head-to-head overview rows and momentum. Use when picking tickers."""
+        wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
         for symbol in symbols[:4]:
             try:
@@ -96,22 +138,28 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                     if len(closes) >= 20
                     else None
                 )
-                rows.append(
-                    {
-                        "symbol": symbol.upper(),
-                        "quote": overview[0] if overview else {},
-                        "momentum_1m_pct": mom,
+                row: dict[str, Any] = {
+                    "symbol": symbol.upper(),
+                    "quote": overview[0] if overview else {},
+                    "momentum_1m_pct": mom,
+                }
+                if wanted is not None:
+                    row = {"symbol": row["symbol"]} | {
+                        k: v for k, v in row.items() if k.lower() in wanted
                     }
-                )
+                rows.append(row)
             except (ProviderUnavailable, ProviderBadData) as exc:
                 rows.append({"symbol": symbol.upper(), "error": str(exc)})
         return make_envelope({"rows": rows}, source="vnstock")
 
     @server.tool(annotations=READ_ONLY)
-    async def evidence_bundle(claim_ids: list[str]) -> dict[str, Any]:
+    async def evidence_bundle(
+        claim_ids: list[str], calc_ids: list[str] | None = None
+    ) -> dict[str, Any]:
         """Lock weighted conclusion by evidence bundle. Use last for final verdict."""
         bundle = {
             "claims": claim_ids,
+            "calc_ids": calc_ids or [],
             "locked": bool(claim_ids),
             "note": "bundle closes server-side; attach calc ids at synthesis",
         }

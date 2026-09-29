@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
 GLOBAL_9 = ["^GSPC", "^IXIC", "^DJI", "^N225", "^HSI", "000001.SS", "^KS11", "^GDAXI", "^FTSE"]
@@ -50,13 +51,18 @@ COMMO_13 = [
 ]
 
 
-def batch_last(tickers: list[str]) -> list[dict[str, Any]]:
+@guarded("yfinance")
+def batch_last(
+    tickers: list[str], period: str = "2d", interval: str = "1d"
+) -> list[dict[str, Any]]:
     try:
         import yfinance as yf
     except ImportError as exc:
         raise ProviderUnavailable("yfinance not installed") from exc
     try:
-        frame = yf.download(tickers, period="2d", interval="1d", group_by="ticker", progress=False)
+        frame = yf.download(
+            tickers, period=period, interval=interval, group_by="ticker", progress=False
+        )
     except Exception as exc:
         raise ProviderUnavailable("yfinance download failed") from exc
     out: list[dict[str, Any]] = []
@@ -71,6 +77,7 @@ def batch_last(tickers: list[str]) -> list[dict[str, Any]]:
     return out
 
 
+@guarded("yfinance")
 def yield_curve() -> dict[str, Any]:
     try:
         import yfinance as yf
@@ -84,17 +91,22 @@ def yield_curve() -> dict[str, Any]:
     return {"us10y": ten_y, "us2y": two_y, "inverted": two_y > ten_y}
 
 
-def world_indices() -> list[dict[str, Any]]:
-    return batch_last(WORLD_24)
+@guarded("yfinance")
+def world_indices(tickers: list[str] | None = None) -> list[dict[str, Any]]:
+    return batch_last(tickers or WORLD_24)
 
 
-def oracle_markets() -> dict[str, Any]:
+@guarded("yfinance")
+def oracle_markets(groups: list[str] | None = None) -> dict[str, Any]:
     try:
         import yfinance as yf
     except ImportError as exc:
         raise ProviderUnavailable("yfinance not installed") from exc
-    groups: dict[str, Any] = {}
+    wanted = {g.lower() for g in groups} if groups else None
+    out: dict[str, Any] = {}
     for group, tickers in ORACLE_GROUPS.items():
+        if wanted is not None and group.lower() not in wanted:
+            continue
         try:
             frame = yf.download(
                 tickers, period="1mo", interval="1d", group_by="ticker", progress=False
@@ -120,10 +132,11 @@ def oracle_markets() -> dict[str, Any]:
                 )
             except Exception:
                 continue
-        groups[group] = items
-    return groups
+        out[group] = items
+    return out
 
 
+@guarded("yfinance")
 def regime_assets() -> dict[str, Any]:
     try:
         import yfinance as yf
@@ -155,7 +168,8 @@ def regime_assets() -> dict[str, Any]:
     return out
 
 
-def mega_flows() -> dict[str, Any]:
+@guarded("yfinance")
+def mega_flows(top_n: int = 15) -> dict[str, Any]:
     leaders = [
         "AAPL",
         "MSFT",
@@ -178,9 +192,10 @@ def mega_flows() -> dict[str, Any]:
         "RELIANCE.NS",
         "0700.HK",
     ]
-    return {"universe": "mega-cap leaders", "leaders": batch_last(leaders[:15])}
+    return {"universe": "mega-cap leaders", "leaders": batch_last(leaders[: max(int(top_n), 1)])}
 
 
+@guarded("yfinance")
 def alloc_history(asset: str = "GC", timeframe: str = "1d") -> dict[str, Any]:
     symbols = {
         "GC": "GC=F",
@@ -226,6 +241,7 @@ PINS_WORLD = [
 PINS_VN = ["VCB", "HPG", "SSI", "VIC", "VHM"]
 
 
+@guarded("yfinance")
 def market_pins() -> dict[str, Any]:
     try:
         import yfinance as yf

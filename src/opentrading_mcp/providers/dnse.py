@@ -28,6 +28,7 @@ from uuid import uuid4
 
 import httpx
 
+from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
@@ -74,6 +75,7 @@ def signed_headers(method: str, path: str) -> dict[str, str]:
     }
 
 
+@guarded("dnse")
 def _get(path: str, params: dict[str, Any] | None = None, timeout: int = 20) -> Any:
     try:
         headers = signed_headers("get", path)
@@ -99,17 +101,18 @@ def ohlc_history(
     resolution: int = 15,
     from_date: str = "2018-08-01",
     page_size: int = 10000,
+    to_date: str | None = None,
 ) -> list[dict[str, Any]]:
-    body = _get(
-        "/price/ohlc",
-        {
-            "type": bar_type,
-            "symbol": symbol,
-            "resolution": resolution,
-            "from": from_date,
-            "pageSize": page_size,
-        },
-    )
+    params: dict[str, Any] = {
+        "type": bar_type,
+        "symbol": symbol,
+        "resolution": resolution,
+        "from": from_date,
+        "pageSize": page_size,
+    }
+    if to_date:
+        params["to"] = to_date
+    body = _get("/price/ohlc", params)
     if isinstance(body, dict) and isinstance(body.get("t"), list):
         keys = ("t", "o", "h", "l", "c", "v")
         cols = [body.get(k, []) for k in keys]

@@ -90,24 +90,27 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                     q.get("symbol", s) if isinstance(q, dict) else s
                     for q, s in zip(quotes, symbols, strict=False)
                 ]
-                return make_envelope(
-                    {"count": len(quotes), "symbols": names}, source="vnstock"
-                )
+                return make_envelope({"count": len(quotes), "symbols": names}, source="vnstock")
             return make_envelope({"quotes": _project(quotes, columns)}, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_equity_quote_batch", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_listing() -> dict[str, Any]:
+    async def vn_listing(limit: int = 500) -> dict[str, Any]:
         """Full symbol list with company names. Use for universe and lookup."""
         try:
             rows = await run_blocking(vn_p.listing_symbols, "vn_listing")
-            return make_envelope({"count": len(rows), "symbols": rows[:500]}, source="vnstock")
+            return make_envelope(
+                {"count": len(rows), "symbols": rows[: max(int(limit), 1)]},
+                source="vnstock",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_listing", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
+    async def vn_fundamentals(
+        symbol: str, period: str = "year", report_type: str = "ttm"
+    ) -> dict[str, Any]:
         """Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation."""
         try:
             from vnstock import Fundamental
@@ -115,7 +118,11 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vn_fundamentals", "vnstock not installed")
         try:
             data = await run_blocking(
-                functools.partial(Fundamental().equity(symbol.upper()).ratio, period=period),
+                functools.partial(
+                    Fundamental().equity(symbol.upper()).ratio,
+                    period=period,
+                    report_type=report_type,
+                ),
                 "vn_fundamentals",
             )
             return make_envelope({"symbol": symbol.upper(), "ratios": str(data)}, source="vnstock")
@@ -125,7 +132,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vn_fundamentals", f"upstream failed: {exc}")
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_retail_gold() -> dict[str, Any]:
+    async def vn_retail_gold(source: str = "btmc") -> dict[str, Any]:
         """SJC and ring gold buy/sell from BTMC retail. Use for local gold premium."""
         try:
             from vnstock import Retail
@@ -133,7 +140,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vn_retail_gold", "vnstock not installed")
         try:
             frame = await run_blocking(
-                functools.partial(Retail().gold, source="btmc"), "vn_retail_gold"
+                functools.partial(Retail().gold, source=source), "vn_retail_gold"
             )
             rows = frame.to_dict(orient="records")
             keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]

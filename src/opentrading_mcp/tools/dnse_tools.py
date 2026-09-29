@@ -50,6 +50,8 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         from_date: str = "2018-08-01",
         summary: bool = False,
         columns: list[str] | None = None,
+        to_date: str | None = None,
+        page_size: int = 10000,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Paginated futures/index bars via cursor. Use for VN30F1M backtest input.
@@ -67,6 +69,8 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
                     bar_type=bar_type,
                     resolution=resolution,
                     from_date=from_date,
+                    to_date=to_date,
+                    page_size=page_size,
                 ),
                 "dnse_ohlc_history",
                 timeout_secs=45.0,
@@ -82,7 +86,9 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("dnse_ohlc_history", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def dnse_latest_trade(symbols: list[str]) -> dict[str, Any]:
+    async def dnse_latest_trade(
+        symbols: list[str], summary: bool = False, columns: list[str] | None = None
+    ) -> dict[str, Any]:
         """Latest match price and totals per symbol. Use for realtime fallback."""
         try:
             data = await run_blocking(
@@ -90,7 +96,13 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "dnse_latest_trade",
                 timeout_secs=45.0,
             )
-            return make_envelope({"trades": data}, source="dnse-rest")
+            rows = data if isinstance(data, list) else []
+            if summary:
+                return make_envelope(
+                    {"count": len(rows), "symbols": [r.get("symbol") for r in rows]},
+                    source="dnse-rest",
+                )
+            return make_envelope({"trades": _project(rows, columns)}, source="dnse-rest")
         except (ProviderAuthMissing, ProviderUnavailable) as exc:
             return _na("dnse_latest_trade", str(exc))
 

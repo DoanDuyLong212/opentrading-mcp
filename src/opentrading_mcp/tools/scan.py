@@ -87,9 +87,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             return False
 
         if enrich_n:
-            results = await asyncio.gather(
-                *(_enrich_one(entry) for entry in rows[:enrich_n])
-            )
+            results = await asyncio.gather(*(_enrich_one(entry) for entry in rows[:enrich_n]))
             enriched = sum(1 for r in results if r)
         if rows and enrich_n and enriched < enrich_n:
             warnings.append(f"fundamentals best-effort: {enriched}/{enrich_n} enriched")
@@ -133,7 +131,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def signals_technical(
-        symbol: str, interval: str = "1D", ctx: AnyContext | None = None
+        symbol: str,
+        interval: str = "1D",
+        indicators: list[str] | None = None,
+        ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Full technicals rating from local candles (daily only). Use for timing entries."""
         from opentrading_mcp.providers import technicals as tech_p
@@ -179,6 +180,9 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[f"technicals compute failed: {exc}"],
                 availability="unavailable",
             )
+        if indicators is not None:
+            wanted = {i.lower() for i in indicators}
+            out = {k: v for k, v in out.items() if str(k).lower() in wanted}
         return make_envelope(
             {"symbol": symbol.upper(), "interval": "1D", **out},
             source="computed-local",
@@ -186,7 +190,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def sector_performance(level: int = 1) -> dict[str, Any]:
+    async def sector_performance(level: int = 1, top_n: int = 50) -> dict[str, Any]:
         """GICS heatmap rows. Use for sector rotation reads."""
         try:
             from opentrading_mcp.providers import vietstock as vs_p
@@ -200,7 +204,9 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 for r in rows
                 if isinstance(r, dict) and int(r.get("Level", level) or level) == level
             ] or rows
-            return make_envelope({"level": level, "rows": filtered[:50]}, source="vietstock")
+            return make_envelope(
+                {"level": level, "rows": filtered[: max(int(top_n), 1)]}, source="vietstock"
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "sector_performance"},
@@ -210,12 +216,12 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
 
     @server.tool(annotations=READ_ONLY)
-    async def money_flow() -> dict[str, Any]:
+    async def money_flow(symbols: list[str] | None = None) -> dict[str, Any]:
         """Compose foreign flow: DNSE WS cache first, Vietstock cross-check."""
         try:
             from opentrading_mcp.providers import dnse as dnse_mod
 
-            ws = dnse_mod.ws_snapshot(["VNINDEX"])
+            ws = dnse_mod.ws_snapshot(symbols or ["VNINDEX"])
             return make_envelope({"primary": "dnse-ws", "snapshot": ws}, source="dnse-ws")
         except ProviderUnavailable:
             pass
@@ -255,10 +261,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         needs_history = any(
             str(e.get("metric", "price")) == "rsi14" for e in wanted.values()
-        ) or any(
-            str(e.get("op", ">")) in ("cross_up", "cross_down")
-            for e in wanted.values()
-        )
+        ) or any(str(e.get("op", ">")) in ("cross_up", "cross_down") for e in wanted.values())
         try:
             quotes = await run_blocking(
                 functools.partial(vn_p.equity_quote_batch, list(wanted)),
@@ -343,9 +346,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     # first observation: standing beyond threshold fires and seeds
                     hit = value > threshold if op == "cross_up" else value < threshold
                     if hit:
-                        warnings_list.append(
-                            f"{symbol}: first state seeded for {op}"
-                        )
+                        warnings_list.append(f"{symbol}: first state seeded for {op}")
                 else:
                     try:
                         prev_f = float(prev)
@@ -368,8 +369,13 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 hit = value < threshold
             if hit:
                 triggered.append(
-                    {"symbol": symbol, "metric": metric, "price": value,
-                     "op": op, "threshold": threshold}
+                    {
+                        "symbol": symbol,
+                        "metric": metric,
+                        "price": value,
+                        "op": op,
+                        "threshold": threshold,
+                    }
                 )
         if needs_history and prev_state:
             st_p.cache_set(ALERT_STATE_KEY, prev_state, ttl_seconds=ALERT_STATE_TTL)

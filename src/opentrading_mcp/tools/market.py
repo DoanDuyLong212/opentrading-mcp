@@ -56,16 +56,16 @@ def _summarize_candles(symbol: str, rows: list[dict[str, Any]]) -> dict[str, Any
     return summarize_rows(symbol, rows, uppercase=False)
 
 
-def _project_rows(
-    rows: list[dict[str, Any]], columns: list[str] | None
-) -> list[dict[str, Any]]:
+def _project_rows(rows: list[dict[str, Any]], columns: list[str] | None) -> list[dict[str, Any]]:
     return project_rows(rows, columns)
 
 
 def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def market_snapshot(
-        symbols: list[str] | None = None, ctx: AnyContext | None = None
+        symbols: list[str] | None = None,
+        as_of: str | None = None,
+        ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Snapshot of VN market with provenance. Use when a broad market picture is needed."""
         key = cache_key("market", "market_snapshot", ",".join(symbols or []))
@@ -82,7 +82,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "market_snapshot",
             )
             cache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
-            return make_envelope({"quotes": quotes}, source="vnstock")
+            data: dict[str, Any] = {"quotes": quotes}
+            if as_of is not None:
+                data["requested_as_of"] = as_of
+            return make_envelope(data, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("market_snapshot", str(exc))
 
@@ -154,15 +157,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def symbol_lookup(query: str) -> dict[str, Any]:
+    async def symbol_lookup(query: str, limit: int = 10) -> dict[str, Any]:
         """Resolve company name to symbol, venue and sector. Use before any symbol-scoped call."""
         try:
             rows = await run_blocking(vn_p.listing_symbols, "symbol_lookup")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("symbol_lookup", str(exc))
         query_up = query.upper()
-        hits = [r for r in rows if query_up in r["symbol"] or query_up in r["name"].upper()][:10]
-        return make_envelope({"hits": hits}, source="vnstock")
+        hits = [r for r in rows if query_up in r["symbol"] or query_up in r["name"].upper()]
+        return make_envelope({"hits": hits[: max(int(limit), 1)]}, source="vnstock")
 
     @server.tool(annotations=READ_ONLY)
     async def market_movers(top_n: int = 10) -> dict[str, Any]:
@@ -179,17 +182,32 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         return make_envelope({"movers": quotes[: max(top_n, 1)]}, source="vnstock")
 
     @server.tool(annotations=READ_ONLY)
-    async def breadth_scan() -> dict[str, Any]:
+    async def breadth_scan(exchange: str | None = None) -> dict[str, Any]:
         """Advancers, decliners, ceiling and floor counts. Use to judge rally health."""
         try:
             prices = await run_blocking(vs_p.market_price, "breadth_scan", timeout_secs=30.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("breadth_scan", str(exc))
         rows = prices if isinstance(prices, list) else []
+        warnings: list[str] = []
+        if exchange is not None:
+            venue_rows = [
+                r
+                for r in rows
+                if isinstance(r, dict)
+                and str(r.get("exchange", r.get("floor", r.get("market", "")))).upper()
+                == exchange.upper()
+            ]
+            if venue_rows or not rows:
+                rows = venue_rows
+            else:
+                warnings.append(f"no venue info in board rows; exchange {exchange!r} ignored")
         adv = sum(1 for r in rows if isinstance(r, dict) and float(r.get("change", 0) or 0) > 0)
         dec = sum(1 for r in rows if isinstance(r, dict) and float(r.get("change", 0) or 0) < 0)
         return make_envelope(
-            {"advancers": adv, "decliners": dec, "rows": len(rows)}, source="vietstock"
+            {"advancers": adv, "decliners": dec, "rows": len(rows)},
+            source="vietstock",
+            warnings=warnings,
         )
 
     @server.tool(annotations=READ_ONLY)

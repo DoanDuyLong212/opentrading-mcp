@@ -67,30 +67,46 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     return out
 
 
-def equity_trades(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
+def equity_trades(
+    symbol: str,
+    limit: int = 20,
+    board: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().equity(symbol.upper()).trades()
+        kwargs: dict[str, Any] = {}
+        if board is not None:
+            kwargs["board"] = board
+        if from_date is not None:
+            kwargs["from_date"] = from_date
+        if to_date is not None:
+            kwargs["to_date"] = to_date
+        frame = Market().equity(symbol.upper()).trades(**kwargs)
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock trades failed: {symbol}") from exc
     rows = _records(frame)
     return rows[: max(limit, 1)]
 
 
-def listing_symbols() -> list[dict[str, str]]:
+def listing_symbols(limit: int | None = None) -> list[dict[str, str]]:
     try:
         from vnstock import Listing
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
         frame = Listing().all_symbols()
-        return [
+        rows = [
             {"symbol": str(r.get("symbol", "")), "name": str(r.get("organ_name", ""))}
             for r in frame.to_dict(orient="records")
         ]
+        if limit is not None:
+            rows = rows[: max(int(limit), 1)]
+        return rows
     except Exception as exc:
         raise ProviderUnavailable("vnstock listing failed") from exc
 
@@ -103,13 +119,15 @@ def _records(frame: Any) -> list[dict[str, Any]]:
     return [{str(k): v for k, v in r.items()} for r in rows]
 
 
-def index_ohlcv(symbol: str = "VNINDEX", count: int = 100) -> list[dict[str, Any]]:
+def index_ohlcv(
+    symbol: str = "VNINDEX", count: int = 100, interval: str = "1D"
+) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().index(symbol.upper()).ohlcv(count=count, source="vci")
+        frame = Market().index(symbol.upper()).ohlcv(count=count, source="vci", resolution=interval)
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock index ohlcv failed: {symbol}") from exc
     rows = _records(frame)
@@ -118,13 +136,15 @@ def index_ohlcv(symbol: str = "VNINDEX", count: int = 100) -> list[dict[str, Any
     return rows
 
 
-def equity_ohlcv(symbol: str, count: int = 100) -> list[dict[str, Any]]:
+def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[dict[str, Any]]:
     try:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().equity(symbol.upper()).ohlcv(count=count, source="vci")
+        frame = (
+            Market().equity(symbol.upper()).ohlcv(count=count, source="vci", resolution=interval)
+        )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock equity ohlcv failed: {symbol}") from exc
     rows = _records(frame)
@@ -133,13 +153,15 @@ def equity_ohlcv(symbol: str, count: int = 100) -> list[dict[str, Any]]:
     return rows
 
 
-def futures_ohlcv(symbol: str = "VN30F1M", count: int = 100) -> list[dict[str, Any]]:
+def futures_ohlcv(
+    symbol: str = "VN30F1M", count: int = 100, interval: str = "1D"
+) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().futures(symbol.upper()).ohlcv(count=count)
+        frame = Market().futures(symbol.upper()).ohlcv(count=count, resolution=interval)
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock futures ohlcv failed: {symbol}") from exc
     rows = _records(frame)
@@ -289,9 +311,7 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
         if isinstance(data, pd.DataFrame) and len(data):
             pe = _pick_ratio_number(data, "pe", "p/e")
             roe = _pick_ratio_number(data, "roe")
-            market_cap = _pick_ratio_number(
-                data, "market_cap", "market cap", "von hoa", "vốn hóa"
-            )
+            market_cap = _pick_ratio_number(data, "market_cap", "market cap", "von hoa", "vốn hóa")
     except Exception:
         pass
     if isinstance(data, dict):
@@ -315,12 +335,20 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
 _EXCHANGE_KEYS = ("exchange", "san", "floor", "exchangecode", "exchange_code")
 
 
-def reference_equity(exchange: str = "HOSE") -> list[dict[str, Any]]:
+def reference_equity(
+    exchange: str = "HOSE", by: str = "exchange", key: str | None = None
+) -> list[dict[str, Any]]:
     try:
         from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
+        if by == "group":
+            frame = Reference().equity.list_by_group(key or exchange)
+            return _records(frame)
+        if by == "industry":
+            frame = Reference().equity.list_by_industry(key or exchange)
+            return _records(frame)
         frame = Reference().equity.list()
     except Exception as exc:
         raise ProviderUnavailable("vnstock reference failed") from exc
@@ -340,7 +368,7 @@ def reference_equity(exchange: str = "HOSE") -> list[dict[str, Any]]:
     return [{**r, "exchange": str(r.get("exchange") or exchange.upper()).upper()} for r in rows]
 
 
-def company_info(symbol: str) -> dict[str, Any]:
+def company_info(symbol: str, detail: bool = False) -> dict[str, Any]:
     try:
         from vnstock import Company
     except ImportError as exc:
@@ -355,6 +383,8 @@ def company_info(symbol: str) -> dict[str, Any]:
         data: dict[str, Any] = {"symbol": symbol.upper(), "info": rows[0] if rows else {}}
     except Exception:
         return {"symbol": symbol.upper(), "info": str(info)[:2000]}
+    if not detail:
+        return data
     for key, method in (("shareholders", "shareholders"), ("officers", "officers")):
         try:
             data[key] = _records(getattr(client, method)())
@@ -384,7 +414,7 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
     return rows[: max(limit, 1)]
 
 
-def msn_fx_gold(days: int = 35) -> list[dict[str, Any]]:
+def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[str, Any]]:
     try:
         from vnstock.explorer import msn
     except ImportError as exc:
@@ -394,7 +424,7 @@ def msn_fx_gold(days: int = 35) -> list[dict[str, Any]]:
     end = date.today().isoformat()
     start = (date.today() - timedelta(days=max(days, 5))).isoformat()
     out: list[dict[str, Any]] = []
-    for symbol_id in ("USDVND", "XAUUSD"):
+    for symbol_id in symbols or ("USDVND", "XAUUSD"):
         try:
             frame = msn.Quote(symbol_id).history(start=start, end=end, interval="1D")
             rows = frame.to_dict(orient="records")

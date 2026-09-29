@@ -43,23 +43,26 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("dnse_foreign_rest", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def dnse_indices() -> dict[str, Any]:
+    async def dnse_indices(symbols: list[str] | None = None) -> dict[str, Any]:
         """Index snapshots from WS cache. Use for live index reads."""
         try:
-            return make_envelope(dnse_p.ws_snapshot(["VNINDEX", "VN30"]), source="dnse-ws")
+            return make_envelope(
+                dnse_p.ws_snapshot(symbols or ["VNINDEX", "VN30"]), source="dnse-ws"
+            )
         except ProviderUnavailable as exc:
             return _na("dnse_indices", f"{exc} (fallback: vs_market_index)")
 
     @server.tool(annotations=READ_ONLY)
-    async def dnse_vn30f1m_live() -> dict[str, Any]:
+    async def dnse_vn30f1m_live(bars: int = 60) -> dict[str, Any]:
         """VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday."""
         try:
             week_ago = (date.today() - timedelta(days=7)).isoformat()
-            bars = await _call("l", dnse_p.ohlc_history, "VN30F1M", "derivative", 1, week_ago, 2000)
+            raw = await _call("l", dnse_p.ohlc_history, "VN30F1M", "derivative", 1, week_ago, 2000)
+            raw_bars = raw if isinstance(raw, list) else []
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_vn30f1m_live", str(exc))
         agg: dict[int, dict[str, Any]] = {}
-        for bar in bars:
+        for bar in raw_bars:
             try:
                 bucket = (int(bar["t"]) // 900) * 900
             except (KeyError, TypeError, ValueError):
@@ -79,19 +82,26 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             slot["l"] = min(slot["l"], bar.get("l", slot["l"]))
             slot["c"] = bar.get("c", slot["c"])
             slot["v"] = (slot["v"] or 0) + (bar.get("v") or 0)
+        ordered = sorted(agg.values(), key=lambda b: b["t"])
         return make_envelope(
-            {"symbol": "VN30F1M", "tf": "15m", "bars": sorted(agg.values(), key=lambda b: b["t"])},
+            {"symbol": "VN30F1M", "tf": "15m", "bars": ordered[-max(int(bars), 1) :]},
             source="dnse-rest",
             warnings=["14:30 remap applies in-session"],
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def dnse_working_dates() -> dict[str, Any]:
+    async def dnse_working_dates(year: int | None = None) -> dict[str, Any]:
         """Trading calendar. Use for session planning."""
         try:
-            return make_envelope(
-                {"dates": await _call("w", dnse_p.working_dates)}, source="dnse-rest"
-            )
+            dates = await _call("w", dnse_p.working_dates)
+            if year is not None and isinstance(dates, list):
+                prefix = str(year)
+                dates = [
+                    d
+                    for d in dates
+                    if str(d.get("date", d) if isinstance(d, dict) else d).startswith(prefix)
+                ]
+            return make_envelope({"dates": dates}, source="dnse-rest")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_working_dates", str(exc))
 

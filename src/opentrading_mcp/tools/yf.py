@@ -21,13 +21,15 @@ def _na(tool: str, reason: str) -> dict[str, Any]:
 
 def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
-    async def yf_global_indices(ctx: AnyContext | None = None) -> dict[str, Any]:
+    async def yf_global_indices(
+        tickers: list[str] | None = None, ctx: AnyContext | None = None
+    ) -> dict[str, Any]:
         """9 global benchmarks, 2d daily. Use for overnight context."""
         if ctx is not None:
             await ctx.report_progress(0, 1, "fetch global")
         try:
             data = await run_blocking(
-                functools.partial(yf_p.batch_last, yf_p.GLOBAL_9),
+                functools.partial(yf_p.batch_last, tickers or yf_p.GLOBAL_9),
                 "yf_global_indices",
                 timeout_secs=50.0,
             )
@@ -36,11 +38,11 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("yf_global_indices", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def yf_commodities() -> dict[str, Any]:
+    async def yf_commodities(tickers: list[str] | None = None) -> dict[str, Any]:
         """Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context."""
         try:
             data = await run_blocking(
-                functools.partial(yf_p.batch_last, yf_p.COMMO_13),
+                functools.partial(yf_p.batch_last, tickers or yf_p.COMMO_13),
                 "yf_commodities",
                 timeout_secs=50.0,
             )

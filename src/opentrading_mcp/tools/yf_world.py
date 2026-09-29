@@ -20,21 +20,21 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 90.0) -> Any:
 
 def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
-    async def yf_world_indices() -> dict[str, Any]:
+    async def yf_world_indices(tickers: list[str] | None = None) -> dict[str, Any]:
         """24 world benchmarks. Use for global breadth."""
         try:
             return make_envelope(
-                {"indices": await _call("w", yf_p.world_indices)}, source="yfinance"
+                {"indices": await _call("w", yf_p.world_indices, tickers)}, source="yfinance"
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_world_indices", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def yf_oracle_markets() -> dict[str, Any]:
+    async def yf_oracle_markets(groups: list[str] | None = None) -> dict[str, Any]:
         """40 markets in 6 groups with 30d stats. Use for cross-asset state."""
         try:
             return make_envelope(
-                await _call("o", yf_p.oracle_markets, secs=120.0), source="yfinance"
+                await _call("o", yf_p.oracle_markets, groups, secs=120.0), source="yfinance"
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_oracle_markets", str(exc))
@@ -50,10 +50,12 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("yf_regime_assets", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def yf_mega_flows() -> dict[str, Any]:
+    async def yf_mega_flows(top_n: int = 15) -> dict[str, Any]:
         """Mega-cap leader flows. Use to follow global smart money."""
         try:
-            return make_envelope(await _call("m", yf_p.mega_flows), source="yfinance")
+            return make_envelope(
+                await _call("m", yf_p.mega_flows, max(int(top_n), 1)), source="yfinance"
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_mega_flows", str(exc))
 

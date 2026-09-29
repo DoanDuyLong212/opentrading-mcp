@@ -52,10 +52,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         count: int = 100,
         summary: bool = False,
         columns: list[str] | None = None,
+        interval: str = "1D",
     ) -> dict[str, Any]:
         """Index bars for VN tickers. Use for index history and breadth."""
         try:
-            rows = await _call("i", vn_p.index_ohlcv, symbol, count)
+            rows = await _call("i", vn_p.index_ohlcv, symbol, count, interval)
             if summary:
                 return make_envelope(_summarize(symbol, rows), source="vnstock")
             return make_envelope(
@@ -70,10 +71,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         count: int = 100,
         summary: bool = False,
         columns: list[str] | None = None,
+        interval: str = "1D",
     ) -> dict[str, Any]:
         """Equity bars via Market API. Use as OHLCV alternative to quotes."""
         try:
-            rows = await _call("e", vn_p.equity_ohlcv, symbol, count)
+            rows = await _call("e", vn_p.equity_ohlcv, symbol, count, interval)
             if summary:
                 return make_envelope(_summarize(symbol, rows), source="vnstock")
             return make_envelope(
@@ -88,10 +90,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         count: int = 100,
         summary: bool = False,
         columns: list[str] | None = None,
+        interval: str = "1D",
     ) -> dict[str, Any]:
         """Futures bars. Use for derivatives backtest input."""
         try:
-            rows = await _call("f", vn_p.futures_ohlcv, symbol, count)
+            rows = await _call("f", vn_p.futures_ohlcv, symbol, count, interval)
             if summary:
                 return make_envelope(_summarize(symbol, rows), source="vnstock")
             return make_envelope(
@@ -101,62 +104,100 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vn_futures_ohlcv", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_forex_ohlcv(pair: str = "USDVND", count: int = 30) -> dict[str, Any]:
+    async def vn_forex_ohlcv(
+        pair: str = "USDVND",
+        count: int = 30,
+        summary: bool = False,
+        columns: list[str] | None = None,
+    ) -> dict[str, Any]:
         """FX bars. Use for currency context."""
         try:
             rows = await _call("f", vn_p.forex_ohlcv, pair, count)
-            return make_envelope({"pair": pair.upper(), "bars": rows}, source="vnstock")
+            if summary:
+                return make_envelope(_summarize(pair, rows), source="vnstock")
+            return make_envelope(
+                {"pair": pair.upper(), "bars": _project(rows, columns)}, source="vnstock"
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_forex_ohlcv", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> dict[str, Any]:
+    async def vn_crypto_ohlv(
+        symbol: str = "BTCUSDT",
+        count: int = 30,
+        summary: bool = False,
+        columns: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Crypto bars. Use for digital-asset regime reads."""
         try:
             rows = await _call("c", vn_p.crypto_ohlv, symbol, count)
-            return make_envelope({"symbol": symbol.upper(), "bars": rows}, source="vnstock")
+            if summary:
+                return make_envelope(_summarize(symbol, rows), source="vnstock")
+            return make_envelope(
+                {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_crypto_ohlv", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_global_index(symbol: str = "USA30", count: int = 30) -> dict[str, Any]:
+    async def vn_global_index(
+        symbol: str = "USA30",
+        count: int = 30,
+        summary: bool = False,
+        columns: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Global index bars. Use as yfinance fallback."""
         try:
             rows = await _call("g", vn_p.global_index, symbol, count)
-            return make_envelope({"symbol": symbol.upper(), "bars": rows}, source="vnstock")
+            if summary:
+                return make_envelope(_summarize(symbol, rows), source="vnstock")
+            return make_envelope(
+                {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_global_index", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_reference(exchange: str = "HOSE") -> dict[str, Any]:
-        """ICB reference by exchange. Use for universe construction."""
+    async def vn_reference(
+        exchange: str = "HOSE", by: str = "exchange", key: str | None = None
+    ) -> dict[str, Any]:
+        """ICB reference by exchange, group or industry. Use for universe construction."""
         try:
-            rows = await _call("r", vn_p.reference_equity, exchange)
+            rows = await _call("r", vn_p.reference_equity, exchange, by, key)
             return make_envelope({"exchange": exchange.upper(), "rows": rows}, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_reference", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_company(symbol: str) -> dict[str, Any]:
+    async def vn_company(symbol: str, detail: bool = False) -> dict[str, Any]:
         """Profile, holders and officers. Use for company research."""
         try:
-            return make_envelope(await _call("c", vn_p.company_info, symbol), source="vnstock")
+            return make_envelope(
+                await _call("c", vn_p.company_info, symbol, detail), source="vnstock"
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_company", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_msn_fx_gold() -> dict[str, Any]:
+    async def vn_msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> dict[str, Any]:
         """USDVND and XAUUSD via MSN. Use for gold-basis math."""
         try:
-            return make_envelope({"series": await _call("m", vn_p.msn_fx_gold)}, source="msn")
+            data = await _call("m", vn_p.msn_fx_gold, symbols, days)
+            return make_envelope({"series": data}, source="msn")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_msn_fx_gold", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_trades(symbol: str, limit: int = 20) -> dict[str, Any]:
+    async def vn_trades(
+        symbol: str,
+        limit: int = 20,
+        board: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> dict[str, Any]:
         """Tick-level matched trades. Use for microstructure reads."""
         try:
-            rows = await _call("t", vn_p.equity_trades, symbol, limit)
+            rows = await _call("t", vn_p.equity_trades, symbol, limit, board, from_date, to_date)
             return make_envelope({"symbol": symbol.upper(), "trades": rows}, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_trades", str(exc))

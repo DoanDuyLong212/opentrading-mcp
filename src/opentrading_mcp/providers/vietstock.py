@@ -19,6 +19,7 @@ from typing import Any
 
 import httpx
 
+from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
@@ -160,6 +161,7 @@ def _form_token(client: httpx.Client) -> str:
     return token
 
 
+@guarded("vietstock")
 def _post(path: str, payload: dict[str, Any], timeout: int = 20) -> Any:
     try:
         client = _session_client()
@@ -214,6 +216,7 @@ def _post(path: str, payload: dict[str, Any], timeout: int = 20) -> Any:
     raise ProviderUnavailable(f"vietstock retry exhausted: {path}")
 
 
+@guarded("vietstock")
 def _post_json(
     path: str, payload: dict[str, Any], timeout: int = 30, referer: str | None = None
 ) -> Any:
@@ -326,13 +329,13 @@ def documents(symbol: str, page_size: int = 60) -> Any:
     return _post("/data/GetDocument", {"code": symbol.upper(), "page": 1, "pageSize": page_size})
 
 
-def reports_search(symbol: str = "", page_size: int = 50) -> Any:
+def reports_search(symbol: str = "", page_size: int = 50, keywords: str | None = None) -> Any:
     return _post_json(
         "/CompanyReport/CompanyReportSearch",
         {
             "searchModel": {
                 "stockCode": symbol.upper() or None,
-                "keywords": None,
+                "keywords": keywords or None,
                 "fromDate": None,
                 "toDate": None,
                 "categoryId": 2,
@@ -446,8 +449,8 @@ def financeinfo(symbol: str, period: str = "quarter") -> dict[str, Any]:
     return {"symbol": symbol, "period": period, "pages": sections}
 
 
-def market_price() -> Any:
-    return _post("/data/getmarketprice", {"type": 2})
+def market_price(board_type: int = 2) -> Any:
+    return _post("/data/getmarketprice", {"type": board_type})
 
 
 def indicator_categories() -> Any:

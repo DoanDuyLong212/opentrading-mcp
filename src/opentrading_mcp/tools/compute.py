@@ -78,7 +78,7 @@ def _read_runs() -> list[dict[str, Any]] | None:
 
 def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
-    async def stock_forensic(symbol: str) -> dict[str, Any]:
+    async def stock_forensic(symbol: str, detail: bool = False) -> dict[str, Any]:
         """M-Score and Piotroski from mirror statements. Use for earnings-quality flags."""
         try:
             data = await _call("f", vs_p.financeinfo, symbol, "quarter", secs=60.0)
@@ -101,19 +101,19 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         if sgi and sgi > 1.3:
             flags.append("unusually fast sales growth (SGI>1.3)")
         score = (0 if dsri and dsri > 1.2 else 1) + (0 if sgi and sgi > 1.3 else 1)
-        return make_envelope(
-            {
-                "symbol": symbol.upper(),
-                "dsri": dsri,
-                "sgi": sgi,
-                "piotroski_lite": f"{score}/2",
-                "flags": flags,
-            },
-            source="computed-local",
-        )
+        out: dict[str, Any] = {
+            "symbol": symbol.upper(),
+            "dsri": dsri,
+            "sgi": sgi,
+            "piotroski_lite": f"{score}/2",
+            "flags": flags,
+        }
+        if detail:
+            out["series"] = {"revenue": rev, "receivables": recv, "assets": assets}
+        return make_envelope(out, source="computed-local")
 
     @server.tool(annotations=READ_ONLY)
-    async def valuation_run(symbol: str, btype: int = 1) -> dict[str, Any]:
+    async def valuation_run(symbol: str, btype: int = 1, method: str = "auto") -> dict[str, Any]:
         """PER/PB ensemble with DCF-lite. Use for fair-value ranges."""
         try:
             overview = await _call("v", vs_p.overview_trading, symbol, secs=45.0)
@@ -134,45 +134,53 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
                 out["per"] = round(price / float(eps), 2)
             if price and bvps and float(bvps) > 0:
                 out["pb"] = round(price / float(bvps), 2)
-            if btype in (2, 3):
+            if method != "auto":
+                out["method"] = method
+            elif btype in (2, 3):
                 out["method"] = "pb_bank_broker"
         except (TypeError, ValueError):
             pass
         return make_envelope(out, source="computed-local")
 
     @server.tool(annotations=READ_ONLY)
-    async def fred_series(series_id: str, limit: int = 60) -> dict[str, Any]:
+    async def fred_series(series_id: str, limit: int = 60, spark: bool = False) -> dict[str, Any]:
         """FRED observations. Use for US macro context."""
         try:
-            return make_envelope(
-                await _call("f", intel_p.fred_series, series_id, limit), source="fred"
-            )
+            data = await _call("f", intel_p.fred_series, series_id, limit)
+            if spark and isinstance(data, dict):
+                points = data.get("points", [])
+                data["spark"] = [p.get("v") for p in points if isinstance(p, dict)]
+            return make_envelope(data, source="fred")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("fred_series", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def world_macro_country(iso3: str, indicator: str) -> dict[str, Any]:
+    async def world_macro_country(iso3: str, indicator: str, limit: int = 60) -> dict[str, Any]:
         """WorldBank series per country. Use for global GDP/CPI/debt context."""
         try:
-            return make_envelope(
-                await _call("w", intel_p.worldbank_country, iso3, indicator), source="worldbank"
-            )
+            data = await _call("w", intel_p.worldbank_country, iso3, indicator)
+            if isinstance(data, dict) and isinstance(data.get("points"), list):
+                data["points"] = data["points"][: max(int(limit), 1)]
+            return make_envelope(data, source="worldbank")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("world_macro_country", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def world_fear_greed() -> dict[str, Any]:
+    async def world_fear_greed(limit: int = 7) -> dict[str, Any]:
         """Crypto fear/greed index. Use for risk-appetite reads."""
         try:
-            return make_envelope(await _call("f", intel_p.fear_greed), source="alternative.me")
+            data = await _call("f", intel_p.fear_greed)
+            if isinstance(data, dict) and isinstance(data.get("series"), list):
+                data["series"] = data["series"][: max(int(limit), 1)]
+            return make_envelope(data, source="alternative.me")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("world_fear_greed", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def sentiment_score(symbol: str) -> dict[str, Any]:
+    async def sentiment_score(symbol: str, limit: int = 20) -> dict[str, Any]:
         """Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk."""
         try:
-            posts = await _call("s", intel_p.fireant_posts, symbol, 20, secs=45.0)
+            posts = await _call("s", intel_p.fireant_posts, symbol, max(int(limit), 1), secs=45.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("sentiment_score", str(exc))
         if not posts:
@@ -222,41 +230,104 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("stock_overview", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def company_events(symbol: str) -> dict[str, Any]:
+    async def company_events(symbol: str, types: str | None = None) -> dict[str, Any]:
         """Disclosures and corporate actions. Use for event calendars."""
         try:
             docs = await _call("e", vs_p.documents, symbol)
+            if types is not None and isinstance(docs, list):
+                wanted = {t.strip().lower() for t in types.split(",") if t.strip()}
+                docs = [
+                    d
+                    for d in docs
+                    if isinstance(d, dict)
+                    and wanted.intersection(
+                        {str(d.get("kind", "")).lower(), str(d.get("type", "")).lower()}
+                    )
+                ]
             return make_envelope({"symbol": symbol.upper(), "events": docs}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("company_events", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def financial_statements(symbol: str, period: str = "quarter") -> dict[str, Any]:
+    async def financial_statements(
+        symbol: str, period: str = "quarter", statement: str = "all", periods_n: int = 15
+    ) -> dict[str, Any]:
         """Mirror statements alias (v3 compat). Use for statement reads."""
         try:
             data = await _call("f", vs_p.financeinfo, symbol, period, secs=60.0)
+            pages = data.get("pages", []) if isinstance(data, dict) else []
+            if statement != "all" and isinstance(pages, list):
+                matched = [
+                    p
+                    for p in pages
+                    if isinstance(p, dict) and any(statement.lower() in str(k).lower() for k in p)
+                ]
+                if matched:
+                    flat: list[Any] = []
+                    for page in matched:
+                        for values in page.values():
+                            flat.extend(values if isinstance(values, list) else [values])
+                    return make_envelope(
+                        {"symbol": symbol.upper(), "periods": flat[: max(int(periods_n), 1)]},
+                        source="vietstock",
+                    )
+                return make_envelope(
+                    {"symbol": symbol.upper(), "periods": pages},
+                    source="vietstock",
+                    warnings=[f"statement {statement!r} not found, returning all pages"],
+                )
             return make_envelope(data, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_statements", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def financial_ratios(symbol: str) -> dict[str, Any]:
+    async def financial_ratios(
+        symbol: str,
+        set: str = "all",
+        period: str = "year",
+        peers: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Overview plus vnstock ratios merged. Use for ratio screens."""
         try:
             overview = await _call("r", vs_p.overview_trading, symbol)
-            return make_envelope({"symbol": symbol.upper(), "ratios": overview}, source="vietstock")
+            ratios = overview if isinstance(overview, dict) else {"overview": overview}
+            if set != "all":
+                ratios = {k: v for k, v in ratios.items() if set.lower() in str(k).lower()}
+            out: dict[str, Any] = {"symbol": symbol.upper(), "period": period, "ratios": ratios}
+            if peers:
+                out["peers"] = []
+                for peer in peers:
+                    try:
+                        peer_data = await _call("r", vs_p.overview_trading, peer)
+                    except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+                        peer_data = {"symbol": peer.upper(), "error": str(exc)}
+                    if isinstance(peer_data, dict) and "symbol" not in peer_data:
+                        peer_data = {"symbol": peer.upper(), **peer_data}
+                    out["peers"].append(peer_data)
+            return make_envelope(out, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_ratios", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def peer_compare(symbol: str, peers: list[str]) -> dict[str, Any]:
+    async def peer_compare(
+        symbol: str, peers: list[str], metrics: list[str] | None = None
+    ) -> dict[str, Any]:
         """Head-to-head overview rows. Use when picking tickers."""
+        wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
         for name in [symbol, *peers][:6]:
             try:
-                rows.append(await _call("p", vs_p.overview_trading, name))
+                data = await _call("p", vs_p.overview_trading, name)
             except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
                 rows.append({"symbol": name.upper(), "error": str(exc)})
+                continue
+            if wanted is not None and isinstance(data, dict):
+                data = {"symbol": name.upper()} | {
+                    k: v for k, v in data.items() if str(k).lower() in wanted
+                }
+            elif isinstance(data, dict) and "symbol" not in data:
+                data = {"symbol": name.upper(), **data}
+            rows.append(data if isinstance(data, dict) else {"symbol": name.upper(), "data": data})
         return make_envelope({"rows": rows}, source="vietstock")
 
     @server.tool(annotations=READ_ONLY)
@@ -275,7 +346,7 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         return make_envelope({"hits": hits, "scanned": len(universe)}, source="computed-local")
 
     @server.tool(annotations=READ_ONLY)
-    async def pattern_match(symbol: str, lookback: int = 60) -> dict[str, Any]:
+    async def pattern_match(symbol: str, lookback: int = 60, limit: int = 5) -> dict[str, Any]:
         """Self-similarity of return windows by correlation. Use for analogies."""
         try:
             candles = await _call("p", vn_p.quote_history, symbol, lookback + 20, secs=60.0)
@@ -285,7 +356,8 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         if len(closes) < lookback + 10:
             return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
         rets = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
-        cur, best, best_i = rets[-20:], -2.0, -1
+        cur = rets[-20:]
+        scored: list[tuple[float, int]] = []
 
         def _mean(xs: list[float]) -> float:
             return sum(xs) / len(xs)
@@ -299,16 +371,23 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
                 sum((a - _mean(cur)) ** 2 for a in cur)
                 * sum((b - _mean(window)) ** 2 for b in window)
             ) ** 0.5 or 1e-9
-            corr = num / den
-            if corr > best:
-                best, best_i = corr, i
+            scored.append((num / den, i))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        top = scored[: max(int(limit), 1)]
+        matches = [{"corr": round(corr, 3), "offset_bars": i} for corr, i in top]
+        best_corr, best_i = top[0] if top else (-2.0, -1)
         return make_envelope(
-            {"symbol": symbol.upper(), "best_corr": round(best, 3), "offset_bars": best_i},
+            {
+                "symbol": symbol.upper(),
+                "best_corr": round(best_corr, 3),
+                "offset_bars": best_i,
+                "matches": matches,
+            },
             source="computed-local",
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def signals_trade_log() -> dict[str, Any]:
+    async def signals_trade_log(days: int = 365, side: str | None = None) -> dict[str, Any]:
         """Local trade log. Use for label building."""
         try:
             rows = await run_blocking(_read_trade_log, "signals_trade_log", timeout_secs=10.0)
@@ -316,13 +395,29 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("signals_trade_log", str(exc))
         if rows is None:
             return make_envelope({"trades": []}, source="local", availability="empty")
+        if side is not None:
+            rows = [r for r in rows if str(r.get("side", "")).lower() == side.lower()]
+        if days is not None:
+            from datetime import date, timedelta
+
+            cutoff = (date.today() - timedelta(days=max(int(days), 0))).isoformat()
+            kept = []
+            for r in rows:
+                stamp = ""
+                for key in ("date", "time", "timestamp", "created_at", "day"):
+                    if r.get(key):
+                        stamp = str(r[key])[:10]
+                        break
+                if not stamp or stamp >= cutoff:
+                    kept.append(r)
+            rows = kept
         return make_envelope({"trades": rows}, source="local")
 
     @server.tool(annotations=READ_ONLY)
-    async def macro_reports(symbol: str = "") -> dict[str, Any]:
+    async def macro_reports(symbol: str = "", limit: int = 10) -> dict[str, Any]:
         """Research PDFs metadata. Use for report discovery."""
         try:
-            data = await _call("m", vs_p.reports_search, symbol)
+            data = await _call("m", vs_p.reports_search, symbol, max(int(limit), 1))
             return make_envelope({"reports": data}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("macro_reports", str(exc))
@@ -353,10 +448,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         return make_envelope({"see": "source_status"}, source="local")
 
     @server.tool(annotations=READ_ONLY)
-    async def event_stats(query: str = "stock market") -> dict[str, Any]:
+    async def event_stats(query: str = "stock market", limit: int = 20) -> dict[str, Any]:
         """GDELT event counts for a query. Use for base-rate checks."""
         try:
-            return make_envelope(await _call("e", intel_p.gdelt_events, query), source="gdelt")
+            data = await _call("e", intel_p.gdelt_events, query, max(int(limit), 1))
+            return make_envelope(data, source="gdelt")
         except ProviderUnavailable:
             await asyncio.sleep(10)
             try:
@@ -367,17 +463,20 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("event_stats", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def compare_assets(assets: list[str]) -> dict[str, Any]:
+    async def compare_assets(assets: list[str], timeframe: str = "1d") -> dict[str, Any]:
         """Cross-asset last prices via yfinance. Use for allocation reads."""
+        windows = {"1d": ("2d", "1d"), "1wk": ("3mo", "1wk"), "1mo": ("1y", "1d")}
+        period, interval = windows.get(timeframe, ("2d", "1d"))
         try:
             return make_envelope(
-                await _call("c", yf_p.batch_last, assets[:10], secs=60.0), source="yfinance"
+                await _call("c", yf_p.batch_last, assets[:10], period, interval, secs=60.0),
+                source="yfinance",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("compare_assets", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def runs_list() -> dict[str, Any]:
+    async def runs_list(id: str | None = None) -> dict[str, Any]:
         """Local run registry. Use to resume analysis sessions."""
         try:
             rows = await run_blocking(_read_runs, "runs_list", timeout_secs=10.0)
@@ -385,6 +484,8 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("runs_list", f"unparseable registry: {exc}")
         if rows is None:
             return make_envelope({"runs": []}, source="local", availability="empty")
+        if id is not None:
+            rows = [r for r in rows if id in str(r.get("run_id", ""))]
         return make_envelope({"runs": rows[-50:]}, source="local")
 
     @server.tool(annotations=READ_ONLY)
