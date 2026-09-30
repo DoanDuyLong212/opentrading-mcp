@@ -44,8 +44,15 @@ def _wma(series: pd.Series, n: int) -> pd.Series:
     )
 
 
-def compute(candles: list[dict[str, Any]] | pd.DataFrame) -> dict[str, Any]:
-    """Compute full technicals from candles with columns t,o,h,l,c,v."""
+def compute(
+    candles: list[dict[str, Any]] | pd.DataFrame,
+    benchmark: list[float] | None = None,
+) -> dict[str, Any]:
+    """Compute full technicals from candles with columns t,o,h,l,c,v.
+
+    benchmark: optional index closes aligned by position (same market calendar);
+    yields rs_vs_bench = 63d return spread in pct points (None when <20 common).
+    """
     df = _to_frame(candles)
     if len(df) == 0 or "c" not in df.columns:
         raise ValueError("compute needs at least close column")
@@ -156,7 +163,29 @@ def compute(candles: list[dict[str, Any]] | pd.DataFrame) -> dict[str, Any]:
     sma10 = _last_float(close.rolling(10, min_periods=10).mean())
     sma20 = _last_float(close.rolling(20, min_periods=20).mean())
     sma50 = _last_float(close.rolling(50, min_periods=50).mean())
+    sma150 = _last_float(close.rolling(150, min_periods=150).mean())
     sma200 = _last_float(close.rolling(200, min_periods=200).mean())
+
+    # 52w position in the trailing-250d high-low range (P8 SEPA legs).
+    span = df.tail(250)
+    try:
+        hi52, lo52 = float(span["h"].max()), float(span["l"].min())
+        pos_52w: float | None = round((last - lo52) / (hi52 - lo52), 4) if hi52 > lo52 else 0.5
+    except Exception:
+        pos_52w = None
+
+    # Relative strength vs benchmark closes (position-aligned, same calendar).
+    rs_vs_bench: float | None = None
+    if benchmark:
+        k = min(63, n, len(benchmark))
+        if k >= 20:
+            try:
+                c_then, c_now = float(close.iloc[n - k]), float(last)
+                b_then, b_now = float(benchmark[len(benchmark) - k]), float(benchmark[-1])
+                if c_then and b_then:
+                    rs_vs_bench = round((c_now / c_then - b_now / b_then) * 100, 2)
+            except Exception:
+                rs_vs_bench = None
 
     # VWMA20 fallback SMA20
     if "v" not in df.columns or vol.isna().all() or float(vol.fillna(0).sum()) == 0:
@@ -261,6 +290,7 @@ def compute(candles: list[dict[str, Any]] | pd.DataFrame) -> dict[str, Any]:
         "sma10": sma10,
         "sma20": sma20,
         "sma50": sma50,
+        "sma150": sma150,
         "sma200": sma200,
         "vwma": vwma,
         "hull9": hull9,
@@ -271,6 +301,8 @@ def compute(candles: list[dict[str, Any]] | pd.DataFrame) -> dict[str, Any]:
         "patterns": patterns,
         "support": support,
         "resistance": resistance,
+        "rs_vs_bench": rs_vs_bench,
+        "pos_52w": pos_52w,
         "last": round(float(last), 2),
         "n": n,
     }

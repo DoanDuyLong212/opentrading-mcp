@@ -617,3 +617,37 @@ transcripts, ESG (không tương đương VN).
 - `mypy`: sạch trừ `pandas-stubs` pre-existing ở technicals.py:13.
 - Live `list_tools()`: market 71 · scan 49 · quant 9 · brief 5→7 · intel 7 · **all 142**,
   0 thiếu descriptor; Binance/Vietstock/HNX/NSO/SBV đã probe live thành công.
+
+## Phụ lục — P8 prompts AI-detect + risk + pre-earnings-v2 (2026-09-30)
+
+Đổi hướng theo chốt: chỉ breakout (bỏ BCD/ranking), 8010 tham khảo-only (không tools
+nối 8010), P5 risk_check và triết lý grading pre-earnings đã duyệt.
+
+### 8010 reference (không copy code, không nối mạng)
+- SEPA = Breakout Model 2 (`research_team/signals/breakout.py`, `model_2.pkl`):
+  gate `is_breakout==1` trên Redis features → predict_proba → giữ iff ≥0.85 → PG.
+- BCD = Model 1 (`bcd.py`, `model_1.pkl`): gate `breakdown==1` → điểm B/C + breakdown.
+- Ranking = super_stock LightGBM (`/api/super-stock/scores`, prob_x2, precision@k=20).
+- Không port được (cần pickle + Redis feature store + PG 8010) → prompt mô phỏng
+  heuristic + descriptor ghi rõ "no ML probability".
+
+### Prompts (6, trong `prompts.py`)
+- `ai_detect(symbol?)` mới: 5 legs (trend template / contraction / breakout confirm /
+  fundamentals / flow) → STRONG(≥4)/WATCH/REJECT. Không symbol → signals_scan rồi
+  validate từng hit. Không tool mới.
+- `risk_check(symbols, side, size_vnd)` mới: quant_risk → scenario_simulate scale size →
+  correlation → forensic → events blackout → valuation → GO/HALF/NO-GO + size + unknowns.
+- `pre_earnings` THAY v1: reliability grading A/B/C 6 chân + unknowns (không đặt
+  surprise level vì VN không có EPS consensus).
+- Refresh giữ tên: `morning_briefing` (+market_overview, futures_basis),
+  `ticker_analysis` (+forensic/insider/consensus), `sector_rotation` (+basis/ipo).
+
+### Upgrades tool cho SEPA legs (pure-local, 0 upstream mới)
+- `technicals.compute(benchmark=)`: + `rs_vs_bench` (spread 63d, pct points, None khi
+  <20 điểm chung), + `pos_52w` (vị trí trong biên 250d, flat → 0.5), + `sma150`.
+- `signals_technical`: fetch VNINDEX 250d best-effort (fail → warning, RS=None).
+
+### Verify P8 (live 2026-09-30)
+- pytest 229 passed (217 + 12 mới); ruff + format sạch; mypy chỉ 4 lỗi pre-existing.
+- Live: 142 tools, 6 prompts, 4 resources. VCB legs thật: dưới sma50/150/200,
+  adx 11.81, RS −1.89, pos_52w 0.21 → REJECT đúng rubric.

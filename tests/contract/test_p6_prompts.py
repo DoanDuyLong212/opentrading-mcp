@@ -19,8 +19,10 @@ async def test_register_prompts_exposes_four():
     server = create_server("market")
     names = register_prompts(server)
     assert sorted(names) == [
+        "ai_detect",
         "morning_briefing",
         "pre_earnings",
+        "risk_check",
         "sector_rotation",
         "ticker_analysis",
     ]

@@ -196,7 +196,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Full technicals rating from local candles (daily only). Use for timing entries.
 
         indicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend,
-        patterns, support, resistance); omit for the full set. interval other
+        patterns, support, resistance, rs_vs_bench, pos_52w, sma150);
+        omit for the full set. interval other
         than '1D' is accepted but ignored.
         """
         from opentrading_mcp.providers import technicals as tech_p
@@ -234,7 +235,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="empty",
             )
         try:
-            out = tech_p.compute(candles)
+            bench_candles = await run_blocking(
+                functools.partial(vn_p.quote_history, "VNINDEX", 250),
+                "signals_technical",
+            )
+            bench = [c["c"] for c in bench_candles if c.get("c")]
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            bench = []
+            warnings_list.append(f"VNINDEX benchmark unavailable: {exc}")
+        try:
+            out = tech_p.compute(candles, benchmark=bench or None)
         except Exception as exc:
             return make_envelope(
                 {"tool": "signals_technical"},
