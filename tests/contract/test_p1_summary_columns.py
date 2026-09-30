@@ -63,11 +63,14 @@ async def test_vn_quote_history_columns_projection(monkeypatch):
         assert set(row.keys()) == {"t", "c"}
 
 
-@pytest.mark.parametrize("tool_name,provider_fn", [
-    ("vn_index_ohlcv", "index_ohlcv"),
-    ("vn_equity_ohlcv", "equity_ohlcv"),
-    ("vn_futures_ohlcv", "futures_ohlcv"),
-])
+@pytest.mark.parametrize(
+    "tool_name,provider_fn",
+    [
+        ("vn_index_ohlcv", "index_ohlcv"),
+        ("vn_equity_ohlcv", "equity_ohlcv"),
+        ("vn_futures_ohlcv", "futures_ohlcv"),
+    ],
+)
 async def test_vn_ext_summary_and_columns(monkeypatch, tool_name, provider_fn):
     from opentrading_mcp.providers import vnstock as vn_p
 
@@ -129,7 +132,11 @@ async def test_market_candles_batch_missing_and_cap(monkeypatch):
 
     many = [f"S{i}" for i in range(55)]
     env2 = await fn(symbols=many, days=5)
-    assert len(env2["data"]["series"]) + len(env2["data"]["missing"]) <= 50
+    assert len(env2["data"]["series"]) + len(env2["data"]["missing"]) == 55
+    huge = [f"S{i}" for i in range(105)]
+    env3 = await fn(symbols=huge, days=5)
+    assert len(env3["data"]["series"]) + len(env3["data"]["missing"]) == 100
+    assert any("100" in w for w in env3["warnings"])
 
 
 async def test_market_candles_batch_summary_no_candles(monkeypatch):

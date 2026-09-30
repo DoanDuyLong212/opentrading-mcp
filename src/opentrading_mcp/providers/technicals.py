@@ -207,6 +207,45 @@ def compute(candles: list[dict[str, Any]] | pd.DataFrame) -> dict[str, Any]:
     sells = sum(1 for v in votes if v == "Sell")
     recommend = "Buy" if buys > sells else ("Sell" if sells > buys else "Neutral")
 
+    # Candle patterns on the last 1-2 bars + 20d swing levels (P6).
+    patterns: list[str] = []
+    try:
+        o0, h0, l0, c0 = (
+            float(df["o"].iloc[-1]),
+            float(df["h"].iloc[-1]),
+            float(df["l"].iloc[-1]),
+            float(df["c"].iloc[-1]),
+        )
+        body0, rng0 = abs(c0 - o0), h0 - l0
+        if rng0 > 0:
+            if body0 <= 0.1 * rng0:
+                patterns.append("doji")
+            lower_wick = min(o0, c0) - l0
+            upper_wick = h0 - max(o0, c0)
+            ref = max(body0, 1e-9)
+            if lower_wick >= 2 * ref and upper_wick <= ref + 1e-9:
+                patterns.append("hammer")
+            if n >= 2:
+                o1 = float(df["o"].iloc[-2])
+                c1 = float(df["c"].iloc[-2])
+                prev_bear, curr_bull = c1 < o1, c0 > o0
+                prev_bull, curr_bear = c1 > o1, c0 < o0
+                if prev_bear and curr_bull and o0 <= c1 and c0 >= o1:
+                    patterns.append("engulfing_bull")
+                if prev_bull and curr_bear and o0 >= c1 and c0 <= o1:
+                    patterns.append("engulfing_bear")
+    except Exception:
+        patterns = []
+    lookback = df.tail(20)
+    try:
+        support = round(float(lookback["l"].min()), 2)
+    except Exception:
+        support = round(float(low.min()), 2) if n else 0.0
+    try:
+        resistance = round(float(lookback["h"].max()), 2)
+    except Exception:
+        resistance = round(float(high.max()), 2) if n else 0.0
+
     return {
         "rsi14": rsi14,
         "stoch_k": stoch_k,
@@ -229,6 +268,9 @@ def compute(candles: list[dict[str, Any]] | pd.DataFrame) -> dict[str, Any]:
         "boll_lower": boll_lower,
         "atr14": atr14,
         "recommend": recommend,
+        "patterns": patterns,
+        "support": support,
+        "resistance": resistance,
         "last": round(float(last), 2),
         "n": n,
     }

@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.providers import intel as intel_p
 from opentrading_mcp.providers import vietstock as vs_p
+from opentrading_mcp.providers import vn_public as pub_p
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
@@ -30,10 +31,14 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 45.0) -> Any:
 
 def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
-    async def brief_build(scope: str = "vn", date: str | None = None) -> dict[str, Any]:
+    async def brief_build(
+        scope: str = "vn", date: str | None = None, calendars: bool = False
+    ) -> dict[str, Any]:
         """Compose morning brief from news, odds and calendars. Use at session start.
 
         scope: 'vn' or 'world'. date: ISO date the brief is for (recorded as-is).
+        calendars: also attach IPO/macro/SBV sections (sbv_rates, macro_events_vn,
+        ipo_calendar_vn); off by default to keep the brief fast.
         """
         if scope not in ("vn", "world"):
             return make_envelope(
@@ -61,6 +66,16 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             sections["macro_series_available"] = len(cats) if isinstance(cats, list) else 0
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             sections["macro_series_available"] = 0
+        if calendars:
+            for key, fn in (
+                ("sbv", pub_p.sbv_rates),
+                ("macro_releases", pub_p.nso_releases),
+                ("ipo", pub_p.hnx_auctions),
+            ):
+                try:
+                    sections[key] = await _call(key, fn, secs=45.0)
+                except (ProviderUnavailable, ProviderBadData) as exc:
+                    sections[key] = str(exc)
         data: dict[str, Any] = {
             "scope": scope,
             "sections": sections,
@@ -144,6 +159,30 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("economic_calendar", str(exc))
 
     @server.tool(annotations=READ_ONLY)
+    async def sbv_rates() -> dict[str, Any]:
+        """SBV policy and interbank rates, scraped static page. Use for rate regime.
+
+        Values change rarely; upstream has no API.
+        """
+        try:
+            return make_envelope(await _call("s", pub_p.sbv_rates), source="sbv-scrape")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("sbv_rates", str(exc))
+
+    @server.tool(annotations=READ_ONLY)
+    async def macro_events_vn() -> dict[str, Any]:
+        """NSO release listings with reference and next dates. Use for data calendar.
+
+        Covers CPI schedule and releases; full year schedule lives in an NSO PDF.
+        """
+        try:
+            return make_envelope(
+                {"releases": await _call("m", pub_p.nso_releases)}, source="nso-scrape"
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("macro_events_vn", str(exc))
+
+    @server.tool(annotations=READ_ONLY)
     async def corporate_calendar(symbol: str | None = None, limit: int = 20) -> dict[str, Any]:
         """Disclosures feed as corporate actions. Use for dividend/meeting scans.
 
@@ -166,4 +205,6 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "news_symbol"},
         {"name": "economic_calendar"},
         {"name": "corporate_calendar"},
+        {"name": "sbv_rates"},
+        {"name": "macro_events_vn"},
     ]

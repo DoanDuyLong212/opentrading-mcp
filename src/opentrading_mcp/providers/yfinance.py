@@ -262,3 +262,69 @@ def market_pins() -> dict[str, Any]:
         except Exception:
             continue
     return {"world": pins, "vn": PINS_VN}
+
+
+@guarded("yfinance")
+def corp_actions(symbol: str) -> list[dict[str, Any]]:
+    """Dividend + split history via yfinance actions (world tickers)."""
+    try:
+        import yfinance as yf
+    except ImportError as exc:
+        raise ProviderUnavailable("yfinance not installed") from exc
+    try:
+        frame = yf.Ticker(symbol.upper()).actions
+    except Exception as exc:
+        raise ProviderUnavailable(f"yfinance actions failed: {symbol}") from exc
+    if frame is None or len(frame) == 0:
+        return []
+    rows: list[dict[str, Any]] = []
+    for ts, row in frame.iterrows():
+        try:
+            div = float(row.get("Dividends", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            div = 0.0
+        try:
+            spl = float(row.get("Stock Splits", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            spl = 0.0
+        rows.append({"date": str(ts.date()), "dividends": div, "splits": spl})
+    return rows
+
+
+_HOLDER_ATTRS = {
+    "major": "major_holders",
+    "institutional": "institutional_holders",
+    "mutualfund": "mutualfund_holders",
+}
+
+
+@guarded("yfinance")
+def stock_holders(symbol: str, kind: str = "all") -> list[dict[str, Any]]:
+    """Holder tables via yfinance (world tickers). kind: major|institutional|mutualfund|all."""
+    if kind not in (*_HOLDER_ATTRS, "all"):
+        raise ProviderBadData(f"unknown holder kind {kind!r}")
+    try:
+        import yfinance as yf
+    except ImportError as exc:
+        raise ProviderUnavailable("yfinance not installed") from exc
+    try:
+        ticker = yf.Ticker(symbol.upper())
+    except Exception as exc:
+        raise ProviderUnavailable(f"yfinance ticker failed: {symbol}") from exc
+    wanted = [kind] if kind in _HOLDER_ATTRS else sorted(_HOLDER_ATTRS)
+    out: list[dict[str, Any]] = []
+    for name in wanted:
+        try:
+            frame = getattr(ticker, _HOLDER_ATTRS[name])
+        except Exception as exc:
+            raise ProviderUnavailable(f"yfinance holders failed: {symbol}") from exc
+        if frame is None or len(frame) == 0:
+            continue
+        try:
+            records = frame.to_dict(orient="records")
+        except Exception:
+            continue
+        for rec in records:
+            clean_rec = {str(k): (None if str(v) == "nan" else v) for k, v in rec.items()}
+            out.append({"kind": name, **clean_rec})
+    return out

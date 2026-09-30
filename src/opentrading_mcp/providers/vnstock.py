@@ -119,6 +119,32 @@ def _records(frame: Any) -> list[dict[str, Any]]:
     return [{str(k): v for k, v in r.items()} for r in rows]
 
 
+def _clean(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Make provider rows JSON-safe: NaN/NaT/None -> None, exotic scalars -> str."""
+    import math
+
+    clean: list[dict[str, Any]] = []
+    for row in rows:
+        item: dict[str, Any] = {}
+        for key, val in row.items():
+            try:
+                if val is None:
+                    item[key] = None
+                elif isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                    item[key] = None
+                elif isinstance(val, (str, int, bool)):
+                    item[key] = val
+                elif isinstance(val, float):
+                    item[key] = val
+                else:
+                    text = str(val)
+                    item[key] = None if text in ("NaT", "nan", "None", "") else text
+            except Exception:
+                item[key] = None
+        clean.append(item)
+    return clean
+
+
 def index_ohlcv(
     symbol: str = "VNINDEX", count: int = 100, interval: str = "1D"
 ) -> list[dict[str, Any]]:
@@ -412,6 +438,29 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
         raise ProviderUnavailable(f"vnstock insider failed: {symbol}")
     rows = _records(frame)
     return rows[: max(limit, 1)]
+
+
+def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Corporate actions (cash dividends, share issues) via vnstock Company.
+
+    Returns JSON-safe records, newest first as upstream orders them.
+    """
+    try:
+        from vnstock import Company
+    except ImportError as exc:
+        raise ProviderUnavailable("vnstock not installed") from exc
+    frame = None
+    for source in ("VCI", "KBS"):
+        try:
+            candidate = Company(source=source, symbol=symbol.upper()).events()
+            if candidate is not None and len(candidate) > 0:
+                frame = candidate
+                break
+        except Exception:
+            continue
+    if frame is None or len(frame) == 0:
+        raise ProviderUnavailable(f"vnstock events failed: {symbol}")
+    return _clean(_records(frame))[: max(limit, 1)]
 
 
 def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[str, Any]]:

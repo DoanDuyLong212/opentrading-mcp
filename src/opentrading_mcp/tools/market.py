@@ -125,13 +125,13 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Batch OHLCV for symbols, one request per symbol. Use for multi-chart context.
 
-        days: daily bars per symbol (max 50 symbols). summary/columns: summary
+        days: daily bars per symbol (max 100 symbols). summary/columns: summary
         returns {count,last,high,low} only; columns keeps named fields.
         """
-        capped = symbols[:50]
+        capped = symbols[:100]
         warnings: list[str] = []
-        if len(symbols) > 50:
-            warnings.append(f"capped 50 symbols, {len(symbols) - 50} dropped")
+        if len(symbols) > 100:
+            warnings.append(f"capped 100 symbols, {len(symbols) - 100} dropped")
         total = max(len(capped), 1)
         series: list[dict[str, Any]] = []
         missing: list[dict[str, Any]] = []
@@ -229,6 +229,65 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
+    async def market_overview(top_n: int = 3, ctx: AnyContext | None = None) -> dict[str, Any]:
+        """One-call market context: bluechip quotes, movers, breadth, session. Use for briefs.
+
+        top_n: gainers/losers rows each. Breadth counts the bluechip board
+        (breadth_scan covers the full Vietstock board). Legs degrade
+        independently: a dead leg becomes null plus a warning.
+        """
+        universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
+        warnings: list[str] = []
+        quotes: list[dict[str, Any]] | None = None
+        try:
+            quotes = await run_blocking(
+                functools.partial(vn_p.equity_quote_batch, universe),
+                "market_overview",
+                timeout_secs=30.0,
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            warnings.append(f"quotes unavailable: {exc}")
+        rows = [q for q in (quotes or []) if isinstance(q, dict)]
+
+        def _chg(row: dict[str, Any]) -> float:
+            try:
+                return float(row.get("change", 0) or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        ranked = sorted(rows, key=_chg, reverse=True)
+        keep = max(int(top_n), 1)
+        movers = ranked[:keep]
+        losers = sorted(rows, key=_chg)[:keep]
+        breadth = {
+            "advancers": sum(1 for r in rows if _chg(r) > 0),
+            "decliners": sum(1 for r in rows if _chg(r) < 0),
+            "flat": sum(1 for r in rows if _chg(r) == 0),
+        }
+        session: Any = None
+        try:
+            session = dnse_p.ws_snapshot(["VNINDEX", "VN30", "VN30F1M"])
+        except (ProviderUnavailable, ProviderAuthMissing) as exc:
+            warnings.append(f"session unavailable: {exc}")
+        data = {
+            "quotes": rows,
+            "movers": movers,
+            "losers": losers,
+            "breadth": breadth,
+            "session": session,
+        }
+        availability: str | None = None
+        if not rows or session is None:
+            availability = "partial"
+            if not rows and session is None:
+                return _unavailable("market_overview", "; ".join(warnings) or "all legs down")
+        if ctx is not None:
+            await ctx.log("info", "market_overview done")
+        return make_envelope(
+            data, source="vnstock+dnse", warnings=warnings, availability=availability
+        )
+
+    @server.tool(annotations=READ_ONLY)
     async def dnse_market_status() -> dict[str, Any]:
         """DNSE session state plus latest index snapshot. Use for open/close checks."""
         try:
@@ -248,6 +307,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     return [
         {"name": "market_snapshot"},
+        {"name": "market_overview"},
         {"name": "source_status"},
         {"name": "market_candles_batch"},
         {"name": "symbol_lookup"},

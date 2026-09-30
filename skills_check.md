@@ -559,3 +559,61 @@ thích params) + signature (FastMCP tự loại `ctx`). Logic thật ở `provid
 - `uv run pytest tests/ -q --ignore=tests/contract/test_verify_matrix.py` → **175 passed**.
 - `ruff check` + `ruff format --check` (17 file tools) → sạch. `mypy src/opentrading_mcp/tools/` → 0 issue.
 - Local `list_tools()` preset `all` → **125 tools** (web_search gate theo key), 0 tool thiếu descriptor; 14 chuỗi disambiguation đều OK trong descriptor live.
+
+## Phụ lục — P7 tools mới 2026-09-30 (review MCP tài chính ngoài, 142 tools)
+
+Nguồn đối chiếu: Alpha Vantage official, FMP 250+ tools, EODHD 72, Finnhub 15,
+Unusual Whales 200+, Equibles 95, Alpaca 65, yfinance-mcp 30, QuantConnect 64,
+CCXT official, OpenBB MCP. Chỉ lấy cái VN làm được; bỏ options/Greeks/GEX/IV
+(không có listed options), short interest (cấm bán khống), 13F/congressional,
+transcripts, ESG (không tương đương VN).
+
+### Tools mới (17) + prompts/resources
+
+| Tool | Học từ | Nguồn | Preset |
+|---|---|---|---|
+| `dividends_splits` | yfinance-mcp get_dividends/splits | vnstock `Company.events()` (DIV/ISS) / yfinance actions | scan (corp) |
+| `holders` | yfinance-mcp holders ×3 | vnstock shareholders / yfinance major/institutional/mutualfund | scan (corp) |
+| `correlation_matrix` | QC-mcp | local, inner-join dates (walkback khi t day-only) | quant |
+| `seasonality` | UW seasonality | local, rolling-window theo tháng | quant |
+| `backtest_strategies` | QuantConnect | local sma_cross/momentum/buy_hold (quant_backtest vẫn buy-hold) | quant |
+| `portfolio_optimize` | QC-mcp portfolio | numpy-only equal/inv_vol/max_sharpe long-only heuristic (xem quyết định scipy) | quant |
+| `param_sweep` | QC create_optimization | local grid ≤30 combos | quant |
+| `crypto_spot` | CCXT get_tickers | Binance public `/ticker/24hr` (không key) | market (crypto) |
+| `crypto_derivs` | UW flow-style | Binance fapi funding/OI/LSR/taker-ratio (forceOrders cần key → thay taker) | market (crypto) |
+| `market_overview` | FMP get_market_context | composite quotes+movers+breadth+session, legs degrade độc lập | market |
+| `event_calendar_vn` | AV/EODHD calendars | Vietstock `eventstypedata` (1 dividends/2 listings/5 meetings; không có earnings-dates) | scan (corp) |
+| `block_trades` | UW dark pool (tương tự chức năng) | Vietstock `gettradingresult` MT_* vs PT_* thỏa thuận | scan (corp) |
+| `analyst_consensus` | yfinance price_targets | scrape Vietstock titles (rating+target; vs_reports_search API chết 404) | scan (corp) |
+| `ipo_calendar_vn` | AV/EODHD IPO calendar | HNX lich-dau-gia + fallback tin-cong-bo (verify=False, cert HNX) | scan (corp) |
+| `futures_basis` | UW futures | DNSE F1M − VN30 spot (DNSE không có field OI — đã probe SDK schema) | scan (corp) |
+| `sbv_rates` | EODHD treasury | scrape sbv.gov.vn static (policy + interbank) | brief |
+| `macro_events_vn` | EODHD economic events | scrape NSO (gso.gov.vn đã chết → nso.gov.vn; CPI section.item spans) | brief |
+| prompts ×4 | UW/EODHD/Tiingo | morning_briefing, ticker_analysis, pre_earnings, sector_rotation | mọi preset |
+| resources ×4 | EODHD embedded docs | catalog/tools (live), term-types, exchanges, gics | mọi preset |
+
+### Nâng cấp tools cũ (U1–U5)
+- U1 `stock_screener` + `technical` stage-3 (rsi_lt/gt, above/below_sma20) trên candidates.
+- U2 `market_snapshot` giữ nguyên + tool mới `market_overview` (tránh đổi contract).
+- U3 `technicals.compute` + patterns (doji/hammer/engulfing) + support/resistance 20d.
+- U4 `money_flow` descriptor cross-ref `block_trades` (khác granularity, không gộp code).
+- U5 `brief_build` + `calendars: bool = False` (thêm sbv/macro/ipo khi bật).
+- Bulk cap `market_candles_batch` 50→100 (test P1 cập nhật theo).
+
+### Quyết định kỹ thuật (ghi để khỏi đào lại)
+- **Bỏ scipy**: `uv add` kẹt resolver ở cây dep vnstock (cả khi pin); optimize dùng numpy-only.
+- **Bỏ pypdf**: cùng nguyên nhân; `disclosure_fulltext` drop (chỉ còn metadata/link ở vs_documents).
+- **Bỏ**: `earnings_dates` (eventstypedata không có loại này), OI (không tồn tại), liquidations
+  (forceOrders 401 cần key), paper_trade (user chốt không làm), live execution (chờ duyệt riêng).
+- **Không đụng**: Dockerfile/pyproject/cli Phase 0-2, `vs_reports_search` (chết upstream nhưng giữ
+  contract unavailable trung thực), preset caps cũ trừ market 70→75, scan 50→60.
+- Env quirk: `t` của vnstock v4 chỉ là ngày-trong-tháng → tools quant dùng ISO khi có,
+  fallback business-day walkback + `date_note` trong output.
+- HNX cần `verify=False` (cert chain) + warning `tls-unverified`; Binance array phải không-space.
+
+### Verify P7
+- `pytest tests/ -q --ignore=verify_matrix` → **217 passed** (175 cũ + 42 mới).
+- `ruff check` + `format --check` sạch (trừ drift có sẵn test_p2/p4 không đụng).
+- `mypy`: sạch trừ `pandas-stubs` pre-existing ở technicals.py:13.
+- Live `list_tools()`: market 71 · scan 49 · quant 9 · brief 5→7 · intel 7 · **all 142**,
+  0 thiếu descriptor; Binance/Vietstock/HNX/NSO/SBV đã probe live thành công.

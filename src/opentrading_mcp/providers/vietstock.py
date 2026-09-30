@@ -347,6 +347,96 @@ def reports_search(symbol: str = "", page_size: int = 50, keywords: str | None =
     )
 
 
+def _ms_date(raw: Any) -> str | None:
+    """Parse /Date(1784739600000)/ to YYYY-MM-DD; pass through ISO strings."""
+    import datetime
+
+    text = str(raw or "")
+    match = re.search(r"/Date\((\d+)([+-]\d+)?\)/", text)
+    if match:
+        try:
+            tz = datetime.timezone(datetime.timedelta(hours=7))
+            ts = datetime.datetime.fromtimestamp(int(match.group(1)) / 1000, tz=tz)
+            return ts.date().isoformat()
+        except (ValueError, OSError):
+            return None
+    return text[:10] if re.match(r"\d{4}-\d{2}-\d{2}", text) else None
+
+
+EVENT_TYPE_IDS = {"dividends": 1, "listings": 2, "meetings": 5}
+
+
+def event_calendar(event: str = "dividends", symbol: str = "", limit: int = 20) -> Any:
+    """Corporate-action calendar rows (no earnings-date type exists upstream)."""
+    if event not in EVENT_TYPE_IDS:
+        raise ProviderBadData(f"unknown event {event!r} (dividends|listings|meetings)")
+    raw = _post(
+        "/data/eventstypedata",
+        {
+            "eventTypeID": EVENT_TYPE_IDS[event],
+            "code": symbol.upper(),
+            "page": 1,
+            "pageSize": max(min(int(limit), 100), 1),
+            "orderBy": "Date1",
+            "orderDir": "desc",
+        },
+    )
+    rows = raw[0] if isinstance(raw, list) and raw and isinstance(raw[0], list) else raw
+    if not isinstance(rows, list):
+        raise ProviderBadData("vietstock event calendar malformed")
+    out = []
+    for row in rows[: max(int(limit), 1)]:
+        if not isinstance(row, dict):
+            continue
+        out.append(
+            {
+                "event_id": row.get("EventID"),
+                "code": row.get("Code"),
+                "note": row.get("Note"),
+                "ex_date": _ms_date(row.get("GDKHQDate")),
+                "record_date": _ms_date(row.get("NDKCCDate")),
+                "file_url": row.get("FileUrl"),
+            }
+        )
+    return out
+
+
+def negotiated_trades(
+    symbol: str, from_date: str, to_date: str, limit: int = 30
+) -> list[dict[str, Any]]:
+    """Daily matched (MT_*) vs negotiated put-through (PT_*) splits per symbol."""
+    raw = _post(
+        "/data/gettradingresult",
+        {
+            "Code": symbol.upper(),
+            "PageIndex": 1,
+            "PageSize": max(min(int(limit), 100), 1),
+            "FromDate": from_date,
+            "ToDate": to_date,
+            "Cols": "TKLGD,TGTGD,VHTT,TGG,DC,TGPTG,KLGDKL,GTGDKL",
+            "ExchangeID": 1,
+        },
+    )
+    rows = raw.get("Data") if isinstance(raw, dict) else raw
+    if not isinstance(rows, list):
+        raise ProviderBadData("vietstock trading result malformed")
+    out = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append(
+            {
+                "date": _ms_date(row.get("TradingDate")),
+                "close": row.get("ClosePrice"),
+                "mt_vol": row.get("MT_TotalVol"),
+                "mt_val": row.get("MT_TotalVal"),
+                "pt_vol": row.get("PT_TotalVol"),
+                "pt_val": row.get("PT_TotalVal"),
+            }
+        )
+    return out
+
+
 def industry_tree() -> Any:
     return _post_industry_form("/FinancialStatementSector/GetTreeViewIndustryGICS", {})
 

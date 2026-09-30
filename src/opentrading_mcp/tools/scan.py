@@ -34,14 +34,18 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         max_pe: float | None = None,
         min_roe: float | None = None,
         limit: int = 20,
+        technical: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Screen universe by valuation and quality. Use when hunting candidates.
 
         filters: {field: [min, max]} ranges (None side unbounded) or plain
         strings for symbol/exchange equality; use signals_screener_columns
         to discover valid fields. max_pe/min_roe are shortcuts for the same.
+        technical: optional stage-3 timing filter on post-filter candidates
+        ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).
         """
         from opentrading_mcp.providers import screener as sc_p
+        from opentrading_mcp.providers import technicals as tech_p
 
         eff: dict[str, Any] = dict(filters or {})
         if max_pe is not None and "pe" not in eff:
@@ -105,6 +109,50 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[f"filter error: {exc}"],
                 availability="unavailable",
             )
+        if technical is not None:
+            allowed = {"rsi_lt", "rsi_gt", "above_sma20", "below_sma20"}
+            unknown = [k for k in technical if k not in allowed]
+            if unknown:
+                return make_envelope(
+                    {"tool": "stock_screener"},
+                    source="unavailable",
+                    warnings=[f"unknown technical rules: {unknown}"],
+                    availability="unavailable",
+                )
+            shortlisted = candidates[: max(limit, 1)]
+
+            async def _tech_ok(entry: dict[str, Any]) -> bool:
+                sym = str(entry.get("symbol", "")).upper()
+                if not sym:
+                    return False
+                try:
+                    candles = await run_blocking(
+                        functools.partial(vn_p.quote_history, sym, 80),
+                        "stock_screener",
+                        timeout_secs=10.0,
+                    )
+                    out = tech_p.compute(candles)
+                except Exception:
+                    return False
+                try:
+                    if "rsi_lt" in technical and not (out["rsi14"] < float(technical["rsi_lt"])):
+                        return False
+                    if "rsi_gt" in technical and not (out["rsi14"] > float(technical["rsi_gt"])):
+                        return False
+                    if technical.get("above_sma20") and not (
+                        out["sma20"] is not None and out["last"] > out["sma20"]
+                    ):
+                        return False
+                    if technical.get("below_sma20") and not (
+                        out["sma20"] is not None and out["last"] < out["sma20"]
+                    ):
+                        return False
+                except (TypeError, ValueError):
+                    return False
+                return True
+
+            kept = await asyncio.gather(*(_tech_ok(e) for e in shortlisted))
+            candidates = [e for e, ok in zip(shortlisted, kept, strict=True) if ok]
         return make_envelope(
             {
                 "universe": len(rows),
@@ -147,8 +195,9 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Full technicals rating from local candles (daily only). Use for timing entries.
 
-        indicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend);
-        omit for the full set. interval other than '1D' is accepted but ignored.
+        indicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend,
+        patterns, support, resistance); omit for the full set. interval other
+        than '1D' is accepted but ignored.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
@@ -236,7 +285,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money.
 
         symbols: WS channels to read (default ["VNINDEX"]); falls back to
-        Vietstock NN chart when cache is cold.
+        Vietstock NN chart when cache is cold. Pair with block_trades for
+        per-symbol negotiated put-through prints (different granularity).
         """
         try:
             from opentrading_mcp.providers import dnse as dnse_mod

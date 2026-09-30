@@ -59,8 +59,9 @@ PRESET_MODULES: dict[str, tuple[str, ...]] = {
         "yf_world",
         "dnse_tools",
         "dnse_ext",
+        "crypto",
     ),
-    "scan": ("scan", "compute", "watchlist"),
+    "scan": ("scan", "compute", "watchlist", "corp"),
     "quant": ("quant",),
     "brief": ("brief",),
     "intel": ("intel", "web"),
@@ -74,8 +75,10 @@ PRESET_MODULES: dict[str, tuple[str, ...]] = {
         "yf_world",
         "dnse_tools",
         "dnse_ext",
+        "crypto",
         "scan",
         "compute",
+        "corp",
         "watchlist",
         "quant",
         "brief",
@@ -85,8 +88,10 @@ PRESET_MODULES: dict[str, tuple[str, ...]] = {
 }
 
 # Market-data agent scope per spec needs the full vs/vn/dnse/yf set in one
-# preset; every other preset stays under 50 to keep tools/list fast.
-PRESET_CAPS = {"market": 70, "scan": 50, "quant": 50, "brief": 50, "intel": 50}
+# preset; every other preset stays lean to keep tools/list fast.
+# scan raised 50->60 for the corp research module (P6).
+# market raised 70->75 for the crypto module (P6).
+PRESET_CAPS = {"market": 75, "scan": 60, "quant": 50, "brief": 50, "intel": 50}
 
 _REGISTER_BY_MODULE = {
     "market": "register_market_tools",
@@ -98,8 +103,10 @@ _REGISTER_BY_MODULE = {
     "yf_world": "register_yf_world_tools",
     "dnse_tools": "register_dnse_tools",
     "dnse_ext": "register_dnse_ext_tools",
+    "crypto": "register_crypto_tools",
     "scan": "register_scan_tools",
     "compute": "register_compute_tools",
+    "corp": "register_corp_tools",
     "watchlist": "register_watchlist_tools",
     "quant": "register_quant_tools",
     "brief": "register_brief_tools",
@@ -134,11 +141,17 @@ def register_preset(server: FastMCP, preset: str = "market") -> list[dict[str, A
     """Register every tool module for a preset; returns tool descriptors."""
     import importlib
 
+    from opentrading_mcp.prompts import register_prompts
+    from opentrading_mcp.resources import register_resources
+
     collected: list[dict[str, Any]] = []
     for module in PRESET_MODULES[preset]:
         func_name = _REGISTER_BY_MODULE[module]
         mod = importlib.import_module(f"opentrading_mcp.tools.{module}")
         collected.extend(getattr(mod, func_name)(server))
+    register_prompts(server)
+    register_resources(server)
+    server._opentrading_preset = preset  # type: ignore[attr-defined]  # read by resources
     names = [t["name"] for t in collected]
     if len(names) != len(set(names)):
         raise ValueError(f"duplicate tool names in preset {preset!r}")
