@@ -28,6 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=default_port())
     parser.add_argument("--path", default="/mcp")
     parser.add_argument(
+        "--allow-all-hosts",
+        action="store_true",
+        help="serve HTTP without MCP_ALLOWED_HOSTS DNS-rebinding protection (local/LAN only)",
+    )
+    parser.add_argument(
         "--target",
         default="local",
         choices=["local", "remote", "both"],
@@ -43,10 +48,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def add_health_routes(server: FastMCP) -> None:
     from starlette.requests import Request
-    from starlette.responses import JSONResponse
+    from starlette.responses import JSONResponse, PlainTextResponse
 
-    async def healthz(_request: Request) -> JSONResponse:
-        return JSONResponse({"ok": True, "server": "opentrading"})
+    from opentrading_mcp.health import health_report
+
+    async def healthz(request: Request) -> JSONResponse:
+        deep = request.query_params.get("deep") == "1"
+        code, body = await health_report(deep=deep)
+        return JSONResponse(body, status_code=code)
+
+    async def metrics(_request: Request) -> PlainTextResponse:
+        # NOTE Phase 2: protect with the same auth as /mcp (counters leak tool names).
+        from opentrading_mcp import obs
+
+        return PlainTextResponse(obs.render_metrics(), media_type="text/plain")
 
     async def server_card(_request: Request) -> JSONResponse:
         return JSONResponse(
@@ -59,20 +74,53 @@ def add_health_routes(server: FastMCP) -> None:
         )
 
     server.custom_route("/healthz", methods=["GET"])(healthz)
+    server.custom_route("/metrics", methods=["GET"])(metrics)
     server.custom_route("/.well-known/mcp.json", methods=["GET"])(server_card)
 
 
+def require_public_host_args(args: Any, env: dict[str, str]) -> str | None:
+    """Refuse public HTTP serving without explicit host consent.
+
+    Returns an error message, or None when serving may proceed.
+    """
+    if bool(getattr(args, "allow_all_hosts", False)):
+        return None
+    if (env.get("MCP_ALLOWED_HOSTS") or "").strip():
+        return None
+    return (
+        "Refusing to serve HTTP without MCP_ALLOWED_HOSTS "
+        "(DNS-rebinding protection). Set MCP_ALLOWED_HOSTS to your public "
+        "hostname or pass --allow-all-hosts for local/LAN-only use."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     if args.serve == "verify":
         return run_verify(args.target, args.preset, args.url)
     server = create_server(args.preset)
     register_preset(server, args.preset)
     add_health_routes(server)
     if args.http:
+        import os
+
         import uvicorn
 
+        host_error = require_public_host_args(args, dict(os.environ))
+        if host_error is not None:
+            parser.error(host_error)
+        from opentrading_mcp.middleware import (
+            AuthMiddleware,
+            McpObservabilityMiddleware,
+            RateLimiter,
+            rate_limit_per_minute,
+        )
+
         app = server.streamable_http_app()
+        app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
+        app.add_middleware(AuthMiddleware)
+        app.add_middleware(McpObservabilityMiddleware)
         uvicorn.run(app, host="0.0.0.0", port=args.port)
     else:
         server.run(transport="stdio")
