@@ -39,7 +39,11 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_foreign_rest(symbol: str) -> dict[str, Any]:
-        """Per-symbol foreign trading. Use when WS cache is cold (fallback)."""
+        """Per-symbol foreign trading. Use when WS cache is cold (fallback).
+
+        Upstream rejects most date ranges on this endpoint; errorCode bodies
+        surface as unavailable instead of garbage data.
+        """
         try:
             return make_envelope(await _call("f", dnse_p.foreign_rest, symbol), source="dnse-rest")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

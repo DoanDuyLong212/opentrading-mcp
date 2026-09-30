@@ -34,6 +34,15 @@ from opentrading_mcp.tools.shared import (
 )
 
 
+def _norm_text(text: str) -> str:
+    """Uppercase ASCII fold for Vietnamese (accents + Đ/đ); stdlib only."""
+    import unicodedata
+
+    folded = unicodedata.normalize("NFD", text or "")
+    stripped = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+    return stripped.upper().replace("Đ", "D")
+
+
 def _unavailable(tool: str, reason: str) -> dict[str, Any]:
     return make_envelope(
         {"tool": tool, "reason": reason},
@@ -168,14 +177,23 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def symbol_lookup(query: str, limit: int = 10) -> dict[str, Any]:
         """Resolve company name to symbol, venue and sector. Use before any symbol-scoped call.
 
-        limit: max hits returned (matched by symbol or company name, case-insensitive).
+        limit: max hits returned (matched by symbol or company name,
+        case- and accent-insensitive).
         """
         try:
             rows = await run_blocking(vn_p.listing_symbols, "symbol_lookup")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("symbol_lookup", str(exc))
-        query_up = query.upper()
-        hits = [r for r in rows if query_up in r["symbol"] or query_up in r["name"].upper()]
+        query_norm = _norm_text(query)
+        hits = [
+            r
+            for r in rows
+            if isinstance(r, dict)
+            and (
+                query_norm in _norm_text(str(r.get("symbol", "")))
+                or query_norm in _norm_text(str(r.get("name", "")))
+            )
+        ]
         return make_envelope({"hits": hits[: max(int(limit), 1)]}, source="vnstock")
 
     @server.tool(annotations=READ_ONLY)

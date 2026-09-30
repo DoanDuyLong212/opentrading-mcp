@@ -157,11 +157,20 @@ def orderbook(symbol: str, depth: int = 3) -> dict[str, Any]:
     raise ProviderUnavailable(f"no orderbook for {symbol}")
 
 
+def _coerce_foreign(body: Any) -> Any:
+    """Reject DNSE errorCode payloads (e.g. range limits on foreign-trading)."""
+    if isinstance(body, dict) and "errorCode" in body:
+        code = body.get("errorCode")
+        msg = body.get("message")
+        raise ProviderBadData(f"dnse foreign-trading error {code}: {msg}")
+    return body
+
+
 def foreign_rest(symbol: str) -> dict[str, Any]:
     body = _get(f"/price/{symbol}/foreign-trading")
     if not body:
         raise ProviderUnavailable(f"no foreign data for {symbol}")
-    return {"symbol": symbol, "foreign": body}
+    return {"symbol": symbol, "foreign": _coerce_foreign(body)}
 
 
 def working_dates() -> Any:

@@ -52,9 +52,18 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Paid BCTC values matrix (default tids [2,3,4,5,9]). Use for statements.
 
         tids: report term ids (1 full-year, 2 Q1, 3 Q2, 4 Q3, 5 Q4, 9 half-year, 12 9M).
+        Paid JWT package limits exportable periods; when limited the tool reports
+        unavailable — use vs_financeinfo (free mirror) instead.
         """
         try:
             data = await _call("v", vs_p.financial_values, symbol, btype, years, tids)
+            rows = data.get("rows", []) if isinstance(data, dict) else []
+            if not rows:
+                return _na(
+                    "vs_financial_values",
+                    "BCTC package limited or empty for this JWT; "
+                    "use vs_financeinfo (free mirror) instead",
+                )
             return make_envelope(data, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financial_values", str(exc))
@@ -123,11 +132,23 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vs_stock_industry(industry_id: int) -> dict[str, Any]:
         """Companies under a GICS industry node. Use for peer universes.
 
-        industry_id: node id from vs_industry_tree output.
+        industry_id: level 2-3 node id from vs_industry_tree output. Upstream
+        currently returns no mappings for most nodes (empty, not an error);
+        vs_industry_heatmap covers live rotation instead.
         """
         try:
-            data = await _call("s", vs_p.stock_industry, industry_id)
-            return make_envelope({"industry": industry_id, "stocks": data}, source="vietstock")
+            stocks = await _call("s", vs_p.stock_industry, industry_id)
+            if not stocks:
+                return make_envelope(
+                    {"industry": industry_id, "stocks": []},
+                    source="vietstock",
+                    warnings=[
+                        "no mappings for this node; use level 2-3 ids or "
+                        "vs_industry_heatmap instead"
+                    ],
+                    availability="empty",
+                )
+            return make_envelope({"industry": industry_id, "stocks": stocks}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_stock_industry", str(exc))
 

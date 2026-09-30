@@ -314,6 +314,10 @@ def financial_values(
         {"ReportNormIds": ",".join(ids), "ListParams": params},
         timeout=60,
     )
+    if isinstance(body, dict) and body.get("error"):
+        err = body["error"]
+        code = err.get("ErrorCode", "package-limited") if isinstance(err, dict) else err
+        raise ProviderAuthMissing(f"vietstock package limited: {code}")
     return {"symbol": symbol.upper(), "norms": len(ids), "rows": body.get("data", body)}
 
 
@@ -470,10 +474,16 @@ def _post_industry_form(path: str, payload: dict[str, Any]) -> Any:
         ) from exc
 
 
-def stock_industry(industry_id: int) -> Any:
-    return _post_json(
+def stock_industry(industry_id: int) -> list[dict[str, Any]]:
+    """Company mappings for a GICS node (level 2-3 ids); empty when upstream has none."""
+    raw = _post_json(
         "/FinancialStatementSector/GetBusinessTypeIDCompanyByGICS", {"IndustryID": industry_id}
     )
+    if isinstance(raw, dict):
+        model = raw.get("model", [])
+        if isinstance(model, list):
+            return [r for r in model if isinstance(r, dict)]
+    raise ProviderBadData("vietstock industry stocks malformed")
 
 
 def industry_heatmap() -> Any:
@@ -509,9 +519,29 @@ def news_search(query: str, page_size: int = 20) -> Any:
     except httpx.HTTPError as exc:
         raise ProviderUnavailable("vietstock search unreachable") from exc
     try:
-        return json.loads(response.text.encode().decode("utf-8-sig"))
+        parsed = json.loads(response.text.encode().decode("utf-8-sig"))
     except ValueError as exc:
         raise ProviderBadData("vietstock search bad json") from exc
+    return _coerce_articles(parsed)
+
+
+def _coerce_articles(payload: Any) -> list[dict[str, Any]]:
+    """Normalize article search shapes; error-message dicts become ProviderBadData.
+
+    The dc endpoint returns {"Message": "No HTTP resource..."} when the route
+    is gone — previously passed through as available with garbage data.
+    """
+    if isinstance(payload, list):
+        return [r for r in payload if isinstance(r, dict)]
+    if isinstance(payload, dict):
+        for key in ("data", "articles", "items", "results"):
+            nested = payload.get(key)
+            if isinstance(nested, list):
+                return [r for r in nested if isinstance(r, dict)]
+        msg = payload.get("Message") or payload.get("message") or ""
+        if isinstance(msg, str) and msg.strip():
+            raise ProviderBadData(f"vietstock search error: {msg.strip()[:200]}")
+    raise ProviderBadData("vietstock search malformed")
 
 
 def selftrading() -> Any:
