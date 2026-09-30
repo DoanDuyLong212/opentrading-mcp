@@ -34,7 +34,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_financial_norms(btype: int = 1) -> dict[str, Any]:
-        """190+ BCTC line items for a business type. Use to resolve norm ids."""
+        """190+ BCTC line items for a business type. Use to resolve norm ids.
+
+        btype: 1 CTCP (general), 2 securities, 3 bank, 5 insurance.
+        """
         try:
             data = await _call("n", vs_p.financial_norms, btype)
             rows = data if isinstance(data, list) else data.get("data", [])
@@ -46,7 +49,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vs_financial_values(
         symbol: str, btype: int = 1, years: int = 3, tids: list[int] | None = None
     ) -> dict[str, Any]:
-        """Paid BCTC values matrix (default tids [2,3,4,5,9]). Use for statements."""
+        """Paid BCTC values matrix (default tids [2,3,4,5,9]). Use for statements.
+
+        tids: report term ids (1 full-year, 2 Q1, 3 Q2, 4 Q3, 5 Q4, 9 half-year, 12 9M).
+        """
         try:
             data = await _call("v", vs_p.financial_values, symbol, btype, years, tids)
             return make_envelope(data, source="vietstock")
@@ -76,7 +82,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_documents(symbol: str, page_size: int = 60) -> dict[str, Any]:
-        """Filings and disclosures with links. Use for corporate actions."""
+        """Filings and disclosures with links. Use for corporate actions.
+
+        page_size: max documents returned (default 60).
+        """
         try:
             return make_envelope(
                 {"docs": await _call("d", vs_p.documents, symbol, page_size)},
@@ -89,7 +98,11 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vs_reports_search(
         symbol: str = "", keywords: str | None = None, page_size: int = 50
     ) -> dict[str, Any]:
-        """Analyst reports search. Use for external views on a name."""
+        """Analyst reports search. Use for external views on a name.
+
+        keywords: free-text filter (empty symbol + keywords searches all).
+        page_size: max reports (default 50).
+        """
         try:
             return make_envelope(
                 {"reports": await _call("r", vs_p.reports_search, symbol, page_size, keywords)},
@@ -108,7 +121,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_stock_industry(industry_id: int) -> dict[str, Any]:
-        """Companies under a GICS industry node. Use for peer universes."""
+        """Companies under a GICS industry node. Use for peer universes.
+
+        industry_id: node id from vs_industry_tree output.
+        """
         try:
             data = await _call("s", vs_p.stock_industry, industry_id)
             return make_envelope({"industry": industry_id, "stocks": data}, source="vietstock")
@@ -135,7 +151,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_top_liquidity(index: str = "VNINDEX", top_n: int = 20) -> dict[str, Any]:
-        """Most liquid names per index. Use for liquidity screens."""
+        """Most liquid names per index. Use for liquidity screens.
+
+        index: VNINDEX, VN30, HNX, UPCOM. top_n: rows returned.
+        """
         try:
             rows = await _call("l", vs_p.top_liquidity, index)
             if isinstance(rows, list):
@@ -162,7 +181,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_market_info(symbol: str = "") -> dict[str, Any]:
-        """Compact market line per symbol. Use for 5s snapshots in hours."""
+        """Compact market line per symbol. Use for 5s snapshots in hours.
+
+        symbol: single ticker (empty = whole-board row set).
+        """
         try:
             return make_envelope(
                 {"info": await _call("m", vs_p.market_info, symbol)}, source="vietstock"
@@ -172,7 +194,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_news_search(query: str, page_size: int = 20, page: int = 1) -> dict[str, Any]:
-        """Vietstock article search. Use for catalyst lookup."""
+        """Vietstock article search. Use for catalyst lookup.
+
+        page/page_size: 1-based pagination.
+        """
         try:
             window = max(int(page_size), 1) * max(int(page), 1)
             data = await _call("n", vs_p.news_search, query, window)
@@ -187,7 +212,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vs_xnk_detail(
         direction: str = "xk", from_date: str | None = None, to_date: str | None = None
     ) -> dict[str, Any]:
-        """Import/export by country. Use for trade structure (termType 2)."""
+        """Import/export by country. Use for trade structure (termType 2).
+
+        direction: 'xk' exports, 'nk' imports. from_date/to_date: ISO dates.
+        """
         list_id = 64 if direction == "xk" else 65
         try:
             data = await _call(

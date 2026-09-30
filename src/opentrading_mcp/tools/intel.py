@@ -37,7 +37,11 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         status: str | None = None,
         tag: str | None = None,
     ) -> dict[str, Any]:
-        """Prediction-market odds via jina proxy to Gamma, then direct. Use for Fed/macro odds."""
+        """Prediction-market odds via jina proxy to Gamma, then direct. Use for Fed/macro odds.
+
+        limit: max events. status/tag: keep events whose title or status
+        fields contain these substrings (case-insensitive).
+        """
         try:
             data = await _call("o", intel_p.prediction_odds, query, secs=60.0)
             events = data.get("events", []) if isinstance(data, dict) else []
@@ -66,7 +70,11 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def geo_intel(
         topic: str | None = None, limit: int = 20, days: int | None = None
     ) -> dict[str, Any]:
-        """Geopolitical coverage via GDELT. Use when geopolitics threatens markets."""
+        """Geopolitical coverage via GDELT. Use when geopolitics threatens markets.
+
+        limit: max articles. days: keep articles from the last N days
+        (undated articles are kept).
+        """
         try:
             data = await _call(
                 "g", intel_p.gdelt_events, topic or "geopolitical conflict sanctions", secs=60.0
@@ -125,7 +133,10 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def compare_equities(
         symbols: list[str], metrics: list[str] | None = None
     ) -> dict[str, Any]:
-        """Head-to-head overview rows and momentum. Use when picking tickers."""
+        """Head-to-head overview rows and momentum. Use when picking tickers.
+
+        metrics: keep only matching row keys (symbol column always kept).
+        """
         wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
         for symbol in symbols[:4]:
@@ -156,7 +167,11 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def evidence_bundle(
         claim_ids: list[str], calc_ids: list[str] | None = None
     ) -> dict[str, Any]:
-        """Lock weighted conclusion by evidence bundle. Use last for final verdict."""
+        """Lock weighted conclusion by evidence bundle. Use last for final verdict.
+
+        claim_ids: claim ids to lock; calc_ids: supporting calculation ids
+        (pass [] when none).
+        """
         bundle = {
             "claims": claim_ids,
             "calc_ids": calc_ids or [],

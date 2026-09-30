@@ -35,7 +35,12 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         min_roe: float | None = None,
         limit: int = 20,
     ) -> dict[str, Any]:
-        """Screen universe by valuation and quality. Use when hunting candidates."""
+        """Screen universe by valuation and quality. Use when hunting candidates.
+
+        filters: {field: [min, max]} ranges (None side unbounded) or plain
+        strings for symbol/exchange equality; use signals_screener_columns
+        to discover valid fields. max_pe/min_roe are shortcuts for the same.
+        """
         from opentrading_mcp.providers import screener as sc_p
 
         eff: dict[str, Any] = dict(filters or {})
@@ -114,7 +119,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def signals_screener_columns(
         group: str | None = None, search: str | None = None
     ) -> dict[str, Any]:
-        """Screener column catalog (valuation/quality/universe/price). Use to build filters."""
+        """Screener column catalog (valuation/quality/universe/price). Use to build filters.
+
+        group: keep only that column group; search: keep columns whose
+        key or label contains this substring (case-insensitive).
+        """
         from opentrading_mcp.providers import screener as sc_p
 
         cols = sc_p.screener_columns(group=group, search=search)
@@ -136,7 +145,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         indicators: list[str] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Full technicals rating from local candles (daily only). Use for timing entries."""
+        """Full technicals rating from local candles (daily only). Use for timing entries.
+
+        indicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend);
+        omit for the full set. interval other than '1D' is accepted but ignored.
+        """
         from opentrading_mcp.providers import technicals as tech_p
 
         if ctx is not None:
@@ -191,7 +204,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def sector_performance(level: int = 1, top_n: int = 50) -> dict[str, Any]:
-        """GICS heatmap rows. Use for sector rotation reads."""
+        """GICS heatmap rows. Use for sector rotation reads.
+
+        level: GICS tree depth. top_n: rows returned.
+        """
         try:
             from opentrading_mcp.providers import vietstock as vs_p
 
@@ -217,7 +233,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def money_flow(symbols: list[str] | None = None) -> dict[str, Any]:
-        """Compose foreign flow: DNSE WS cache first, Vietstock cross-check."""
+        """Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money.
+
+        symbols: WS channels to read (default ["VNINDEX"]); falls back to
+        Vietstock NN chart when cache is cold.
+        """
         try:
             from opentrading_mcp.providers import dnse as dnse_mod
 
@@ -244,7 +264,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def alert_check(rules: list[dict[str, Any]]) -> dict[str, Any]:
-        """Evaluate price/RSI rules against live quotes. Use for live watch."""
+        """Evaluate price/RSI rules against live quotes. Use for live watch.
+
+        Each rule: {symbol, threshold, metric ('price'|'rsi14'), op ('>'|'gt'|'>='|'gte'|
+        '<'|'lt'|'<='|'lte'|'cross_up'|'cross_down')}.
+        """
         wanted: dict[str, dict[str, Any]] = {}
         for entry in rules:
             if (

@@ -238,8 +238,7 @@ def _remove_symbols(list_id: str, symbols: list[str]) -> list[str]:
             with conn.transaction(), conn.cursor() as cur:
                 if drop:
                     cur.execute(
-                        "DELETE FROM watchlist_items"
-                        " WHERE watchlist_id = %s AND symbol = ANY(%s)",
+                        "DELETE FROM watchlist_items WHERE watchlist_id = %s AND symbol = ANY(%s)",
                         (int(list_id), drop),
                     )
                 cur.execute(
@@ -395,8 +394,7 @@ def _rename_list(list_id: str, name: str) -> dict[str, Any] | None:
 
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
-                    "UPDATE watchlists SET name = %s WHERE id = %s"
-                    " RETURNING id, name",
+                    "UPDATE watchlists SET name = %s WHERE id = %s RETURNING id, name",
                     (name, int(list_id)),
                 )
                 row = cur.fetchone()
@@ -426,12 +424,11 @@ def _rename_list(list_id: str, name: str) -> dict[str, Any] | None:
 
 async def _toggle(server: FastMCP, rule_id: int, active: bool) -> dict[str, Any]:
     """Shared body for alert_pause/alert_resume."""
-    updated = await run_blocking(
-        lambda: _set_rule_active(str(rule_id), active), "alert_toggle"
-    )
+    updated = await run_blocking(lambda: _set_rule_active(str(rule_id), active), "alert_toggle")
     if updated is None:
-        return make_envelope({"tool": "alert_toggle", "rule_id": rule_id},
-                             source="local", availability="empty")
+        return make_envelope(
+            {"tool": "alert_toggle", "rule_id": rule_id}, source="local", availability="empty"
+        )
     source = "postgres" if _pg_configured() else "file"
     verb = "paused" if not active else "resumed"
     return make_envelope({**updated, "state": verb}, source=source)
@@ -442,16 +439,18 @@ async def _toggle(server: FastMCP, rule_id: int, active: bool) -> dict[str, Any]
 
 def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_WRITE)
-    async def watchlist_create(
-        name: str, ctx: AnyContext | None = None
-    ) -> dict[str, Any]:
+    async def watchlist_create(name: str, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Create a named watchlist. Use to start tracking a symbol group."""
         if ctx is not None:
             await ctx.log("info", f"watchlist_create {name}")
         name = name.strip()
         if not name:
-            return make_envelope({"tool": "watchlist_create"}, source="local",
-                                 warnings=["name required"], availability="empty")
+            return make_envelope(
+                {"tool": "watchlist_create"},
+                source="local",
+                warnings=["name required"],
+                availability="empty",
+            )
         conn = _pg()
         if conn is not None:
             try:
@@ -462,21 +461,27 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "INSERT INTO watchlists (name) VALUES (%s) RETURNING id, name", (name,)
                     )
                     row = cur.fetchone()
-                return make_envelope({"id": row["id"], "name": row["name"], "symbols": []},
-                                     source="postgres")
+                return make_envelope(
+                    {"id": row["id"], "name": row["name"], "symbols": []}, source="postgres"
+                )
             except Exception as exc:
-                return make_envelope({"tool": "watchlist_create"}, source="local",
-                                     warnings=[f"create failed: {exc}"],
-                                     availability="unavailable")
+                return make_envelope(
+                    {"tool": "watchlist_create"},
+                    source="local",
+                    warnings=[f"create failed: {exc}"],
+                    availability="unavailable",
+                )
             finally:
                 conn.close()
         existing = _file_load("lists")
         if any(r["name"] == name for r in existing):
-            return make_envelope({"tool": "watchlist_create"}, source="local",
-                                 warnings=[f"watchlist '{name}' already exists"],
-                                 availability="unavailable")
-        new_id = max((int(str(r["id"])) for r in existing if str(r["id"]).isdigit()),
-                     default=0) + 1
+            return make_envelope(
+                {"tool": "watchlist_create"},
+                source="local",
+                warnings=[f"watchlist '{name}' already exists"],
+                availability="unavailable",
+            )
+        new_id = max((int(str(r["id"])) for r in existing if str(r["id"]).isdigit()), default=0) + 1
         created = _upsert_list(str(new_id), name)
         return make_envelope(created, source="file")
 
@@ -494,19 +499,16 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def watchlist_get(
-        list_id: int, ctx: AnyContext | None = None
-    ) -> dict[str, Any]:
+    async def watchlist_get(list_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Get one watchlist's symbols by id. Use before quoting a saved set."""
         if ctx is not None:
             await ctx.log("info", f"watchlist_get {list_id}")
         for entry in await run_blocking(_load_lists, "watchlist_get"):
             if int(entry["id"]) == int(list_id):
-                return make_envelope(
-                    entry, source="postgres" if _pg_configured() else "file"
-                )
-        return make_envelope({"tool": "watchlist_get", "list_id": list_id},
-                             source="local", availability="empty")
+                return make_envelope(entry, source="postgres" if _pg_configured() else "file")
+        return make_envelope(
+            {"tool": "watchlist_get", "list_id": list_id}, source="local", availability="empty"
+        )
 
     @server.tool(annotations=READ_WRITE)
     async def watchlist_add(
@@ -517,12 +519,13 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("info", f"watchlist_add {list_id} {symbols}")
         known = {int(w["id"]) for w in await run_blocking(_load_lists, "watchlist_add")}
         if int(list_id) not in known:
-            return make_envelope({"tool": "watchlist_add", "list_id": list_id},
-                                 source="local", warnings=[f"no watchlist {list_id}"],
-                                 availability="empty")
-        out = await run_blocking(
-            lambda: _add_symbols(str(list_id), symbols), "watchlist_add"
-        )
+            return make_envelope(
+                {"tool": "watchlist_add", "list_id": list_id},
+                source="local",
+                warnings=[f"no watchlist {list_id}"],
+                availability="empty",
+            )
+        out = await run_blocking(lambda: _add_symbols(str(list_id), symbols), "watchlist_add")
         return make_envelope(
             {"list_id": list_id, "added": len(out), "symbols": out},
             source="postgres" if _pg_configured() else "file",
@@ -546,20 +549,22 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[f"remove failed: {exc}"],
                 availability="unavailable",
             )
-        return make_envelope({"list_id": list_id, "symbols": out},
-                             source="postgres" if _pg_configured() else "file")
+        return make_envelope(
+            {"list_id": list_id, "symbols": out}, source="postgres" if _pg_configured() else "file"
+        )
 
     @server.tool(annotations=READ_WRITE)
-    async def watchlist_delete(
-        list_id: int, ctx: AnyContext | None = None
-    ) -> dict[str, Any]:
+    async def watchlist_delete(list_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Delete a watchlist and its items (cascade). Use to clean up."""
         if ctx is not None:
             await ctx.log("info", f"watchlist_delete {list_id}")
         ok = await run_blocking(lambda: _delete_list(str(list_id)), "watchlist_delete")
         if not ok:
-            return make_envelope({"tool": "watchlist_delete", "list_id": list_id},
-                                 source="local", availability="empty")
+            return make_envelope(
+                {"tool": "watchlist_delete", "list_id": list_id},
+                source="local",
+                availability="empty",
+            )
         return make_envelope(
             {"deleted": list_id},
             source="postgres" if _pg_configured() else "file",
@@ -574,14 +579,19 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("info", f"watchlist_update {list_id} {name}")
         name = name.strip()
         if not name:
-            return make_envelope({"tool": "watchlist_update"}, source="local",
-                                 warnings=["name required"], availability="empty")
-        updated = await run_blocking(
-            lambda: _rename_list(str(list_id), name), "watchlist_update"
-        )
+            return make_envelope(
+                {"tool": "watchlist_update"},
+                source="local",
+                warnings=["name required"],
+                availability="empty",
+            )
+        updated = await run_blocking(lambda: _rename_list(str(list_id), name), "watchlist_update")
         if updated is None:
-            return make_envelope({"tool": "watchlist_update", "list_id": list_id},
-                                 source="local", availability="empty")
+            return make_envelope(
+                {"tool": "watchlist_update", "list_id": list_id},
+                source="local",
+                availability="empty",
+            )
         return make_envelope(updated, source="postgres" if _pg_configured() else "file")
 
     @server.tool(annotations=READ_WRITE)
@@ -592,14 +602,19 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
         metric: str = "price",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Create a stored alert rule (input to alert_check). Use for live watch."""
+        """Create a stored alert rule (input to alert_check). Use for live watch.
+
+        metric: 'price' or 'rsi14'. op: '>'/'>='/<'/'<=' (aliases 'gt'/'gte'/
+        'lt'/'lte' accepted). threshold: comparison value for the metric.
+        """
         if ctx is not None:
             await ctx.log("info", f"alert_create {symbol} {metric} {op} {threshold}")
         metric = metric if metric in ("price", "rsi14") else "price"
         op = _OP_ALIASES.get(op, op)
         if op not in VALID_ALERT_OPS:
             return make_envelope(
-                {"tool": "alert_create"}, source="local",
+                {"tool": "alert_create"},
+                source="local",
                 warnings=[f"invalid op: {op} (use one of {', '.join(VALID_ALERT_OPS)})"],
                 availability="empty",
             )
@@ -607,8 +622,10 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             threshold = float(threshold)
         except (TypeError, ValueError):
             return make_envelope(
-                {"tool": "alert_create"}, source="local",
-                warnings=["threshold must be a number"], availability="empty",
+                {"tool": "alert_create"},
+                source="local",
+                warnings=["threshold must be a number"],
+                availability="empty",
             )
         record = {
             "symbol": symbol.upper(),
@@ -632,9 +649,7 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
                 return make_envelope(
                     {**r, "state": "already exists"},
                     source="postgres" if _pg_configured() else "file",
-                    warnings=[
-                        f"alert rule already exists: {record['symbol']} {op} {threshold}"
-                    ],
+                    warnings=[f"alert rule already exists: {record['symbol']} {op} {threshold}"],
                 )
         rid = await run_blocking(lambda: _upsert_rule(record), "alert_create")
         created = dict(record)
@@ -654,31 +669,26 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_WRITE)
-    async def alert_delete(
-        rule_id: int, ctx: AnyContext | None = None
-    ) -> dict[str, Any]:
+    async def alert_delete(rule_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Delete a stored alert rule by id. Use to clean up alerts."""
         if ctx is not None:
             await ctx.log("info", f"alert_delete {rule_id}")
         ok = await run_blocking(lambda: _delete_rule(str(rule_id)), "alert_delete")
         if not ok:
-            return make_envelope({"tool": "alert_delete", "rule_id": rule_id},
-                                 source="local", availability="empty")
+            return make_envelope(
+                {"tool": "alert_delete", "rule_id": rule_id}, source="local", availability="empty"
+            )
         return make_envelope(
             {"deleted": rule_id}, source="postgres" if _pg_configured() else "file"
         )
 
     @server.tool(annotations=READ_WRITE)
-    async def alert_pause(
-        rule_id: int, ctx: AnyContext | None = None
-    ) -> dict[str, Any]:
+    async def alert_pause(rule_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Pause a stored alert rule (active=false). Use to silence alerts."""
         return await _toggle(server, rule_id, False)
 
     @server.tool(annotations=READ_WRITE)
-    async def alert_resume(
-        rule_id: int, ctx: AnyContext | None = None
-    ) -> dict[str, Any]:
+    async def alert_resume(rule_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Resume a paused alert rule (active=true). Use to re-enable alerts."""
         return await _toggle(server, rule_id, True)
 

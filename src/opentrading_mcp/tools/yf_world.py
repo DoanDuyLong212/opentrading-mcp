@@ -21,7 +21,10 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 90.0) -> Any:
 def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def yf_world_indices(tickers: list[str] | None = None) -> dict[str, Any]:
-        """24 world benchmarks. Use for global breadth."""
+        """24 world benchmarks. Use for global breadth.
+
+        tickers: subset override (default WORLD 24).
+        """
         try:
             return make_envelope(
                 {"indices": await _call("w", yf_p.world_indices, tickers)}, source="yfinance"
@@ -31,7 +34,10 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def yf_oracle_markets(groups: list[str] | None = None) -> dict[str, Any]:
-        """40 markets in 6 groups with 30d stats. Use for cross-asset state."""
+        """40 markets in 6 groups with 30d stats. Use for cross-asset state.
+
+        groups: keep only named groups (crypto/metals/energy/agri/bonds_fx/index).
+        """
         try:
             return make_envelope(
                 await _call("o", yf_p.oracle_markets, groups, secs=120.0), source="yfinance"
@@ -51,7 +57,10 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def yf_mega_flows(top_n: int = 15) -> dict[str, Any]:
-        """Mega-cap leader flows. Use to follow global smart money."""
+        """Mega-cap leader flows. Use to follow global smart money.
+
+        top_n: leaders evaluated (default 15 of the ~20-name universe).
+        """
         try:
             return make_envelope(
                 await _call("m", yf_p.mega_flows, max(int(top_n), 1)), source="yfinance"
@@ -61,7 +70,11 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def yf_alloc_history(asset: str = "GC", timeframe: str = "1d") -> dict[str, Any]:
-        """Long allocation history per asset. Use for regime backtests."""
+        """Long allocation history per asset. Use for regime backtests.
+
+        asset: GC/VND/BTC/OIL/SILVER/COFFEE (unknown falls back to GC).
+        timeframe: '1d' or '1wk'; returns last 60 closes over 5y.
+        """
         try:
             return make_envelope(
                 await _call("a", yf_p.alloc_history, asset, timeframe, secs=120.0),

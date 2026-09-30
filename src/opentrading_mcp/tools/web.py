@@ -33,7 +33,11 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def web_fetch(
         url: str, format: str = "markdown", timeout_seconds: int = 30
     ) -> dict[str, Any]:
-        """Fetch a URL and convert to markdown, text or html. Use for reading web content."""
+        """Fetch a URL and convert to markdown, text or html. Use for reading web content.
+
+        format: 'markdown' (default), 'text' or 'html'. timeout_seconds: max
+        fetch time (default 30).
+        """
         try:
             data = await _call(
                 "web_fetch",
@@ -60,7 +64,12 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
             search_type: str = "auto",
             context_max_chars: int | None = None,
         ) -> dict[str, Any]:
-            """Search the web via Exa/Parallel providers. Use for up-to-date information."""
+            """Search the web via Exa/Parallel providers. Use for up-to-date information.
+
+            num_results: results requested (default 8). livecrawl: 'fallback' uses
+            cached index first, 'preferred' crawls live. search_type: 'auto' (default),
+            'fast', or 'deep'. context_max_chars: cap on returned context.
+            """
             try:
                 data = await _call(
                     "web_search",

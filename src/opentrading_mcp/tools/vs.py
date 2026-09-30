@@ -37,7 +37,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vs_financeinfo(
         symbol: str, period: str = "quarter", ctx: AnyContext | None = None
     ) -> dict[str, Any]:
-        """Free-mirror statements, 12 quarters or years. Use when JWT is absent."""
+        """Free-mirror statements, 12 quarters or years. Use when JWT is absent.
+
+        period: 'quarter' (12 quarters) or 'year' (annual).
+        """
         if ctx is not None:
             await ctx.log("info", f"vs_financeinfo {symbol} {period}")
         try:
@@ -48,7 +51,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_market_price(type: int = 2) -> dict[str, Any]:
-        """Live board snapshot from Vietstock. Use as secondary quote source."""
+        """Live board snapshot from Vietstock. Use as secondary quote source.
+
+        type: board id (2 = main board).
+        """
         try:
             data = await _call("vs_market_price", vs_p.market_price, type)
             return make_envelope({"rows": data}, source="vietstock")
@@ -68,7 +74,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_nn_flow(days: int = 90) -> dict[str, Any]:
-        """Foreign investor buy/sell chart. Use to cross-check DNSE WS flows."""
+        """Foreign investor buy/sell chart. Use to cross-check DNSE WS flows.
+
+        days: keep only the most recent N chart points.
+        """
         try:
             data = await _call("vs_nn_flow", vs_p._post, "/data/KQGDGiaoDichNDTNNChart", {})
             if isinstance(data, list) and len(data) == 2 and all(isinstance(p, list) for p in data):
@@ -98,7 +107,11 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
         from_date: str = "2021-06-30",
         to_date: str | None = None,
     ) -> dict[str, Any]:
-        """Macro series for a category and term type. Use for GDP, CPI, trade context."""
+        """Macro series for a category and term type. Use for GDP, CPI, trade context.
+
+        term_type_id: 1 daily, 2 monthly, 3 quarterly, 4 yearly, 5 YTD, 6 MoM,
+        7 YoY, 8 QoQ. from_date/to_date: ISO dates (YYYY-MM-DD).
+        """
         try:
             data = await _call(
                 "vs_indicator_data",

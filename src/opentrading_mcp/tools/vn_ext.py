@@ -54,7 +54,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         columns: list[str] | None = None,
         interval: str = "1D",
     ) -> dict[str, Any]:
-        """Index bars for VN tickers. Use for index history and breadth."""
+        """Index bars for VN tickers. Use for index history and breadth.
+
+        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).
+        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
+        """
         try:
             rows = await _call("i", vn_p.index_ohlcv, symbol, count, interval)
             if summary:
@@ -73,7 +77,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         columns: list[str] | None = None,
         interval: str = "1D",
     ) -> dict[str, Any]:
-        """Equity bars via Market API. Use as OHLCV alternative to quotes."""
+        """Equity bars via Market API. Use as OHLCV alternative to quotes.
+
+        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).
+        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
+        """
         try:
             rows = await _call("e", vn_p.equity_ohlcv, symbol, count, interval)
             if summary:
@@ -92,7 +100,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         columns: list[str] | None = None,
         interval: str = "1D",
     ) -> dict[str, Any]:
-        """Futures bars. Use for derivatives backtest input."""
+        """Futures bars. Use for derivatives backtest input.
+
+        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).
+        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
+        """
         try:
             rows = await _call("f", vn_p.futures_ohlcv, symbol, count, interval)
             if summary:
@@ -110,7 +122,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary: bool = False,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
-        """FX bars. Use for currency context."""
+        """FX bars. Use for currency context.
+
+        pair like 'USDVND'. summary/columns: summary returns {count,last,high,low}
+        only; columns keeps named fields.
+        """
         try:
             rows = await _call("f", vn_p.forex_ohlcv, pair, count)
             if summary:
@@ -128,7 +144,10 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary: bool = False,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Crypto bars. Use for digital-asset regime reads."""
+        """Crypto bars. Use for digital-asset regime reads.
+
+        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
+        """
         try:
             rows = await _call("c", vn_p.crypto_ohlv, symbol, count)
             if summary:
@@ -146,7 +165,10 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary: bool = False,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Global index bars. Use as yfinance fallback."""
+        """Global index bars. Use as yfinance fallback.
+
+        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
+        """
         try:
             rows = await _call("g", vn_p.global_index, symbol, count)
             if summary:
@@ -161,7 +183,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_reference(
         exchange: str = "HOSE", by: str = "exchange", key: str | None = None
     ) -> dict[str, Any]:
-        """ICB reference by exchange, group or industry. Use for universe construction."""
+        """ICB reference by exchange, group or industry. Use for universe construction.
+
+        by: 'exchange' (use exchange=HOSE/HNX/UPCOM), 'group' or 'industry'
+        (use key=group/industry name).
+        """
         try:
             rows = await _call("r", vn_p.reference_equity, exchange, by, key)
             return make_envelope({"exchange": exchange.upper(), "rows": rows}, source="vnstock")
@@ -170,7 +196,10 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_company(symbol: str, detail: bool = False) -> dict[str, Any]:
-        """Profile, holders and officers. Use for company research."""
+        """Profile, holders and officers. Use for company research.
+
+        detail: false returns profile only; true adds holders and officers (heavier).
+        """
         try:
             return make_envelope(
                 await _call("c", vn_p.company_info, symbol, detail), source="vnstock"
@@ -180,7 +209,10 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> dict[str, Any]:
-        """USDVND and XAUUSD via MSN. Use for gold-basis math."""
+        """USDVND and XAUUSD via MSN. Use for gold-basis math.
+
+        symbols: subset to fetch (default both); days: history depth.
+        """
         try:
             data = await _call("m", vn_p.msn_fx_gold, symbols, days)
             return make_envelope({"series": data}, source="msn")
@@ -195,7 +227,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         from_date: str | None = None,
         to_date: str | None = None,
     ) -> dict[str, Any]:
-        """Tick-level matched trades. Use for microstructure reads."""
+        """Tick-level matched trades. Use for microstructure reads.
+
+        board: board filter (default all boards). from_date/to_date: ISO dates
+        bounding the trade window.
+        """
         try:
             rows = await _call("t", vn_p.equity_trades, symbol, limit, board, from_date, to_date)
             return make_envelope({"symbol": symbol.upper(), "trades": rows}, source="vnstock")

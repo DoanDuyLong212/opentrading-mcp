@@ -56,8 +56,11 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Paginated futures/index bars via cursor. Use for VN30F1M backtest input.
 
-        bar_type/from_date kept for backward compatibility (defaults
-        derivative/2018-08-01, same as provider); do not remove.
+        symbol: futures code (VN30F1M) or index (VN30). resolution: bar size in
+        minutes (1/5/15/30/60). bar_type: 'derivative' for futures, 'index' for
+        indices. from_date/to_date: ISO dates (YYYY-MM-DD). summary: return only
+        {symbol, count, last, high, low} instead of full bars. columns: keep only
+        named fields per bar (t/o/h/l/c/v).
         """
         if ctx is not None:
             await ctx.report_progress(0, 1, f"fetch {symbol}")
@@ -89,7 +92,11 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def dnse_latest_trade(
         symbols: list[str], summary: bool = False, columns: list[str] | None = None
     ) -> dict[str, Any]:
-        """Latest match price and totals per symbol. Use for realtime fallback."""
+        """Latest match price and totals per symbol. Use for realtime fallback.
+
+        summary/columns: summary returns {count,symbols} only; columns keeps
+        named fields per trade.
+        """
         try:
             data = await run_blocking(
                 functools.partial(dnse_p.latest_trade, symbols),
@@ -116,7 +123,10 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_ws_snapshot(symbols: list[str] | None = None) -> dict[str, Any]:
-        """Raw worker snapshot for symbols. Use to debug realtime staleness."""
+        """Raw worker snapshot for symbols. Use to debug realtime staleness.
+
+        symbols: channels to read (None reads VN30F1M+VNINDEX+VN30).
+        """
         try:
             return make_envelope(
                 dnse_p.ws_snapshot(symbols or ["VN30F1M", "VNINDEX", "VN30"]),

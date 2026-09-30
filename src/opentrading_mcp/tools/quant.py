@@ -23,7 +23,11 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         benchmark: str = "VNINDEX",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Buy-and-hold backtest with costs over available history. Use for baseline stats."""
+        """Buy-and-hold backtest with costs over available history. Use for baseline stats.
+
+        strategy: recorded label only (engine is buy-and-hold). cost_bps/slippage_bps:
+        round-trip bps each deducted twice from gross. benchmark: reference index label.
+        """
         if ctx is not None:
             await ctx.report_progress(0, 2, "load candles")
         try:
@@ -62,7 +66,11 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def quant_risk(returns: list[float], periods_per_year: int = 252) -> dict[str, Any]:
-        """Sharpe, max drawdown and win rate from a return series. Use to gate models."""
+        """Sharpe, max drawdown and win rate from a return series. Use to gate models.
+
+        returns: per-period simple returns. periods_per_year: annualization
+        factor for Sharpe (252 daily, 52 weekly, 12 monthly).
+        """
         if not returns:
             return make_envelope({"note": "empty series"}, source="local", availability="empty")
         import statistics
@@ -91,7 +99,11 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def quant_factors(symbol: str = "VCB", lookback: int = 60) -> dict[str, Any]:
-        """Momentum, volatility and drawdown factors from candles. Use to expand features."""
+        """Momentum, volatility and drawdown factors from candles. Use to expand features.
+
+        lookback: daily closes fetched (20d factor windows fixed); also adds
+        max_dd_full_pct over the full window.
+        """
         try:
             candles = await run_blocking(
                 functools.partial(vn_p.quote_history, symbol, max(int(lookback), 30) + 20),
@@ -131,7 +143,10 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def scenario_simulate(
         scenario: str, symbol: str = "VCB", shock_pct: float = -5.0
     ) -> dict[str, Any]:
-        """Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing."""
+        """Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing.
+
+        shock_pct: percent shock, negative for drops (e.g. -5.0).
+        """
         try:
             candles = await run_blocking(
                 functools.partial(vn_p.quote_history, symbol, 10),

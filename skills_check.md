@@ -506,3 +506,56 @@ Per-agent filter (bắt buộc, tránh bloat context — theo docs Opencode `too
 | `oracle_meta` | Aggregator snapshot plus source health. Use for dashboard meta. | — | RO | yf_market_pins + source_status |
 
 > Ghi chú gating: `web_search` chỉ xuất hiện khi có `EXA_API_KEY`/`PARALLEL_API_KEY` → market = 68/69, intel = 7/8, all = 125/126 khi không có key. Đếm chuẩn: **126 tools unique · 117 RO / 9 RW · market 69/70 · scan 42/50 · quant 4 · brief 5 · intel 8/50 · all 126**. `ctx: AnyContext` bị FastMCP loại khỏi schema nên không liệt kê ở cột Params.
+
+## Phụ lục — Descriptor review 2026-09-30 (bản v5)
+
+Descriptor LLM thấy = tên function + docstring (dòng đầu là "làm gì + Use...", phần sau giải
+thích params) + signature (FastMCP tự loại `ctx`). Logic thật ở `providers/` — LLM không thấy.
+
+### Lỗi đã tìm thấy và đã sửa (toàn bộ 126 tools, 17 file `tools/*.py`)
+
+**Critical (5)**
+- `dnse_ohlc_history`: docstring có ghi chú dev "do not remove" — đã viết lại descriptor chuẩn, giữ logic.
+- `money_flow`: thiếu mệnh đề Use — thêm "Use for smart money" + mô tả `symbols` (default ["VNINDEX"], fallback Vietstock NN).
+- `alert_check`: không mô tả schema `rules` — thêm `{symbol, threshold, metric 'price'|'rsi14', op '>'|'gt'|'>='|'gte'|'<'|'lt'|'<='|'lte'|'cross_up'|'cross_down'}`.
+- `stock_screener filters`: thêm format `{field: [min,max]}` (None = unbounded), chuỗi = equality cho symbol/exchange, dùng `signals_screener_columns` để tra field.
+- `evidence_bundle`: mô tả rõ `claim_ids` (claim cần lock) vs `calc_ids` (calculation hỗ trợ, `[]` nếu không có).
+- `runs_list id` vs `run_get run_id`: tách rõ — `id` filter substring trong list, `run_id` exact id lấy 1 run.
+
+**Major (~45 tools thiếu enum/format) — đã bổ sung**
+- `dnse_ohlc_history`: resolution 1/5/15/30/60 phút, bar_type 'derivative'/'index', dates ISO, summary `{symbol,count,last,high,low}`, columns t/o/h/l/c/v.
+- `valuation_run`: btype 1 tổng hợp/2 CK/3 NH/5 bảo hiểm; method 'auto'|'dcf'|'per'|'pb'|'ev'|'ensemble'.
+- `vs_indicator_data`: termTypeID map (1 Ngày/2 Tháng/3 Quý/4 Năm/5 YTD/6 MoM/7 YoY/8 QoQ).
+- `vs_financial_values`: tids (1 năm đủ, 2-4 Q1-Q3, 5 Q4, 9 H1, 12 9M).
+- `vs_financeinfo`/`financial_statements`: period 'quarter' (12 quý) | 'year'; statement section 'KQKD'/'CDKT'.
+- `vn_fundamentals`: period 'year'|'quarter'; report_type 'ttm'|'latest'.
+- `signals_technical`: indicators (rsi14, macd, sma20, recommend...), omit = full set; interval ≠ '1D' được nhận nhưng bỏ qua (daily only).
+- `quant_backtest`: strategy chỉ là label (engine buy-and-hold); cost/slippage bps trừ 2 chiều ×2.
+- `quant_risk`: periods_per_year 252 ngày/52 tuần/12 tháng.
+- `scenario_simulate`: shock_pct %, âm = giảm (vd -5.0).
+- `compare_assets`: timeframe '1d'(2d/1d)|'1wk'(3mo/1wk)|'1mo'(1y/1d); assets tối đa 10.
+- `yf_alloc_history`: asset GC|VND|BTC|OIL|SILVER|COFFEE (lệch → GC), timeframe 1d|1wk, trả 60 điểm/5y.
+- `yf_oracle_markets`: groups crypto/metals/energy/agri/bonds_fx/index.
+- `market_snapshot`: as_of chỉ là label ghi vào `requested_as_of`, data luôn latest.
+- `breadth_scan`: exchange HOSE/HNX/UPCOM, bị bỏ qua + warning khi rows không có venue.
+- `brief_build`: scope 'vn'|'world', date ISO (ghi nguyên).
+- `economic_calendar`: chỉ 'vn', khác → empty + warning; không phải calendar thật (dates → `dnse_working_dates`).
+- `web_search`: num_results (8), livecrawl 'fallback'|'preferred', search_type 'auto'|'fast'|'deep', context_max_chars.
+- `web_fetch`: format 'markdown'|'text'|'html', timeout_seconds 30.
+- `alert_create`: metric 'price'|'rsi14'; op '>'|'>='|'<'|'<=' (nhận 'gt'/'gte'/'lt'/'lte').
+- `dnse_orderbook`: depth levels mỗi bên (3); `dnse_indices`: symbols default VNINDEX+VN30; `dnse_vn30f1m_live`: bars = số nến 15m cuối.
+- Batch tools (`dnse_latest_trade`, `market_candles_batch`, `vn_quote_history`, `vn_equity_quote_batch`, `vn_index/equity/futures_ohlcv`, `vn_forex/crypto/global`): chuẩn hóa mô tả summary `{count,last,high,low}` / `{count,symbols}` và columns giữ field.
+- Còn lại: `insider_trading limit`, `signals_scan limit`, `run_get run_id exact`, `dnse_orderbook depth`, `market_movers top_n`, `symbol_lookup limit`, `vs_market_info symbol '' = cả board`, `vs_stock_industry industry_id từ vs_industry_tree`, `sector_performance level/top_n`, `pattern_match lookback`, `signals_trade_log days/side`, `event_stats limit`, `peer_compare peers ≤5`, `world_prediction_odds limit/status/tag`, `geo_intel limit/days`, `news_market/news_symbol sources='gdelt'`, `macro_reports limit`.
+
+### Disambiguation (đã thêm câu phân biệt vào descriptor)
+- Flows ×5: `dnse_foreign_flow` primary WS · `vs_nn_flow` cross-check · `foreign_flow` alias của dnse · `mega_flows` alias yf (global, không phải DNSE) · `money_flow` composite (WS → Vietstock fallback).
+- News ×3: `news_symbol` pre-scoped symbol · `vs_news_search` free-text engine (dùng cho topic) · `news_market` overview.
+- Disclosures ×3: `company_events` phân loại theo kind · `corporate_calendar` raw feed · `vs_documents` filings kèm link.
+- Calendars ×4: `dnse_working_dates` ngày giao dịch thật · `exchange_calendar` mechanics tĩnh (giờ, ATO/ATC, T+) · `economic_calendar` proxy catalogue (không phải calendar) · `corporate_calendar` sự kiện DN.
+- Reports ×2: `macro_reports` thư viện macro/strategy · `vs_reports_search` analyst notes theo symbol.
+- Statements ×3: `vs_financeinfo` gốc · `financial_statements` alias v3 (wraps vs_financeinfo) · `vn_fundamentals` vnstock ratios+statements.
+
+### Verify
+- `uv run pytest tests/ -q --ignore=tests/contract/test_verify_matrix.py` → **175 passed**.
+- `ruff check` + `ruff format --check` (17 file tools) → sạch. `mypy src/opentrading_mcp/tools/` → 0 issue.
+- Local `list_tools()` preset `all` → **125 tools** (web_search gate theo key), 0 tool thiếu descriptor; 14 chuỗi disambiguation đều OK trong descriptor live.

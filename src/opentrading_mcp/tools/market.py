@@ -67,7 +67,11 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         as_of: str | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Snapshot of VN market with provenance. Use when a broad market picture is needed."""
+        """Snapshot of VN market with provenance. Use when a broad market picture is needed.
+
+        symbols: tickers to quote (default VCB/HPG/SSI). as_of: requested
+        timestamp label, recorded as requested_as_of (data is always latest).
+        """
         key = cache_key("market", "market_snapshot", ",".join(symbols or []))
         hit = cache_get(key)
         if hit is not None:
@@ -119,7 +123,11 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         columns: list[str] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Batch OHLCV for symbols, one request per symbol. Use for multi-chart context."""
+        """Batch OHLCV for symbols, one request per symbol. Use for multi-chart context.
+
+        days: daily bars per symbol (max 50 symbols). summary/columns: summary
+        returns {count,last,high,low} only; columns keeps named fields.
+        """
         capped = symbols[:50]
         warnings: list[str] = []
         if len(symbols) > 50:
@@ -158,7 +166,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def symbol_lookup(query: str, limit: int = 10) -> dict[str, Any]:
-        """Resolve company name to symbol, venue and sector. Use before any symbol-scoped call."""
+        """Resolve company name to symbol, venue and sector. Use before any symbol-scoped call.
+
+        limit: max hits returned (matched by symbol or company name, case-insensitive).
+        """
         try:
             rows = await run_blocking(vn_p.listing_symbols, "symbol_lookup")
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -169,7 +180,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def market_movers(top_n: int = 10) -> dict[str, Any]:
-        """Top gainers, losers and volume leaders. Use for session pulse checks."""
+        """Top gainers, losers and volume leaders. Use for session pulse checks.
+
+        top_n: rows per list.
+        """
         try:
             quotes = await run_blocking(
                 functools.partial(
@@ -183,7 +197,11 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def breadth_scan(exchange: str | None = None) -> dict[str, Any]:
-        """Advancers, decliners, ceiling and floor counts. Use to judge rally health."""
+        """Advancers, decliners, ceiling and floor counts. Use to judge rally health.
+
+        exchange: filter rows carrying venue info (HOSE/HNX/UPCOM); ignored
+        with a warning when rows carry no venue info.
+        """
         try:
             prices = await run_blocking(vs_p.market_price, "breadth_scan", timeout_secs=30.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

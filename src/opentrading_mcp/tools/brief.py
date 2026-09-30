@@ -31,7 +31,10 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 45.0) -> Any:
 def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def brief_build(scope: str = "vn", date: str | None = None) -> dict[str, Any]:
-        """Compose morning brief from news, odds and calendars. Use at session start."""
+        """Compose morning brief from news, odds and calendars. Use at session start.
+
+        scope: 'vn' or 'world'. date: ISO date the brief is for (recorded as-is).
+        """
         if scope not in ("vn", "world"):
             return make_envelope(
                 {"tool": "brief_build"},
@@ -69,7 +72,10 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def news_market(limit: int = 10, sources: str | None = None) -> dict[str, Any]:
-        """Market news: Vietstock first, GDELT fallback. Use for catalyst checks."""
+        """Market news: Vietstock first, GDELT fallback. Use for catalyst checks.
+
+        sources: 'gdelt' routes straight to GDELT (default tries Vietstock first).
+        """
         if sources == "gdelt":
             try:
                 data = await _call("g", intel_p.gdelt_events, "vietnam market", limit)
@@ -90,7 +96,11 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def news_symbol(
         symbol: str, limit: int = 10, sources: str | None = None
     ) -> dict[str, Any]:
-        """Symbol news via Vietstock search. Use to verify rumors."""
+        """Symbol news via Vietstock search. Use to verify rumors.
+
+        sources: 'gdelt' routes straight to GDELT (default tries Vietstock first).
+        vs_news_search is the free-text engine; use it for topics, not symbols.
+        """
         if sources == "gdelt":
             try:
                 data = await _call("g", intel_p.gdelt_events, symbol.upper(), limit)
@@ -105,7 +115,11 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def economic_calendar(scope: str = "vn", limit: int = 20) -> dict[str, Any]:
-        """Macro series catalogue as event proxy. Use for data-availability checks."""
+        """Macro series catalogue as event proxy. Use for data-availability checks.
+
+        scope: 'vn' only (others return empty with a warning). limit: max series.
+        Not a real calendar; for trading dates use dnse_working_dates instead.
+        """
         if scope != "vn":
             return make_envelope(
                 {"scope": scope},
@@ -131,7 +145,11 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def corporate_calendar(symbol: str | None = None, limit: int = 20) -> dict[str, Any]:
-        """Disclosures feed as corporate actions. Use for dividend/meeting scans."""
+        """Disclosures feed as corporate actions. Use for dividend/meeting scans.
+
+        symbol: omit for VN overview; limit: max disclosures. Raw feed;
+        company_events classifies the same disclosures into kinds.
+        """
         try:
             docs = await _call("d", vs_p.documents, symbol or "VCB", 60)
             if isinstance(docs, list):

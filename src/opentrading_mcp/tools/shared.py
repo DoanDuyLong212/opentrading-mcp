@@ -28,9 +28,7 @@ def pick_value(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
     return None
 
 
-def project_rows(
-    rows: list[dict[str, Any]], columns: list[str] | None
-) -> list[dict[str, Any]]:
+def project_rows(rows: list[dict[str, Any]], columns: list[str] | None) -> list[dict[str, Any]]:
     """Project rows to a column subset; None/empty returns rows as-is (P1 shared)."""
     if not columns:
         return rows

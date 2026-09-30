@@ -24,7 +24,10 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def yf_global_indices(
         tickers: list[str] | None = None, ctx: AnyContext | None = None
     ) -> dict[str, Any]:
-        """9 global benchmarks, 2d daily. Use for overnight context."""
+        """9 global benchmarks, 2d daily. Use for overnight context.
+
+        tickers: subset override (default GLOBAL 9).
+        """
         if ctx is not None:
             await ctx.report_progress(0, 1, "fetch global")
         try:
@@ -39,7 +42,10 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def yf_commodities(tickers: list[str] | None = None) -> dict[str, Any]:
-        """Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context."""
+        """Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context.
+
+        tickers: subset override (default COMMO 13).
+        """
         try:
             data = await run_blocking(
                 functools.partial(yf_p.batch_last, tickers or yf_p.COMMO_13),

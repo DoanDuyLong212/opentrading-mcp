@@ -26,7 +26,10 @@ async def _call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
 def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def dnse_orderbook(symbol: str, depth: int = 3) -> dict[str, Any]:
-        """Bid/ask depth. Use for microstructure reads."""
+        """Bid/ask depth. Use for microstructure reads.
+
+        depth: levels per side (default 3).
+        """
         try:
             return make_envelope(
                 await _call("o", dnse_p.orderbook, symbol, depth), source="dnse-rest"
@@ -36,7 +39,7 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_foreign_rest(symbol: str) -> dict[str, Any]:
-        """Per-symbol foreign trading. Use when WS cache is cold."""
+        """Per-symbol foreign trading. Use when WS cache is cold (fallback)."""
         try:
             return make_envelope(await _call("f", dnse_p.foreign_rest, symbol), source="dnse-rest")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -44,7 +47,10 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_indices(symbols: list[str] | None = None) -> dict[str, Any]:
-        """Index snapshots from WS cache. Use for live index reads."""
+        """Index snapshots from WS cache. Use for live index reads.
+
+        symbols: index channels to read (default VNINDEX+VN30).
+        """
         try:
             return make_envelope(
                 dnse_p.ws_snapshot(symbols or ["VNINDEX", "VN30"]), source="dnse-ws"
@@ -54,7 +60,10 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_vn30f1m_live(bars: int = 60) -> dict[str, Any]:
-        """VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday."""
+        """VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday.
+
+        bars: keep only the most recent N aggregated 15m bars.
+        """
         try:
             week_ago = (date.today() - timedelta(days=7)).isoformat()
             raw = await _call("l", dnse_p.ohlc_history, "VN30F1M", "derivative", 1, week_ago, 2000)
@@ -91,7 +100,11 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_working_dates(year: int | None = None) -> dict[str, Any]:
-        """Trading calendar. Use for session planning."""
+        """Trading calendar. Use for session planning.
+
+        year: keep only dates starting with this year (e.g. 2026). Actual
+        trading dates; exchange_calendar holds static session mechanics.
+        """
         try:
             dates = await _call("w", dnse_p.working_dates)
             if year is not None and isinstance(dates, list):

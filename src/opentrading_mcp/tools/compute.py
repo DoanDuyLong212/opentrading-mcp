@@ -79,7 +79,10 @@ def _read_runs() -> list[dict[str, Any]] | None:
 def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def stock_forensic(symbol: str, detail: bool = False) -> dict[str, Any]:
-        """M-Score and Piotroski from mirror statements. Use for earnings-quality flags."""
+        """M-Score and Piotroski from mirror statements. Use for earnings-quality flags.
+
+        detail: false returns flags+score only; true adds the raw input series.
+        """
         try:
             data = await _call("f", vs_p.financeinfo, symbol, "quarter", secs=60.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -114,7 +117,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def valuation_run(symbol: str, btype: int = 1, method: str = "auto") -> dict[str, Any]:
-        """PER/PB ensemble with DCF-lite. Use for fair-value ranges."""
+        """PER/PB ensemble with DCF-lite. Use for fair-value ranges.
+
+        btype: 1 general, 2 securities, 3 bank, 5 insurance. method: 'auto'
+        (default, picks by btype) or force 'dcf'/'per'/'pb'/'ev'/'ensemble'.
+        """
         try:
             overview = await _call("v", vs_p.overview_trading, symbol, secs=45.0)
             quotes = await _call("q", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
@@ -144,7 +151,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def fred_series(series_id: str, limit: int = 60, spark: bool = False) -> dict[str, Any]:
-        """FRED observations. Use for US macro context."""
+        """FRED observations. Use for US macro context.
+
+        series_id like 'DGS10'; spark adds a value-only sparkline list.
+        """
         try:
             data = await _call("f", intel_p.fred_series, series_id, limit)
             if spark and isinstance(data, dict):
@@ -156,7 +166,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def world_macro_country(iso3: str, indicator: str, limit: int = 60) -> dict[str, Any]:
-        """WorldBank series per country. Use for global GDP/CPI/debt context."""
+        """WorldBank series per country. Use for global GDP/CPI/debt context.
+
+        iso3: 3-letter country code (VNM/USA); indicator like 'NY.GDP.MKTP.KD.ZG'.
+        limit caps returned points.
+        """
         try:
             data = await _call("w", intel_p.worldbank_country, iso3, indicator)
             if isinstance(data, dict) and isinstance(data.get("points"), list):
@@ -167,7 +181,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def world_fear_greed(limit: int = 7) -> dict[str, Any]:
-        """Crypto fear/greed index. Use for risk-appetite reads."""
+        """Crypto fear/greed index. Use for risk-appetite reads.
+
+        limit: number of recent daily readings returned.
+        """
         try:
             data = await _call("f", intel_p.fear_greed)
             if isinstance(data, dict) and isinstance(data.get("series"), list):
@@ -178,7 +195,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def sentiment_score(symbol: str, limit: int = 20) -> dict[str, Any]:
-        """Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk."""
+        """Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk.
+
+        limit: max posts scored; without Groq key falls back to likes heuristic.
+        """
         try:
             posts = await _call("s", intel_p.fireant_posts, symbol, max(int(limit), 1), secs=45.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -210,7 +230,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def insider_trading(symbol: str, limit: int = 10) -> dict[str, Any]:
-        """Insider deals via vnstock Company. Use for informed-flow reads."""
+        """Insider deals via vnstock Company. Use for informed-flow reads.
+
+        limit: max deals returned.
+        """
         try:
             rows = await _call("i", vn_p.insider_trading, symbol, limit)
             return make_envelope({"symbol": symbol.upper(), "deals": rows}, source="vnstock")
@@ -231,7 +254,12 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def company_events(symbol: str, types: str | None = None) -> dict[str, Any]:
-        """Disclosures and corporate actions. Use for event calendars."""
+        """Classified disclosures and corporate actions. Use for event calendars.
+
+        types: comma-separated kinds to keep, matched against kind/type
+        fields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw
+        unfiltered feed; company_events classifies it per symbol.
+        """
         try:
             docs = await _call("e", vs_p.documents, symbol)
             if types is not None and isinstance(docs, list):
@@ -252,7 +280,12 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def financial_statements(
         symbol: str, period: str = "quarter", statement: str = "all", periods_n: int = 15
     ) -> dict[str, Any]:
-        """Mirror statements alias (v3 compat). Use for statement reads."""
+        """Mirror statements alias (v3 compat). Use for statement reads.
+
+        Wraps vs_financeinfo (no JWT needed). statement: which statement
+        section to return ('all', or a section key like 'KQKD'/'CDKT');
+        periods_n caps returned periods.
+        """
         try:
             data = await _call("f", vs_p.financeinfo, symbol, period, secs=60.0)
             pages = data.get("pages", []) if isinstance(data, dict) else []
@@ -287,7 +320,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         period: str = "year",
         peers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Overview plus vnstock ratios merged. Use for ratio screens."""
+        """Overview plus vnstock ratios merged. Use for ratio screens.
+
+        set: keep only ratio keys containing this substring ('all' keeps all).
+        period: statement period ('year'); peers: extra symbols merged as list.
+        """
         try:
             overview = await _call("r", vs_p.overview_trading, symbol)
             ratios = overview if isinstance(overview, dict) else {"overview": overview}
@@ -312,7 +349,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def peer_compare(
         symbol: str, peers: list[str], metrics: list[str] | None = None
     ) -> dict[str, Any]:
-        """Head-to-head overview rows. Use when picking tickers."""
+        """Head-to-head overview rows. Use when picking tickers.
+
+        peers: up to 5 extra symbols. metrics: keep only matching ratio keys
+        (symbol column always kept).
+        """
         wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
         for name in [symbol, *peers][:6]:
@@ -332,7 +373,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def signals_scan(limit: int = 10) -> dict[str, Any]:
-        """Donchian breakout scan over VN30 names. Use to hunt momentum."""
+        """Donchian breakout scan over VN30 names. Use to hunt momentum.
+
+        limit: max rows returned.
+        """
         universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN", "MWG", "FPT", "CTG", "BID"]
         hits: list[dict[str, Any]] = []
         for name in universe[: max(limit, 1)]:
@@ -347,7 +391,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def pattern_match(symbol: str, lookback: int = 60, limit: int = 5) -> dict[str, Any]:
-        """Self-similarity of return windows by correlation. Use for analogies."""
+        """Self-similarity of return windows by correlation. Use for analogies.
+
+        lookback: daily closes fetched (window is last 20 bars). limit: top-N
+        matches by correlation (best_* fields describe rank 1).
+        """
         try:
             candles = await _call("p", vn_p.quote_history, symbol, lookback + 20, secs=60.0)
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -388,7 +436,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def signals_trade_log(days: int = 365, side: str | None = None) -> dict[str, Any]:
-        """Local trade log. Use for label building."""
+        """Local trade log. Use for label building.
+
+        days: keep trades from the last N days (date-prefixed rows only).
+        side: 'buy' or 'sell' filter (case-insensitive).
+        """
         try:
             rows = await run_blocking(_read_trade_log, "signals_trade_log", timeout_secs=10.0)
         except ProviderUnavailable as exc:
@@ -415,7 +467,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def macro_reports(symbol: str = "", limit: int = 10) -> dict[str, Any]:
-        """Research PDFs metadata. Use for report discovery."""
+        """Research PDFs metadata. Use for report discovery.
+
+        limit: max reports (forwarded as provider page_size). Macro/strategy
+        library; vs_reports_search searches analyst notes per symbol.
+        """
         try:
             data = await _call("m", vs_p.reports_search, symbol, max(int(limit), 1))
             return make_envelope({"reports": data}, source="vietstock")
@@ -449,7 +505,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def event_stats(query: str = "stock market", limit: int = 20) -> dict[str, Any]:
-        """GDELT event counts for a query. Use for base-rate checks."""
+        """GDELT event counts for a query. Use for base-rate checks.
+
+        limit: max articles fetched from GDELT.
+        """
         try:
             data = await _call("e", intel_p.gdelt_events, query, max(int(limit), 1))
             return make_envelope(data, source="gdelt")
@@ -464,7 +523,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def compare_assets(assets: list[str], timeframe: str = "1d") -> dict[str, Any]:
-        """Cross-asset last prices via yfinance. Use for allocation reads."""
+        """Cross-asset last prices via yfinance. Use for allocation reads.
+
+        assets: yfinance tickers (max 10). timeframe: '1d' (2d/1d),
+        '1wk' (3mo/1wk), '1mo' (1y/1d) download window.
+        """
         windows = {"1d": ("2d", "1d"), "1wk": ("3mo", "1wk"), "1mo": ("1y", "1d")}
         period, interval = windows.get(timeframe, ("2d", "1d"))
         try:
@@ -477,7 +540,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def runs_list(id: str | None = None) -> dict[str, Any]:
-        """Local run registry. Use to resume analysis sessions."""
+        """Local run registry. Use to resume analysis sessions.
+
+        id: filter by run id substring; use run_get for one full run.
+        """
         try:
             rows = await run_blocking(_read_runs, "runs_list", timeout_secs=10.0)
         except (ProviderUnavailable, ValueError) as exc:
@@ -490,7 +556,10 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def run_get(run_id: str) -> dict[str, Any]:
-        """Fetch one run by id. Use to inspect past outputs."""
+        """Local run registry fetch. Use to inspect past outputs.
+
+        run_id: exact id from runs_list output.
+        """
         try:
             rows = await run_blocking(_read_runs, "run_get", timeout_secs=10.0)
         except (ProviderUnavailable, ValueError) as exc:

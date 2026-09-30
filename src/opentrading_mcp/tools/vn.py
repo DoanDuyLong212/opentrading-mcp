@@ -56,7 +56,11 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         columns: list[str] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history."""
+        """Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history.
+
+        days: daily bars requested (max 365). summary/columns: summary returns
+        {count,last,high,low} only; columns keeps named fields.
+        """
         if ctx is not None:
             await ctx.log("info", f"vn_quote_history {symbol} {days}d")
         try:
@@ -79,7 +83,11 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary: bool = False,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
-        """One-request price board for many symbols. Use for snapshots and movers."""
+        """One-request price board for many symbols. Use for snapshots and movers.
+
+        summary/columns: summary returns {count,symbols} only; columns keeps
+        named fields per quote.
+        """
         try:
             quotes = await run_blocking(
                 functools.partial(vn_p.equity_quote_batch, symbols),
@@ -97,7 +105,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_listing(limit: int = 500) -> dict[str, Any]:
-        """Full symbol list with company names. Use for universe and lookup."""
+        """Full symbol list with company names. Use for universe and lookup.
+
+        limit: max symbols returned (universe ~1500).
+        """
         try:
             rows = await run_blocking(vn_p.listing_symbols, "vn_listing")
             return make_envelope(
@@ -111,7 +122,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_fundamentals(
         symbol: str, period: str = "year", report_type: str = "ttm"
     ) -> dict[str, Any]:
-        """Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation."""
+        """Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation.
+
+        period: 'year' or 'quarter'. report_type: 'ttm' (trailing twelve months) or 'latest'.
+        """
         try:
             from vnstock import Fundamental
         except ImportError:
@@ -133,7 +147,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_retail_gold(source: str = "btmc") -> dict[str, Any]:
-        """SJC and ring gold buy/sell from BTMC retail. Use for local gold premium."""
+        """SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.
+
+        source: retail source id (default 'btmc').
+        """
         try:
             from vnstock import Retail
         except ImportError:
