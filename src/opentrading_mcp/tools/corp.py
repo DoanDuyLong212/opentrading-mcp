@@ -417,39 +417,6 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             source="dnse+vnstock",
         )
 
-    @server.tool(annotations=READ_ONLY)
-    async def financial_detail(
-        symbol: str,
-        statement: str = "KQKD",
-        periods_n: int = 8,
-        ctx: AnyContext | None = None,
-    ) -> dict[str, Any]:
-        """Free detailed statements, every line item per period. Use for deep BCTC reads.
-
-        statement: KQKD (income), CDKT (balance), LCTT (cashflow), TM (notes),
-        BCTT. periods_n: recent periods (unit VND billions). Free /data/*
-        chain — no paid package; legs fail independently (partial).
-        NOTE: upstream currently gates periods+values behind an upgraded
-        package (Package_Permission) — until then this reports unavailable;
-        norms list still resolves. Mirror (vs_financeinfo) covers summaries.
-        """
-        if ctx is not None:
-            await ctx.log("info", f"financial_detail {symbol} {statement}")
-        try:
-            data = await run_blocking(
-                functools.partial(vs_p.financial_detail, symbol, statement, periods_n),
-                "financial_detail",
-                timeout_secs=90.0,
-            )
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return make_envelope(
-                {"tool": "financial_detail"},
-                source="unavailable",
-                warnings=[str(exc)],
-                availability="unavailable",
-            )
-        return make_envelope(data, source="vietstock")
-
     return [
         {"name": "dividends_splits"},
         {"name": "holders"},
@@ -458,5 +425,4 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "analyst_consensus"},
         {"name": "ipo_calendar_vn"},
         {"name": "futures_basis"},
-        {"name": "financial_detail"},
     ]

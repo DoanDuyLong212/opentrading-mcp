@@ -27,23 +27,6 @@ def test_news_search_normal_passthrough():
     assert vs_p._coerce_articles({"data": rows}) == rows
 
 
-async def test_vs_news_search_error_is_unavailable(monkeypatch):
-    import json
-
-    class FakeResp:
-        text = json.dumps(
-            {"Message": "No HTTP resource was found that matches the request URI 'x'."}
-        )
-
-    monkeypatch.setattr("httpx.post", lambda *a, **k: FakeResp())
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("vs_news_search")
-    assert tool is not None
-    env = await tool.fn(query="VCB")
-    assert env["availability"] == "unavailable"
-
-
 async def test_symbol_lookup_ignores_accents(monkeypatch):
     async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
         return [{"symbol": "HPG", "name": "CTCP Tập đoàn Hòa Phát"}]
@@ -68,19 +51,6 @@ async def test_foreign_rest_errorcode_is_unavailable(monkeypatch):
 
     with pytest.raises(ProviderBadData):
         dnse_p._coerce_foreign({"errorCode": 400, "message": "range exceeds maximum time range"})
-
-    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        raise ProviderBadData("dnse foreign-trading error 400: range exceeds maximum time range")
-
-    import opentrading_mcp.tools.dnse_ext as ext_mod
-
-    monkeypatch.setattr(ext_mod, "run_blocking", fake_block)
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("dnse_foreign_rest")
-    assert tool is not None
-    env = await tool.fn(symbol="VCB")
-    assert env["availability"] == "unavailable"
 
 
 async def test_financial_values_empty_rows_is_unavailable(monkeypatch):

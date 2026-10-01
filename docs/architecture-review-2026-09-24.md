@@ -1,131 +1,125 @@
-# Architecture Review — opentrading-mcp (main @ 5010d07, 2026-09-24)
+# Architecture Review — opentrading-mcp (post-upgrade, 2026-09-28)
 
-Tài liệu để trình bày/nghiên cứu: client giao tiếp như nào, luồng đi, data shape, kiến trúc, ops.
+Tài liệu kiến trúc + luồng hoạt động sau đợt nâng cấp Phase 0–2
+(ổn định nội bộ → public an toàn, tải nhỏ). Ghi đè bản review 2026-09-24.
 
-## 1. Big picture
+## 1. Big picture (as-built)
 
-**Opentrading MCP-server**: MCP server phục vụ nghiên cứu thị trường VN, tự lấy data trực tiếp từ upstream (không qua một API layer khác).
+**Opentrading MCP-server**: MCP server phục vụ nghiên cứu thị trường VN,
+stateless-first, tự lấy data trực tiếp từ upstream (không qua API layer khác).
 
-- **Stack**: Python 3.12 + FastMCP (`mcp>=1.9,<2`), httpx, psycopg (PG 16), redis, vnstock, yfinance, pandas, uvicorn, markdownify/bs4.
-- **126 tools unique** · 117 READ_ONLY / 9 READ_WRITE · **6 presets** (`market` 69/70, `scan` 42/50, `quant` 4, `brief` 5, `intel` 8/50, `all` 126).
-- **2 transports**: stdio (default, mọi client) + Streamable HTTP stateless `POST /mcp` + legacy `/sse`.
-- **Deploy**: Docker web + worker + Postgres (Render Blueprint, region singapore, healthcheck `/healthz`, auto-deploy khi push main). Redis external qua `REDIS_URL`.
+- **Stack**: Python 3.12 + FastMCP (`mcp>=1.9,<2`, lock `uv.lock` commit),
+  httpx, psycopg (PG 16, sync + asyncio), redis, vnstock, yfinance, pandas,
+  uvicorn, markdownify/bs4, PyJWT + cryptography (OAuth), Starlette (middleware).
+- **126 tools unique** · preset caps (`market` 70, còn lại 50) · **6 presets**
+  (`market/scan/quant/brief/intel/all`).
+- **2 transports**: stdio (default, mọi client, open khi không token) +
+  Streamable HTTP stateless `POST /mcp` + legacy `/sse` (giữ cho client cũ).
+- **Deploy**: Docker (`python:3.12-slim`, user `appuser` non-root, `uv sync
+  --frozen`, HEALTHCHECK `/healthz`) — web + worker + Postgres (Render
+  Blueprint, Singapore, auto-deploy main). Redis external qua `REDIS_URL`.
+- **Tầng tin cậy mới**: middleware chain (rate-limit → auth → observability),
+  circuit breaker per-upstream, JSON logging, `/metrics`, healthcheck thật,
+  OAuth 2.1 resource-server + quota PG theo user/ngày.
 
 ## 2. Client giao tiếp như nào
 
 ### stdio (team LAN, local dev)
 
-Client (opencode/Claude/Cursor/Codex) spawn subprocess và nói JSON-RPC 2.0 qua stdin/stdout:
+Client spawn subprocess, JSON-RPC 2.0 qua stdin/stdout (`cli.py: main()` →
+`server.run(transport="stdio")`). Không auth, không rate-limit, không quota
+(máy local tin cậy).
+
+### Streamable HTTP (Render public) — middleware chain
 
 ```
-configs/*.json →
-"command": "uvx", "args": ["opentrading-mcp", "serve", "--preset", "market"]
+POST /mcp
+ → RateLimiter (120 req/phút/IP, X-Forwarded-For; exempt /healthz, /.well-known/*)
+ → AuthMiddleware (401/429, \S4)
+ → McpObservabilityMiddleware (1 dòng JSON log + metrics; exempt non-/mcp)
+ → FastMCP tools/call → SSE stream (json_response=False)
 ```
 
-1. Client spawn process → server chạy `server.run(transport="stdio")`.
-2. `initialize` handshake: client gửi protocolVersion/capabilities → server trả `serverInfo {name:"opentrading", version:"1.30.0"}`, `capabilities {tools, prompts, resources}`, `instructions` (SERVER_INSTRUCTIONS: quy ước snake_case, btype, TTL...).
-3. `tools/list` → client nhận 126/69 tools với `inputSchema` sinh tự động từ signature (FastMCP tự bỏ `ctx`).
-4. `tools/call {name, arguments}` → chạy → trả `{content:[{type:"text", text:"<JSON envelope>"}]}`.
+- `GET /healthz` → 200/503 + breakdown components (`?deep=1` probe live DNSE/Vietstock/yfinance).
+- `GET /.well-known/mcp.json` → server card cho "add MCP by URL".
+- `GET /metrics` → Prometheus text; **bắt auth như `/mcp`** (counters lộ tên tool).
+- `MCP_ALLOWED_HOSTS` (DNS-rebinding protection): bắt buộc khi `--http`
+  trừ khi `--allow-all-hosts` (local/LAN). Tool `verify` hỗ trợ stdio + remote.
 
-Auth stdio: không cần token (máy local tin cậy).
-
-### Streamable HTTP (Render public)
-
-- Endpoint `POST https://opentrading-mcp-web.onrender.com/mcp` — **stateless**: mỗi POST độc lập, không session cookie.
-- `initialize` và `tools/call` trả về **SSE stream** (`event: message\ndata: {jsonrpc...}`) vì `json_response=False`; client MCP chuẩn (streamablehttp_client) tự parse.
-- Fallback `/sse` (legacy transport) cho client cũ.
-- **Discovery routes**: `GET /healthz` → `{"ok":true}` (Render healthcheck), `GET /.well-known/mcp.json` → server card (name, endpoint, transports) cho client dùng "add MCP by URL".
-- **Auth**: `auth.py` có `get_bearer()`/`is_authorized()` đọc `MCP_BEARER_TEAM`/`MCP_TOKEN`, `redact()` che secret — nhưng **CHƯA được wire vào HTTP app** (không middleware nào gọi `is_authorized`). Hiện remote **không bắt Bearer**. `configs/antigravity.mcp.json` ghi header Bearer nhưng server không kiểm tra → finding cần fix trước khi public.
-
-### Connect flow client thật (opencode)
-
-`opencode.json` khai `mcp.opentrading` → client spawn/POST → `tools/list` → tool key sanitize `/[^a-zA-Z0-9_-]/→_` → LLM chọn tool theo descriptor → `tools/call` → envelope JSON.
-
-## 3. Luồng đi một call (kiến trúc 4 tầng)
+## 3. Luồng đi một call (5 tầng)
 
 ```
-Client (JSON-RPC tools/call)
-  → cli.py main() [chọn preset, tạo server 1 lần]
-  → server.py: create_server(preset) → FastMCP(name, instructions, stateless_http=True,
-        streamable_http_path="/mcp", sse_path="/sse", transport_security=MCP_ALLOWED_HOSTS)
-    register_preset() → import module theo PRESET_MODULES, gọi register_<mod>_tools(server)
-        → kiểm tra duplicate name + preset cap (raise nếu vượt)
-  → tools/<mod>.py: async def tool(params, ctx) — THIN LAYER:
-        validate nhẹ → run_blocking(fn, timeout) → projection/summary → make_envelope
-        (long tools: ctx.report_progress + ctx.log, không print stdout)
-  → providers/<nguồn>.py: I/O thật — httpx (Vietstock/DNSE/FRED/GDELT/Fireant/Groq),
-        vnstock lib, yfinance lib, psycopg (watchlist/alert), Redis store, websearch JSON-RPC
-  → trả make_envelope(data, source, warnings, availability)
+Client tools/call{name, arguments}
+ → middleware: rate-limit → auth (user_id) → quota (non-team) → log-start
+ → server.py: preset đã register lúc boot (import module, check duplicate + cap)
+ → tools/<mod>.py THIN: validate → run_blocking(fn, 30-120s thread+timeout)
+      → providers.<guarded(upstream)>: circuit breaker check → I/O thật
+ → make_envelope(data, source, warnings, availability) — fail = unavailable, KHÔNG raise
+ → middleware: log 1 dòng {tool, duration_ms, ok} + metrics → SSE response
 ```
 
-- **`run_blocking`** (`tools/shared.py`): bọc sync provider call bằng `asyncio.to_thread` + `asyncio.wait_for(timeout)`; timeout → `ProviderUnavailable "timed out"`. Timeout từng tool hard-cap 30-120s; `TIMEOUT_MATRIX` ở `server.py` là contract cho client-side config.
-- **Envelope `make_envelope`** (`schemas.py`): mỗi tool fail → envelope `availability="unavailable"` + warnings, KHÔNG raise — `tools/list` không bao giờ vỡ.
-- **Cache**: `providers/store.py` tiered Redis (`REDIS_URL`, setex TTL, socket 2-3s) → fallback `_memory` dict in-process. Key `mcp:{preset}:{tool}:{fingerprint}`.
-- **Worker decoupling** (`loops.py`, chạy riêng trong Docker): `dnse_ws_loop` (WS DNSE msgpack/json HMAC → pump Redis `mcp:market:dnse_ws_snapshot:{sym}` TTL 30s, backoff 5→120s), `yf_loop` (60s pump global/commo TTL 300s), `heartbeat` (30s TTL 60s). Web process chỉ ĐỌC Redis → không giữ WS trong web process.
-- **Preset filter**: `PRESET_MODULES` map preset→modules; `PRESET_CAPS` giữ `tools/list` nhanh (market 70, scan/quant/brief/intel 50); tool "all" không cap.
+- **`run_blocking`** (`tools/shared.py`): `asyncio.to_thread` + `wait_for`; timeout → `ProviderUnavailable`.
+- **Circuit breaker** (`providers/circuit.py`): closed/open(60s recovery)/half-open-trial;
+  chỉ đếm `ProviderUnavailable` (auth/data-shape không trip);
+  `CircuitOpenError` là subclass của `ProviderUnavailable` nên tool cũ vẫn
+  degrade về envelope thay vì crash (bug đã bắt bằng verify matrix).
+  Gắn tại choke points: `dnse._get`, `vietstock._post/_post_json`, 8 hàm batch yfinance.
+- **Cache** (`providers/store.py`): Redis setex TTL → fallback memory dict; key `mcp:{preset}:{tool}:{fingerprint}`.
+- **Worker decoupling** (`loops.py`, Docker riêng): `dnse_ws_loop` (WS HMAC → pump
+  Redis snapshots TTL 30s, backoff 5→120s), `yf_loop` 60s, `heartbeat` 30s.
+  Web process chỉ ĐỌC Redis.
 
-## 4. Data shape (envelope chuẩn)
-
-Mọi tool trả đúng 1 shape:
+## 4. Data shape (envelope chuẩn — không đổi)
 
 ```json
 {
   "data": { ... per-tool shape ... },
-  "provenance": {
-    "source": "vnstock|dnse-rest|vietstock|yfinance|postgres|file|computed-local|aggregator|cache|unavailable",
-    "as_of": "2026-09-24T09:15:00+00:00",
-    "timezone": "Asia/Ho_Chi_Minh"
-  },
-  "warnings": ["(fallback: vs_nn_flow)", "capped 50 symbols, 5 dropped", "daily-only: interval '1W' ignored"],
+  "provenance": {"source": "vnstock|dnse-rest|vietstock|...", "as_of": "ISO8601", "timezone": "Asia/Ho_Chi_Minh"},
+  "warnings": ["..."],
   "availability": "available | empty | stale | partial | unavailable"
 }
 ```
 
-Shape per family:
-- **Candles**: `{t (unix sec UTC), o, h, l, c, v}` hoặc khi `summary=true` → `{count, last, high, low}` (không kèm raw bars — tiết kiệm context, pattern TradingView).
-- **Batch**: `{series: [{symbol, candles|summary}], missing: [{symbol, error}]}` + availability `partial` khi lẻ lỗi.
-- **Quotes**: rows từ `Market.equity.quote()` (`close_price, volume_accumulated, percent_change`...).
-- **Screener**: `{candidates: rows}`, filters `{field:[min,max]}` (null = unbounded) + equality cho sector/industry/index.
-- **Technicals**: `{rsi14, stoch_k/d, cci20, adx14, macd{line,signal,hist}, momentum10, ao, ema10/20/50, sma10/20/50/200, vwma, hull9, boll{upper,lower}, atr14, recommend}`.
-- **Watchlist/alert**: rows PG (id int, name, symbols[]) hoặc file JSON fallback cùng shape.
-- **Sai/không resolve** → báo `missing[]` thay vì bịa số 0.
+## 5. Auth model (Phase 2)
 
-## 5. Providers (upstream I/O) — ai gọi ai
-
-| Provider | Giao thức | Ghi chú |
+| Caller | Cách nhận diện | Quota |
 |---|---|---|
-| `vietstock.py` | httpx: mirror free `/data/*` + BCTC JWT (`/FinancialStatement/*`) + GICS + Macro + `dc.vietstock.vn` news | Auth chain: env JWT → seed session.json → login Email/Password + CSRF; HTML-shell → reset + retry 1; Permission/Limit → `ProviderAuthMissing` |
-| `vnstock.py` | vnstock lib (VCI/KBS/MSN/Retail) | `quote_history`/`insider_trading` tự fallback VCI→KBS; `reference_equity` fail-closed |
-| `dnse.py` | httpx REST HMAC (date + nonce, `x-api-key`, `version: 2026-05-07`) | signature `(request-target): get <path>\ndate\nnonce` base64+URL-quote; 2-path orderbook |
-| `yfinance.py` | yfinance lib | batch download 2d/1mo/2y/5y |
-| `webfetch.py` | httpx direct | cap 5MB, CF retry, ảnh → base64 |
-| `websearch.py` | POST JSON-RPC `tools/call` tới Exa/Parallel MCP | chọn provider env/hash; parse JSON + SSE `data:` |
-| `intel.py` | GDELT, jina→Gamma, FRED, WorldBank, Fireant, Groq, alternative.me | retry pattern cho GDELT |
-| `screener.py`, `technicals.py` | pandas/numpy local | không network |
-| `store.py` | redis + memory | TTL từng key |
+| Local dev (không cấu hình gì) | open, `user_id` unset | không |
+| Team nội bộ | `Authorization: Bearer $MCP_BEARER_TEAM` (so sánh constant-time) → `user_id="team"` | **không giới hạn** |
+| Public user | JWT RS256: verify signature qua JWKS (cache 10p) + `iss`/`aud`/`exp` + scope (`MCP_JWT_REQUIRED_SCOPE`) → `user_id=sub` | `mcp_auth_tokens.quota_day` (default 1000/ngày), đếm trong `mcp_tool_usage`; hết → **429 + Retry-After** tới nửa đêm |
+| Thiếu/sai credentials | **401** + header `WWW-Authenticate: Bearer realm="opentrading-mcp"...` chỉ chỗ lấy token | — |
 
-## 6. Invariants (điều bất biến cần nói khi trình bày)
+- Server **không phát hành token** (đúng vai resource-server): dùng IdP ngoài
+  (`MCP_JWT_ISSUER/AUDIENCE/JWKS_URL`). Không `DATABASE_URL` → quota skip (fail-open, local dev).
+- Env mới: `MCP_RATE_LIMIT_PER_MIN` (default 120), `MCP_JWT_*` (4 biến), `--allow-all-hosts` (flag).
 
-1. Mọi tool qua `make_envelope` — timezone Asia/Ho_Chi_Minh tường minh, provenance source/as_of bắt buộc.
-2. Graceful degradation: upstream chết → `unavailable` envelope, không crash, tools/list vẫn OK.
-3. Tool name snake_case, prefix nguồn (`vs_|vn_|yf_|dnse_|world_|signals_|quant_|brief_|intel_|watchlist_|alert_`), 1 tool = 1 endpoint family, duplicate → raise khi register.
-4. Preset cap mỗi preset <50 (trừ market 70, all uncapped) — bảo vệ context LLM.
-5. Thêm params mới luôn **additive + default giữ cũ** (backward-compat: `summary/columns/bar_type/interval`).
-6. Web process stateless (scale ngang được); state thật nằm Redis/PG/file.
+## 6. Observability (Phase 1)
 
-## 7. Ops & verify
+- **Logs**: 1 dòng JSON/call `{ts, event:"tool_call", tool, duration_ms, ok, error_code}` ra stdout — **không args/results/headers** (PII rule, có test assert).
+- **Metrics** (`/metrics`, Prometheus): `tool_calls_total`, `tool_errors_total{tool,error}`,
+  `tool_latency_ms_{sum,max}`, `upstream_failures_total{upstream}`. Lưu ý trung thực:
+  `ok` ở tầng HTTP (status<500); lỗi logic trong envelope không lật cờ này.
+- **Health** (`/healthz`): Redis ping, PG `SELECT 1`, worker heartbeat age; unset env → `skipped`
+  (không fail); `?deep=1` probe live từng upstream (8s timeout mỗi cái).
+- **Alert gợi ý** (chưa tự động — Render starter không có Grafana): error-rate >5%/5p,
+  p95 >10s, 3 healthcheck fail liên tiếp, container restart. Nguồn số liệu: log stream + `/metrics`.
 
-- **Local run**: `opentrading-mcp serve --preset market` (stdio) | `--http --port 8102` (LAN).
-- **Deploy**: push main → Render auto-deploy Blueprint (`render.yaml`: web starter + worker + pg 16, singapore, `/healthz`). Verify: `/healthz` 200 → `/mcp` initialize → `tools/list` → `tools/call source_status`.
-- **`opentrading-mcp verify`** (`verify.py`): client MCP giả lập opencode — stdio subprocess hoặc remote StreamableHTTP→SSE fallback, connect timeout, per-call timeout, tool key sanitize; `verify_matrix.py` = contract: mỗi preset chạy bộ calls thật, assert envelope (`data/provenance/warnings/availability`, timezone).
-- **Tests**: `tests/contract/` 78 test — presets/boot/infra/matrix + P1-P4 (TDD). Full matrix cần network ~5 phút.
-- **Docker compose**: mcp-web (`serve --preset market --http`), mcp-worker (`python -m opentrading_mcp.loops`), postgres:16; Redis external.
+## 7. Ops & verify (evidence đợt này)
 
-## 8. Findings (cần lưu ý khi public)
+- **Tests**: 110 passed (`tests/contract/`: boot/presets/infra/matrix + health/middleware/obs/auth mới);
+  full matrix stdio ~6 phút **pass** (1 lần fail đã điều tra: flaky upstream + bug breaker-đã-fix, có regression test).
+- **TDD**: test đỏ trước cho health/middleware/obs/auth (12+7+4+11 cases), smoke test live bắt 2 bug thật
+  (metrics lọt auth; close-error nuốt kết quả verify client).
+- **Live smoke** (server thật, team bearer): `/mcp` không token→401, có token→200 tool chạy thật;
+  `/metrics` không token→401, có token→200 counters đúng; `/healthz`→200 mở.
+- **Docker verify**: build OK, chạy user `appuser`, `/healthz` trả breakdown components thật.
+- **ruff + mypy strict**: sạch trên mọi file mới/sửa (4 lỗi mypy + 9 file format drift là **có sẵn ở HEAD**, không đụng tới).
 
-1. **Bearer auth chưa wire** — `auth.py` có sẵn nhưng HTTP server không middleware check. Remote hiện public không token. Fix: add ASGI middleware `is_authorized` trước khi public.
-2. `web_search` ẩn khi thiếu key (thiết kế đúng, nhớ nói khi demo).
-3. TTL cache chỉ có thật ở `market_snapshot` + worker loops; phần lớn tools live-fetch (không cache) → Render free tier sẽ hit upstream mỗi call.
-4. Bảng 3 trong skills_check.md mô tả một số fallback chưa implement (Kalshi/Manifold, RSS, OpenBB, PG/8010 read-only).
-5. Preset `market` 69/70 — gần cap, thêm tool mới vào market sẽ vỡ.
-6. `MCP_ALLOWED_HOSTS` (DNS rebinding protection) chỉ bật khi set env.
+## 8. Findings còn lại (trung thực)
+
+1. `/sse` legacy vẫn bật — tắt khi hết client cũ.
+2. Quota fail-open khi PG down (chủ ý cho availability; đảo lại khi cần strict).
+3. Metrics `ok` là HTTP-level, không phản ánh envelope `unavailable` (ghi rõ để khỏi hiểu lầm khi alert).
+4. Render free/starter sleep + cold start: request đầu sau idle chậm (đã thấy 20-40s ở verify); muốn hết hẳn cần plan cao hơn, ngoài scope tải nhỏ.
+5. DNSE từ Singapore vẫn timeout (geo-block) — worker VN + proxy là đường chính, đã ghi trong skill docs.
+6. Chưa làm (đúng plan, tải nhỏ không cần): tách server theo capability, K8s/gateway riêng, sticky session (spec đã bỏ), Grafana tự host.

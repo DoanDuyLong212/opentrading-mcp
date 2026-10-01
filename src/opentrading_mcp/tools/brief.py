@@ -79,7 +79,12 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         data: dict[str, Any] = {
             "scope": scope,
             "sections": sections,
-            "sources": ["vs_news_search", "gdelt", "alternative.me", "vs_categories"],
+            "sources": [
+                "vietstock-dc (currently unavailable)",
+                "gdelt",
+                "alternative.me",
+                "vs_categories",
+            ],
         }
         if date is not None:
             data["date"] = date
@@ -114,7 +119,8 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Symbol news via Vietstock search. Use to verify rumors.
 
         sources: 'gdelt' routes straight to GDELT (default tries Vietstock first).
-        vs_news_search is the free-text engine; use it for topics, not symbols.
+        Vietstock dc search is currently down — pass sources='gdelt' for
+        topic-wide searches, or use news_market (has GDELT fallback).
         """
         if sources == "gdelt":
             try:

@@ -1,18 +1,8 @@
-"""P11 contract: financial_detail free chain (TDD RED)."""
+"""P11 contract: financial_detail provider chain (tool removed P12; provider dormant)."""
 
 from __future__ import annotations
 
 from typing import Any
-
-from opentrading_mcp.server import create_server, register_preset
-
-
-def _tool_fn(name: str, preset: str = "scan"):
-    server = create_server(preset)
-    register_preset(server, preset)
-    tool = server._tool_manager.get_tool(name)
-    assert tool is not None, f"tool {name} not registered"
-    return tool.fn
 
 
 def test_financial_detail_chains_three_calls(monkeypatch):
@@ -40,29 +30,3 @@ def test_financial_detail_chains_three_calls(monkeypatch):
     ]
     assert out["periods"] == [11, 12]
     assert out["rows"][0]["Name"] == "DTBH"
-
-
-async def test_financial_detail_tool_shape(monkeypatch):
-    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        return {
-            "symbol": "FPT",
-            "statement": "KQKD",
-            "unit": "VNDbn",
-            "periods": [11, 12],
-            "rows": [{"Name": "DTBH", "V1": 1.0}],
-        }
-
-    import opentrading_mcp.tools.corp as corp_mod
-
-    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
-    fn = _tool_fn("financial_detail")
-    env = await fn(symbol="FPT", statement="KQKD", periods_n=2)
-    assert env["availability"] == "available"
-    assert env["data"]["statement"] == "KQKD"
-    assert env["data"]["unit"] == "VNDbn"
-
-
-async def test_financial_detail_bad_statement_is_unavailable():
-    fn = _tool_fn("financial_detail")
-    env = await fn(symbol="FPT", statement="NOPE")
-    assert env["availability"] == "unavailable"

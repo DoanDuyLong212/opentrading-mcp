@@ -69,22 +69,6 @@ async def test_vs_documents_accepts_page_size(monkeypatch):
     assert seen == {"symbol": "FPT", "page_size": 10}
 
 
-async def test_vs_news_search_accepts_paging(monkeypatch):
-    from opentrading_mcp.providers import vietstock as vs_p
-
-    seen: dict[str, Any] = {}
-
-    def fake_search(query: str, page_size: int = 20):
-        seen.update(query=query, page_size=page_size)
-        return []
-
-    monkeypatch.setattr(vs_p, "news_search", fake_search)
-    fn = _tool_fn("vs_news_search")
-    env = await fn(query="VCB", page_size=5, page=2)
-    _check_envelope(env, "vs_news_search")
-    assert seen == {"query": "VCB", "page_size": 10}
-
-
 async def test_vs_xnk_detail_accepts_range(monkeypatch):
     from opentrading_mcp.providers import vietstock as vs_p
 

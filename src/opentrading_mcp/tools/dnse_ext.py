@@ -39,18 +39,6 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("dnse_orderbook", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def dnse_foreign_rest(symbol: str) -> dict[str, Any]:
-        """Per-symbol foreign trading. Use when WS cache is cold (fallback).
-
-        Upstream rejects most date ranges on this endpoint; errorCode bodies
-        surface as unavailable instead of garbage data.
-        """
-        try:
-            return make_envelope(await _call("f", dnse_p.foreign_rest, symbol), source="dnse-rest")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("dnse_foreign_rest", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
     async def dnse_indices(symbols: list[str] | None = None) -> dict[str, Any]:
         """Index snapshots from WS cache. Use for live index reads.
 
@@ -145,7 +133,6 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     return [
         {"name": "dnse_orderbook"},
-        {"name": "dnse_foreign_rest"},
         {"name": "dnse_indices"},
         {"name": "dnse_vn30f1m_live"},
         {"name": "dnse_working_dates"},

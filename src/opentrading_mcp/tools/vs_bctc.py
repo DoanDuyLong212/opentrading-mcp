@@ -169,22 +169,6 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_market_info", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_news_search(query: str, page_size: int = 20, page: int = 1) -> dict[str, Any]:
-        """Vietstock article search. Use for catalyst lookup.
-
-        page/page_size: 1-based pagination.
-        """
-        try:
-            window = max(int(page_size), 1) * max(int(page), 1)
-            data = await _call("n", vs_p.news_search, query, window)
-            if isinstance(data, list) and page > 1:
-                start = (page - 1) * page_size
-                data = data[start : start + page_size]
-            return make_envelope({"articles": data}, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vs_news_search", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
     async def vs_xnk_detail(
         direction: str = "xk", from_date: str | None = None, to_date: str | None = None
     ) -> dict[str, Any]:
@@ -228,6 +212,5 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "vs_gics_index"},
         {"name": "vs_currency"},
         {"name": "vs_market_info"},
-        {"name": "vs_news_search"},
         {"name": "vs_xnk_detail"},
     ]

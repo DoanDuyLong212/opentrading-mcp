@@ -11,7 +11,7 @@ HNX-NSO-SBV scrape / GDELT / FRED / WorldBank). Không qua API layer trung gian.
 
 - **Stack**: Python 3.12 + FastMCP (`mcp>=1.9,<2`, lock `uv.lock`), httpx, pandas/numpy
   (không scipy, không pypdf — quyết định có chủ ý, xem §8), bs4, PyJWT, Starlette, uvicorn.
-- **142 tools live** (`all`; market 71 / scan 49 / quant 9 / brief 7 / intel 7) · caps
+- **139 tools live** (`all`; market 66 / scan 49 / quant 9 / brief 7 / intel 7) · caps
   (`server.py:94`: market 75, scan 60, còn lại 50) · **6 presets** + **6 prompts**
   (morning_briefing, ticker_analysis, pre_earnings v2, sector_rotation, ai_detect,
   risk_check) + **4 resources**
@@ -19,10 +19,26 @@ HNX-NSO-SBV scrape / GDELT / FRED / WorldBank). Không qua API layer trung gian.
 - **Transports**: stdio (default) + Streamable HTTP stateless `POST /mcp` + legacy `/sse`.
 - **Deploy**: Docker non-root + `uv sync --frozen` + HEALTHCHECK `/healthz`; Render Blueprint
   (web + worker + Postgres, Singapore); Redis external qua `REDIS_URL`.
-  ⚠️ **Trạng thái 2026-09-30: prod STALE** — remote `/mcp` chỉ có 69 tools (preset market
-  cũ) + `/healthz` format cũ, trong khi worktree đã 142 tools + 6 prompts. Nguyên nhân:
-  local main **ahead origin/main 16 commits** (P5→P8) và stack Phase 0-2 (middleware/auth/
-  health/quota/obs/circuit) **chưa commit**. Muốn prod mới: commit nốt → push → redeploy.
+  ✅ **Prod đã deploy bản mới 2026-09-30 ~23:15** (`main = 2ca4a67`, gồm P5→P8 + stack
+  Phase 0-2; local từng ahead origin 16 commits). Verify live: `/healthz` format breakdown
+  mới (redis pong/postgres select 1/worker heartbeat 21s đều OK); `/mcp` không token → 401
+  đúng middleware mới (`realm="opentrading-mcp"`); `/metrics` bắt auth; `/.well-known/mcp.json`
+  public. Chưa verify `tools/list` = 142 + smoke call (cần team bearer, không lưu local).
+  Rollback: Render Dashboard → Deploys → Rollback về deploy trước (baseline cũ
+  `origin/main = 3ef5530`, serve 69 tools).
+- ✅ **Deploy P9 2026-10-01 ~00:30** (`main = 17e1155`): honest-availability fixes.
+  Verify live: `/healthz` xanh (redis/pg/worker heartbeat 2s); auto-deploy quan sát
+  cycling rỗng → healthy. Chưa đếm `tools/list` tay (thiếu team bearer).
+- ✅ **Deploy P10 2026-10-01 ~01:30** (`main = 1027287`): required POST fields —
+  nn_flow/selftrading/gics/market_info sống lại live; macro trả permission message thật.
+- ✅ **Deploy P11 2026-10-01** (`main = 4c91136`): breadth case-count, reference KBS,
+  vàng BTMC https, financial_detail chain. Verify: pytest **258 passed**, health xanh.
+- ✅ **Deploy P12 2026-10-01** (`main = ac99396`): xóa 3 tools chết
+  (reports_search 404, stock_industry hết mapping, top_liquidity body rỗng);
+  `macro_reports` hồi sinh qua consensus scrape (live: MSN MUA 89,200).
+- ✅ **Deploy P12b 2026-10-01** (`main = 716bcba`): futures_basis ohlc-fallback
+  (live basis +4.68), money_flow dùng nn_chart path (live), sentiment chịu body list.
+  Health xanh sau cycling. Rollback: Dashboard → Deploys → Rollback (baseline 3ef5530).
 - **Tầng tin cậy**: middleware chain (rate-limit → auth → observability), circuit breaker
   per-upstream (`providers/circuit.py`), JSON logging, `/metrics`, healthcheck thật + `?deep=1`,
   OAuth 2.1 resource-server + quota PG theo user/ngày.
@@ -216,5 +232,10 @@ X-Forwarded-For: <ip>                        ← Render proxy chèn (dùng cho r
 6. Còn lại từ bản cũ (vẫn đúng): `/sse` legacy chờ tắt; quota fail-open khi PG down (chủ ý);
    metrics `ok` là HTTP-level; cold start Render 20-40s; DNSE geo-block từ Singapore.
 7. **Doc này mô tả WORKTREE local** (đã verify: 142 tools, 6 prompts, flows, số liệu).
-   origin/main kém 16 commits; prod-remote kém hơn nữa (69 tools). Đọc §1-deploy-status
-   trước khi suy ra hành vi prod.
+   Từ deploy 2026-09-30 ~23:15, prod ≈ worktree (trừ `tools/list` 142 chưa đếm tay vì
+   thiếu team bearer). Muốn kiểm tra: gọi `/mcp` kèm `Authorization: Bearer $MCP_BEARER_TEAM`.
+8. **P9 honest-availability (2026-10-01, đã deploy 17e1155)**: news error-payload,
+   foreign errorCode, BCTC package-limit, industry empty đều → unavailable/empty thay vì
+   available-giả; lookup không dấu (NFD+Đ→D); DNSE REST 7/7 sống lại với key thật
+   (foreign-trading endpoint từ chối mọi range 10m→30d); orderbook rỗng lúc 00:05 là
+   đúng (ngoài giờ). pytest 239 passed.

@@ -525,9 +525,7 @@ _DETAIL_FILTER = {
 }
 
 
-def financial_detail(
-    symbol: str, statement: str = "KQKD", periods_n: int = 8
-) -> dict[str, Any]:
+def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -> dict[str, Any]:
     """Free detailed statements via /data/* chain (P11, no paid package).
 
     norms -> periods -> batched detail values. Unit is VND billions.
