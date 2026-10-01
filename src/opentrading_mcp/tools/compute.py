@@ -467,7 +467,7 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def macro_reports(symbol: str = "", limit: int = 10) -> dict[str, Any]:
-        """Research PDFs metadata. Use for report discovery.
+        """Analyst reports via listing scrape. Use for report discovery.
 
         limit: max reports. Reads the analyst-report listing (same source as
         analyst_consensus); pass symbol to scope one ticker.
