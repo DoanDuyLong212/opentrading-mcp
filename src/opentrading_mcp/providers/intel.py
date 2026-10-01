@@ -82,7 +82,13 @@ def fireant_posts(symbol: str | None = None, limit: int = 20) -> list[dict[str, 
         body = response.json()
     except ValueError as exc:
         raise ProviderBadData("fireant bad json") from exc
-    items = body.get("posts") or body.get("data") or (body if isinstance(body, list) else [])
+    items = (
+        body
+        if isinstance(body, list)
+        else (body.get("posts") or body.get("data") or [])
+        if isinstance(body, dict)
+        else []
+    )
     out: list[dict[str, Any]] = []
     for post in items[:limit]:
         if not isinstance(post, dict):

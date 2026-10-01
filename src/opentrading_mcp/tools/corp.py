@@ -326,8 +326,12 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         """VN30F1M price minus VN30 spot. Use for premium/discount reads.
 
         DNSE exposes no open-interest field, so no OI is reported; basis_bps
-        is (futures-spot)/spot in basis points.
+        is (futures-spot)/spot in basis points. Futures leg prefers the latest
+        trade, falling back to the last 15m ohlc bar (trades/latest is often
+        empty); spot accepts raw or normalized candle keys.
         """
+        import datetime
+
         if ctx is not None:
             await ctx.log("info", "futures_basis")
         try:
@@ -350,14 +354,51 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         fut = None
         if trades and isinstance(trades[0], dict):
-            for key in ("price", "matchPrice", "match_price", "close", "c", "last"):
-                fut = _fnum(trades[0].get(key))
+            first = trades[0]
+            nested = first.get("trades")
+            cand = (
+                nested[-1]
+                if isinstance(nested, list) and nested and isinstance(nested[-1], dict)
+                else first
+            )
+            for key in (
+                "price",
+                "matchPrice",
+                "match_price",
+                "close",
+                "Close",
+                "c",
+                "CLOSE",
+                "last",
+                "Last",
+            ):
+                fut = _fnum(cand.get(key))
                 if fut is not None:
                     break
         spot = None
-        closes = [r.get("c") for r in spot_rows if isinstance(r, dict) and r.get("c")]
+        closes = [
+            _fnum(r.get(k))
+            for r in spot_rows
+            if isinstance(r, dict)
+            for k in ("close", "Close", "c", "CLOSE")
+            if _fnum(r.get(k)) is not None
+        ]
         if closes:
-            spot = _fnum(closes[-1])
+            spot = closes[-1]
+        if fut is None:
+            try:
+                week_ago = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
+                bars = await run_blocking(
+                    functools.partial(
+                        dnse_p.ohlc_history, "VN30F1M", "derivative", 15, week_ago, 500
+                    ),
+                    "futures_basis",
+                    timeout_secs=60.0,
+                )
+                if bars and isinstance(bars[-1], dict):
+                    fut = _fnum(bars[-1].get("c"))
+            except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
+                fut = None
         if fut is None or not spot:
             return make_envelope(
                 {"futures": fut, "spot": spot},

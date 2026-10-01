@@ -217,3 +217,28 @@ async def test_futures_basis_auth_missing_is_unavailable(monkeypatch):
     fn = _tool_fn("futures_basis")
     env = await fn()
     assert env["availability"] == "unavailable"
+
+
+async def test_futures_basis_falls_back_to_ohlc(monkeypatch):
+    from opentrading_mcp.providers import dnse as dnse_p
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        target = getattr(fn, "func", None)
+        if target is dnse_p.latest_trade:
+            return [{"symbol": "VN30F1M", "trades": []}]
+        if target is vn_p.index_ohlcv:
+            return [{"time": "2026-09-30", "open": 1790.0, "high": 1805.0,
+                     "low": 1785.0, "close": 1800.0, "volume": 1.0}]
+        if target is dnse_p.ohlc_history:
+            return [{"t": 1, "o": 1805.0, "h": 1812.0, "l": 1804.0, "c": 1810.0, "v": 9}]
+        raise AssertionError(f"unexpected upstream {target}")
+
+    import opentrading_mcp.tools.corp as corp_mod
+
+    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
+    fn = _tool_fn("futures_basis")
+    env = await fn()
+    assert env["availability"] == "available"
+    assert env["data"]["basis"] == 10.0
+    assert env["data"]["spot"] == 1800.0

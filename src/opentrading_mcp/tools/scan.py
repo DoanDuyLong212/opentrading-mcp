@@ -309,7 +309,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             from opentrading_mcp.providers import vietstock as vs_mod
 
             data = await run_blocking(
-                functools.partial(vs_mod._post, "/data/KQGDGiaoDichNDTNNChart", {}),
+                vs_mod.nn_flow_chart,
                 "money_flow",
                 timeout_secs=45.0,
             )
