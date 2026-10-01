@@ -7,6 +7,7 @@ so tools/list and smoke tests pass everywhere.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import sys
 from typing import Any
@@ -78,8 +79,9 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Snapshot of VN market with provenance. Use when a broad market picture is needed.
 
-        symbols: tickers to quote (default VCB/HPG/SSI). as_of: requested
-        timestamp label, recorded as requested_as_of (data is always latest).
+        symbols: tickers to quote — default the full VN30 basket (P14).
+        as_of: requested timestamp label, recorded as requested_as_of
+        (data is always latest).
         """
         key = cache_key("market", "market_snapshot", ",".join(symbols or []))
         hit = cache_get(key)
@@ -91,7 +93,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("info", f"market_snapshot symbols={symbols or []}")
         try:
             quotes = await run_blocking(
-                functools.partial(vn_p.equity_quote_batch, symbols or ["VCB", "HPG", "SSI"]),
+                functools.partial(vn_p.equity_quote_batch, symbols or vn_p.VN30),
                 "market_snapshot",
             )
             cache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
@@ -268,14 +270,20 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
         warnings: list[str] = []
         quotes: list[dict[str, Any]] | None = None
-        try:
-            quotes = await run_blocking(
-                functools.partial(vn_p.equity_quote_batch, universe),
-                "market_overview",
-                timeout_secs=30.0,
-            )
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            warnings.append(f"quotes unavailable: {exc}")
+        # P14: retry the main leg twice (1s apart) before degrading.
+        for attempt in (1, 2):
+            try:
+                quotes = await run_blocking(
+                    functools.partial(vn_p.equity_quote_batch, universe),
+                    "market_overview",
+                    timeout_secs=30.0,
+                )
+                break
+            except (ProviderUnavailable, ProviderBadData) as exc:
+                if attempt == 2:
+                    warnings.append(f"quotes unavailable: {exc}")
+                else:
+                    await asyncio.sleep(1.0)
         rows = [q for q in (quotes or []) if isinstance(q, dict)]
 
         def _chg(row: dict[str, Any]) -> float:

@@ -651,3 +651,44 @@ nối 8010), P5 risk_check và triết lý grading pre-earnings đã duyệt.
 - pytest 229 passed (217 + 12 mới); ruff + format sạch; mypy chỉ 4 lỗi pre-existing.
 - Live: 142 tools, 6 prompts, 4 resources. VCB legs thật: dưới sma50/150/200,
   adx 11.81, RS −1.89, pos_52w 0.21 → REJECT đúng rubric.
+
+## Phụ lục P14 — macro thật + storage + tối ưu (2026-10-01 tối)
+
+### Điều tra macro (bạn đúng, tôi đã sửa kết luận)
+- **Standard pack LẤY ĐƯỢC vĩ mô VN đầy đủ** — bằng chứng replay HAR full-cookie:
+  GDP(73,tt3) 504 rows tới Q2/2026 · CPI(15,tt7+sub2) 1,839 · XK(38,tt2) 2,941 ·
+  XNK theo nước(64/65,tt2) 3,675 · FX(55,tt1) 75. "Yêu cầu nâng cấp" trước đó là
+  do **session-gate** (CookieLogin đơn + session mới bị chặn; full cookie-jar trình duyệt
+  + token postData thì được) và **termTypeID sai** (GDP tt=2 → đúng là tt=3).
+- Fix: `providers/vietstock.py` thêm **HAR-session mode** (`har_client()`): ưu tiên env
+  `VIETSTOCK_COOKIE_HEADER`+`VIETSTOCK_PAGE_TOKEN` → parse `docs/*.har` (file, không commit).
+  `macro_report_data()` pipe-parser (DataStructure 16 cột → name/group/period/year/value/unit).
+- `vs_indicator_data` + `vs_xnk_detail` wire xong, **live xanh** (số thật).
+- CTKH/planned_targets: provider xong, live đang **session-rejected** (302) — dormant
+  trung thực, chờ env cookie mới từ trình duyệt.
+- GetStockByGICS replay flaky → skip.
+
+### Storage theo ngày (quyền DB của bạn)
+- 8010 retire → **DB mới `opentrading_mcp`** trong PG 15432 (không đụng db cũ); `dbinit`
+  idempotent 6 bảng (watchlists/items, alert_rules, mcp_auth_tokens, mcp_tool_usage
+  schema (user,tool,day,count,total_ms), **daily_snapshots(date,kind,payload JSONB)**).
+- Watchlist `_pg()` auto-ensure; **write-fallback file** khi SQL lỗi (đúng docs).
+- Worker thêm **`snapshot_loop`** (17:15 VN/ngày): `snapshot_once()` best-effort 12 kinds —
+  live 10/12 ok (vn30_quotes transient db-down, tự hồi ngày sau).
+- Tool mới **`snapshot_history(kind, days)`** đọc lịch sử (fix bug JSONB-list).
+
+### Tối ưu catalog (a/b/d/e đã duyệt)
+- Xóa: `macro_reports` (gộp analyst_consensus) + 3 alias `mega_flows/foreign_flow/oracle_health`.
+- Thêm: `polymarket_event(slug)` (odds đầy đủ outcomes+prob_pct) + `planned_targets` +
+  `snapshot_history`; `world_prediction_odds` nâng cấp (query cả slug/description, tag
+  Polymarket thật, sort vol24h).
+- `market_snapshot` default **VN30-30 mã**; `market_overview` retry ×2; `signals_scan`
+  `universe/exchange/max_symbols≤300` + progress + truncated.
+- `news_symbol` default-path **GDELT fallback** (dc chết).
+- pre_earnings prompt leg-4 đổi thành expectation anchor = planned_targets.
+- Catalog: **136 tools** (market 66 · scan 47 · quant 9 · brief 7 · intel 8 · all 136; web_search ẩn khi thiếu key).
+
+### Env checklist Render (bạn làm trên Dashboard)
+- `VIETSTOCK_COOKIE_HEADER` + `VIETSTOCK_PAGE_TOKEN` (từ HAR trình duyệt mới nhất) — mở macro/CTKH.
+- `FRED_API_KEY` (có trong Trading_Agents .env), `DATABASE_URL` (Render PG),
+  `REDIS_URL`, `MCP_BEARER_TEAM`, `DNSE_API_KEY/DNSE_SECRET`, `VIETSTOCK_COOKIE_LOGIN` (JWT 31/10).

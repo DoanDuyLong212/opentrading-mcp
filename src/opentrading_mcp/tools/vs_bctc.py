@@ -169,33 +169,24 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_market_info", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_xnk_detail(
-        direction: str = "xk", from_date: str | None = None, to_date: str | None = None
-    ) -> dict[str, Any]:
-        """Import/export by country. Use for trade structure (termType 2).
+    async def vs_xnk_detail(direction: str = "xk", from_date: str | None = None) -> dict[str, Any]:
+        """Import/export by country via browser-session replay. Use for trade structure.
 
-        direction: 'xk' exports, 'nk' imports. from_date/to_date: ISO dates
-        (to_date defaults to today). Paid macro package; without it reports
-        unavailable — use macro_events_vn for free release dates.
+        direction: 'xk' exports (cat 64), 'nk' imports (65). termType monthly,
+        from_date default current year (ISO). Standard pack serves it; rows
+        {name=country, group, period, year, value 'Triệu USD', timeorder}.
         """
+        list_id = 64 if direction == "xk" else 65
         import datetime
 
-        list_id = 64 if direction == "xk" else 65
+        frm = from_date or f"{datetime.date.today().year}-01-01"
         try:
-            data = await _call(
-                "x",
-                vs_p._post,
-                "/Macro/GetReportDataByIDs",
-                {
-                    "termTypeID": 2,
-                    "subTermTypeID": "",
-                    "fromDate": from_date or "2021-01-01",
-                    "toDate": to_date or datetime.date.today().isoformat(),
-                    "type": "CATEGORY",
-                    "listID[]": list_id,
-                },
+            out = await _call("x", vs_p.macro_report_data, 2, list_id, "", frm)
+            rows = out.get("rows", []) if isinstance(out, dict) else []
+            availability = "available" if rows else "empty"
+            return make_envelope(
+                {"direction": direction, **out}, source="vietstock", availability=availability
             )
-            return make_envelope({"direction": direction, "data": data}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_xnk_detail", str(exc))
 

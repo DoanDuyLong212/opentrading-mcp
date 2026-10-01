@@ -34,37 +34,38 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def world_prediction_odds(
         query: str | None = None,
         limit: int = 20,
-        status: str | None = None,
         tag: str | None = None,
     ) -> dict[str, Any]:
-        """Prediction-market odds via jina proxy to Gamma, then direct. Use for Fed/macro odds.
+        """Polymarket odds via jina proxy to Gamma, then direct. Use for Fed/macro odds.
 
-        limit: max events. status/tag: keep events whose title or status
-        fields contain these substrings (case-insensitive).
+        query: substring in title/slug/description. tag: Polymarket tag
+        (e.g. 'economics', 'fed', 'crypto'). Rows carry outcomes + prob_pct,
+        sorted by 24h volume.
         """
         try:
-            data = await _call("o", intel_p.prediction_odds, query, secs=60.0)
+            data = await _call("o", intel_p.prediction_odds, query, tag, limit, secs=60.0)
             events = data.get("events", []) if isinstance(data, dict) else []
-            if status is not None or tag is not None:
-                filters = [f.lower() for f in (status, tag) if f]
-                kept = []
-                for event in events:
-                    if not isinstance(event, dict):
-                        continue
-                    haystacks = [str(event.get("title", "")).lower()] + [
-                        str(event.get(k, "")).lower()
-                        for k in ("status", "tag", "state", "closed", "active")
-                        if k in event
-                    ]
-                    if all(any(f in hay for hay in haystacks) for f in filters):
-                        kept.append(event)
-                events = kept
             return make_envelope(
                 {"source": data.get("source"), "events": events[: max(int(limit), 1)]},
                 source="polymarket",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("world_prediction_odds", str(exc))
+
+    @server.tool(annotations=READ_ONLY)
+    async def polymarket_event(
+        slug: str,
+    ) -> dict[str, Any]:
+        """One Polymarket event detail by slug (every market + odds). Use to drill in.
+
+        slug: from world_prediction_odds rows. Returns description, markets
+        with outcome probs, volumes and end dates.
+        """
+        try:
+            data = await _call("e", intel_p.polymarket_event, slug, secs=60.0)
+            return make_envelope(data, source="polymarket")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("polymarket_event", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def geo_intel(
@@ -194,6 +195,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     return [
         {"name": "world_prediction_odds"},
+        {"name": "polymarket_event"},
         {"name": "geo_intel"},
         {"name": "assets_rotation"},
         {"name": "compare_equities"},

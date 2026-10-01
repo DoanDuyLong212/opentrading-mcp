@@ -90,22 +90,19 @@ async def test_vs_indicator_data_accepts_range_params(monkeypatch):
 
     seen: dict[str, Any] = {}
 
-    def fake_post(path: str, payload: dict[str, Any]):
-        seen.update(payload)
-        return {"ok": True}
+    def fake_macro(tt: int, cat: int, sub: str = "", frm: str = "2022-01-01") -> Any:
+        seen.update(tt=tt, cat=cat, sub=sub, frm=frm)
+        return {"rows": [{"name": "GDP", "value": 1.0}]}
 
-    monkeypatch.setattr(vs_p, "_post", fake_post)
+    monkeypatch.setattr(vs_p, "macro_report_data", fake_macro)
     fn = _tool_fn("vs_indicator_data")
     env = await fn(
-        category_id=7,
+        category_id=73,
         term_type_id=3,
         sub_term_type_id="M1",
         from_date="2020-01-01",
-        to_date="2026-01-01",
     )
     _check_envelope(env, "vs_indicator_data")
-    assert seen["termTypeID"] == 3
-    assert seen["subTermTypeID"] == "M1"
-    assert seen["fromDate"] == "2020-01-01"
-    assert seen["toDate"] == "2026-01-01"
-    assert seen["listID[]"] == 7
+    assert seen == {"tt": 3, "cat": 73, "sub": "M1", "frm": "2020-01-01"}
+    assert env["data"]["rows"][0]["name"] == "GDP"
+    assert seen["cat"] == 73

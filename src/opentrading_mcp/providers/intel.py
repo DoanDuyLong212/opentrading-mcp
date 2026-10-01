@@ -141,7 +141,73 @@ def groq_chat(system_msg: str, user_msg: str, max_tokens: int = 300) -> str:
         raise ProviderBadData("groq bad response") from exc
 
 
-def prediction_odds(query: str | None = None) -> dict[str, Any]:
+def _event_rows(events: list[Any], limit: int) -> list[dict[str, Any]]:
+    """Shape Polymarket events into agent-readable rows with odds (P14)."""
+    rows: list[dict[str, Any]] = []
+    for event in events[:limit]:
+        if not isinstance(event, dict):
+            continue
+        tag_labels = [
+            t.get("label")
+            for t in event.get("tags") or []
+            if isinstance(t, dict) and t.get("label")
+        ]
+        best: dict[str, Any] | None = None
+        best_vol = -1.0
+        for market in event.get("markets") or []:
+            if not isinstance(market, dict):
+                continue
+            try:
+                vol = float(market.get("volume24hr") or 0)
+            except (TypeError, ValueError):
+                vol = 0.0
+            if vol > best_vol:
+                best_vol = vol
+                best = market
+        outcomes: list[dict[str, Any]] = []
+        if best:
+            raw_out = best.get("outcomes")
+            raw_prices = best.get("outcomePrices")
+            names = []
+            if isinstance(raw_out, str):
+                try:
+                    names = json.loads(raw_out)
+                except ValueError:
+                    names = []
+            elif isinstance(raw_out, list):
+                names = raw_out
+            prices = []
+            if isinstance(raw_prices, str):
+                try:
+                    prices = json.loads(raw_prices)
+                except ValueError:
+                    prices = []
+            elif isinstance(raw_prices, list):
+                prices = raw_prices
+            for name, price in zip(names, prices, strict=False):
+                try:
+                    prob = round(float(price) * 100, 1)
+                except (TypeError, ValueError):
+                    prob = None
+                outcomes.append({"outcome": name, "prob_pct": prob})
+        rows.append(
+            {
+                "title": event.get("title"),
+                "slug": event.get("slug"),
+                "tags": tag_labels[:8],
+                "volume24h": event.get("volume24hr"),
+                "liquidity": event.get("liquidity"),
+                "end": event.get("endDate"),
+                "top_market": (best or {}).get("question"),
+                "outcomes": outcomes,
+            }
+        )
+    return rows
+
+
+def prediction_odds(
+    query: str | None = None, tag: str | None = None, limit: int = 20
+) -> dict[str, Any]:
     """Polymarket events: jina reader (text mode -> raw JSON) then direct."""
     attempts: list[tuple[str, str | None]] = [
         ("https://r.jina.ai/https://gamma-api.polymarket.com", "text"),
@@ -151,7 +217,7 @@ def prediction_odds(query: str | None = None) -> dict[str, Any]:
         try:
             headers = {"X-Return-Format": return_format} if return_format else None
             response = httpx.get(
-                f"{base}/events?active=true&closed=false&limit=50",
+                f"{base}/events?active=true&closed=false&limit=100",
                 timeout=30,
                 headers=headers,
             )
@@ -161,20 +227,98 @@ def prediction_odds(query: str | None = None) -> dict[str, Any]:
             events = body if isinstance(body, list) else []
             if query:
                 query_low = query.lower()
-                events = [e for e in events if query_low in str(e.get("title", "")).lower()]
-            rows = [
-                {
-                    "title": e.get("title"),
-                    "volume24h": e.get("volume24hr"),
-                    "liquidity": e.get("liquidity"),
-                    "end": e.get("endDate"),
-                }
-                for e in events[:20]
-            ]
-            return {"source": base, "events": rows}
+                events = [
+                    e
+                    for e in events
+                    if isinstance(e, dict)
+                    and (
+                        query_low in str(e.get("title", "")).lower()
+                        or query_low in str(e.get("slug", "")).lower()
+                        or query_low in str(e.get("description", "")).lower()
+                    )
+                ]
+            if tag:
+                tag_low = tag.lower()
+                events = [
+                    e
+                    for e in events
+                    if isinstance(e, dict)
+                    and any(
+                        tag_low in str(t.get("label", "")).lower()
+                        or tag_low in str(t.get("slug", "")).lower()
+                        for t in e.get("tags") or []
+                        if isinstance(t, dict)
+                    )
+                ]
+            events.sort(
+                key=lambda e: float(e.get("volume24hr") or 0) if isinstance(e, dict) else 0,
+                reverse=True,
+            )
+            return {"source": base, "events": _event_rows(events, limit)}
         except (ProviderUnavailable, ProviderBadData, ValueError):
             continue
     raise ProviderUnavailable("polymarket unreachable via jina and direct")
+
+
+def polymarket_event(slug: str) -> dict[str, Any]:
+    """One Polymarket event detail by slug (all markets + prices) — P14."""
+    import datetime
+
+    attempts: list[tuple[str, str | None]] = [
+        ("https://r.jina.ai/https://gamma-api.polymarket.com", "text"),
+        ("https://gamma-api.polymarket.com", None),
+    ]
+    for base, return_format in attempts:
+        try:
+            headers = {"X-Return-Format": return_format} if return_format else None
+            response = httpx.get(
+                f"{base}/events?slug={httpx.QueryParams({'slug': slug})['slug']}",
+                timeout=30,
+                headers=headers,
+            )
+            if response.status_code == 429:
+                raise ProviderUnavailable(f"rate limited: {base}")
+            body = json.loads(response.text)
+            events = body if isinstance(body, list) else []
+            if not events:
+                continue
+            event = events[0]
+            markets: list[dict[str, Any]] = []
+            for market in event.get("markets") or []:
+                if not isinstance(market, dict):
+                    continue
+                raw_out = market.get("outcomes")
+                raw_prices = market.get("outcomePrices")
+                names = json.loads(raw_out) if isinstance(raw_out, str) else raw_out or []
+                prices = json.loads(raw_prices) if isinstance(raw_prices, str) else raw_prices or []
+                outcomes = []
+                for name, price in zip(names, prices, strict=False):
+                    try:
+                        prob = round(float(price) * 100, 1)
+                    except (TypeError, ValueError):
+                        prob = None
+                    outcomes.append({"outcome": name, "prob_pct": prob})
+                markets.append(
+                    {
+                        "question": market.get("question"),
+                        "outcomes": outcomes,
+                        "volume24h": market.get("volume24hr"),
+                        "end": market.get("endDate"),
+                    }
+                )
+            return {
+                "slug": slug,
+                "title": event.get("title"),
+                "description": str(event.get("description") or "")[:2000],
+                "end": event.get("endDate"),
+                "volume24h": event.get("volume24hr"),
+                "liquidity": event.get("liquidity"),
+                "markets": markets,
+                "fetched_at": datetime.datetime.now(datetime.UTC).isoformat(),
+            }
+        except (ProviderUnavailable, ValueError):
+            continue
+    raise ProviderUnavailable(f"polymarket event {slug!r} unreachable")
 
 
 def fear_greed() -> dict[str, Any]:

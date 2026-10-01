@@ -20,7 +20,7 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -372,22 +372,45 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         return make_envelope({"rows": rows}, source="vietstock")
 
     @server.tool(annotations=READ_ONLY)
-    async def signals_scan(limit: int = 10) -> dict[str, Any]:
-        """Donchian breakout scan over VN30 names. Use to hunt momentum.
+    async def signals_scan(
+        universe: list[str] | None = None,
+        exchange: str | None = None,
+        max_symbols: int = 10,
+        ctx: AnyContext | None = None,
+    ) -> dict[str, Any]:
+        """Donchian-20d breakout scan. Use to hunt momentum across the market.
 
-        limit: max rows returned.
+        Default universe: 10 bluechips. exchange='HOSE' scans the exchange
+        list capped at max_symbols (P14: up to 300, semaphore 5, progress +
+        truncated honest). Scanning hundreds takes minutes — cache the call.
         """
-        universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN", "MWG", "FPT", "CTG", "BID"]
+        capped = max(min(int(max_symbols), 300), 1)
+        if universe:
+            names = [u.strip().upper() for u in universe if u.strip()][:capped]
+        elif exchange:
+            rows = await _call("r", vn_p.reference_equity, exchange)
+            pool = [str(r.get("symbol")) for r in rows if isinstance(r, dict) and r.get("symbol")]
+            names = pool[:capped]
+        else:
+            names = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN", "MWG", "FPT", "CTG", "BID"][:capped]
         hits: list[dict[str, Any]] = []
-        for name in universe[: max(limit, 1)]:
+        scanned = 0
+        total = len(names)
+        for name in names:
             try:
                 candles = await _call("s", vn_p.quote_history, name, 30, secs=60.0)
                 closes = [c["c"] for c in candles if c["c"]]
+                scanned += 1
                 if len(closes) >= 20 and closes[-1] >= max(closes[-20:]):
                     hits.append({"symbol": name, "close": closes[-1], "signal": "breakout_20d"})
             except (ProviderUnavailable, ProviderBadData):
                 continue
-        return make_envelope({"hits": hits, "scanned": len(universe)}, source="computed-local")
+            if ctx is not None and total > 20:
+                await ctx.report_progress(scanned, total, name)
+        data: dict[str, Any] = {"hits": hits, "scanned": scanned, "requested": total}
+        if total > capped:
+            data["truncated"] = True
+        return make_envelope(data, source="computed-local")
 
     @server.tool(annotations=READ_ONLY)
     async def pattern_match(symbol: str, lookback: int = 60, limit: int = 5) -> dict[str, Any]:
@@ -466,55 +489,26 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         return make_envelope({"trades": rows}, source="local")
 
     @server.tool(annotations=READ_ONLY)
-    async def macro_reports(symbol: str = "", limit: int = 10) -> dict[str, Any]:
-        """Analyst reports via listing scrape. Use for report discovery.
+    async def snapshot_history(kind: str, days: int = 90) -> dict[str, Any]:
+        """Daily-snapshot history saved by the worker. Use for data that vanishes.
 
-        limit: max reports. Reads the analyst-report listing (same source as
-        analyst_consensus); pass symbol to scope one ticker.
+        kind: market_board, breadth_3ex, flows_charts (NN/prop 30d rolling),
+        heatmap_gics, gold_btmc, sbv_rates, nso_releases, analyst_titles,
+        macro_curated, vn30_quotes, futures_basis, documents_feed, events_feed.
+        days: history depth (newest first).
         """
-        try:
-            from opentrading_mcp.providers import vn_public as pub_p
+        from opentrading_mcp import snapshots
 
-            reports = await run_blocking(
-                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10)),
-                "macro_reports",
-                timeout_secs=45.0,
-            )
-            rows = [r for r in reports if isinstance(r, dict) and r.get("title")]
-            if symbol.strip():
-                want = symbol.strip().upper()
-                rows = [r for r in rows if (r.get("symbol") or "").upper() == want]
+        rows = await run_blocking(
+            functools.partial(snapshots.load, kind, days), "snapshot_history", timeout_secs=15.0
+        )
+        if not rows:
             return make_envelope(
-                {"symbol": symbol.strip().upper(), "reports": rows[: max(int(limit), 1)]},
-                source="vietstock-scrape",
+                {"kind": kind, "rows": []},
+                source="postgres",
+                availability="empty",
             )
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("macro_reports", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def mega_flows() -> dict[str, Any]:
-        """Alias of yf_mega_flows (Nasdaq/global, not DNSE). Use for global flows."""
-        try:
-            from opentrading_mcp.providers import yfinance as yf_mod
-
-            return make_envelope(await _call("m", yf_mod.mega_flows), source="yfinance")
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("mega_flows", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def foreign_flow() -> dict[str, Any]:
-        """Alias of dnse_foreign_flow (primary). Use for smart-money reads."""
-        try:
-            from opentrading_mcp.providers import dnse as dnse_mod
-
-            return make_envelope(dnse_mod.ws_snapshot(["VNINDEX"]), source="dnse-ws")
-        except ProviderUnavailable as exc:
-            return _na("foreign_flow", f"{exc} (fallback: vs_nn_flow)")
-
-    @server.tool(annotations=READ_ONLY)
-    async def oracle_health() -> dict[str, Any]:
-        """Alias of source_status. Use for health checks."""
-        return make_envelope({"see": "source_status"}, source="local")
+        return make_envelope({"kind": kind, "count": len(rows), "rows": rows}, source="postgres")
 
     @server.tool(annotations=READ_ONLY)
     async def event_stats(query: str = "stock market", limit: int = 20) -> dict[str, Any]:
@@ -615,11 +609,8 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "signals_scan"},
         {"name": "pattern_match"},
         {"name": "signals_trade_log"},
-        {"name": "macro_reports"},
-        {"name": "mega_flows"},
-        {"name": "foreign_flow"},
-        {"name": "oracle_health"},
         {"name": "event_stats"},
+        {"name": "snapshot_history"},
         {"name": "compare_assets"},
         {"name": "runs_list"},
         {"name": "run_get"},

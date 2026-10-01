@@ -74,14 +74,13 @@ async def test_vs_xnk_detail_accepts_range(monkeypatch):
 
     seen: dict[str, Any] = {}
 
-    def fake_post(path: str, payload: dict[str, Any]):
-        seen.update(payload)
-        return {"ok": True}
+    def fake_macro(tt: int, cat: int, sub: str = "", frm: str = "2022-01-01") -> Any:
+        seen.update(tt=tt, cat=cat, sub=sub, frm=frm)
+        return {"rows": [{"name": "Trung Quoc", "value": 1.0}]}
 
-    monkeypatch.setattr(vs_p, "_post", fake_post)
+    monkeypatch.setattr(vs_p, "macro_report_data", fake_macro)
     fn = _tool_fn("vs_xnk_detail")
-    env = await fn(direction="nk", from_date="2022-01-01", to_date="2023-01-01")
+    env = await fn(direction="nk", from_date="2022-01-01")
     _check_envelope(env, "vs_xnk_detail")
-    assert seen["fromDate"] == "2022-01-01"
-    assert seen["toDate"] == "2023-01-01"
-    assert seen["listID[]"] == 65
+    assert seen == {"tt": 2, "cat": 65, "sub": "", "frm": "2022-01-01"}
+    assert env["data"]["direction"] == "nk"

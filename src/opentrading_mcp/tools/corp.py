@@ -417,6 +417,33 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             source="dnse+vnstock",
         )
 
+    @server.tool(annotations=READ_ONLY)
+    async def planned_targets(
+        symbol: str, years: int = 3, ctx: AnyContext | None = None
+    ) -> dict[str, Any]:
+        """Business-plan targets (CTKH: planned revenue/profit by year). Use as expectation anchor.
+
+        years: latest N plan years (unit VND billions). Browser-session replay
+        (HAR/env seed); reports unavailable while the gate rejects — mirror +
+        analyst_consensus cover expectations meanwhile.
+        """
+        if ctx is not None:
+            await ctx.log("info", f"planned_targets {symbol}")
+        try:
+            data = await run_blocking(
+                functools.partial(vs_p.planned_targets, symbol, max(int(years), 1)),
+                "planned_targets",
+                timeout_secs=60.0,
+            )
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "planned_targets"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        return make_envelope(data, source="vietstock")
+
     return [
         {"name": "dividends_splits"},
         {"name": "holders"},
@@ -425,4 +452,5 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "analyst_consensus"},
         {"name": "ipo_calendar_vn"},
         {"name": "futures_basis"},
+        {"name": "planned_targets"},
     ]

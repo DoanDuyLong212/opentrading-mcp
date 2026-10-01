@@ -166,7 +166,9 @@ def _publish_dnse_snapshot(state: dict[str, Any], now: float) -> None:
 
 
 async def main_async() -> None:
-    await asyncio.gather(yf_loop(), heartbeat_loop(), dnse_ws_loop())
+    from opentrading_mcp.snapshots import snapshot_loop
+
+    await asyncio.gather(yf_loop(), heartbeat_loop(), dnse_ws_loop(), snapshot_loop())
 
 
 def main() -> None:

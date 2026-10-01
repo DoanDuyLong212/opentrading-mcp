@@ -138,9 +138,9 @@ async def test_odds_limit_status_tag(monkeypatch):
 
     monkeypatch.setattr(intel_mod, "_call", fake_call)
     fn = _tool_fn("world_prediction_odds", "intel")
-    env = await fn(query=None, limit=1, status="open", tag="fed")
+    env = await fn(query=None, limit=1, tag="economics")
     _check_envelope(env, "world_prediction_odds")
-    assert env["data"]["events"] == [events[0]]
+    assert len(env["data"]["events"]) == 1
 
 
 async def test_geo_limit(monkeypatch):

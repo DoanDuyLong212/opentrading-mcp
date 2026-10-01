@@ -36,10 +36,17 @@ def _pg_configured() -> bool:
 
 
 def _pg() -> Any:
-    """Open a PG connection when DATABASE_URL is set; caller must close it."""
-    url = os.environ.get("DATABASE_URL", "").strip()
+    """Open a PG connection when DATABASE_URL is set; caller must close it.
+
+    Tables are auto-ensured once per process (P14 dbinit), so a fresh
+    database works without a manual migration step.
+    """
+    from opentrading_mcp import dbinit
+
+    url = dbinit.db_url().strip()
     if not url:
         return None
+    dbinit.ensure_tables()
     try:
         import psycopg
 
@@ -465,12 +472,8 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
                     {"id": row["id"], "name": row["name"], "symbols": []}, source="postgres"
                 )
             except Exception as exc:
-                return make_envelope(
-                    {"tool": "watchlist_create"},
-                    source="local",
-                    warnings=[f"create failed: {exc}"],
-                    availability="unavailable",
-                )
+                warnings_pg = f"pg create failed, file fallback: {exc}"
+                logger.warning(warnings_pg)
             finally:
                 conn.close()
         existing = _file_load("lists")

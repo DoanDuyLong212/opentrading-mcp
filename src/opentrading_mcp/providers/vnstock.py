@@ -493,3 +493,37 @@ def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[s
         except Exception as exc:
             raise ProviderUnavailable(f"vnstock msn failed: {symbol_id}: {exc}") from exc
     return out
+
+
+VN30 = [
+    "ACB",
+    "BCM",
+    "BID",
+    "BVH",
+    "CTG",
+    "FPT",
+    "GAS",
+    "GVR",
+    "HDB",
+    "HPG",
+    "LPB",
+    "MBB",
+    "MSN",
+    "MWG",
+    "NAB",
+    "NVL",
+    "PJB",
+    "PLX",
+    "PNJ",
+    "SAB",
+    "SSI",
+    "STB",
+    "TCB",
+    "TPB",
+    "VCB",
+    "VHM",
+    "VIC",
+    "VJC",
+    "VNM",
+    "VPB",
+]

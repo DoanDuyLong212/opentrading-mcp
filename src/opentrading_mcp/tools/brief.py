@@ -118,9 +118,9 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Symbol news via Vietstock search. Use to verify rumors.
 
-        sources: 'gdelt' routes straight to GDELT (default tries Vietstock first).
-        Vietstock dc search is currently down — pass sources='gdelt' for
-        topic-wide searches, or use news_market (has GDELT fallback).
+        sources: 'gdelt' routes straight to GDELT. Default tries Vietstock dc
+        first, falls back to GDELT when the dc route is down (P14 — it is
+        currently down, so expect the GDELT leg to serve).
         """
         if sources == "gdelt":
             try:
@@ -131,8 +131,14 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             data = await _call("n", vs_p.news_search, symbol.upper(), limit)
             return make_envelope({"symbol": symbol.upper(), "articles": data}, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("news_symbol", str(exc))
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
+            try:
+                data = await _call(
+                    "g", intel_p.gdelt_events, f"{symbol.upper()} stock", 20, secs=45.0
+                )
+                return make_envelope(data, source="gdelt")
+            except (ProviderUnavailable, ProviderBadData) as exc:
+                return _na("news_symbol", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def economic_calendar(scope: str = "vn", limit: int = 20) -> dict[str, Any]:

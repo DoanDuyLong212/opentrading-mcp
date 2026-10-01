@@ -239,23 +239,6 @@ async def test_trade_log_days_side_filter(monkeypatch):
     assert env["data"]["trades"][0]["date"] == "2026-09-20"
 
 
-async def test_macro_reports_limit(monkeypatch):
-    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        return [
-            {"title": "VCB: MUA", "symbol": "VCB", "rating": "MUA"},
-            {"title": "HPG: BÁN", "symbol": "HPG", "rating": "BÁN"},
-        ]
-
-    import opentrading_mcp.tools.compute as comp_mod
-
-    monkeypatch.setattr(comp_mod, "run_blocking", fake_block)
-    fn = _tool_fn("macro_reports")
-    env = await fn(symbol="VCB", limit=7)
-    _check_envelope(env, "macro_reports")
-    assert env["data"]["symbol"] == "VCB"
-    assert all(r["symbol"] == "VCB" for r in env["data"]["reports"])
-
-
 async def test_event_stats_limit(monkeypatch):
     from opentrading_mcp.providers import intel as intel_p
 

@@ -104,33 +104,29 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
         category_id: int,
         term_type_id: int = 3,
         sub_term_type_id: str | None = None,
-        from_date: str = "2021-06-30",
+        from_date: str = "2022-01-01",
         to_date: str | None = None,
     ) -> dict[str, Any]:
-        """Macro series for a category and term type. Use for GDP, CPI, trade context.
+        """Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.
 
         term_type_id: 1 daily, 2 monthly, 3 quarterly, 4 yearly, 5 YTD, 6 MoM,
-        7 YoY, 8 QoQ. from_date/to_date: ISO dates (to_date defaults to today).
-        Paid macro package: without it the tool reports unavailable instead of
-        an empty shell — use FRED/WorldBank tools for free macro.
+        7 YoY, 8 QoQ — pairs must match each category's ListTermType metadata
+        (e.g. GDP 73 tt=3, CPI 15 tt=7 sub=2). from_date default 2022-01-01.
+        Uses the full browser cookie jar (HAR/env seed); Standard pack serves it.
+        Rows: {name, group, period, year, value, unit, timeorder}.
         """
-        import datetime
-
         try:
-            data = await _call(
+            out = await _call(
                 "vs_indicator_data",
-                vs_p._post,
-                "/Macro/GetReportDataByIDs",
-                {
-                    "termTypeID": term_type_id,
-                    "subTermTypeID": sub_term_type_id or "",
-                    "fromDate": from_date,
-                    "toDate": to_date or datetime.date.today().isoformat(),
-                    "type": "CATEGORY",
-                    "listID[]": category_id,
-                },
+                vs_p.macro_report_data,
+                term_type_id,
+                category_id,
+                sub_term_type_id or "",
+                from_date,
             )
-            return make_envelope({"category": category_id, "data": data}, source="vietstock")
+            rows = out.get("rows", []) if isinstance(out, dict) else []
+            availability = "available" if rows else "empty"
+            return make_envelope(out, source="vietstock", availability=availability)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_indicator_data", str(exc))
 

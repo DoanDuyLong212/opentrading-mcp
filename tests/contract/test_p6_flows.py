@@ -139,14 +139,13 @@ async def test_vs_market_info_bad_exchange_is_unavailable():
     assert env["availability"] == "unavailable"
 
 
-async def test_indicator_data_defaults_todate_today(monkeypatch):
-    import datetime
+async def test_indicator_data_defaults_2022_and_macro_path(monkeypatch):
 
     seen: dict[str, Any] = {}
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        seen["payload"] = args[1] if len(args) > 1 else kwargs
-        return {"data": []}
+        seen["args"] = args
+        return {"rows": [{"name": "GDP", "value": 1.0}]}
 
     import opentrading_mcp.tools.vs as vs_mod
 
@@ -155,19 +154,18 @@ async def test_indicator_data_defaults_todate_today(monkeypatch):
     register_preset(server, "market")
     tool = server._tool_manager.get_tool("vs_indicator_data")
     assert tool is not None
-    await tool.fn(category_id=7)
-    assert seen["payload"]["toDate"] == datetime.date.today().isoformat()
-    assert seen["payload"]["toDate"] != ""
+    await tool.fn(category_id=73)
+    assert seen["args"] == (3, 73, "", "2022-01-01")
 
 
-async def test_xnk_detail_defaults_todate_today(monkeypatch):
+async def test_xnk_detail_defaults_current_year(monkeypatch):
     import datetime
 
     seen: dict[str, Any] = {}
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        seen["payload"] = args[1] if len(args) > 1 else kwargs
-        return {"data": []}
+        seen["args"] = args
+        return {"rows": [{"name": "My", "value": 1.0}]}
 
     import opentrading_mcp.tools.vs_bctc as bctc_mod
 
@@ -177,4 +175,5 @@ async def test_xnk_detail_defaults_todate_today(monkeypatch):
     tool = server._tool_manager.get_tool("vs_xnk_detail")
     assert tool is not None
     await tool.fn()
-    assert seen["payload"]["toDate"] == datetime.date.today().isoformat()
+    assert seen["args"][:3] == (2, 64, "")
+    assert seen["args"][3] == f"{datetime.date.today().year}-01-01"

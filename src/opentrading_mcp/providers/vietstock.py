@@ -689,3 +689,207 @@ def market_price(board_type: int = 2) -> Any:
 
 def indicator_categories() -> Any:
     return _post("/Macro/GetIndicatorCategoryData", {})
+
+
+# ------------------------------------------------------------------ P14: HAR session
+
+
+def _har_seed() -> tuple[str, str]:
+    """(cookie_header, page_token) for the browser-session replay mode.
+
+    Priority: VIETSTOCK_COOKIE_HEADER + VIETSTOCK_PAGE_TOKEN env → newest
+    docs/*.har (VIETSTOCK_HAR_FILE overrides). Empty strings when absent.
+    """
+    cookie = _env("VIETSTOCK_COOKIE_HEADER")
+    token = _env("VIETSTOCK_PAGE_TOKEN")
+    if cookie and token:
+        return cookie, token
+    import glob
+
+    candidates = [_env("VIETSTOCK_HAR_FILE")] or []
+    candidates += sorted(glob.glob("docs/*.har"), reverse=True)
+    for path in candidates:
+        if not path:
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                har = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        for entry in har.get("log", {}).get("entries", []):
+            if "finance.vietstock.vn" not in str(entry.get("request", {}).get("url", "")):
+                continue
+            if not cookie:
+                for header in entry.get("request", {}).get("headers", []):
+                    if header.get("name", "").lower() == "cookie":
+                        cookie = str(header.get("value", ""))
+            if not token:
+                for param in entry.get("request", {}).get("postData", {}).get("params", []):
+                    if param.get("name") == "__RequestVerificationToken":
+                        token = str(param.get("value", ""))
+            if cookie and token:
+                return cookie, token
+    return "", ""
+
+
+_HAR_CLIENT: httpx.Client | None = None
+
+
+def har_client() -> httpx.Client:
+    """Browser-session replay client (full cookie jar + page token)."""
+    global _HAR_CLIENT
+    if _HAR_CLIENT is not None:
+        return _HAR_CLIENT
+    cookie, _token = _har_seed()
+    if not cookie:
+        raise ProviderAuthMissing("VIETSTOCK_COOKIE_HEADER/HAR not configured")
+    _HAR_CLIENT = httpx.Client(
+        timeout=30,
+        headers={
+            "User-Agent": BROWSER_UA,
+            "Cookie": cookie,
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+            "Origin": BASE,
+            "Referer": f"{BASE}/vi-mo/du-lieu",
+        },
+    )
+    return _HAR_CLIENT
+
+
+MACRO_PAGE = f"{BASE}/vi-mo/du-lieu"
+
+
+def _parse_pipe_rows(raw: Any, group_default: str = "") -> list[dict[str, Any]]:
+    """Parse GetReportDataByIDs pipe-rows (DataStructure header + Data lines)."""
+    if not isinstance(raw, dict):
+        return []
+    structure = str(raw.get("DataStructure", "")).split("|")
+    out: list[dict[str, Any]] = []
+    for row in raw.get("Data") or []:
+        parts = row.split("|") if isinstance(row, str) else [str(v) for v in row]
+        if len(parts) < 16:
+            continue
+        item = dict(zip(structure, parts, strict=False))
+        try:
+            value = float(str(item.get("Value", "")).replace(",", "."))
+        except ValueError:
+            value = None
+        out.append(
+            {
+                "name": item.get("NormName"),
+                "group": item.get("GroupName") or group_default,
+                "period": item.get("ReportTime"),
+                "year": item.get("TermYear"),
+                "value": value,
+                "unit": item.get("UnitCode"),
+                "timeorder": int(item.get("TimeOrder") or 0),
+            }
+        )
+    return out
+
+
+@guarded("vietstock")
+def macro_report_data(
+    term_type_id: int, category_id: int, sub_term_type_id: str = "", from_date: str = "2022-01-01"
+) -> dict[str, Any]:
+    """Macro series via browser-session replay (Standard pack works — P14).
+
+    Returns {rows, source} with pipe-row parse; raises ProviderAuthMissing
+    when the session is rejected (upgrade/permission body).
+    """
+    import datetime
+
+    client = har_client()
+    token = _env("VIETSTOCK_PAGE_TOKEN")
+    if not token:
+        _, token = _har_seed()
+    payload = {
+        "termTypeID": str(term_type_id),
+        "subTermTypeID": sub_term_type_id or "",
+        "fromDate": from_date,
+        "toDate": datetime.date.today().isoformat(),
+        "type": "CATEGORY",
+        "listID[]": str(category_id),
+        "__RequestVerificationToken": token,
+    }
+    try:
+        response = client.post(f"{BASE}/Macro/GetReportDataByIDs", data=payload)
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock macro unreachable: {exc}") from exc
+    try:
+        body = json.loads(response.content.decode("utf-8-sig"))
+    except ValueError as exc:
+        raise ProviderBadData(f"vietstock macro non-JSON: {response.status_code}") from exc
+    error = body.get("errorModel") if isinstance(body, dict) else None
+    if isinstance(error, dict) and error.get("ErrorCode"):
+        raise ProviderAuthMissing(
+            f"vietstock macro {error.get('ErrorCode')}: {error.get('ErrorMessage')}"
+        )
+    rows = _parse_pipe_rows(body)
+    return {"category": category_id, "term_type": term_type_id, "rows": rows}
+
+
+@guarded("vietstock")
+def planned_targets(symbol: str, years: int = 3) -> dict[str, Any]:
+    """Business-plan targets (CTKH: planned revenue/profit by year) — P14.
+
+    Chain: GetListReportNorm_CTKH -> CTKH_GetListYearPeriods (latest N years)
+    -> GetPlannedTargetsCompanyValue_CTKH_ByYearPeriods (batch). Unit VND bn.
+    Raises ProviderAuthMissing when the gate rejects (dormant until a fresh
+    browser-session env seed).
+    """
+    client = har_client()
+    token = _env("VIETSTOCK_PAGE_TOKEN") or (_har_seed()[1])
+    periods = _post(
+        "/data/CTKH_GetListYearPeriods",
+        {
+            "StockCode": symbol.upper(),
+            "UnitedId": -1,
+            "AuditedStatusId": -1,
+            "Unit": 1000000000,
+            "IsNamDuongLich": True,
+            "PeriodType": "NAM",
+            "SortTimeType": "Time_ASC",
+        },
+    )
+    rows_per = periods.get("data", periods) if isinstance(periods, dict) else periods
+    if not isinstance(rows_per, list):
+        raise ProviderBadData(f"vietstock CTKH periods malformed for {symbol}")
+    years_latest = [
+        p.get("YearPeriod")
+        for p in rows_per
+        if isinstance(p, dict) and p.get("YearPeriod") is not None
+    ][-max(int(years), 1) :]
+    if not years_latest:
+        raise ProviderBadData(f"vietstock CTKH carries no years for {symbol}")
+    try:
+        response = client.post(
+            f"{BASE}/data/GetPlannedTargetsCompanyValue_CTKH_ByYearPeriods",
+            data={
+                "StockCode": symbol.upper(),
+                "Unit": 1000000000,
+                "TypeCompare": "1",
+                "listReportDataIds": json.dumps(years_latest),
+                "__RequestVerificationToken": token,
+            },
+        )
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock CTKH values unreachable: {exc}") from exc
+    raw = response.content.decode("utf-8-sig")
+    if raw.startswith("<!DOCTYPE") or "<html" in raw[:60].lower():
+        raise ProviderAuthMissing("vietstock CTKH session rejected")
+    try:
+        body = json.loads(raw)
+    except ValueError as exc:
+        raise ProviderBadData("vietstock CTKH values non-JSON") from exc
+    error = body.get("errorModel") if isinstance(body, dict) else None
+    if isinstance(error, dict) and error.get("ErrorCode"):
+        raise ProviderAuthMissing(f"vietstock CTKH {error.get('ErrorCode')}")
+    return {
+        "symbol": symbol.upper(),
+        "unit": "VNDbn",
+        "years": years_latest,
+        "rows": body.get("data", body),
+    }
