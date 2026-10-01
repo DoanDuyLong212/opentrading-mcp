@@ -240,19 +240,20 @@ async def test_trade_log_days_side_filter(monkeypatch):
 
 
 async def test_macro_reports_limit(monkeypatch):
-    from opentrading_mcp.providers import vietstock as vs_p
+    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        return [
+            {"title": "VCB: MUA", "symbol": "VCB", "rating": "MUA"},
+            {"title": "HPG: BÁN", "symbol": "HPG", "rating": "BÁN"},
+        ]
 
-    seen: dict[str, Any] = {}
+    import opentrading_mcp.tools.compute as comp_mod
 
-    def fake_search(symbol: str = "", page_size: int = 50, keywords: str | None = None):
-        seen.update(symbol=symbol, page_size=page_size)
-        return []
-
-    monkeypatch.setattr(vs_p, "reports_search", fake_search)
+    monkeypatch.setattr(comp_mod, "run_blocking", fake_block)
     fn = _tool_fn("macro_reports")
     env = await fn(symbol="VCB", limit=7)
     _check_envelope(env, "macro_reports")
-    assert seen == {"symbol": "VCB", "page_size": 7}
+    assert env["data"]["symbol"] == "VCB"
+    assert all(r["symbol"] == "VCB" for r in env["data"]["reports"])
 
 
 async def test_event_stats_limit(monkeypatch):

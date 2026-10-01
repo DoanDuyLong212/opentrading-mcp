@@ -104,53 +104,12 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_documents", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_reports_search(
-        symbol: str = "", keywords: str | None = None, page_size: int = 50
-    ) -> dict[str, Any]:
-        """Analyst reports search. Use for external views on a name.
-
-        keywords: free-text filter (empty symbol + keywords searches all).
-        page_size: max reports (default 50).
-        """
-        try:
-            return make_envelope(
-                {"reports": await _call("r", vs_p.reports_search, symbol, page_size, keywords)},
-                source="vietstock",
-            )
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vs_reports_search", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
     async def vs_industry_tree() -> dict[str, Any]:
         """GICS industry tree. Use before sector mapping."""
         try:
             return make_envelope({"tree": await _call("t", vs_p.industry_tree)}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_industry_tree", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def vs_stock_industry(industry_id: int) -> dict[str, Any]:
-        """Companies under a GICS industry node. Use for peer universes.
-
-        industry_id: level 2-3 node id from vs_industry_tree output. Upstream
-        currently returns no mappings for most nodes (empty, not an error);
-        vs_industry_heatmap covers live rotation instead.
-        """
-        try:
-            stocks = await _call("s", vs_p.stock_industry, industry_id)
-            if not stocks:
-                return make_envelope(
-                    {"industry": industry_id, "stocks": []},
-                    source="vietstock",
-                    warnings=[
-                        "no mappings for this node; use level 2-3 ids or "
-                        "vs_industry_heatmap instead"
-                    ],
-                    availability="empty",
-                )
-            return make_envelope({"industry": industry_id, "stocks": stocks}, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vs_stock_industry", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def vs_industry_heatmap() -> dict[str, Any]:
@@ -169,22 +128,6 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return make_envelope({"flow": await _call("s", vs_p.selftrading)}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_selftrading", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def vs_top_liquidity(index: str = "VNINDEX", top_n: int = 20) -> dict[str, Any]:
-        """Most liquid names per index. Use for liquidity screens.
-
-        index: VNINDEX, VN30, HNX, UPCOM. top_n: rows returned.
-        Upstream often returns an empty body (unavailable, not an error in
-        our code) — use market_movers or vn_equity_quote_batch instead.
-        """
-        try:
-            rows = await _call("l", vs_p.top_liquidity, index)
-            if isinstance(rows, list):
-                rows = rows[: max(int(top_n), 1)]
-            return make_envelope({"rows": rows}, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vs_top_liquidity", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def vs_gics_index(group: int = 1) -> dict[str, Any]:
@@ -279,12 +222,9 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "vs_company_info"},
         {"name": "vs_overview_trading"},
         {"name": "vs_documents"},
-        {"name": "vs_reports_search"},
         {"name": "vs_industry_tree"},
-        {"name": "vs_stock_industry"},
         {"name": "vs_industry_heatmap"},
         {"name": "vs_selftrading"},
-        {"name": "vs_top_liquidity"},
         {"name": "vs_gics_index"},
         {"name": "vs_currency"},
         {"name": "vs_market_info"},

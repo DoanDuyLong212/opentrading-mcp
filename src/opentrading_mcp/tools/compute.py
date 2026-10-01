@@ -469,13 +469,26 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def macro_reports(symbol: str = "", limit: int = 10) -> dict[str, Any]:
         """Research PDFs metadata. Use for report discovery.
 
-        limit: max reports (forwarded as provider page_size). Macro/strategy
-        library; vs_reports_search searches analyst notes per symbol.
+        limit: max reports. Reads the analyst-report listing (same source as
+        analyst_consensus); pass symbol to scope one ticker.
         """
         try:
-            data = await _call("m", vs_p.reports_search, symbol, max(int(limit), 1))
-            return make_envelope({"reports": data}, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            from opentrading_mcp.providers import vn_public as pub_p
+
+            reports = await run_blocking(
+                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10)),
+                "macro_reports",
+                timeout_secs=45.0,
+            )
+            rows = [r for r in reports if isinstance(r, dict) and r.get("title")]
+            if symbol.strip():
+                want = symbol.strip().upper()
+                rows = [r for r in rows if (r.get("symbol") or "").upper() == want]
+            return make_envelope(
+                {"symbol": symbol.strip().upper(), "reports": rows[: max(int(limit), 1)]},
+                source="vietstock-scrape",
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("macro_reports", str(exc))
 
     @server.tool(annotations=READ_ONLY)

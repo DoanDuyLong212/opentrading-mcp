@@ -69,38 +69,6 @@ async def test_vs_documents_accepts_page_size(monkeypatch):
     assert seen == {"symbol": "FPT", "page_size": 10}
 
 
-async def test_vs_reports_search_accepts_keywords(monkeypatch):
-    from opentrading_mcp.providers import vietstock as vs_p
-
-    seen: dict[str, Any] = {}
-
-    def fake_search(symbol: str = "", page_size: int = 50, keywords: str | None = None):
-        seen.update(symbol=symbol, page_size=page_size, keywords=keywords)
-        return []
-
-    monkeypatch.setattr(vs_p, "reports_search", fake_search)
-    fn = _tool_fn("vs_reports_search")
-    env = await fn(symbol="VCB", keywords="tăng vốn", page_size=5)
-    _check_envelope(env, "vs_reports_search")
-    assert seen == {"symbol": "VCB", "page_size": 5, "keywords": "tăng vốn"}
-
-
-async def test_vs_top_liquidity_accepts_top_n(monkeypatch):
-    from opentrading_mcp.providers import vietstock as vs_p
-
-    rows = [{"code": f"S{i:02d}"} for i in range(5)]
-
-    def fake_top(index: str = "VNINDEX"):
-        assert index == "VNINDEX"
-        return rows
-
-    monkeypatch.setattr(vs_p, "top_liquidity", fake_top)
-    fn = _tool_fn("vs_top_liquidity")
-    env = await fn(index="VNINDEX", top_n=2)
-    _check_envelope(env, "vs_top_liquidity")
-    assert env["data"]["rows"] == rows[:2]
-
-
 async def test_vs_news_search_accepts_paging(monkeypatch):
     from opentrading_mcp.providers import vietstock as vs_p
 

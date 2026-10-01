@@ -271,7 +271,7 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         symbol: filter one ticker (omit for latest across market). Ratings come
         from title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per
-        symbol shows upgrades/downgrades. vs_reports_search API is dead upstream.
+        symbol shows upgrades/downgrades by history.
         """
         if ctx is not None:
             await ctx.log("info", f"analyst_consensus {symbol}")

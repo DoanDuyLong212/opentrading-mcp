@@ -130,34 +130,3 @@ def test_financial_values_provider_surfaces_package_error(monkeypatch):
     monkeypatch.setattr(vs_p, "_post_json", fake_post)
     with pytest.raises(ProviderAuthMissing):
         vs_p.financial_values("VCB", years=1, tids=[5])
-
-
-async def test_stock_industry_empty_model_is_empty(monkeypatch):
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        return []
-
-    import opentrading_mcp.tools.vs_bctc as bctc_mod
-
-    monkeypatch.setattr(bctc_mod, "_call", fake_call)
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("vs_stock_industry")
-    assert tool is not None
-    env = await tool.fn(industry_id=3)
-    assert env["availability"] == "empty"
-
-
-async def test_stock_industry_model_list_passes(monkeypatch):
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        return [{"StockCode": "VCB", "BusinessTypeID": 3}]
-
-    import opentrading_mcp.tools.vs_bctc as bctc_mod
-
-    monkeypatch.setattr(bctc_mod, "_call", fake_call)
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("vs_stock_industry")
-    assert tool is not None
-    env = await tool.fn(industry_id=3)
-    assert env["availability"] == "available"
-    assert env["data"]["stocks"][0]["StockCode"] == "VCB"

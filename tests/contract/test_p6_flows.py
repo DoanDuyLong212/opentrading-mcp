@@ -178,29 +178,3 @@ async def test_xnk_detail_defaults_todate_today(monkeypatch):
     assert tool is not None
     await tool.fn()
     assert seen["payload"]["toDate"] == datetime.date.today().isoformat()
-
-
-async def test_top_liquidity_empty_body_is_unavailable(monkeypatch):
-    from opentrading_mcp.providers.errors import ProviderBadData
-
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        raise ProviderBadData("vietstock non-JSON 200: ")
-
-    import opentrading_mcp.tools.vs_bctc as bctc_mod
-
-    monkeypatch.setattr(bctc_mod, "_call", fake_call)
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("vs_top_liquidity")
-    assert tool is not None
-    env = await tool.fn()
-    assert env["availability"] == "unavailable"
-
-
-async def test_top_liquidity_descriptor_names_alternatives():
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("vs_top_liquidity")
-    assert tool is not None
-    assert tool.description is not None
-    assert "market_movers" in tool.description
