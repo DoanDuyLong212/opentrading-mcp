@@ -175,6 +175,8 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Most liquid names per index. Use for liquidity screens.
 
         index: VNINDEX, VN30, HNX, UPCOM. top_n: rows returned.
+        Upstream often returns an empty body (unavailable, not an error in
+        our code) — use market_movers or vn_equity_quote_batch instead.
         """
         try:
             rows = await _call("l", vs_p.top_liquidity, index)
@@ -185,10 +187,16 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_top_liquidity", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_gics_index() -> dict[str, Any]:
-        """GICS index closes with foreign flow. Use for sector context."""
+    async def vs_gics_index(group: int = 1) -> dict[str, Any]:
+        """GICS index closes with foreign flow. Use for sector context.
+
+        group: index set (1, 2 or 3 return different groups).
+        """
         try:
-            return make_envelope({"rows": await _call("g", vs_p.gics_index)}, source="vietstock")
+            return make_envelope(
+                {"group": group, "rows": await _call("g", vs_p.gics_index, group)},
+                source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_gics_index", str(exc))
 
@@ -201,14 +209,18 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_currency", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_market_info(symbol: str = "") -> dict[str, Any]:
-        """Compact market line per symbol. Use for 5s snapshots in hours.
+    async def vs_market_info(exchange: str = "HOSE") -> dict[str, Any]:
+        """Per-exchange board row: index, breadth, put-through. Use for 5s snapshots in hours.
 
-        symbol: single ticker (empty = whole-board row set).
+        exchange: HOSE, HNX or UPCOM (endpoint is per-exchange, not per-symbol).
         """
         try:
             return make_envelope(
-                {"info": await _call("m", vs_p.market_info, symbol)}, source="vietstock"
+                {
+                    "exchange": exchange.strip().upper(),
+                    "rows": await _call("m", vs_p.market_info_board, exchange),
+                },
+                source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_market_info", str(exc))
@@ -235,8 +247,12 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Import/export by country. Use for trade structure (termType 2).
 
-        direction: 'xk' exports, 'nk' imports. from_date/to_date: ISO dates.
+        direction: 'xk' exports, 'nk' imports. from_date/to_date: ISO dates
+        (to_date defaults to today). Paid macro package; without it reports
+        unavailable — use macro_events_vn for free release dates.
         """
+        import datetime
+
         list_id = 64 if direction == "xk" else 65
         try:
             data = await _call(
@@ -247,7 +263,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "termTypeID": 2,
                     "subTermTypeID": "",
                     "fromDate": from_date or "2021-01-01",
-                    "toDate": to_date or "",
+                    "toDate": to_date or datetime.date.today().isoformat(),
                     "type": "CATEGORY",
                     "listID[]": list_id,
                 },

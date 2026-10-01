@@ -79,7 +79,7 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
         days: keep only the most recent N chart points.
         """
         try:
-            data = await _call("vs_nn_flow", vs_p._post, "/data/KQGDGiaoDichNDTNNChart", {})
+            data = await _call("vs_nn_flow", vs_p.nn_flow_chart)
             if isinstance(data, list) and len(data) == 2 and all(isinstance(p, list) for p in data):
                 tail = max(int(days), 1)
                 data = [data[0][-tail:], data[1][-tail:]]
@@ -110,8 +110,12 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Macro series for a category and term type. Use for GDP, CPI, trade context.
 
         term_type_id: 1 daily, 2 monthly, 3 quarterly, 4 yearly, 5 YTD, 6 MoM,
-        7 YoY, 8 QoQ. from_date/to_date: ISO dates (YYYY-MM-DD).
+        7 YoY, 8 QoQ. from_date/to_date: ISO dates (to_date defaults to today).
+        Paid macro package: without it the tool reports unavailable instead of
+        an empty shell — use FRED/WorldBank tools for free macro.
         """
+        import datetime
+
         try:
             data = await _call(
                 "vs_indicator_data",
@@ -121,7 +125,7 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "termTypeID": term_type_id,
                     "subTermTypeID": sub_term_type_id or "",
                     "fromDate": from_date,
-                    "toDate": to_date or "",
+                    "toDate": to_date or datetime.date.today().isoformat(),
                     "type": "CATEGORY",
                     "listID[]": category_id,
                 },

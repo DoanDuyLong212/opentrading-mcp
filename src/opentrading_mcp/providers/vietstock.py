@@ -497,16 +497,24 @@ def top_liquidity(index: str = "VNINDEX") -> Any:
     return _post("/Data/GetTopStockLiquidity", {"index": index})
 
 
-def gics_index() -> Any:
-    return _post("/data/GetGICSIndexMain", {})
+def gics_index(group: int = 1) -> Any:
+    """GICS index group rows. Requires type (P10); groups differ by index set."""
+    return _post("/data/GetGICSIndexMain", {"type": group})
 
 
 def currency() -> Any:
     return _post("/data/GetCurrency", {})
 
 
-def market_info(symbol: str = "") -> Any:
-    return _post("/data/marketinfo", {"symbol": symbol.upper()} if symbol else {})
+EXCHANGE_TYPE_IDS = {"HOSE": 1, "HNX": 2, "UPCOM": 3}
+
+
+def market_info_board(exchange: str = "HOSE") -> Any:
+    """Per-exchange board row (index, breadth, put-through). Requires type (P10)."""
+    venue = exchange.strip().upper()
+    if venue not in EXCHANGE_TYPE_IDS:
+        raise ProviderBadData(f"unknown exchange {exchange!r} (HOSE|HNX|UPCOM)")
+    return _post("/data/marketinfo", {"type": EXCHANGE_TYPE_IDS[venue]})
 
 
 def news_search(query: str, page_size: int = 20) -> Any:
@@ -544,8 +552,24 @@ def _coerce_articles(payload: Any) -> list[dict[str, Any]]:
     raise ProviderBadData("vietstock search malformed")
 
 
+def nn_flow_chart() -> Any:
+    """Foreign buy/sell chart. Requires selectType/code/type/isRealTime (P10)."""
+    return _post(
+        "/data/KQGDGiaoDichNDTNNChart",
+        {"selectType": 1, "code": "", "type": 1, "isRealTime": False},
+    )
+
+
+def selftrading_chart() -> Any:
+    """Prop-desk buy/sell chart. Requires selectType/code/type (P10)."""
+    return _post(
+        "/data/KQGDGiaoDichTuDoanhChart",
+        {"selectType": 1, "code": "", "type": 1},
+    )
+
+
 def selftrading() -> Any:
-    return _post("/data/KQGDGiaoDichTuDoanhChart", {})
+    return selftrading_chart()
 
 
 def financeinfo(symbol: str, period: str = "quarter") -> dict[str, Any]:
