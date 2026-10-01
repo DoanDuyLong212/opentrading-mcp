@@ -375,7 +375,17 @@ def reference_equity(
         if by == "industry":
             frame = Reference().equity.list_by_industry(key or exchange)
             return _records(frame)
-        frame = Reference().equity.list()
+        frame = None
+        for source in ("KBS",):
+            try:
+                candidate = Reference().equity.list_by_exchange(source=source)
+                if candidate is not None and len(candidate) > 0:
+                    frame = candidate
+                    break
+            except Exception:
+                continue
+        if frame is None:
+            frame = Reference().equity.list()
     except Exception as exc:
         raise ProviderUnavailable("vnstock reference failed") from exc
     rows = _records(frame)

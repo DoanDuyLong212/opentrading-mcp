@@ -71,6 +71,54 @@ def _table_rows(table: Any) -> list[list[str]]:
     return rows
 
 
+BTMC_URL = "https://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v"
+
+
+def _parse_btmc(payload: Any) -> list[dict[str, Any]]:
+    """Parse BTMC DataList rows (same shape as vnstock lib, minus the hang)."""
+    try:
+        items = payload["DataList"]["Data"]
+    except (KeyError, TypeError) as exc:
+        raise ProviderBadData("BTMC payload malformed") from exc
+    out = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        row = str(item.get("@row", ""))
+        out.append(
+            {
+                "name": item.get(f"@n_{row}", ""),
+                "karat": item.get(f"@k_{row}", ""),
+                "gold_content": item.get(f"@h_{row}", ""),
+                "buy_price": item.get(f"@pb_{row}", ""),
+                "sell_price": item.get(f"@ps_{row}", ""),
+                "world_price": item.get(f"@pt_{row}", ""),
+                "time": item.get(f"@d_{row}", ""),
+            }
+        )
+    return out
+
+
+@guarded("vn_public")
+def btmc_gold() -> list[dict[str, Any]]:
+    """BTMC retail gold over HTTPS with timeout (P11).
+
+    The vnstock lib hits the http:// URL with no timeout and hangs when the
+    host stalls; https answers. Same default key the lib uses.
+    """
+    try:
+        import httpx
+    except ImportError as exc:
+        raise ProviderUnavailable("httpx not installed") from exc
+    try:
+        resp = httpx.get(BTMC_URL, timeout=15.0)
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        raise ProviderUnavailable(f"BTMC fetch failed: {exc}") from exc
+    return _parse_btmc(payload)
+
+
 @guarded("vn_public")
 def hnx_auctions() -> dict[str, Any]:
     """HNX auction calendar table; falls back to the announcement list."""

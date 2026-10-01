@@ -149,8 +149,18 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_retail_gold(source: str = "btmc") -> dict[str, Any]:
         """SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.
 
-        source: retail source id (default 'btmc').
+        source: retail source id (default 'btmc'). Direct BTMC https fetch
+        first (15s); vnstock lib fallback (its http URL hangs without timeout).
         """
+        if source.strip().lower() == "btmc":
+            try:
+                from opentrading_mcp.providers import vn_public as pub_p
+
+                rows = await run_blocking(pub_p.btmc_gold, "vn_retail_gold", timeout_secs=20.0)
+                keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
+                return make_envelope({"rows": keep or rows}, source="btmc-direct")
+            except (ProviderUnavailable, ProviderBadData):
+                pass
         try:
             from vnstock import Retail
         except ImportError:

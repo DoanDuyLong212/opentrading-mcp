@@ -486,6 +486,98 @@ def stock_industry(industry_id: int) -> list[dict[str, Any]]:
     raise ProviderBadData("vietstock industry stocks malformed")
 
 
+_DETAIL_STATEMENTS = {
+    "KQKD": (
+        "GetListReportNorm_KQKD_ByStockCode",
+        "KQKD_GetListReportData",
+        "GetReportDataDetailValue_KQKD_ByReportDataIds",
+    ),
+    "CDKT": (
+        "GetListReportNormByStockCode",
+        "CDKT_GetListReportData",
+        "GetReportDataDetailValueByReportDataIds",
+    ),
+    "LCTT": (
+        "GetListReportNorm_LCTT_ByStockCode",
+        "LCTT_GetListReportData",
+        "GetReportDataDetailValue_LCTT_ByReportDataIds",
+    ),
+    "TM": (
+        "GetListReportNorm_TM_ByStockCode",
+        "TM_GetListReportData",
+        "GetReportDataDetailValue_TM_ByReportDataIds",
+    ),
+    "BCTT": (
+        "GetListReportNorm_BCTT_ByStockCode",
+        "BCTT_GetListReportData",
+        "GetReportDataDetailValue_BCTT_ByReportDataIds",
+    ),
+}
+
+_DETAIL_FILTER = {
+    "StockCode": "",
+    "UnitedId": -1,
+    "AuditedStatusId": -1,
+    "Unit": 1000000000,
+    "IsNamDuongLich": True,
+    "PeriodType": "QUY",
+    "SortTimeType": "Time_ASC",
+}
+
+
+def financial_detail(
+    symbol: str, statement: str = "KQKD", periods_n: int = 8
+) -> dict[str, Any]:
+    """Free detailed statements via /data/* chain (P11, no paid package).
+
+    norms -> periods -> batched detail values. Unit is VND billions.
+    """
+    code = statement.strip().upper()
+    if code not in _DETAIL_STATEMENTS:
+        raise ProviderBadData(f"unknown statement {statement!r} (KQKD|CDKT|LCTT|TM|BCTT)")
+    norm_ep, per_ep, val_ep = (f"/data/{name}" for name in _DETAIL_STATEMENTS[code])
+    norms_raw = _post(norm_ep, {"stockCode": symbol.upper()})
+    norms = norms_raw.get("data", norms_raw) if isinstance(norms_raw, dict) else norms_raw
+    if not isinstance(norms, list) or not norms:
+        raise ProviderBadData(f"vietstock no norms for {symbol} {code}")
+    filt = {**_DETAIL_FILTER, "StockCode": symbol.upper()}
+    per_raw = _post(per_ep, filt)
+    periods = per_raw.get("data", per_raw) if isinstance(per_raw, dict) else per_raw
+    if not isinstance(periods, list) or not periods:
+        raise ProviderBadData(f"vietstock no periods for {symbol} {code}")
+    periods = periods[: max(int(periods_n), 1)]
+    ids: list[Any] = []
+    for period in periods:
+        if not isinstance(period, dict):
+            continue
+        for key in ("ReportDataID", "ReportDataId", "ID", "id"):
+            if period.get(key) is not None:
+                ids.append(period[key])
+                break
+    if not ids:
+        raise ProviderBadData(f"vietstock periods carry no ids for {symbol} {code}")
+    val_raw = _post(
+        val_ep,
+        {
+            "StockCode": symbol.upper(),
+            "Unit": 1000000000,
+            "TypeCompare": "1",
+            "listReportDataIds": ids,
+        },
+    )
+    rows = val_raw.get("data", val_raw) if isinstance(val_raw, dict) else val_raw
+    if not isinstance(rows, list):
+        raise ProviderBadData(f"vietstock detail values malformed for {symbol} {code}")
+    return {
+        "symbol": symbol.upper(),
+        "statement": code,
+        "unit": "VNDbn",
+        "norms": len(norms) if isinstance(norms, list) else 0,
+        "periods": ids,
+        "rows": rows,
+    }
+
+
 def industry_heatmap() -> Any:
     return _post_industry_form(
         "/Data/GetHeatmapGICS",

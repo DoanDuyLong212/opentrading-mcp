@@ -231,15 +231,26 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 r
                 for r in rows
                 if isinstance(r, dict)
-                and str(r.get("exchange", r.get("floor", r.get("market", "")))).upper()
+                and str(
+                    pick_value(r, ("exchange", "Exchange", "floor", "Floor", "market", "Market"))
+                    or ""
+                ).upper()
                 == exchange.upper()
             ]
             if venue_rows or not rows:
                 rows = venue_rows
             else:
                 warnings.append(f"no venue info in board rows; exchange {exchange!r} ignored")
-        adv = sum(1 for r in rows if isinstance(r, dict) and float(r.get("change", 0) or 0) > 0)
-        dec = sum(1 for r in rows if isinstance(r, dict) and float(r.get("change", 0) or 0) < 0)
+        adv = sum(
+            1
+            for r in rows
+            if isinstance(r, dict) and float(pick_value(r, ("change", "Change", "CHANGE")) or 0) > 0
+        )
+        dec = sum(
+            1
+            for r in rows
+            if isinstance(r, dict) and float(pick_value(r, ("change", "Change", "CHANGE")) or 0) < 0
+        )
         return make_envelope(
             {"advancers": adv, "decliners": dec, "rows": len(rows)},
             source="vietstock",
