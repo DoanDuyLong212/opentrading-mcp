@@ -18,4 +18,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD python -c "import os,sys,urllib.request; \
 p=os.environ.get('PORT','8102'); \
 sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/healthz',timeout=8).read() else 1)"
-CMD ["sh", "-c", "opentrading-mcp serve --preset market --http --port ${PORT:-8102}"]
+CMD ["sh", "-c", "opentrading-mcp serve --preset all --http --port ${PORT:-8102}"]

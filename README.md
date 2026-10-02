@@ -82,7 +82,10 @@ Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
 BASE=https://opentrading-mcp-web.onrender.com
 HDR=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "Authorization: Bearer $TEAM_TOKEN")
 
-# 1. Liệt kê tools → kỳ vọng: 135 tools (đếm "name": 135 lần)
+# 1. Liệt kê tools → kỳ vọng: 135 tools (đếm "name": 135 lần).
+#    Lưu ý: response là SSE (dòng "data: {json}"), opencode parse tự động;
+#    curl thì grep trên text thô như dưới. Nếu chỉ đếm được 66 → prod đang
+#    chạy preset market cũ (thiếu scan/quant/brief/intel) → redeploy bản mới nhất.
 curl -s -X POST "$BASE/mcp" "${HDR[@]}" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | grep -o '"name":' | wc -l
 
@@ -107,6 +110,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
 | Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` |
 | Tools | 135 (`all`), presets `market` 65 / `scan` 47 / `quant` 9 / `brief` 7 / `intel` 8 |
+| Preset remote | `all` — Render chạy `serve --preset all` (xem `Dockerfile` CMD). Nếu `tools/list` chỉ trả 66 tools = đang chạy preset `market` cũ, cần redeploy bản mới |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
 | Quy tắc dùng | Rate-limit 120 req/phút/IP; quota 1000 calls/ngày/user (team token bypass quota) |
 | Timezone | `Asia/Ho_Chi_Minh` tz-aware — parse theo giờ VN |
