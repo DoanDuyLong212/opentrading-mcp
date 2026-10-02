@@ -101,7 +101,16 @@
 
 ## Bảng 2 — Tools v4 FULL (chia theo nguồn, 1 tool = 1 endpoint family)
 
-### Nhóm A — Vietstock trả phí (JWT `VIETSTOCK_COOKIE_LOGIN`, exp 2026-10-02, check mỗi phiên)
+### Nhóm A — Vietstock trả phí (JWT `VIETSTOCK_COOKIE_LOGIN`, exp **2026-10-31 18:35**, check mỗi phiên)
+
+> **Sự cố 02-10-2026 (đã xử lý)**: token trong env hết hạn 19:15 hôm nay + auto-login
+> Email/Password bị từ chối ("Tài khoản này được đăng nhập bằng Google!"). Fix: extract
+> cookie `CookieLogin` từ HAR `docs/finance.vietstock.vn_Archive [26-10-01 18-35-43].har`
+> (exp 31/10) → thay vào `~/Trading_Agents/.env`. Verify: `vs_auth_status` authenticated
+> true, 4/4 tool vs_* sống lại. **Quy trình tái sử dụng khi JWT chết lần nữa**: re-login
+> Google trên trình duyệt → export HAR mới → `python3` extract `CookieLogin=` từ request
+> cookie header → thay env local + Render. HAR session (macro) sống độc lập với JWT —
+> `vs_indicator_data` vẫn available khi JWT chết.
 
 | Tool | Parameters | Lấy trực tiếp như nào (copy 8010) | TTL/cache | Fallback |
 |---|---|---|---|---|
