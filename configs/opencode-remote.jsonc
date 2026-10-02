@@ -1,0 +1,17 @@
+{
+  // opencode remote: key is `mcp.servers`, type MUST be `remote` (NOT streamable-http).
+  // `oauth: false` is REQUIRED: this server uses a static team bearer, it has no
+  // OAuth metadata endpoints, so opencode must not attempt OAuth discovery.
+  // Replace <TEAM_TOKEN> with the real team bearer from the server admin.
+  "mcp": {
+    "servers": {
+      "opentrading": {
+        "type": "remote",
+        "url": "https://opentrading-mcp-web.onrender.com/mcp",
+        "headers": { "Authorization": "Bearer <TEAM_TOKEN>" },
+        "oauth": false,
+        "timeout": 30000
+      }
+    }
+  }
+}

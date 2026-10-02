@@ -68,19 +68,35 @@ curl -s -X POST "$BASE/mcp" "${HDR[@]}" \
   -d '{"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"ticker_analysis","arguments":{"symbol":"VCB"}}}'
 ```
 
-Config mẫu cho harness/AI clients (remote):
+Config cho opencode / harness giống-opencode 100% (remote):
 
 ```json
 {
-  "mcpServers": {
-    "opentrading": {
-      "type": "streamable-http",
-      "url": "https://opentrading-mcp-web.onrender.com/mcp",
-      "headers": { "Authorization": "Bearer <TEAM_TOKEN>" }
+  "mcp": {
+    "servers": {
+      "opentrading": {
+        "type": "remote",
+        "url": "https://opentrading-mcp-web.onrender.com/mcp",
+        "headers": { "Authorization": "Bearer <TEAM_TOKEN>" },
+        "oauth": false,
+        "timeout": 30000
+      }
     }
   }
 }
 ```
+
+Bắt buộc đúng 4 điểm theo schema opencode (`type: "remote"`, `url`, `headers`, xem
+`packages/opencode/src/config/v2-compat.ts:45-53`):
+- `"type": "remote"` (không phải `"streamable-http"` — sai key sẽ fail validation).
+- `"oauth": false` — server này là resource-server thuần (team bearer tĩnh, không có
+  OAuth metadata endpoints); bỏ trống `oauth` thì opencode tự thử OAuth discovery và fail.
+- `headers.Authorization` — Bearer team token, pass-through tới `POST /mcp`.
+- `url` trỏ đúng `/mcp`. Opencode tự thử StreamableHTTP trước, SSE fallback sau —
+  server hỗ trợ cả hai (`POST /mcp` + legacy `/sse`).
+
+File mẫu copy-paste: `configs/opencode-remote.jsonc`. Clients khác (Claude/Cursor/generic)
+dùng block generic `streamable-http` + cùng 3 headers ở trên.
 
 ### Cách 2 — stdio local (dev, không cần token)
 
