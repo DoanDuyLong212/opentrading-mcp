@@ -109,7 +109,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
 | Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` |
-| Tools | 135 (`all`), presets `market` 65 / `scan` 47 / `quant` 9 / `brief` 7 / `intel` 8 |
+| Tools | 135 (`all`, 136 khi có websearch key — prod đang serve 136), presets `market` 65 / `scan` 47 / `quant` 9 / `brief` 7 / `intel` 8 |
 | Preset remote | `all` — Render chạy `serve --preset all` (xem `Dockerfile` CMD). Nếu `tools/list` chỉ trả 66 tools = đang chạy preset `market` cũ, cần redeploy bản mới |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
 | Quy tắc dùng | Rate-limit 120 req/phút/IP; quota 1000 calls/ngày/user (team token bypass quota) |
