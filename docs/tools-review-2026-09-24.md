@@ -1,4 +1,4 @@
-# Tools Review — opentrading-mcp (worktree 2026-10-01, P14)
+# Tools Review — opentrading-mcp (P15 + full-135 live 2026-10-02)
 
 **Tổng: 135 tools unique · 126 READ_ONLY / 9 READ_WRITE · 6 presets**
 (P5 enrich params → P6 descriptors → P7 17 tools mới → P8 SEPA legs → P10/P11 fixes → P12/P13 xóa tools chết → P14 macro HAR-session + storage + polymarket_event + planned_targets; xem Phụ lục cuối file)
@@ -35,7 +35,7 @@ TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_sca
 ## 3. vn.py — 6 tools
 | Tool | Descriptor | Params | Source |
 |---|---|---|---|
-| vn_quote_history | Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history. | symbol, days=365, summary=False, columns[]? | vnstock Quote VCI→KBS tự fallback |
+| vn_quote_history | Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history. | symbol, days=365, summary=False, columns[]?, interval=1D/1W/1M (P15 mới) | vnstock Quote VCI→KBS tự fallback |
 | vn_equity_quote_batch | One-request price board for many symbols. Use for snapshots and movers. | symbols[], summary=False, columns[]? | vnstock Market.equity(list).quote() |
 | vn_listing | Full symbol list with company names. Use for universe and lookup. | — | vnstock Listing().all_symbols() |
 | vn_fundamentals | Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation. | symbol, period=year | vnstock Fundamental + Finance |
@@ -87,8 +87,8 @@ TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_sca
 ## 7-8. yf.py (3) + yf_world.py (6)
 | Tool | Descriptor | Params | Source |
 |---|---|---|---|
-| yf_global_indices | 9 global benchmarks, 2d daily. Use for overnight context. | — | yfinance GLOBAL_9; worker loop pump TTL 300s |
-| yf_commodities | Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context. | — | yfinance COMMO_13 |
+| yf_global_indices | 9 global benchmarks. Use for overnight context. | tickers?, period?, interval? (P15 mới) | yfinance GLOBAL_9; worker loop pump TTL 300s |
+| yf_commodities | Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context. | tickers?, period?, interval? (P15 mới) | yfinance COMMO_13 |
 | yf_yield_curve | US 2Y/10Y and inversion flag. Use for rates and regime context. | — | yfinance ^TNX + 2YY=F |
 | yf_world_indices | 24 world benchmarks. Use for global breadth. | — | yfinance batch download |
 | yf_oracle_markets | 40 markets in 6 groups with 30d stats. Use for cross-asset state. | — | yfinance ~40 ticker 1mo |
@@ -120,7 +120,7 @@ TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_sca
 | money_flow | Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money. | — (P10 + P12b: fallback dùng nn_flow_chart có params, không còn {}) | DNSE WS → Vietstock NN chart → unavailable |
 | alert_check | Evaluate price/RSI rules against live quotes. Use for live watch. | rules[{symbol,metric,op,threshold}] | metric price: vnstock quote; rsi14: vnstock candles → technicals local; cross state Redis TTL 3600 |
 
-## 12. compute.py — 20 tools (P14: -macro_reports/-mega_flows/-foreign_flow/-oracle_health, +snapshot_history)
+## 12. compute.py — 21 tools (P14: -macro_reports/-mega_flows/-foreign_flow/-oracle_health, +snapshot_history; P15: -vs_financial_values/-signals_trade_log)
 | Tool | Descriptor | Params | Source |
 |---|---|---|---|
 | stock_forensic | Beneish M-Score (7 chỉ số, partial) + Piotroski F 6/8 từ full detail (P15 rewrite, live FPT M=-2.06). Use for earnings-quality flags. | symbol, detail?, periods_n=4 | KQKD/CDKT detail (DSRI/GMI/AQI/SGI/SGAI/LVGI/TATA; CFO thiếu khi LCTT rỗng) → local tính |
@@ -144,7 +144,7 @@ TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_sca
 | run_get | Local run registry fetch. Use to inspect past outputs. | run_id | data/runs.jsonl |
 | doctor | Local self-check: env keys present, package versions. Use before handoff. | — | local |
 
-## 13. quant.py — 4 tools
+## 13. quant.py — 9 tools (4 gốc + 5 P7)
 | Tool | Descriptor | Params | Source |
 |---|---|---|---|
 | quant_backtest | Buy-and-hold backtest with costs over available history. Use for baseline stats. | symbol, cost_bps=10.0, strategy=buy_hold (label), slippage_bps=5.0, benchmark=VNINDEX (P5) | vnstock candles → local |
@@ -157,12 +157,12 @@ TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_sca
 | portfolio_optimize | Long-only weights by rule. Use for allocation starting points. | symbols[] cap 8, objective=max_sharpe (equal/inv_vol/max_sharpe), days=180 (P7 mới) | numpy-only (không scipy): closed-form clip long-only + fallback equal, kèm ann_vol/sharpe_proxy |
 | param_sweep | Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks. | symbol, strategy=sma_cross, fast_range[]?, slow_range[]? (product cap 30) (P7 mới) | vnstock 365d → local grid |
 
-## 14. brief.py — 5 tools
+## 14. brief.py — 7 tools (5 gốc + sbv_rates + macro_events_vn P7)
 | Tool | Descriptor | Params | Source |
 |---|---|---|---|
 | brief_build | Compose morning brief from news, odds and calendars. Use at session start. | scope=vn (vn/world), date? ISO, calendars=False (P7 U5: True → thêm sbv/macro/ipo sections) | fear_greed + Vietstock news → GDELT + categories + world pins |
-| news_market | Market news: Vietstock first, GDELT fallback. Use for catalyst checks. | limit=10, sources? (gdelt = bỏ Vietstock) (P5) | Vietstock dc → GDELT |
-| news_symbol | Symbol news via Vietstock search. Use to verify rumors. | symbol, limit=10, sources? (P5) | Vietstock dc (không fallback) |
+| news_market | Market news: Fireant posts first, GDELT fallback. Use for catalyst checks. | limit=10, sources? (P5; P15: path Fireant primary, live posts Putin 1.10) | Fireant → GDELT |
+| news_symbol | Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors. | symbol, limit=10, sources? (P5; P15: path Fireant primary) | Fireant → GDELT |
 | economic_calendar | Macro series catalogue as event proxy. Use for data-availability checks. | scope=vn, limit=20 (P5) | vs_categories (scope≠vn → empty) |
 | corporate_calendar | Disclosures feed as corporate actions. Use for dividend/meeting scans. | symbol?=VCB, limit=20 (P5) | Vietstock GetDocument |
 | sbv_rates | SBV policy and interbank rates, scraped static page. Use for rate regime. | — (P7 mới) | scrape sbv.gov.vn (static, hiếm đổi) |
@@ -254,6 +254,12 @@ TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_sca
 - **P11** (commit 4c91136, deploy 2026-10-01): breadth đếm Change hoa; reference qua KBS source; vàng BTMC https trực tiếp; financial_detail mới (chain free, chờ nâng tier). 258 tests passed.
 - **P15** (worktree): macro Standard-pack LIVE (GDP 504 rows tới Q2/26, CPI 1839, XK 2941, XNK 3675) qua HAR-session replay + term-type đúng; planned_targets fix YearPeriods-shape (FPT KH 58,580/75,400 live); stock_forensic M-Score/Piotroski đầy đủ từ detail (FPT M=-2.06, HPG -2.24, VCB partial); polymarket sort vol24h + tag_slug (Fed 73.5% live); OHLCV interval 1D/1W/1M; snapshots PG 13 kinds + worker 17:15 + snapshot_history; DB riêng `opentrading_mcp`.
 - **P9** (commit 17e1155, deploy 2026-10-01): honest-availability — news error-payload → unavailable; lookup không dấu; foreign errorCode → unavailable (endpoint từ chối mọi range); BCTC package-limit → unavailable + hint mirror; industry model-list + empty. Nguyên tắc: không bao giờ available-kèm-garbage.
+
+## Phụ lục P15 — full 135 tools live 2026-10-02 (có key, local)
+- Chạy thật 135/135 qua 2 batch (`/tmp/full135.txt`): **129 available · 1 partial (market_overview, session leg null) · 2 empty đúng bản chất (runs_list/run_get, chưa có runs) · 3 unavailable (WS trio, thiếu worker local — prod có)**. 0 tool chết.
+- Điểm nhấn live: macro GDP 504 rows tới Q2/26 · CPI 1839 · XK 2941 · XNK 3675; forensic FPT M=-2.06 sạch (7 chỉ số + F-score từ detail); planned_targets FPT KH DT 75,400/58,580; futures_basis +5.89 (+31bps); block_trades VCB thỏa thuận 48.85%; snapshot_history macro_curated count 2; brief_build 12.6s; polymarket Fed 73.5% giữ; yf_yield_curve US10Y ~5.2% không đảo.
+- 3 sự cố trong đợt chạy đều không phải bug code: `signals_scan` gọi sai signature cũ trong runner (code đúng, re-run available); 2 timeouts thoáng qua (valuation_run, financial_statements) re-run available; yf_yield_curve + GDELT tự hồi sau flaky.
+- Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:15432/opentrading_mcp" VIETSTOCK_HAR_FILE="docs/finance.vietstock.vn_Archive [26-10-01 18-35-43].har"`.
 
 ## Docs vs code (skills_check.md Bảng 3) — chưa implement so docs
 - Kalshi → Manifold fallback cho odds (chỉ jina→Gamma)

@@ -11,7 +11,7 @@ HNX-NSO-SBV scrape / GDELT / FRED / WorldBank). Không qua API layer trung gian.
 
 - **Stack**: Python 3.12 + FastMCP (`mcp>=1.9,<2`, lock `uv.lock`), httpx, pandas/numpy
   (không scipy, không pypdf — quyết định có chủ ý, xem §8), bs4, PyJWT, Starlette, uvicorn.
-- **139 tools live** (`all`; market 66 / scan 49 / quant 9 / brief 7 / intel 7) · caps
+- **135 tools live** (`all`; market 65 / scan 47 / quant 9 / brief 7 / intel 8; 136 khi có websearch key) · caps
   (`server.py:94`: market 75, scan 60, còn lại 50) · **6 presets** + **6 prompts**
   (morning_briefing, ticker_analysis, pre_earnings v2, sector_rotation, ai_detect,
   risk_check) + **4 resources**
@@ -194,7 +194,7 @@ X-Forwarded-For: <ip>                        ← Render proxy chèn (dùng cho r
 
 ## 6. Data flow upstream (tóm tắt)
 
-`tools/*` (142: market 71/scan 49/quant 9/brief 7/intel 7 + prompts/resources ngoài preset)
+`tools/*` (135: market 65/scan 47/quant 9/brief 7/intel 8 + prompts/resources ngoài preset)
 → `providers/`: `vietstock` (cookie+CSRF session, JWT paid), `vnstock` (VCI→KBS fallback),
 `dnse` (HMAC WS+REST, WS cache qua worker), `yfinance`, `binance` (public, không key),
 `vn_public` (HNX/NSO/SBV/Vietstock-titles scrape, bs4), `intel` (GDELT/FRED/WorldBank/Groq),
@@ -260,3 +260,5 @@ X-Forwarded-For: <ip>                        ← Render proxy chèn (dùng cho r
   snapshot_history + financial_detail(revive); market_snapshot VN30-30;
   signals_scan HOSE ≤300; OHLCV interval 1D/1W/1M; news Fireant primary.
 - Verify P15: pytest, ruff + format, mypy (trừ pre-existing) — xem báo cáo commit.
+- ✅ **Deploy P13+P14+P15 2026-10-02** (`main = 3485e6a` + `958b957`): xóa tools chết, macro HAR-session, snapshots PG, BCTC-detail revive + forensic rewrite. Health xanh sau cycling.
+- ✅ **Full-135 live 2026-10-02** (local, có key): 129 available · 1 partial (market_overview) · 2 empty đúng (runs_list/run_get) · 3 unavailable (WS trio, thiếu worker local). 0 tool chết. Chi tiết xem tools-review Phụ lục P15.

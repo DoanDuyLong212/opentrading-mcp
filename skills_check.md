@@ -664,8 +664,8 @@ nối 8010), P5 risk_check và triết lý grading pre-earnings đã duyệt.
   `VIETSTOCK_COOKIE_HEADER`+`VIETSTOCK_PAGE_TOKEN` → parse `docs/*.har` (file, không commit).
   `macro_report_data()` pipe-parser (DataStructure 16 cột → name/group/period/year/value/unit).
 - `vs_indicator_data` + `vs_xnk_detail` wire xong, **live xanh** (số thật).
-- CTKH/planned_targets: provider xong, live đang **session-rejected** (302) — dormant
-  trung thực, chờ env cookie mới từ trình duyệt.
+- CTKH/planned_targets: **P15 LIVE** (fix YearPeriods-shape: `YearPeriods[i][YearPeriod]`) —
+  FPT KH DT 75,400/58,580. Trước đó session-rejected do parse sai shape, không phải gate.
 - GetStockByGICS replay flaky → skip.
 
 ### Storage theo ngày (quyền DB của bạn)
@@ -673,8 +673,8 @@ nối 8010), P5 risk_check và triết lý grading pre-earnings đã duyệt.
   idempotent 6 bảng (watchlists/items, alert_rules, mcp_auth_tokens, mcp_tool_usage
   schema (user,tool,day,count,total_ms), **daily_snapshots(date,kind,payload JSONB)**).
 - Watchlist `_pg()` auto-ensure; **write-fallback file** khi SQL lỗi (đúng docs).
-- Worker thêm **`snapshot_loop`** (17:15 VN/ngày): `snapshot_once()` best-effort 12 kinds —
-  live 10/12 ok (vn30_quotes transient db-down, tự hồi ngày sau).
+- Worker thêm **`snapshot_loop`** (17:15 VN/ngày): `snapshot_once()` best-effort 13 kinds —
+  live P15 **13/13 ok** (fix `_json_safe` NaN→None cho PG JSONB).
 - Tool mới **`snapshot_history(kind, days)`** đọc lịch sử (fix bug JSONB-list).
 
 ### Tối ưu catalog (a/b/d/e đã duyệt)
@@ -687,6 +687,15 @@ nối 8010), P5 risk_check và triết lý grading pre-earnings đã duyệt.
 - `news_symbol` default-path **GDELT fallback** (dc chết).
 - pre_earnings prompt leg-4 đổi thành expectation anchor = planned_targets.
 - Catalog: **136 tools** (market 66 · scan 47 · quant 9 · brief 7 · intel 8 · all 136; web_search ẩn khi thiếu key).
+
+## Phụ lục P15 — full 135 live + forensic rewrite (2026-10-02)
+- Full run 135/135: **129 available · 1 partial · 2 empty đúng · 3 unavailable (WS trio)**.
+  Điểm nhấn: FPT M=-2.06 sạch (rewrite từ full detail, trước đây crash/bug); HPG -2.24;
+  VCB partial; futures_basis +5.89; block_trades VCB pt 48.85%; macro GDP 504/CPI 1839/
+  XK 2941/XNK 3675; brief 12.6s; Fed 73.5% giữ; US10Y ~5.2% không đảo.
+- `financial_detail` revive đúng shape (`listReportDataIds[i][...]` + permission filter):
+  FPT 25 norms × 138 số thật. `signals_scan` fix signature (bỏ `limit` cũ).
+- Verify: pytest **248 passed**, ruff + format sạch, mypy 4 lỗi pre-existing.
 
 ### Env checklist Render (bạn làm trên Dashboard)
 - `VIETSTOCK_COOKIE_HEADER` + `VIETSTOCK_PAGE_TOKEN` (từ HAR trình duyệt mới nhất) — mở macro/CTKH.
