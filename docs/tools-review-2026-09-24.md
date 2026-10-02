@@ -1,270 +1,367 @@
-# Tools Review — opentrading-mcp (P15 + full-135 live 2026-10-02)
+# Tools + Workflow — opentrading-mcp (báo cáo chi tiết, số liệu live 2026-10-02)
 
-**Tổng: 135 tools unique · 126 READ_ONLY / 9 READ_WRITE · 6 presets**
-(P5 enrich params → P6 descriptors → P7 17 tools mới → P8 SEPA legs → P10/P11 fixes → P12/P13 xóa tools chết → P14 macro HAR-session + storage + polymarket_event + planned_targets; xem Phụ lục cuối file)
+**135 tools unique · 126 READ_ONLY / 9 READ_WRITE · 6 presets · 6 prompts (workflows) · 4 resources**
+Chạy live 135/135 ngày 2026-10-02 (có key): **129 available · 1 partial · 2 empty (đúng bản chất) · 3 unavailable (WS trio, thiếu worker local)**. 0 tool chết.
+
+## 0. Tổng quan presets
 
 | Preset | Tools | Cap | Modules |
 |---|---|---|---|
-| market | 65 (64 khi không có websearch key) | 75 | market(8), web, vn, vs, vs_bctc, vn_ext, yf, yf_world, dnse_tools, dnse_ext, crypto |
+| market | 65 (64 khi thiếu websearch key) | 75 | market(8), web, vn, vs, vs_bctc, vn_ext, yf, yf_world, dnse_tools, dnse_ext, crypto |
 | scan | 47 | 60 | scan(6) + compute(20) + watchlist(12) + corp(9) |
 | quant | 9 | 50 | quant |
 | brief | 7 | 50 | brief |
 | intel | 8 (9 khi có websearch key — web_search gate theo key) | 50 | intel(7) + web(1+1 key) |
-| all | 135 (136 khi có websearch key) | không cap | 18 modules |
+| all | 135 (136 khi có websearch key; web_fetch dùng chung market+intel) | không cap | 18 modules |
 
-TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_scan 15, vs_financial_values 60, yf_mega_flows 60, dnse_ohlc_history 60, quant_backtest 120, quant_factors 120, stock_screener 60, signals_screener_columns 30, watchlist_get 30, alert_check 30.
+| Kênh avail | Số tools | Ghi chú |
+|---|---|---|
+| available | 129 | gồm 3 tools re-run xác nhận (signals_scan, valuation_run, financial_statements — lỗi thoáng qua) |
+| partial | 1 | market_overview (session leg null, thiếu WS worker) |
+| empty (đúng) | 2 | runs_list, run_get (chưa có runs local) |
+| unavailable | 3 | dnse_foreign_flow, dnse_ws_snapshot, dnse_indices (cần worker local; prod có) |
 
-## 1. market.py — 8 tools (P14: market_overview mới)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| market_snapshot | Snapshot of VN market with provenance. Use when a broad market picture is needed. | symbols? (default VN30-30 mã, P14) | vnstock quote_batch; cache Redis TTL 60s |
-| source_status | Health of every upstream plus TTL state. Use to debug stale data. | — | local health aggregator (Redis keys, JWT, env) |
-| market_candles_batch | Batch OHLCV for symbols, one request per symbol. Use for multi-chart context. | symbols[] (cap 100, P7 nâng từ 50), days=30, summary=False, columns[]? | vnstock VCI→KBS per symbol; missing[] cho symbol lỗi; availability partial |
-| symbol_lookup | Resolve company name to symbol, venue and sector. Use before any symbol-scoped call. | query, limit=10 (P5; P9 accent-insensitive: "hoa phat" → HPG) | vnstock Listing + Reference (NFD fold + Đ→D, stdlib) |
-| market_movers | Top gainers, losers and volume leaders. Use for session pulse checks. | top_n=10 (P5) | snapshot local (universe hardcode VN30) |
-| market_overview | One-call market context: bluechip quotes, movers, breadth, session. Use for briefs. | top_n=3 (P14: quotes leg retry ×2) | vnstock bluechip batch + DNSE WS session; legs degrade độc lập (partial) |
-| breadth_scan | Advancers, decliners, ceiling and floor counts. Use to judge rally health. | — (P11: đếm case-insensitive Change/Exchange) | Vietstock getmarketprice + marketinfo |
-| dnse_market_status | DNSE session state plus latest index snapshot. Use for open/close checks. | — | DNSE WS cache → DNSE REST trades/latest → unavailable |
+TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_scan 15, yf_mega_flows 60, dnse_ohlc_history 60, quant_backtest 120, quant_factors 120, stock_screener 60, signals_screener_columns 30, watchlist_get 30, alert_check 30.
 
-## 2. web.py — 2 tools
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| web_fetch | Fetch a URL and convert to markdown, text or html. Use for reading web content. | url, format=markdown, timeout_seconds=30 | direct httpx browser-UA; CF 403 retry UA "opencode"; cap 5MB |
-| web_search | Search the web via Exa/Parallel providers. Use for up-to-date information. | query, num_results=8, livecrawl=fallback, search_type=auto | Exa hoặc Parallel (WEBSEARCH_PROVIDER / hash query); ẨN khỏi tools/list khi thiếu key |
+Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:15432/opentrading_mcp" VIETSTOCK_HAR_FILE="docs/finance.vietstock.vn_Archive [26-10-01 18-35-43].har"`.
 
-## 3. vn.py — 6 tools
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| vn_quote_history | Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history. | symbol, days=365, summary=False, columns[]?, interval=1D/1W/1M (P15 mới) | vnstock Quote VCI→KBS tự fallback |
-| vn_equity_quote_batch | One-request price board for many symbols. Use for snapshots and movers. | symbols[], summary=False, columns[]? | vnstock Market.equity(list).quote() |
-| vn_listing | Full symbol list with company names. Use for universe and lookup. | — | vnstock Listing().all_symbols() |
-| vn_fundamentals | Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation. | symbol, period=year | vnstock Fundamental + Finance |
-| vn_retail_gold | SJC and ring gold buy/sell from BTMC retail. Use for local gold premium. | — (P11: fetch https trực tiếp 15s + fallback vnstock; lib http treo) | BTMC JSON trực tiếp → vnstock Retail fallback |
-| vn_retail_fx | VCB USD buy/sell rates. Use for currency conversion context. | — | vnstock Retail VCB |
+---
+## market.py — 8 tools
 
-## 4. vs.py — 8 tools
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| vs_auth_status | Vietstock JWT state and expiry. Use before any paid BCTC call. | — | Vietstock session (env → seed → login) |
-| vs_financeinfo | Free-mirror statements, 12 quarters or years. Use when JWT is absent. | symbol, period=quarter | Vietstock /data/financeinfo mirror |
-| vs_market_price | Live board snapshot from Vietstock. Use as secondary quote source. | — | Vietstock /data/getmarketprice |
-| vs_market_index | Index closes with 1M and YTD change. Use for index context. | — | Vietstock GetMarketIndexVNData |
-| vs_nn_flow | Foreign investor buy/sell chart. Use to cross-check DNSE WS flows. | days=90 (P10: gửi selectType/code/type/isRealTime) | Vietstock KQGDGiaoDichNDTNNChart (tail N điểm) |
-| vs_categories | Macro indicator catalogue (~60 categories). Use before indicator queries. | — | Vietstock Macro GetIndicatorCategoryData |
-| vs_indicator_data | Macro series for a category and term type. Use for GDP, CPI, trade context. | category_id, term_type_id=3, to_date default today (P10; paid package) | Vietstock Macro (không gói → RequestUpgradeAccount) |
-| vs_trading_info | Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot. | symbol | Vietstock /company/tradinginfo |
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| market_snapshot | ['symbols', 'as_of'] | Snapshot of VN market with provenance. Use when a broad market picture is needed. | Báo giá 30 mã VN30 kèm trần/sàn/tham chiếu/vol + nguồn. Tham số as_of chỉ là nhãn. | `{"quotes": [{"symbol": "ACB", "time": 1790910967815.0, "exchange": "HOSE", "ceiling_price": 22550.0, "floor_price": 19650.0, "reference_price": 21100.0, "open_p` | available |
+| source_status | [] | Health of every upstream plus TTL state. Use to debug stale data. | Sức khỏe từng upstream (JWT, vnstock, WS, TTL cache). Gọi đầu tiên khi nghi data cũ. | `{"upstreams": {"vietstock": {"authenticated": true, "jwt_expires_at": 1790943335}, "vnstock": "ok", "dnse_ws": "cold"}, "stateless": true, "ttl": {"snapshot": 5` | available |
+| market_candles_batch | ['symbols', 'days', 'summary', 'columns'] | Batch OHLCV for symbols, one request per symbol. Use for multi-chart context. | Nến hàng loạt; mã lỗi vào `missing`, không fail cả batch. | `{"series": [{"symbol": "VCB", "count": 5, "last": 57.3, "high": 58.5, "low": 57.2}, {"symbol": "HPG", "count": 5, "last": 19.95, "high": 20.8, "low": 19.9}], "m` | available |
+| symbol_lookup | ['query', 'limit'] | Resolve company name to symbol, venue and sector. Use before any symbol-scoped call. | Tra mã từ tên công ty không dấu (`hoa phat` → HPG). | `{"hits": [{"symbol": "HPG", "name": "CTCP Tập đoàn Hòa Phát"}, {"symbol": "HPA", "name": "CTCP Phát triển Nông nghiệp Hòa Phát"}, {"symbol": "HTP", "name": "CTC` | available |
+| market_movers | ['top_n'] | Top gainers, losers and volume leaders. Use for session pulse checks. | Top tăng/giảm/thanh khoản của bluechip trong phiên. | `{"movers": [{"symbol": "VCB", "time": 1790910971687, "exchange": "HOSE", "ceiling_price": 61600, "floor_price": 53600, "reference_price": 57600, "open_price": 5` | available |
+| breadth_scan | ['exchange'] | Advancers, decliners, ceiling and floor counts. Use to judge rally health. | Đếm mã tăng/giảm/trần/sàn toàn sàn (đếm case-insensitive). | `{"advancers": 1, "decliners": 6, "rows": 7}` | available |
+| market_overview | ['top_n'] | One-call market context: bluechip quotes, movers, breadth, session. Use for briefs. | Gộp quotes+movers+breadth+session một call; legs degrade độc lập (partial khi thiếu worker). | `{"quotes": [{"symbol": "VCB", "time": 1790910974093, "exchange": "HOSE", "ceiling_price": 61600, "floor_price": 53600, "reference_price": 57600, "open_price": 5` | partial |
+| dnse_market_status | [] | DNSE session state plus latest index snapshot. Use for open/close checks. | Trạng thái phiên DNSE + snapshot chỉ số (REST fallback khi WS lạnh). | `{"rest": [{"symbol": "VN30F1M", "trades": []}]}` | available |
 
-## 5. vs_bctc.py — 12 tools (P12 xóa 3, P13 xóa news_search, P15 xóa vs_financial_values)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| vs_financial_terms | Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries. | — | Vietstock GetListReportTerm |
-| vs_financial_norms | 190+ BCTC line items for a business type. Use to resolve norm ids. | btype=1 | Vietstock BCTC_GetChiTieuForTable |
-| vs_company_info | Company names, exchange and description. Use for profiles. | symbol | Vietstock BCTC_CompanyByCodes |
-| vs_overview_trading | EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs. | symbol | Vietstock GetStockDeal_OverviewTrading |
-| vs_documents | Filings and disclosures with links. Use for corporate actions. | symbol | Vietstock /data/GetDocument |
-| vs_industry_tree | GICS industry tree. Use before sector mapping. | — | Vietstock GetTreeViewIndustryGICS |
-| vs_industry_heatmap | Live sector heatmap. Use for intraday rotation. | — | Vietstock GetHeatmapGICS |
-| vs_selftrading | Prop-desk flow chart. Use alongside foreign flows. | — (P10: cùng shape selectType/code/type) | Vietstock KQGDGiaoDichTuDoanhChart |
-| vs_gics_index | GICS index closes with foreign flow. Use for sector context. | group=1 (P10 mới: 1/2/3) | Vietstock GetGICSIndexMain {type} |
-| vs_currency | Reference FX table. Use as fallback FX source. | — | Vietstock GetCurrency |
-| vs_market_info | Per-exchange board row: index, breadth, put-through. Use for 5s snapshots in hours. | exchange=HOSE (P10 đổi từ symbol) | Vietstock /data/marketinfo {type 1/2/3} |
-| vs_xnk_detail | Import/export by country. Use for trade structure (termType 2). | direction=xk, to_date default today (P10; paid package) | Vietstock Macro listID 64/65 |
+## web.py — 1 tool (+1 gated)
 
-## 6. vn_ext.py — 10 tools
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| vn_index_ohlcv | Index bars for VN tickers. Use for index history and breadth. | symbol=VNINDEX, count=100, summary=False, columns[]? | vnstock Market.index VCI |
-| vn_equity_ohlcv | Equity bars via Market API. Use as OHLCV alternative to quotes. | symbol, count=100, summary=False, columns[]? | vnstock Market.equity VCI |
-| vn_futures_ohlcv | Futures bars. Use for derivatives backtest input. | symbol=VN30F1M, count=100, summary=False, columns[]? | vnstock Market.futures |
-| vn_forex_ohlcv | FX bars. Use for currency context. | pair=USDVND, count=30 | vnstock Market.forex |
-| vn_crypto_ohlv | Crypto bars. Use for digital-asset regime reads. | symbol=BTCUSDT, count=30 | vnstock Market.crypto |
-| vn_global_index | Global index bars. Use as yfinance fallback. | symbol=USA30, count=30 | vnstock Market.index scope=global |
-| vn_reference | ICB reference by exchange, group or industry. Use for universe construction. | exchange=HOSE (P11: list_by_exchange source KBS có cột exchange) | vnstock Reference KBS (HOSE 757/HNX 396/UPCOM 818), filter local |
-| vn_company | Profile, holders and officers. Use for company research. | symbol | vnstock Company VCI |
-| vn_msn_fx_gold | USDVND and XAUUSD via MSN. Use for gold-basis math. | — | vnstock explorer.msn |
-| vn_trades | Tick-level matched trades. Use for microstructure reads. | symbol, limit=20 | vnstock Market.equity.trades |
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| web_fetch | ['url', 'format', 'timeout_seconds'] | Fetch a URL and convert to markdown, text or html. Use for reading web content. | Đọc URL → markdown/text/html, cap 5MB, retry khi CF-403. | `{"title": "https://example.com (text/html; charset=utf-8)", "output": "Example DomainThis domain is for use in documentation examples without needing permission` | available |
 
-## 7-8. yf.py (3) + yf_world.py (6)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| yf_global_indices | 9 global benchmarks. Use for overnight context. | tickers?, period?, interval? (P15 mới) | yfinance GLOBAL_9; worker loop pump TTL 300s |
-| yf_commodities | Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context. | tickers?, period?, interval? (P15 mới) | yfinance COMMO_13 |
-| yf_yield_curve | US 2Y/10Y and inversion flag. Use for rates and regime context. | — | yfinance ^TNX + 2YY=F |
-| yf_world_indices | 24 world benchmarks. Use for global breadth. | — | yfinance batch download |
-| yf_oracle_markets | 40 markets in 6 groups with 30d stats. Use for cross-asset state. | — | yfinance ~40 ticker 1mo |
-| yf_regime_assets | 7 regime drivers with 2y history. Use for RISK-ON/OFF calls. | — | yfinance 2y + rule classify |
-| yf_mega_flows | Mega-cap leader flows. Use to follow global smart money. | — | yfinance 15 mega-cap + Nasdaq-style screener |
-| yf_alloc_history | Long allocation history per asset. Use for regime backtests. | asset=GC, timeframe=1d | yfinance 5y |
-| yf_market_pins | 5-day pins for world majors plus VN watchlist. Use for brief headers. | — | yfinance world majors |
+## vn.py — 6 tools
 
-## 9-10. dnse_tools.py (4) + dnse_ext.py (5, P13 xóa foreign_rest)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| dnse_ohlc_history | Paginated futures/index bars via cursor. Use for VN30F1M backtest input. | symbol=VN30F1M, resolution=15, bar_type=derivative, from_date=2018-08-01, summary=False, columns[]? | DNSE REST /price/ohlc HMAC |
-| dnse_latest_trade | Latest match price and totals per symbol. Use for realtime fallback. | symbols[] | DNSE REST /price/{s}/trades/latest |
-| dnse_foreign_flow | Net foreign flow from WS cache. Use as primary smart-money read. | — | DNSE WS foreign.* qua Redis (fallback chỉ ra warning: vs_nn_flow) |
-| dnse_ws_snapshot | Raw worker snapshot for symbols. Use to debug realtime staleness. | symbols[]? | Redis mcp:market:dnse_ws_snapshot:{sym} TTL 30s (worker publish) |
-| dnse_orderbook | Bid/ask depth. Use for microstructure reads. | symbol, depth=3 | DNSE REST quotes/latest → fallback /quotes |
-| dnse_indices | Index snapshots from WS cache. Use for live index reads. | — | DNSE WS market_index.* Redis (fallback ra warning: vs_market_index) |
-| dnse_vn30f1m_live | VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday. | — | DNSE REST 1m (7 ngày) → local agg 15m remap 14:30→14:45 |
-| dnse_working_dates | Trading calendar. Use for session planning. | — | DNSE REST /market/working-dates |
-| exchange_calendar | HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics. | — | static local |
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| vn_quote_history | ['symbol', 'days', 'summary', 'columns', 'interval'] | Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history. | Nến ngày/tuần/tháng 1 mã VN, VCI→KBS tự fallback. | `{"symbol": "VCB", "count": 5, "last": 57.3, "high": 58.5, "low": 57.2}` | available |
+| vn_equity_quote_batch | ['symbols', 'summary', 'columns'] | One-request price board for many symbols. Use for snapshots and movers. | Bảng giá N mã trong 1 request — nhanh nhất để snapshot. | `{"count": 2, "symbols": ["VCB", "HPG"]}` | available |
+| vn_listing | ['limit'] | Full symbol list with company names. Use for universe and lookup. | Universe 1522 mã toàn thị trường kèm tên công ty. | `{"count": 1523, "symbols": [{"symbol": "DPP", "name": "CTCP Dược Đồng Nai"}, {"symbol": "SDA", "name": "CTCP Simco Sông Đà"}, {"symbol": "CLH", "name": "CTCP Xi` | available |
+| vn_fundamentals | ['symbol', 'period', 'report_type'] | Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation. | PE/ROE/EPS/BVPS nhanh qua vnstock (có thể throttle giờ cao điểm). | `{"symbol": "VCB", "ratios": "                                                 item  ...      2022\n0   Thu nhập trên mỗi cổ phần của 4 quý gần nhất (...  ...   ` | available |
+| vn_retail_gold | ['source'] | SJC and ring gold buy/sell from BTMC retail. Use for local gold premium. | Giá vàng SJC/nhẫn BTMC trực tiếp qua https (timeout 15s). | `{"rows": [{"name": "VÀNG MIẾNG SJC (Vàng SJC)", "karat": "24k", "gold_content": "999.9", "buy_price": "13950000", "sell_price": "14350000", "world_price": "4150` | available |
+| vn_retail_fx | [] | VCB USD buy/sell rates. Use for currency conversion context. | Tỷ giá mua/bán của VCB (đa ngoại tệ). | `{"rows": [{"currency_code": "AUD", "currency_name": "AUSTRALIAN DOLLAR", "buy_cash": "17,507.78", "buy_transfer": "17,684.63", "sell": "18,251.32", "date": "202` | available |
 
-## 11. scan.py — 6 tools
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| stock_screener | Screen universe by valuation and quality. Use when hunting candidates. | filters{}?, max_pe?, min_roe?, limit=20, technical={rsi_lt,rsi_gt,above_sma20,below_sma20}? (P7 U1 stage-3) | vnstock Listing + equity_fundamentals enrich (semaphore 5, 10s/symbol) + local apply_filters + technical stage trên candidates |
-| signals_screener_columns | Screener column catalog (valuation/quality/universe/price). Use to build filters. | group?, search? | local catalog (close/change_pct/sector/industry/index non-filterable) |
-| signals_technical | Full technicals rating from local candles (daily only). Use for timing entries. | symbol, interval="1D" (khác 1D → warning), indicators[]? (P6: rsi14/macd/sma20/recommend/patterns/support/resistance; P8 thêm rs_vs_bench/pos_52w/sma150) | vnstock candles (250d) + VNINDEX benchmark best-effort → pandas RSI/Stoch/CCI/ADX/MACD/MOM/AO/EMA/SMA/SMA150/VWMA/Hull/BB/ATR + patterns(doji/hammer/engulfing) + support/resistance 20d + RS spread 63d + pos_52w + recommend |
-| sector_performance | GICS heatmap rows. Use for sector rotation reads. | level=1 | Vietstock GetHeatmapGICS |
-| money_flow | Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money. | — (P10 + P12b: fallback dùng nn_flow_chart có params, không còn {}) | DNSE WS → Vietstock NN chart → unavailable |
-| alert_check | Evaluate price/RSI rules against live quotes. Use for live watch. | rules[{symbol,metric,op,threshold}] | metric price: vnstock quote; rsi14: vnstock candles → technicals local; cross state Redis TTL 3600 |
+## vs.py — 8 tools
 
-## 12. compute.py — 21 tools (P14: -macro_reports/-mega_flows/-foreign_flow/-oracle_health, +snapshot_history; P15: -vs_financial_values/-signals_trade_log)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| stock_forensic | Beneish M-Score (7 chỉ số, partial) + Piotroski F 6/8 từ full detail (P15 rewrite, live FPT M=-2.06). Use for earnings-quality flags. | symbol, detail?, periods_n=4 | KQKD/CDKT detail (DSRI/GMI/AQI/SGI/SGAI/LVGI/TATA; CFO thiếu khi LCTT rỗng) → local tính |
-| snapshot_history | Daily-snapshot history saved by the worker (P14 MỚI). Use for data that vanishes. | kind (13 kinds), days=90 | PG daily_snapshots (worker 17:15 VN/ngày) |
-| valuation_run | PER/PB ensemble with DCF-lite. Use for fair-value ranges. | symbol, btype=1 | vs_overview + vn quote → local |
-| fred_series | FRED observations. Use for US macro context. | series_id, limit=60 | FRED API (FRED_API_KEY) |
-| world_macro_country | WorldBank series per country. Use for global GDP/CPI/debt context. | iso3, indicator | WorldBank v2 |
-| world_fear_greed | Crypto fear/greed index. Use for risk-appetite reads. | — | alternative.me |
-| sentiment_score | Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk. | symbol (P12b: chịu body list trần + heuristic khi thiếu Groq) | Fireant → Groq (fallback heuristic likes) |
-| insider_trading | Insider deals via vnstock Company. Use for informed-flow reads. | symbol, limit=10 | vnstock Company VCI→KBS |
-| stock_overview | Trading info plus company profile. Use for quick dossiers. | symbol | vs_trading_info + vs_overview + vn_company |
-| company_events | Classified disclosures and corporate actions. Use for event calendars. | symbol | vs_documents + company |
-| financial_statements | Mirror statements alias (v3 compat). Use for statement reads. | symbol, period=quarter | vs_financeinfo |
-| financial_ratios | Overview plus vnstock ratios merged. Use for ratio screens. | symbol | vs_overview + vn_fundamentals |
-| peer_compare | Head-to-head overview rows. Use when picking tickers. | symbol, peers[] | overview batch cap 6 |
-| signals_scan | Donchian-20d breakout scan (P14: universe/exchange/max_symbols≤300). Use to hunt momentum across the market. | universe?, exchange?, max_symbols≤300 | vn_reference pool + quote_history từng mã + progress + truncated |
-| pattern_match | Self-similarity of return windows by correlation. Use for analogies. | symbol, lookback=60 | vnstock candles local correlation |
-| event_stats | GDELT event counts for a query. Use for base-rate checks. | query | GDELT (retry 1 lần) |
-| compare_assets | Cross-asset last prices via yfinance. Use for allocation reads. | assets[] cap 10 | yfinance |
-| runs_list | Local run registry. Use to resume analysis sessions. | — | data/runs.jsonl (MCP_RUNS_FILE) |
-| run_get | Local run registry fetch. Use to inspect past outputs. | run_id | data/runs.jsonl |
-| doctor | Local self-check: env keys present, package versions. Use before handoff. | — | local |
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| vs_auth_status | [] | Vietstock JWT state and expiry. Use before any paid BCTC call. | Trạng thái JWT Vietstock + hạn dùng. | `{"authenticated": true, "jwt_expires_at": 1790943335}` | available |
+| vs_financeinfo | ['symbol', 'period'] | Free-mirror statements, 12 quarters or years. Use when JWT is absent. | BCTC mirror miễn phí 12 quý/năm — nguồn BCTC chính khi không cần detail. | `{"symbol": "VCB", "period": "quarter", "pages": [[[{"ID": 5, "Row": 5, "CompanyID": 1167, "YearPeriod": 2025, "TermCode": "Q2", "TermName": "Quý 2", "TermNameEN` | available |
+| vs_market_price | ['type'] | Live board snapshot from Vietstock. Use as secondary quote source. | Board giá live Vietstock (dự phòng cho bảng giá). | `{"rows": [{"Code": "VNIndex", "Name": "VN-Index", "Price": 1740.46, "Change": -8.84, "PerChange": -0.51, "Color": "#F00", "TradingDate": "/Date(1790874000000)/"` | available |
+| vs_market_index | [] | Index closes with 1M and YTD change. Use for index context. | Chỉ số + biến động 1M/YTD. | `{"indices": {"data": [{"IndexID": "1", "IndexTitle": "VN-Index", "MarketType": 0, "IndexType": 1, "BasicIndex": 1749.3, "CloseIndex": 1740.41, "PerChange": -0.5` | available |
+| vs_nn_flow | ['days'] | Foreign investor buy/sell chart. Use to cross-check DNSE WS flows. | Chart mua/bán khối ngoại (bắt buộc đủ POST fields). | `{"flow": [["/Date(1790910869700)/"], [{"TradingDate": "/Date(1790528400000)/", "BuyVol": 51180300, "BuyVal": 1461.532125, "SellVol": 58399100, "SellVal": 1682.1` | available |
+| vs_categories | [] | Macro indicator catalogue (~60 categories). Use before indicator queries. | Danh mục ~60 chỉ tiêu macro để tra cứu trước khi query. | `{"categories": [{"CategoryID": 7, "ParentID": 0, "CategoryName": "1. Tài khoản quốc gia (GDP)", "Level": 1, "DisplayOrder": 1, "HasData": false, "ListTermType":` | available |
+| vs_indicator_data | ['category_id', 'term_type_id', 'sub_term_type_id', 'from_date', 'to_date'] | Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads. | Số macro thật (GDP/CPI/XK) qua HAR-session replay + termType đúng. | `{"category": 73, "term_type": 3, "rows": [{"name": "TỔNG SỐ", "group": "", "period": "Quý 1/2022", "year": "2022", "value": 2137413.0, "unit": "Tỷ VNĐ", "timeor` | available |
+| vs_trading_info | ['symbol'] | Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot. | Trần/sàn/room/EPS/BVPS/PE/PB nhanh theo mã. | `{"symbol": "VCB", "info": {"StockCode": "VCB", "TradingDate": "/Date(1790910986000)/", "KLCPLH": 8355675094, "KLCPNY": 8355675094, "PriorClosePrice": 57600, "Ce` | available |
 
-## 13. quant.py — 9 tools (4 gốc + 5 P7)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| quant_backtest | Buy-and-hold backtest with costs over available history. Use for baseline stats. | symbol, cost_bps=10.0, strategy=buy_hold (label), slippage_bps=5.0, benchmark=VNINDEX (P5) | vnstock candles → local |
-| quant_risk | Sharpe, max drawdown and win rate from a return series. Use to gate models. | returns[], periods_per_year=252 (252/52/12) (P5) | thuần local |
-| quant_factors | Momentum, volatility and drawdown factors from candles. Use to expand features. | symbol=VCB, lookback=60 (P5) | vnstock candles → local |
-| scenario_simulate | Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing. | scenario, symbol=VCB, shock_pct=-5.0 | vnstock candles → local |
-| correlation_matrix | Pairwise Pearson correlation of daily returns. Use for diversification reads. | symbols[] cap 8, days=90 (P7 mới) | vnstock candles, inner-join dates (walkback + date_note khi t day-only) |
-| seasonality | Rolling-window return stats per calendar month. Use for seasonal bias. | symbol, window=21 (5–63) (P7 mới) | vnstock 400d candles → local buckets |
-| backtest_strategies | Rule-based backtests beyond buy-and-hold. Use to compare timing rules. | symbol, strategy=sma_cross (sma_cross/momentum/buy_hold), fast=10, slow=30, cost_bps=10.0 (P7 mới) | vnstock 365d → local engine (trades đếm entries, fee in+out/flip) |
-| portfolio_optimize | Long-only weights by rule. Use for allocation starting points. | symbols[] cap 8, objective=max_sharpe (equal/inv_vol/max_sharpe), days=180 (P7 mới) | numpy-only (không scipy): closed-form clip long-only + fallback equal, kèm ann_vol/sharpe_proxy |
-| param_sweep | Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks. | symbol, strategy=sma_cross, fast_range[]?, slow_range[]? (product cap 30) (P7 mới) | vnstock 365d → local grid |
+## vs_bctc.py — 12 tools
 
-## 14. brief.py — 7 tools (5 gốc + sbv_rates + macro_events_vn P7)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| brief_build | Compose morning brief from news, odds and calendars. Use at session start. | scope=vn (vn/world), date? ISO, calendars=False (P7 U5: True → thêm sbv/macro/ipo sections) | fear_greed + Vietstock news → GDELT + categories + world pins |
-| news_market | Market news: Fireant posts first, GDELT fallback. Use for catalyst checks. | limit=10, sources? (P5; P15: path Fireant primary, live posts Putin 1.10) | Fireant → GDELT |
-| news_symbol | Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors. | symbol, limit=10, sources? (P5; P15: path Fireant primary) | Fireant → GDELT |
-| economic_calendar | Macro series catalogue as event proxy. Use for data-availability checks. | scope=vn, limit=20 (P5) | vs_categories (scope≠vn → empty) |
-| corporate_calendar | Disclosures feed as corporate actions. Use for dividend/meeting scans. | symbol?=VCB, limit=20 (P5) | Vietstock GetDocument |
-| sbv_rates | SBV policy and interbank rates, scraped static page. Use for rate regime. | — (P7 mới) | scrape sbv.gov.vn (static, hiếm đổi) |
-| macro_events_vn | NSO release listings with reference and next dates. Use for data calendar. | — (P7 mới) | scrape nso.gov.vn (gso.gov.vn đã chết; full-year schedule nằm trong PDF) |
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| vs_financial_terms | [] | Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries. | Danh mục kỳ báo cáo (năm, Q1–Q4, H1, 9M). | `{"terms": {"data": [{"ReportTermID": 1, "ReportTermTypeID": 1, "Description": "Năm", "DescriptionEn": "Year", "DisplayOrdering": 1, "ExportName": "NAM", "FromMo` | available |
+| vs_financial_norms | ['btype'] | 190+ BCTC line items for a business type. Use to resolve norm ids. | Tra 190+ chỉ tiêu BCTC theo loại hình DN (256 norms). | `{"btype": 1, "count": 256, "norms": [{"ReportNormID": -1111, "Name": "Báo cáo tình hình tài chính", "PublishNormCode": null, "NormCode": null, "CssStyle": null}` | available |
+| vs_company_info | ['symbol'] | Company names, exchange and description. Use for profiles. | Hồ sơ DN: tên, sàn, mô tả. | `{"info": {"data": [{"StockCode": "VCB", "CompanyID": 1167, "CatID": 1, "CompanyName": "Ngân hàng TMCP Ngoại thương Việt Nam", "CompanyNameEN": "Joint Stock Comm` | available |
+| vs_overview_trading | ['symbol'] | EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs. | Snapshot định giá EPS/BVPS/PE/PB/ROEA/ROAA. | `{"overview": {"data": [{"StockCode": "VCB", "TradingDate": "/Date(1790874000000)/", "ClosePrice": 57300, "ColorID": -1, "Change": -300, "PerChange": -0.52, "Tot` | available |
+| vs_documents | ['symbol', 'page_size'] | Filings and disclosures with links. Use for corporate actions. | Công bố thông tin + link PDF tải trực tiếp. | `{"docs": [{"FileExt": ".pdf ", "UpdateTime": null, "TotalRow": 487, "FileInfoID": 559412, "Url": "https://static2.vietstock.vn/data/HOSE/2026/NGHI QUYET HDQT/VN` | available |
+| vs_industry_tree | [] | GICS industry tree. Use before sector mapping. | Cây ngành GICS 285 nodes. | `{"tree": {"Id": 2, "Name": "Nhóm ngành", "ListIndustry": [{"IndustryID": 1, "Level": 1, "IndustryCode": 10, "ParentCode": 0, "IndustryName": "Năng lượng", "Ima` | available |
+| vs_industry_heatmap | [] | Live sector heatmap. Use for intraday rotation. | Heatmap ngành live trong phiên. | `{"heatmap": [{"IndustryCode": 10, "ParentCode": 0, "Level": 1, "DisplayOrder": 0, "IndustryName": "Năng lượng", "StockFullName": null, "ImageURL": "/content/im` | available |
+| vs_selftrading | [] | Prop-desk flow chart. Use alongside foreign flows. | Dòng tiền tự doanh CTCK. | `{"flow": [["/Date(1790841600000)/"], [{"TradingDate": "/Date(1788454800000)/", "BuyVol": 12735108, "BuyVal": 444.906387, "SellVol": 18948028, "SellVal": 618.016` | available |
+| vs_gics_index | ['group'] | GICS index closes with foreign flow. Use for sector context. | Chỉ số ngành GICS theo 3 nhóm + NN mua/bán. | `{"group": 1, "rows": [{"IndustryCode": 1010, "Url": "/nganh/1010-nang-luong.htm", "Text": "Năng lượng", "ChangeClose": 0.38, "CloseIndex": 361.99, "SectionID":` | available |
+| vs_currency | [] | Reference FX table. Use as fallback FX source. | Bảng FX tham chiếu (dự phòng). | `{"rows": [{"Percent": "+0.04%", "Last": "1.12", "Css": "up"}, {"Percent": "-0.52%", "Last": "29,943.94", "Css": "dn"}, {"Percent": "-0.27%", "Last": "34,797.85"` | available |
+| vs_market_info | ['exchange'] | Per-exchange board row: index, breadth, put-through. Use for 5s snapshots in hours. | 1 dòng/sàn: index, breadth, thỏa thuận (snapshot 5s trong giờ). | `{"exchange": "HOSE", "rows": [{"exId": 1, "c": "VN-Index", "n": "Chỉ số VN Index", "e": "HOSE", "p": 1739.61, "ch": -9.69, "pch": -0.55, "vol": 193007672, "val"` | available |
+| vs_xnk_detail | ['direction', 'from_date'] | Import/export by country via browser-session replay. Use for trade structure. | Xuất/nhập khẩu theo quốc gia, triệu USD (HAR-session replay). | `{"direction": "xk", "category": 64, "term_type": 2, "rows": [{"name": "EU", "group": "EU", "period": "Tháng 1/2026", "year": "2026", "value": 5446.79, "unit": "` | available |
 
-## 15. intel.py — 7 tools (P14: +polymarket_event)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| world_prediction_odds | Polymarket odds via jina proxy to Gamma, then direct. Use for Fed/macro odds. | query? (title/slug/desc), tag? (tag_slug), limit (P14: outcomes+prob_pct, sort vol24h) | Gamma /events (jina-first) |
-| polymarket_event | One Polymarket event detail by slug (every market + odds). Use to drill in. | slug (P14 mới) | Gamma /events?slug= + markets outcomes/prices |
-| geo_intel | Geopolitical coverage via GDELT. Use when geopolitics threatens markets. | topic? | GDELT (retry 1) |
-| assets_rotation | Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads. | — | yfinance 2y → local rule |
-| compare_equities | Head-to-head overview rows and momentum. Use when picking tickers. | symbols[] cap 4 | vs_overview + vn quote |
-| evidence_bundle | Lock weighted conclusion by evidence bundle. Use last for final verdict. | claim_ids[] | local |
-| oracle_meta | Aggregator snapshot plus source health. Use for dashboard meta. | — | yf pins + source_status |
+## vn_ext.py — 10 tools
 
-## 16. watchlist.py — 12 tools (MỚI, P4)
-| Tool | Descriptor | Params | Annotations | Source |
-|---|---|---|---|---|
-| watchlist_create | Create a named watchlist. Use to start tracking a symbol group. | name | READ_WRITE | Postgres → fallback file data/watchlists.json (atomic) |
-| watchlist_list | List all watchlists with their symbols. Use to recall tracking state. | — | READ_ONLY | PG/file |
-| watchlist_get | Get one watchlist's symbols by id. Use before quoting a saved set. | list_id | READ_ONLY | PG/file |
-| watchlist_add | Add symbols (deduped, uppercase) to a watchlist. Use to track more. | list_id, symbols[] | READ_WRITE | PG/file |
-| watchlist_remove | Remove symbols from a watchlist. Use to trim tracking. | list_id, symbols[] | READ_WRITE | PG (transaction, không fallback khi fail) |
-| watchlist_delete | Delete a watchlist and its items (cascade). Use to clean up. | list_id | READ_WRITE | PG/file |
-| watchlist_update | Rename a watchlist. Use sparingly; names are unique labels. | list_id, name | READ_WRITE | PG/file |
-| alert_create | Create a stored alert rule (input to alert_check). Use for live watch. | symbol, op=">", threshold=0.0, metric="price" | READ_WRITE | PG/file; validate op ∈ {>,>=,<,<=,cross_up,cross_down} |
-| alert_list | List stored alert rules (active and paused). Use before alert_check. | — | READ_ONLY | PG/file |
-| alert_delete | Delete a stored alert rule by id. Use to clean up alerts. | rule_id | READ_WRITE | PG/file |
-| alert_pause | Pause a stored alert rule (active=false). Use to silence alerts. | rule_id | READ_WRITE | PG/file |
-| alert_resume | Resume a paused alert rule (active=true). Use to re-enable alerts. | rule_id | READ_WRITE | PG/file |
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| vn_index_ohlcv | ['symbol', 'count', 'summary', 'columns', 'interval'] | Index bars for VN tickers. Use for index history and breadth. | Nến chỉ số VN (VNINDEX/VN30...). | `{"symbol": "VNINDEX", "count": 5, "last": 1739.61, "high": 1788.0, "low": 1731.03}` | available |
+| vn_equity_ohlcv | ['symbol', 'count', 'summary', 'columns', 'interval'] | Equity bars via Market API. Use as OHLCV alternative to quotes. | Nến cổ phiếu qua Market API (thay thế quote_history). | `{"symbol": "VCB", "count": 5, "last": 57.3, "high": 58.5, "low": 57.2}` | available |
+| vn_futures_ohlcv | ['symbol', 'count', 'summary', 'columns', 'interval'] | Futures bars. Use for derivatives backtest input. | Nến phái sinh (input backtest VN30F1M). | `{"symbol": "VN30F1M", "count": 5, "last": 1886.3, "high": 1937.0, "low": 1881.3}` | available |
+| vn_forex_ohlcv | ['pair', 'count', 'summary', 'columns'] | FX bars. Use for currency context. | Nến FX (USDVND...). | `{"symbol": "USDVND", "count": 5, "last": 25959.0, "high": 26014.0, "low": 25929.0}` | available |
+| vn_crypto_ohlv | ['symbol', 'count', 'summary', 'columns'] | Crypto bars. Use for digital-asset regime reads. | Nến crypto quy VND. | `{"symbol": "BTCUSDT", "count": 5, "last": 2172149396.85, "high": 2225338114.99, "low": 2146590963.65}` | available |
+| vn_global_index | ['symbol', 'count', 'summary', 'columns'] | Global index bars. Use as yfinance fallback. | Nến chỉ số thế giới (fallback yfinance). | `{"symbol": "USA30", "count": 5, "last": 50926.56, "high": 51874.94, "low": 50546.54}` | available |
+| vn_reference | ['exchange', 'by', 'key'] | ICB reference by exchange, group or industry. Use for universe construction. | Universe theo sàn/nhóm/ngành (source KBS, HOSE 757 mã). | `{"exchange": "HOSE", "rows": [{"symbol": "VID", "organ_name": "CTCP Đầu tư Phát triển Thương mại Viễn Đông", "en_organ_name": "Vien Dong Investment Development ` | available |
+| vn_company | ['symbol', 'detail'] | Profile, holders and officers. Use for company research. | Vốn hóa, rating, holders, officers (chậm khi throttle). | `{"symbol": "VCB", "info": {"symbol": "VCB", "organ_code": "VCB", "current_price": 57600.0, "market_cap": 481286885414400.0, "issue_share": 8355675094, "tag": nu` | available |
+| vn_msn_fx_gold | ['symbols', 'days'] | USDVND and XAUUSD via MSN. Use for gold-basis math. | USDVND/XAUUSD qua MSN (tính gold-basis). | `{"series": [{"symbol": "USDVND", "points": 21, "last": {"time": "2026-09-30 00:00:00", "open": 25964.0, "high": 25975.0, "low": 25959.0, "close": 25959.0, "volu` | available |
+| vn_trades | ['symbol', 'limit', 'board', 'from_date', 'to_date'] | Tick-level matched trades. Use for microstructure reads. | Băng khớp lệnh tick-level live. | `{"symbol": "VCB", "trades": [{"time": "2026-10-02 10:17:17", "price": 57.4, "volume": 500, "match_type": "buy", "id": "2026-10-02_101717_574000_500"}, {"time": ` | available |
 
-## Data source map tóm tắt (fallback)
-- **DNSE WS** (worker pump Redis TTL 30s): dnse_foreign_flow, dnse_ws_snapshot, dnse_indices, dnse_market_status(tầng 1) — money_flow tự fallback → Vietstock
-- **DNSE REST** (HMAC): ohlc_history, latest_trade, orderbook, foreign_rest, vn30f1m_live, working_dates — market_status fallback REST
-- **vnstock VCI→KBS**: quote_history (tự fallback), quote_batch, listing, fundamentals, reference, company, trades, futures/forex/crypto/global ohlcv, retail gold/fx, MSN
-- **Vietstock**: toàn bộ vs_* (mirror free + BCTC JWT + GICS + macro), news dc.vietstock.vn, forensic/valuation/overview trong compute
-- **yfinance**: yf_*, assets_rotation, mega_flows, compare_assets
-- **FRED / WorldBank / GDELT / Fireant / Groq / alternative.me**: fred_series, world_macro_country, geo_intel + event_stats + news fallback, sentiment, fear_greed
-- **jina → Gamma**: world_prediction_odds
-- **Exa/Parallel**: web_search (ẩn khi thiếu key)
-- **PG → file JSON**: watchlist/alert store (mới)
-- **Redis → memory**: cache snapshot, WS cache đọc, alert cross-state
+## yf.py — 3 tools
 
-## 17. corp.py — 9 tools (7 P7 + planned_targets + financial_detail, P14 revive)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| dividends_splits | Cash dividends and share issues/splits. Use for payout history. | symbol, region=vn (vn/world), limit=20 | vn: vnstock Company.events() (DIV cash, ISS bonus/private) + flags is_cash_dividend/is_share_issue; world: yfinance actions (lọc dividends>0 hoặc splits≠0/1) |
-| holders | Shareholder and institutional holder tables. Use for ownership reads. | symbol, region=vn, kind=all (major/institutional/mutualfund/all, world only) | vn: vnstock shareholders; world: yfinance major/institutional/mutualfund holders |
-| event_calendar_vn | Vietstock corporate-action calendar. Use for dividend/meeting/listing dates. | event=dividends (dividends/listings/meetings → typeID 1/2/5), symbol?, limit=20 | Vietstock /data/eventstypedata (không có earnings-dates); /Date(ms)/ parse theo giờ VN |
-| block_trades | Matched vs negotiated put-through splits per day. Use for dark-pool-style reads. | symbol, from_date?/to_date? ISO (default 30d), limit=30 | Vietstock /data/gettradingresult (MT_* khớp lệnh vs PT_* thỏa thuận + pt_pct/totals) |
-| analyst_consensus | Analyst ratings and price targets parsed from report titles. Use for street views. | symbol?, limit=30 | scrape Vietstock /bao-cao-phan-tich (rating MUA/BÁN... + target từ title; vs_reports_search API chết 404) |
-| ipo_calendar_vn | HNX auction calendar plus announcement fallback. Use for upcoming supply. | — | scrape HNX lich-dau-gia (thường rỗng) + tin-cong-bo; verify=False (cert HNX) + warning tls-unverified |
-| futures_basis | VN30F1M price minus VN30 spot. Use for premium/discount reads. | — (P12b: futures rớt về ohlc 15m khi trades/latest rỗng; spot chịu keys thô) | DNSE latest_trade → ohlc fallback − vnstock VN30 spot (KHÔNG OI) |
-| planned_targets | Business-plan targets (CTKH: planned revenue/profit by year). Use as expectation anchor. | symbol, years=3 (P15 revive, session-gated) | Vietstock CTKH chain (norms → periods → values YearPeriods shape); dormant khi gate chặn |
-| financial_detail | FULL detailed statements, every line item per period. Use for deep BCTC reads. | symbol, statement=KQKD/CDKT/LCTT/TM/BCTT, periods_n (P15 revive) | Vietstock /data/* chain object-array keys + permission filter; rows {norm_id, name, values} |
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| yf_global_indices | ['tickers', 'period', 'interval'] | 9 global benchmarks. Use for overnight context. | 9 benchmarks thế giới (S&P, Nasdaq...). | `{"indices": [{"ticker": "^GSPC", "price": 7666.4501953125, "prev": 7651.5400390625}, {"ticker": "^IXIC", "price": 26871.595703125, "prev": 26861.060546875}, {"t` | available |
+| yf_commodities | ['tickers', 'period', 'interval'] | Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context. | Vàng/dầu/kim loại/BTC/VND/DXY (giá đầu vào). | `{"items": [{"ticker": "GC=F", "price": 4200.60009765625, "prev": 4186.7001953125}, {"ticker": "SI=F", "price": 61.26499938964844, "prev": 60.097999572753906}, {` | available |
+| yf_yield_curve | [] | US 2Y/10Y and inversion flag. Use for rates and regime context. | Lợi suất US 2Y/10Y + cờ đảo ngược (chế độ rates). | `{"us10y": 0.052369999885559085, "us2y": 0.046100001335144046, "inverted": false}` | available |
 
-## 18. crypto.py — 2 tools (MỚI, P7)
-| Tool | Descriptor | Params | Source |
-|---|---|---|---|
-| crypto_spot | Binance spot 24h tickers. Use for crypto price and volume reads. | symbols[] cap 10 (mọi spelling BTCUSDT/BTC-USDT/...) | Binance public /ticker/24hr (không key; array JSON cấm space) |
-| crypto_derivs | Binance futures funding, OI and long/short ratios. Use for leverage reads. | symbols[] cap 5 | Binance fapi funding/OI/account-LSR/taker-ratio (forceOrders cần key → bỏ liquidations); per-symbol error không fail batch |
+## yf_world.py — 6 tools
 
-## Phụ lục P12 — Removed (commit ac99396, deploy 2026-10-01)
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| yf_world_indices | ['tickers'] | 24 world benchmarks. Use for global breadth. | 24 benchmarks (độ rộng toàn cầu). | `{"indices": [{"ticker": "^GSPC", "price": 7666.4501953125, "prev": 7651.5400390625}, {"ticker": "^IXIC", "price": 26871.595703125, "prev": 26861.060546875}, {"t` | available |
+| yf_oracle_markets | ['groups'] | 40 markets in 6 groups with 30d stats. Use for cross-asset state. | 40 thị trường/6 nhóm + stats 30d. | `{"crypto": [{"ticker": "BTC-USD", "price": 85271.9765625, "chg_30d": 10.31, "high30": 86602.9141, "low30": 75612.5078}, {"ticker": "ETH-USD", "price": 2715.4699` | available |
+| yf_regime_assets | [] | 7 regime drivers with 2y history. Use for RISK-ON/OFF calls. | 7 tài sản dẫn dắt chế độ + lịch sử 2y (RISK-ON/OFF). | `{"^GSPC": {"last": 7666.4501953125, "chg_1y_pct": 14.23}, "^VIX": {"last": 16.389999389648438, "chg_1y_pct": -1.56}, "DX-Y.NYB": {"last": 101.99299621582031, "c` | available |
+| yf_mega_flows | ['top_n'] | Mega-cap leader flows. Use to follow global smart money. | Dòng tiền mega-cap (AAPL/MSFT/NVDA...). | `{"universe": "mega-cap leaders", "leaders": [{"ticker": "AAPL", "price": 330.32000732421875, "prev": 333.0199890136719}, {"ticker": "MSFT", "price": 512.7999877` | available |
+| yf_alloc_history | ['asset', 'timeframe'] | Long allocation history per asset. Use for regime backtests. | Lịch sử phân bổ 5y theo tài sản (backtest chế độ). | `{"asset": "GC", "ticker": "GC=F", "points": [{"t": "2026-07-09", "c": 4140.7998}, {"t": "2026-07-10", "c": 4113.7002}, {"t": "2026-07-13", "c": 4005.7}, {"t": "` | available |
+| yf_market_pins | [] | 5-day pins for world majors plus VN watchlist. Use for brief headers. | Neo 5 ngày + sparkline (tiêu đề brief). | `{"world": [{"ticker": "^GSPC", "last": 7666.4502, "spark": [7743.4102, 7683.6899, 7670.8398, 7651.54, 7666.4502]}, {"ticker": "^IXIC", "last": 26871.5957, "spar` | available |
+
+## dnse_tools.py — 4 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| dnse_ohlc_history | ['symbol', 'resolution', 'bar_type', 'from_date', 'summary', 'columns', 'to_date', 'page_size'] | Paginated futures/index bars via cursor. Use for VN30F1M backtest input. | Nến futures/index phân trang bằng cursor (37k+ bars). | `{"symbol": "VN30F1M", "count": 37748, "last": 1888, "high": 2115.7, "low": 560.1}` | available |
+| dnse_latest_trade | ['symbols', 'summary', 'columns'] | Latest match price and totals per symbol. Use for realtime fallback. | Giá khớp mới nhất theo mã (fallback realtime). | `{"count": 1, "symbols": ["VN30F1M"]}` | available |
+| dnse_foreign_flow | [] | Net foreign flow from WS cache. Use as primary smart-money read. | NN mua/bán ròng từ WS cache — cần worker local. | `{"tool": "dnse_foreign_flow"}` | unavailable |
+| dnse_ws_snapshot | ['symbols'] | Raw worker snapshot for symbols. Use to debug realtime staleness. | Snapshot WS thô để debug realtime — cần worker. | `{"tool": "dnse_ws_snapshot"}` | unavailable |
+
+## dnse_ext.py — 5 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| dnse_orderbook | ['symbol', 'depth'] | Bid/ask depth. Use for microstructure reads. | Depth bid/ask (futures rỗng ngoài giờ là đúng). | `{"symbol": "VCB", "bids": [], "asks": []}` | available |
+| dnse_indices | ['symbols'] | Index snapshots from WS cache. Use for live index reads. | Snapshot chỉ số từ WS cache — cần worker. | `{"tool": "dnse_indices"}` | unavailable |
+| dnse_vn30f1m_live | ['bars'] | VN30F1M 1m bars aggregated to 15m with session remap. Use for intraday. | Nến 1m gộp 15m, remap phiên 14:30→14:45. | `{"symbol": "VN30F1M", "tf": "15m", "bars": [{"t": 1790907300, "o": 1897, "h": 1899.4, "l": 1894, "c": 1896.9, "v": 12674}, {"t": 1790908200, "o": 1896.9, "h": 1` | available |
+| dnse_working_dates | ['year'] | Trading calendar. Use for session planning. | Lịch giao dịch (lên kế hoạch phiên). | `{"dates": {"workingDates": ["2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-12", "2026-10-13", "2026-10-14", "2026-` | available |
+| exchange_calendar | [] | HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics. | Giờ HOSE/HNX/UPCOM, ATO/ATC, T+2 (tĩnh). | `{"sessions": [{"days": "Mon-Fri", "open": "09:00", "close": "15:00", "ato": "09:00-09:15", "atc": "14:30-14:45"}], "settlement": "T+2", "timezone": "Asia/Ho_Chi` | available |
+
+## crypto.py — 2 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| crypto_spot | ['symbols'] | Binance spot 24h tickers. Use for crypto price and volume reads. | Spot Binance 24h, không key (BTC 83,476...). | `{"tickers": [{"symbol": "BTCUSDT", "last": 85278.01, "change_pct": 2.11, "high": 85511.0, "low": 83186.0, "volume": 17780.18956, "quote_volume": 1497492624.8471` | available |
+| crypto_derivs | ['symbols'] | Binance futures funding, OI and long/short ratios. Use for leverage reads. | Funding/OI/long-short ratio futures (đọc đòn bẩy). | `{"derivs": [{"symbol": "BTCUSDT", "mark_price": 85246.55378986, "funding_rate": 3.869e-05, "next_funding_time": 1790928000000, "open_interest": 98109.581, "ls_r` | available |
+
+## scan.py — 6 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| stock_screener | ['filters', 'max_pe', 'min_roe', 'limit', 'technical'] | Screen universe by valuation and quality. Use when hunting candidates. | Lọc 1522 mã 3 stages (universe→fundamentals→technical). | `{"universe": 1523, "filters": {}, "candidates": [{"symbol": "DPP", "name": "CTCP Dược Đồng Nai"}, {"symbol": "SDA", "name": "CTCP Simco Sông Đà"}, {"symbol": "C` | available |
+| signals_screener_columns | ['group', 'search'] | Screener column catalog (valuation/quality/universe/price). Use to build filters. | Catalog cột lọc để build filters. | `{"count": 2, "group": "valuation", "search": null, "columns": {"pe": {"group": "valuation", "desc": "Price / trailing earnings (P/E). Lower is cheaper."}, "mark` | available |
+| signals_technical | ['symbol', 'interval', 'indicators'] | Full technicals rating from local candles (daily only). Use for timing entries. | Technicals đầy đủ + RS/pos_52w/sma150/patterns/Hỗ trợ-kháng cự. | `{"symbol": "VCB", "interval": "1D", "rsi14": 39.23, "stoch_k": 2.63, "stoch_d": 4.8, "cci20": -125.54, "adx14": 12.12, "macd": {"line": -0.3102, "signal": -0.13` | available |
+| sector_performance | ['level', 'top_n'] | GICS heatmap rows. Use for sector rotation reads. | Heatmap GICS (đọc luân chuyển ngành). | `{"level": 1, "rows": [{"IndustryCode": 10, "ParentCode": 0, "Level": 1, "DisplayOrder": 0, "IndustryName": "Năng lượng", "StockFullName": null, "ImageURL": "/c` | available |
+| money_flow | ['symbols'] | Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money. | NN mua/bán: DNSE WS → Vietstock cross-check. | `{"primary": "vietstock", "flow": [["/Date(1790911058990)/"], [{"TradingDate": "/Date(1788714000000)/", "BuyVol": 46533428, "BuyVal": 1813.559809, "SellVol": 651` | available |
+| alert_check | ['rules'] | Evaluate price/RSI rules against live quotes. Use for live watch. | Đánh giá rules giá/RSI trên quotes live. | `{"rules": 1, "evaluated": 1, "triggered": [{"symbol": "VCB", "metric": "price", "price": 57300.0, "op": ">", "threshold": 50.0}]}` | available |
+
+## compute.py — 20 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| stock_forensic | ['symbol', 'detail', 'periods_n'] | Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15). | M-Score Beneish + Piotroski F từ FULL detail (P15). | `{"symbol": "FPT", "dsri": 0.9772, "gmi": 1.0961, "aqi": 1.0107, "sgi": 1.1049, "sgai": 0.9951, "lvgi": 1.1257, "tata": 0.0349, "m_score": -2.0589, "m_partial": ` | available |
+| snapshot_history | ['kind', 'days'] | Daily-snapshot history saved by the worker. Use for data that vanishes. | Lịch sử snapshot ngày do worker lưu (data hay mất). | `{"kind": "macro_curated", "count": 2, "rows": [{"date": "2026-10-02", "kind": "macro_curated", "payload": {"fx55_t1": {"rows": [{"name": "Tỷ giá trung tâm (từ 0` | available |
+| valuation_run | ['symbol', 'btype', 'method'] | PER/PB ensemble with DCF-lite. Use for fair-value ranges. | PER/PB ensemble + DCF-lite (vùng giá hợp lý). | `{"symbol": "VCB", "price": 57400.0, "method": "per_pb"}` | available |
+| fred_series | ['series_id', 'limit', 'spark'] | FRED observations. Use for US macro context. | Chuỗi FRED (bối cảnh macro Mỹ, cần key). | `{"series": "DGS10", "points": [{"t": "2026-09-30", "v": "5.29"}, {"t": "2026-09-29", "v": "5.26"}, {"t": "2026-09-28", "v": "5.24"}]}` | available |
+| world_macro_country | ['iso3', 'indicator', 'limit'] | WorldBank series per country. Use for global GDP/CPI/debt context. | Chuỗi WorldBank theo quốc gia (GDP/CPI/nợ). | `{"country": "VNM", "indicator": "NY.GDP.MKTP.KD.ZG", "points": [{"t": "2025", "v": 8.01882998978245}, {"t": "2024", "v": 7.03955197123018}, {"t": "2023", "v": 4` | available |
+| world_fear_greed | ['limit'] | Crypto fear/greed index. Use for risk-appetite reads. | Chỉ số sợ hãi/tham lam crypto (đọc risk-appetite). | `{"series": [{"t": "1790899200", "v": "72", "label": "Greed"}, {"t": "1790812800", "v": "74", "label": "Greed"}, {"t": "1790726400", "v": "71", "label": "Greed"}` | available |
+| sentiment_score | ['symbol', 'limit'] | Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk. | Sentiment đám đông từ Fireant (Groq chấm, fallback heuristic). | `{"symbol": "VCB", "posts": 3, "score_heuristic": -0.25}` | available |
+| insider_trading | ['symbol', 'limit'] | Insider deals via vnstock Company. Use for informed-flow reads. | Giao dịch nội bộ (rỗng = không có, đúng data). | `{"symbol": "VCB", "deals": []}` | available |
+| stock_overview | ['symbol'] | Trading info plus company profile. Use for quick dossiers. | Hồ sơ nhanh 1 mã (trading info + profile). | `{"trading": {"StockCode": "VCB", "TradingDate": "/Date(1790911060003)/", "KLCPLH": 8355675094, "KLCPNY": 8355675094, "PriorClosePrice": 57600, "CeilingPrice": 6` | available |
+| company_events | ['symbol', 'types'] | Classified disclosures and corporate actions. Use for event calendars. | Sự kiện phân loại từ công bố. | `{"symbol": "VCB", "events": [{"FileExt": ".pdf ", "UpdateTime": null, "TotalRow": 487, "FileInfoID": 559412, "Url": "https://static2.vietstock.vn/data/HOSE/2026` | available |
+| financial_statements | ['symbol', 'period', 'statement', 'periods_n'] | Mirror statements alias (v3 compat). Use for statement reads. | Alias đọc BCTC nhanh (wrap financeinfo mirror). | `{"symbol": "VCB", "period": "quarter", "pages": "Q2/2025 ..."}` | available |
+| financial_ratios | ['symbol', 'set', 'period', 'peers'] | Overview plus vnstock ratios merged. Use for ratio screens. | Bộ chỉ số + so peers. | `{"symbol": "VCB", "period": "year", "ratios": {"data": [{"StockCode": "VCB", "TradingDate": "/Date(1790874000000)/", "ClosePrice": 57300, "ColorID": -1, "Change` | available |
+| peer_compare | ['symbol', 'peers', 'metrics'] | Head-to-head overview rows. Use when picking tickers. | So trực tiếp tối đa 6 mã. | `{"rows": [{"symbol": "VCB", "data": [{"StockCode": "VCB", "TradingDate": "/Date(1790874000000)/", "ClosePrice": 57300, "ColorID": -1, "Change": -300, "PerChange` | available |
+| signals_scan | ['universe', 'exchange', 'max_symbols'] | Donchian-20d breakout scan. Use to hunt momentum across the market. | Quét breakout Donchian-20d (0 hits = không có, đúng). | `{"hits": [], "scanned": 3, "requested": 3}` | available |
+| pattern_match | ['symbol', 'lookback', 'limit'] | Self-similarity of return windows by correlation. Use for analogies. | Quá khứ giống hiện tại bằng tương quan (analogy). | `{"symbol": "VCB", "best_corr": 0.379, "offset_bars": 30, "matches": [{"corr": 0.379, "offset_bars": 30}, {"corr": 0.323, "offset_bars": 29}]}` | available |
+| event_stats | ['query', 'limit'] | GDELT event counts for a query. Use for base-rate checks. | Đếm sự kiện GDELT (base-rate). | `{"query": "vietnam", "articles": [{"title": "ĐT Việt Nam chuẩn bị sẵn sàng cho trận đại chiến ĐT Thái Lan", "url": "http://vov.vn/the-thao/dt-viet-nam-chuan-bi-` | available |
+| compare_assets | ['assets', 'timeframe'] | Cross-asset last prices via yfinance. Use for allocation reads. | Giá chéo tài sản qua yfinance. | `[{"ticker": "GC=F", "price": 4198.2998046875, "prev": 4186.7001953125}, {"ticker": "BTC-USD", "price": 85203.9375, "prev": null}]` | available |
+| runs_list | ['id'] | Local run registry. Use to resume analysis sessions. | Registry runs local (trống = chưa chạy, đúng). | `{"runs": []}` | empty |
+| run_get | ['run_id'] | Local run registry fetch. Use to inspect past outputs. | Đọc 1 run đã lưu. | `{"run_id": "x"}` | empty |
+| doctor | [] | Local self-check: env keys present, package versions. Use before handoff. | Self-check env keys + versions. | `{"mcp_sdk": "1.x", "vietstock_jwt": true, "dnse_keys": true, "redis": true, "database": true, "fred": true, "groq": true, "fireant": true}` | available |
+
+## corp.py — 9 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| dividends_splits | ['symbol', 'region', 'limit'] | Cash dividends and share issues/splits. Use for payout history. | Cổ tức tiền mặt + phát hành/tách (lịch sử chi trả). | `{"symbol": "VCB", "region": "vn", "events": [{"event_code": "DIV", "title": "Cash Dividend - Year 2025 - 450 VND", "exright_date": "2026-07-23T00:00:00", "recor` | available |
+| holders | ['symbol', 'region', 'kind'] | Shareholder and institutional holder tables. Use for ownership reads. | Bảng cổ đông/tổ chức (sở hữu). | `{"symbol": "VCB", "region": "vn", "kind": "all", "holders": [{"symbol": "VCB", "share_holder": "Ngân Hàng Nhà Nước Việt Nam", "quantity": 6250338579, "share_own` | available |
+| event_calendar_vn | ['event', 'symbol', 'limit'] | Vietstock corporate-action calendar. Use for dividend/meeting/listing dates. | Lịch cổ tức/niêm yết/ĐHĐCĐ Vietstock. | `{"event": "dividends", "symbol": "VCB", "events": [{"event_id": 223751, "code": "VCB", "note": "Trả cổ tức  năm 2025  bằng tiền, 450 đồng/CP", "ex_date": "2026-` | available |
+| block_trades | ['symbol', 'from_date', 'to_date', 'limit'] | Matched vs negotiated put-through splits per day. Use for dark-pool-style reads. | Tách khớp lệnh vs thỏa thuận theo ngày (đọc dòng tiền lớn). | `{"symbol": "VCB", "days": [{"date": "2026-10-02", "close": 57300, "mt_vol": 886900, "mt_val": 50930200000.0, "pt_vol": 0, "pt_val": 0.0, "pt_pct": 0.0}, {"date"` | available |
+| analyst_consensus | ['symbol', 'limit'] | Analyst ratings and price targets parsed from report titles. Use for street views. | Rating + target từ titles báo cáo (rỗng = không báo cáo mới). | `{"symbol": "VCB", "reports": []}` | available |
+| ipo_calendar_vn | [] | HNX auction calendar plus announcement fallback. Use for upcoming supply. | Lịch đấu giá HNX + thông báo (thường rỗng, đúng). | `{"auctions": [], "announcements": [{"posted": "23/09/2026 16:29", "title": "Không tổ chức bán đấu giá theo lô cổ phần của Tổng công ty Thủy sản Việt Nam - CTCP ` | available |
+| futures_basis | [] | VN30F1M price minus VN30 spot. Use for premium/discount reads. | F1M − VN30 spot (premium/discount, fallback ohlc). | `{"futures": 1888.0, "spot": 1882.11, "basis": 5.89, "basis_bps": 31.3}` | available |
+| planned_targets | ['symbol', 'years'] | Business-plan targets (CTKH: planned revenue/profit by year). Use as expectation anchor. | Kế hoạch DT/LN năm của DN — neo kỳ vọng (P15 live). | `{"symbol": "FPT", "unit": "VNDbn", "years": [2025, 2026], "rows": [{"name": "Doanh thu kế hoạch", "planned_target_id": 5, "plan": {"2025": 75400.0, "2026": 5858` | available |
+| financial_detail | ['symbol', 'statement', 'periods_n'] | FULL detailed statements, every line item per period. Use for deep BCTC reads. | FULL BCTC từng dòng theo kỳ (đọc sâu, P15 revive). | `{"symbol": "FPT", "statement": "KQKD", "unit": "VNDbn", "periods": ["Q1/2026", "Q2/2026"], "rows": [{"norm_id": 2206, "name": "1. Doanh thu bán hàng và cung cấp` | available |
+
+## quant.py — 9 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| quant_backtest | ['symbol', 'cost_bps', 'strategy', 'slippage_bps', 'benchmark'] | Buy-and-hold backtest with costs over available history. Use for baseline stats. | Backtest buy-hold có phí (baseline). | `{"symbol": "VCB", "strategy": "buy_hold", "benchmark": "VNINDEX", "gross_return": -0.0687, "net_return": -0.0717, "bars": 285, "cost_bps": 10.0, "slippage_bps":` | available |
+| quant_risk | ['returns', 'periods_per_year'] | Sharpe, max drawdown and win rate from a return series. Use to gate models. | Sharpe/DD/win từ chuỗi lợi suất (cổng mô hình). | `{"sharpe_proxy": 12.8759, "max_drawdown": 0.005, "win_rate": 0.6667, "n": 3, "periods_per_year": 252}` | available |
+| quant_factors | ['symbol', 'lookback'] | Momentum, volatility and drawdown factors from candles. Use to expand features. | Momentum/vol/DD từ nến (mở rộng features). | `{"symbol": "VCB", "lookback": 60, "momentum_20d_pct": -1.21, "vol_20d_ann_pct": 15.44, "max_dd_20d_pct": -4.5, "max_dd_full_pct": 13.57}` | available |
+| scenario_simulate | ['scenario', 'symbol', 'shock_pct'] | Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing. | Shock giá → P/L trên 1000cp (cỡ vị thế). | `{"scenario": "t", "symbol": "VCB", "last_close": 57.3, "shock_pct": -5.0, "shocked_price": 54.43, "pnl_per_1000_shares": -2870.0, "assumptions": ["linear shock,` | available |
+| correlation_matrix | ['symbols', 'days'] | Pairwise Pearson correlation of daily returns. Use for diversification reads. | Tương quan Pearson cặp mã (đa dạng hóa). | `{"symbols": ["VCB", "HPG"], "common_dates": 91, "matrix": {"VCB": {"VCB": 1.0, "HPG": 0.5045}, "HPG": {"VCB": 0.5045, "HPG": 1.0}}, "date_note": "business-day w` | available |
+| seasonality | ['symbol', 'window'] | Rolling-window return stats per calendar month. Use for seasonal bias. | Stats theo tháng (bias mùa vụ). | `{"symbol": "VCB", "window": 21, "months": {"1": {"n": 22, "mean_pct": 4.67, "median_pct": -1.55, "hit_rate": 0.32, "best_pct": 33.8, "worst_pct": -5.48}, "2": {` | available |
+| backtest_strategies | ['symbol', 'strategy', 'fast', 'slow', 'cost_bps'] | Rule-based backtests beyond buy-and-hold. Use to compare timing rules. | Backtest sma/momentum vs buy-hold. | `{"symbol": "VCB", "strategy": "sma_cross", "fast": 10, "slow": 30, "cost_bps": 10.0, "trades": 6, "net_return": -0.0872, "max_drawdown": 0.2008, "win_rate": 0.3` | available |
+| portfolio_optimize | ['symbols', 'objective', 'days'] | Long-only weights by rule. Use for allocation starting points. | Tỷ trọng long-only (numpy, fallback equal). | `{"symbols": ["VCB", "HPG"], "objective": "max_sharpe", "weights": {"VCB": 0.5, "HPG": 0.5}, "common_dates": 156, "notes": ["long-only heuristic; rebalance and c` | available |
+| param_sweep | ['symbol', 'strategy', 'fast_range', 'slow_range', 'cost_bps'] | Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks. | Grid lookbacks ≤30 combos (chống overfit). | `{"symbol": "VCB", "strategy": "sma_cross", "combos_evaluated": 8, "ranked": [{"fast": 10, "slow": 20, "trades": 9, "net_return": 0.071, "max_drawdown": 0.142, "` | available |
+
+## brief.py — 7 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| brief_build | ['scope', 'date', 'calendars'] | Compose morning brief from news, odds and calendars. Use at session start. | Brief sáng từ news+odds+calendars. | `{"scope": "vn", "sections": {"world_pins": {"series": [{"t": "1790899200", "v": "72", "label": "Greed"}, {"t": "1790812800", "v": "74", "label": "Greed"}, {"t":` | available |
+| news_market | ['limit', 'sources'] | Market news: Fireant posts first, GDELT fallback. Use for catalyst checks. | Tin thị trường: Fireant trước, GDELT fallback. | `{"posts": [{"id": null, "user": null, "text": "Tổng thống Nga Vladimir Putin ngày 1.10 cảnh báo nguy cơ xung đột toàn cầu, kêu gọi phương Tây từ bỏ thế bá quyền` | available |
+| news_symbol | ['symbol', 'limit', 'sources'] | Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors. | Tin theo mã: Fireant posts + GDELT fallback. | `{"symbol": "VCB", "posts": [{"id": null, "user": null, "text": "Lãi suất Vietcombank hiện dao động từ 0,1-6%/năm. Khách hàng gửi 500 triệu đồng kỳ hạn 24 tháng ` | available |
+| economic_calendar | ['scope', 'limit'] | Macro series catalogue as event proxy. Use for data-availability checks. | Catalog macro (proxy lịch sự kiện). | `{"scope": "vn", "series": [{"category_id": 7, "name": "1. Tài khoản quốc gia (GDP)", "has_data": false}, {"category_id": 73, "name": "GDP danh nghĩa", "has_data` | available |
+| corporate_calendar | ['symbol', 'limit'] | Disclosures feed as corporate actions. Use for dividend/meeting scans. | Feed công bố thô (quét cổ tức/họp). | `{"symbol": "VCB", "docs": [{"FileExt": ".pdf ", "UpdateTime": null, "TotalRow": 487, "FileInfoID": 559412, "Url": "https://static2.vietstock.vn/data/HOSE/2026/N` | available |
+| sbv_rates | [] | SBV policy and interbank rates, scraped static page. Use for rate regime. | Lãi suất điều hành + liên NH (scrape SBV). | `{"policy": [{"name": "Lãi suất tái chiết khấu", "value": "3,000%"}, {"name": "Lãi suất tái cấp vốn", "value": "4,500%"}], "interbank": [], "as_of": null}` | available |
+| macro_events_vn | [] | NSO release listings with reference and next dates. Use for data calendar. | Lịch công bố NSO + ngày tham chiếu/kế tiếp. | `{"releases": [{"indicator": "CPI", "title": "Chỉ số giá tiêu dùng (CPI), chỉ số giá vàng và chỉ số giá đô la Mỹ tháng Tám và 8 tháng năm 2026", "url": null, "re` | available |
+
+## intel.py — 7 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| world_prediction_odds | ['query', 'limit', 'tag'] | Polymarket odds via jina proxy to Gamma, then direct. Use for Fed/macro odds. | Odds Polymarket (outcomes+prob, sort vol24h). | `{"source": "https://r.jina.ai/https://gamma-api.polymarket.com", "events": [{"title": "Steelers vs. Browns", "slug": "nfl-pit-cle-2026-10-02", "tags": ["Sports"` | available |
+| polymarket_event | ['slug'] | One Polymarket event detail by slug (every market + odds). Use to drill in. | Chi tiết 1 event theo slug (mọi market + odds). | `{"slug": "nfl-pit-cle-2026-10-02", "title": "Steelers vs. Browns", "description": "In the upcoming NFL game, scheduled for October 1 at 8:15PM ET:\nIf Steelers ` | available |
+| geo_intel | ['topic', 'limit', 'days'] | Geopolitical coverage via GDELT. Use when geopolitics threatens markets. | Tin địa chính trị qua GDELT. | `{"query": "Vietnam", "articles": [{"title": "ĐT Việt Nam chuẩn bị sẵn sàng cho trận đại chiến ĐT Thái Lan", "url": "http://vov.vn/the-thao/dt-viet-nam-chuan-bi-` | available |
+| assets_rotation | [] | Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads. | Momentum 1y → RISK-ON/OFF (phân bổ). | `{"regime": "neutral/mixed", "signals": ["equities momentum up", "crypto negative (risk-off lean)"], "drivers": {"^GSPC": {"last": 7666.4501953125, "chg_1y_pct":` | available |
+| compare_equities | ['symbols', 'metrics'] | Head-to-head overview rows and momentum. Use when picking tickers. | Overview + momentum head-to-head (chọn mã). | `{"rows": [{"symbol": "VCB", "quote": {"symbol": "VCB", "time": 1790911726385, "exchange": "HOSE", "ceiling_price": 61600, "floor_price": 53600, "reference_price` | available |
+| evidence_bundle | ['claim_ids', 'calc_ids'] | Lock weighted conclusion by evidence bundle. Use last for final verdict. | Khóa kết luận có trọng số (dùng cuối để verdict). | `{"claims": ["c1"], "calc_ids": [], "locked": true, "note": "bundle closes server-side; attach calc ids at synthesis"}` | available |
+| oracle_meta | [] | Aggregator snapshot plus source health. Use for dashboard meta. | Snapshot aggregator + sức khỏe nguồn. | `{"pins": {"world": [{"ticker": "^GSPC", "last": 7666.4502, "spark": [7743.4102, 7683.6899, 7670.8398, 7651.54, 7666.4502]}, {"ticker": "^IXIC", "last": 26871.59` | available |
+
+## watchlist.py — 12 tools
+
+| Tool | Params | Descriptor | Mô tả chi tiết (TV) | Dữ liệu mẫu live 2026-10-02 | Avail |
+|---|---|---|---|---|---|
+| watchlist_create | ['name'] | Create a named watchlist. Use to start tracking a symbol group. | Tạo watchlist theo tên. | `{"id": 1, "name": "tmp-full135", "symbols": []}` | available |
+| watchlist_list | [] | List all watchlists with their symbols. Use to recall tracking state. | Liệt kê watchlists + mã. | `{"watchlists": [{"id": 1, "name": "tmp-full135", "symbols": [null]}]}` | available |
+| watchlist_get | ['list_id'] | Get one watchlist's symbols by id. Use before quoting a saved set. | Lấy mã 1 watchlist theo id. | `{"id": 1, "name": "tmp-full135", "symbols": [null]}` | available |
+| watchlist_add | ['list_id', 'symbols'] | Add symbols (deduped, uppercase) to a watchlist. Use to track more. | Thêm mã (dedupe, uppercase). | `{"list_id": 1, "added": 1, "symbols": ["VCB"]}` | available |
+| watchlist_remove | ['list_id', 'symbols'] | Remove symbols from a watchlist. Use to trim tracking. | Bớt mã khỏi watchlist. | `{"list_id": 1, "symbols": []}` | available |
+| watchlist_delete | ['list_id'] | Delete a watchlist and its items (cascade). Use to clean up. | Xóa watchlist + items (cascade). | `{"deleted": 1}` | available |
+| watchlist_update | ['list_id', 'name'] | Rename a watchlist. Use sparingly; names are unique labels. | Đổi tên watchlist. | `{"id": 1, "name": "tmp-full135b", "symbols": ["VCB"]}` | available |
+| alert_create | ['symbol', 'op', 'threshold', 'metric'] | Create a stored alert rule (input to alert_check). Use for live watch. | Tạo rule alert (input cho alert_check). | `{"symbol": "VCB", "metric": "price", "op": ">", "threshold": 999999.0, "active": true, "id": 1}` | available |
+| alert_list | [] | List stored alert rules (active and paused). Use before alert_check. | Liệt kê rules (active + paused). | `{"rules": [{"id": 1, "symbol": "VCB", "metric": "price", "op": ">", "threshold": 999999.0, "active": true}]}` | available |
+| alert_delete | ['rule_id'] | Delete a stored alert rule by id. Use to clean up alerts. | Xóa rule theo id. | `{"deleted": 1}` | available |
+| alert_pause | ['rule_id'] | Pause a stored alert rule (active=false). Use to silence alerts. | Tạm dừng rule. | `{"id": 1, "symbol": "VCB", "metric": "price", "op": ">", "threshold": 999999.0, "active": false, "state": "paused"}` | available |
+| alert_resume | ['rule_id'] | Resume a paused alert rule (active=true). Use to re-enable alerts. | Bật lại rule. | `{"id": 1, "symbol": "VCB", "metric": "price", "op": ">", "threshold": 999999.0, "active": true, "state": "resumed"}` | available |
+
+---
+
+# PHẦN II — 6 WORKFLOWS (prompts, chạy live 2026-10-02)
+
+Prompts không fetch data — chúng chỉ dẫn agent gọi tools theo thứ tự. Dưới đây là kết quả chạy thật từng workflow.
+
+## WF1 — morning_briefing (scope=vn): 5 available + 1 partial
+
+| # | Tool | Result live |
+|---|---|---|
+| 1 | brief_build | available 2.1s — Greed 70–74 (7 ngày), Fireant news live (Quỹ bình ổn xăng dầu, đất nền HN, thuế) |
+| 2 | market_overview | partial — VCB 57,400 (−0.35%), HPG 19,950 (−0.50%); session leg null (thiếu worker) |
+| 3 | breadth_scan | available — advancers 1 / decliners 6 |
+| 4 | money_flow | available — NN bán ròng (BuyVal 1,814 vs SellVal 2,268 tỷ) |
+| 5 | futures_basis | available — F1M premium +6.95 (+37bps) |
+| 6 | world_prediction_odds | available 9.9s — Fed giữ nguyên tháng 10: 74.5% |
+
+**Verdict WF1**: phiên yếu (breadth 1/6, bluechip đỏ, NN bán ròng), phái sinh premium nhẹ +37bps, macro ngoài êm (Fed 74.5% giữ). Unknowns: session chính xác (thiếu worker), NN intraday realtime.
+
+## WF2 — ticker_analysis (VCB): 8/8 available
+
+| # | Tool | Result live |
+|---|---|---|
+| 1 | stock_overview | available — VCB ~57,400, vốn hóa 479.6T |
+| 2 | signals_technical | available — RSI 39.2, ADX 12.1 (trend yếu), MACD −0.31/−0.13, giá dưới EMA10/20/50 |
+| 3 | valuation_run | available — per_pb @57,300 |
+| 4 | stock_forensic | available — DSRI 0.72/GMI 1.93/AQI 1.01/SGI 1.08, SGAI null (LCTT rỗng) → M partial, F 4/6, không flags |
+| 5 | insider_trading | available — không deals (đúng data) |
+| 6 | analyst_consensus | available — rỗng (không báo cáo mới, đúng) |
+| 7 | company_events | available — 487 docs, link PDF trực tiếp |
+| 8 | news_symbol | available — Fireant posts (lãi suất VCB 0.1–6%) |
+
+**Verdict WF2**: BEAR ngắn hạn (kỹ thuật yếu toàn diện) / NEUTRAL cơ bản (forensic sạch, minh bạch cao). Điều đổi nhận định: RSI <30 oversold thật hoặc vượt lại EMA50 58.74.
+
+## WF3 — pre_earnings (FPT): 13/13 available → Grade B
+
+| Leg | Tools | Result live |
+|---|---|---|
+| 1. Date | company_events + event_calendar_vn | 466 docs; thưởng CP 10:1 ex 21-09-2026 (đã qua); ngày BCTC Q3 chưa rõ → unknown |
+| 2. Trend | financial_statements | Q1–Q2/2026 số thật (warning: statement filter trả all pages) |
+| 3. Manipulation | stock_forensic | **M −2.06 sạch (đủ 7 chỉ số)**, F 2/6, không flags |
+| 4. Anchor | planned_targets + analyst_consensus + news_symbol + sentiment_score | KH DT 61,850/75,400/58,580 (2024/25/26); consensus rỗng; sentiment −0.25 heuristic (thiếu Groq key); tin HOSE chứng quyền |
+| 5. Positioning | insider_trading + money_flow + block_trades | insider none; NN bán ròng chung; FPT pt 0% hôm nay |
+| 6. Cushion | valuation_run + scenario_simulate | per_pb @62,700; shock −5% → −3,140đ/1000cp |
+
+**Verdict WF3**: Grade **B** — chất lượng sạch + KH rõ, trừ F-score thấp (2/6), sentiment âm, thiếu street coverage, chưa rõ ngày BCTC.
+
+## WF4 — sector_rotation: tiền vào Vật liệu, ra Tài chính/BĐS
+
+| # | Tool | Result live |
+|---|---|---|
+| 1 | sector_performance | available — Vật liệu **+1.12%** (YTD +8.9); Tài chính −0.8%; BĐS −1.33%; Năng lượng YTD +48.2% |
+| 2 | money_flow | available — NN bán ròng |
+| 3 | futures_basis | available — +6.58 (+35bps) |
+| 4 | ipo_calendar_vn | available — auctions rỗng, chỉ announcements cũ (đúng) |
+| 5 | compare_equities (HPG,HSG) | available — HPG 19,950 (−0.50%) vol 9.6tr |
+
+**Verdict WF4**: rotation **tài-chính/BĐS → vật-liệu (thép)** trong phiên; YTD thì năng lượng (+48%) và viễn thông (+39.8%) dẫn. Unknowns: leaders ngành vật liệu ngoài HPG/HSG.
+
+## WF5 — ai_detect (HPG, validate mode): 7/7 available → REJECT
+
+| Leg | Tools | Result live |
+|---|---|---|
+| 1. Trend | signals_technical | **FAIL** — 19.95 < sma50 21.37 < sma150 23.07 < sma200 23.31; RS −7.32; pos_52w 0.008; recommend Sell |
+| 2. Contraction | technicals | partial — oversold sâu (stoch 2.9/0.98, CCI −129.6), ATR 0.37 |
+| 3. Breakout | signals_scan + pattern_match | **FAIL** — scan 0 hits; pattern corr cao nhất 0.41 (yếu) |
+| 4. Fundamentals | vn_fundamentals + valuation_run | trung tính — có EPS/BVPS/PE; per_pb @19,900 |
+| 5. Flow | money_flow + block_trades | **FAIL** — NN bán ròng; pt chỉ 1.1% hôm nay |
+
+**Verdict WF5**: **REJECT (0–1/5 legs)** — đang rơi, ngồi ngay support 19.9. Invalidation: thủng 19.9 → tránh; chỉ xem lại khi vượt sma50 + scan có hit.
+
+## WF6 — risk_check (VCB,HPG buy 100tr): 10/10 available → HALF
+
+| # | Tool | Result live |
+|---|---|---|
+| 1 | quant_risk (VCB 63 phiên) | Sharpe −1.15, maxDD 12.3%, win 41% |
+| 2 | scenario_simulate | shock −5% @57.4 → −2,870đ/1000cp (≈ −5tr trên size 100tr) |
+| 3 | correlation_matrix | VCB-HPG 0.50 (91 phiên chung) |
+| 4 | stock_forensic ×2 | VCB: M partial, F 4/6; HPG: M −2.24, F 2/6; cả 2 không flags |
+| 5 | company_events + event_calendar_vn | VCB 487 docs; cổ tức 450đ đã qua ex 23-07 → không blackout 10 ngày |
+| 6 | valuation_run | per_pb @57,400 (cushion) |
+
+**Verdict WF6**: **HALF (size tối đa ~50tr)** — rủi ro lịch sử xấu (Sharpe âm, win <50%) nhưng forensic sạch + không blackout nên không NO-GO. Invalidation: VCB thủng 54.5. Unknowns: trượt giá khi bán mạnh, biến động sau ĐHĐCĐ, tương quan lúc stress.
+
+---
+
+## Phụ lục — Tools đã xóa (có thay thế)
+
 | Tool | Lý do xóa | Thay thế live |
 |---|---|---|
-| vs_reports_search | Route `CompanyReportSearch` 404 mọi params (cả code 8010 cũng fail) | `analyst_consensus`, `macro_reports` (revived qua scrape) |
-| vs_stock_industry | `model: []` mọi IndustryID level 1–3, cả `_post` lẫn `_post_json` | `vs_industry_tree` + `vs_industry_heatmap` |
-| vs_top_liquidity | Body rỗng mọi params, kể cả trong phiên | `market_movers` |
+| vs_reports_search | Route 404 mọi params | analyst_consensus, news_symbol |
+| vs_stock_industry | model rỗng mọi level | vs_industry_tree + vs_industry_heatmap |
+| vs_top_liquidity | Body rỗng | market_movers |
+| vs_news_search | dc route chết | news_market + sources=gdelt |
+| dnse_foreign_rest | Endpoint từ chối mọi range | dnse_foreign_flow, money_flow |
+| vs_financial_values | Gói JWT giới hạn kỳ | vs_financeinfo, financial_detail |
+| signals_trade_log | Log trống | runs_list/run_get |
+| macro_reports, mega_flows, foreign_flow, oracle_health | Alias/gộp | analyst_consensus, money_flow, oracle_meta |
 
-## Phụ lục P13 — Removed (worktree, chưa deploy)
-| Tool | Lý do xóa | Thay thế live |
+## Lịch sử phases (tóm tắt)
+
+| Phase | Nội dung | Commit |
 |---|---|---|
-| vs_news_search | dc route chết (`No HTTP resource`); `news_symbol`/`news_market` cùng provider (dùng `sources='gdelt'`) | `news_market` + `sources='gdelt'` |
-| dnse_foreign_rest | Endpoint từ chối mọi range from/to (400), WS flow là primary | `dnse_foreign_flow` (prod worker), `money_flow` |
-
-## Phụ lục P15 — Removed + revive (worktree)
-| Tool | Lý do | Thay thế live |
-|---|---|---|
-| vs_financial_values | Gói JWT giới hạn số kỳ (Package_Permission) — rows luôn rỗng | `vs_financeinfo` (mirror), `financial_detail` (P15 revive, số thật) |
-| signals_trade_log | Local log trống, không ai ghi | `runs_list`/`run_get` |
-| financial_detail | REVIVE P15: object-array form keys + permission filter → LIVE 138 số thật (FPT doanh thu/chi phí từng quý) | — |
-
-## Phụ lục P5–P6 (params + descriptors, đã ghi chi tiết trong skills_check.md)
-- **P5** (commit 7dcc77e): enrich params toàn bộ 126 tools (defaults backward-compat + 6 files contract tests `test_p5_*`, 65 tests). Ví dụ: quant thêm strategy/slippage_bps/benchmark, periods_per_year, lookback; scan thêm indicators/filters/max_pe/min_roe; brief thêm sources/scope/limit/date; intel thêm limit/status/tag/days/metrics/calc_ids.
-- **P6** (commit 258d634): viết lại descriptors — enum/format/đơn vị cho ~45 tools + disambiguation 6 nhóm overlap (flows ×5, news ×3, disclosures ×3, calendars ×4, reports ×2, statements ×3). Xóa dev-note trong dnse_ohlc_history; schema rules cho alert_check/alert_create.
-- **P8** (commit c8a9ddc): 6 prompts (ai_detect, risk_check, pre_earnings v2 thay v1, + refresh 3 cũ); `technicals.compute` thêm sma150/rs_vs_bench/pos_52w (signals_technical fetch VNINDEX best-effort).
-- **P10** (commit 1027287, deploy 2026-10-01): required POST fields — nn/selftrading/gics/marketinfo sống lại live (reverse-engineer bundles finance.vietstock.vn); macro toDate=today để nhận message permission thật; liquidity giữ unavailable trung thực.
-- **P11** (commit 4c91136, deploy 2026-10-01): breadth đếm Change hoa; reference qua KBS source; vàng BTMC https trực tiếp; financial_detail mới (chain free, chờ nâng tier). 258 tests passed.
-- **P15** (worktree): macro Standard-pack LIVE (GDP 504 rows tới Q2/26, CPI 1839, XK 2941, XNK 3675) qua HAR-session replay + term-type đúng; planned_targets fix YearPeriods-shape (FPT KH 58,580/75,400 live); stock_forensic M-Score/Piotroski đầy đủ từ detail (FPT M=-2.06, HPG -2.24, VCB partial); polymarket sort vol24h + tag_slug (Fed 73.5% live); OHLCV interval 1D/1W/1M; snapshots PG 13 kinds + worker 17:15 + snapshot_history; DB riêng `opentrading_mcp`.
-- **P9** (commit 17e1155, deploy 2026-10-01): honest-availability — news error-payload → unavailable; lookup không dấu; foreign errorCode → unavailable (endpoint từ chối mọi range); BCTC package-limit → unavailable + hint mirror; industry model-list + empty. Nguyên tắc: không bao giờ available-kèm-garbage.
-
-## Phụ lục P15 — full 135 tools live 2026-10-02 (có key, local)
-- Chạy thật 135/135 qua 2 batch (`/tmp/full135.txt`): **129 available · 1 partial (market_overview, session leg null) · 2 empty đúng bản chất (runs_list/run_get, chưa có runs) · 3 unavailable (WS trio, thiếu worker local — prod có)**. 0 tool chết.
-- Điểm nhấn live: macro GDP 504 rows tới Q2/26 · CPI 1839 · XK 2941 · XNK 3675; forensic FPT M=-2.06 sạch (7 chỉ số + F-score từ detail); planned_targets FPT KH DT 75,400/58,580; futures_basis +5.89 (+31bps); block_trades VCB thỏa thuận 48.85%; snapshot_history macro_curated count 2; brief_build 12.6s; polymarket Fed 73.5% giữ; yf_yield_curve US10Y ~5.2% không đảo.
-- 3 sự cố trong đợt chạy đều không phải bug code: `signals_scan` gọi sai signature cũ trong runner (code đúng, re-run available); 2 timeouts thoáng qua (valuation_run, financial_statements) re-run available; yf_yield_curve + GDELT tự hồi sau flaky.
-- Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:15432/opentrading_mcp" VIETSTOCK_HAR_FILE="docs/finance.vietstock.vn_Archive [26-10-01 18-35-43].har"`.
-
-## Docs vs code (skills_check.md Bảng 3) — chưa implement so docs
-- Kalshi → Manifold fallback cho odds (chỉ jina→Gamma)
-- PG read-only / 8010 fallback cho OHLCV, macro, BCTC (Fireant chain)
-- RSS fallback news (chỉ có Vietstock→GDELT)
-- OpenBB fallback global/macro
-- jina/webgia SJC fallback vàng
-- TTL cache: chỉ market_snapshot (60s) + worker loops dùng thật; odds TTL 2700s định nghĩa nhưng world_prediction_odds không dùng
+| P5 | Enrich params 126 tools (65 tests) | 7dcc77e |
+| P6 | Viết lại descriptors + disambiguation 6 nhóm overlap | 258d634 |
+| P7 | 17 tools mới (corp 7, crypto 2, quant 5, brief 2) | — |
+| P8 | 6 prompts + SEPA legs (sma150/rs/pos_52w) | c8a9ddc |
+| P9 | Honest-availability (không available-giả) | 17e1155 |
+| P10 | Required POST fields (nn/selftrading/gics/marketinfo sống lại) | 1027287 |
+| P11 | breadth case-fix, reference KBS, vàng BTMC https | 4c91136 |
+| P12/P13 | Xóa tools chết | ac99396, e1fd4b9 |
+| P14 | Macro HAR-session + snapshots PG + catalog 136 | 958b957 |
+| P15 | BCTC-detail revive + forensic rewrite + full-135 live | 3485e6a |
+| Docs | Full-135 + fix stale counts + 6 workflows live | 1d9f498 |
