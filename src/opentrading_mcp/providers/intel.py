@@ -216,8 +216,11 @@ def prediction_odds(
     for base, return_format in attempts:
         try:
             headers = {"X-Return-Format": return_format} if return_format else None
+            qs = "active=true&closed=false&limit=100&order=volume24hr&ascending=false"
+            if tag:
+                qs += f"&tag_slug={tag}"
             response = httpx.get(
-                f"{base}/events?active=true&closed=false&limit=100",
+                f"{base}/events?{qs}",
                 timeout=30,
                 headers=headers,
             )
@@ -332,13 +335,49 @@ def fear_greed() -> dict[str, Any]:
     }
 
 
+_GDELT_CACHE_TTL = 600
+
+
 def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str, Any]:
-    body = _get_json(
-        "https://api.gdeltproject.org/api/v2/doc/doc",
-        {"query": query, "mode": "artlist", "maxrecords": min(max_records, 50), "format": "json"},
-    )
+    """GDELT article list with Redis cache + one 20s backoff retry (P15).
+
+    GDELT throttles per-IP aggressively; the cache also keeps news_market /
+    news_symbol / geo_intel / event_stats from hammering the same endpoint.
+    """
+    from opentrading_mcp.cache import cache_key
+    from opentrading_mcp.providers.store import cache_get, cache_set
+
+    key = cache_key("gdelt", "events", f"{query}|{max_records}")
+    hit = cache_get(key)
+    if hit is not None:
+        import json
+
+        cached: dict[str, Any] = json.loads(hit)
+        return cached
+    params = {
+        "query": query,
+        "mode": "artlist",
+        "maxrecords": min(max_records, 50),
+        "format": "json",
+    }
+    body = None
+    last_exc: Exception | None = None
+    for attempt in (1, 2):
+        try:
+            body = _get_json("https://api.gdeltproject.org/api/v2/doc/doc", params)
+            break
+        except ProviderUnavailable as exc:
+            last_exc = exc
+            if attempt == 1 and "rate limited" in str(exc):
+                import time
+
+                time.sleep(20)
+            else:
+                raise
+    if body is None:
+        raise ProviderUnavailable(str(last_exc) if last_exc else "gdelt failed")
     articles = body.get("articles", []) if isinstance(body, dict) else []
-    return {
+    out = {
         "query": query,
         "articles": [
             {
@@ -350,3 +389,5 @@ def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str
             for a in articles
         ],
     }
+    cache_set(key, out, _GDELT_CACHE_TTL)
+    return out

@@ -444,6 +444,38 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         return make_envelope(data, source="vietstock")
 
+    @server.tool(annotations=READ_ONLY)
+    async def financial_detail(
+        symbol: str,
+        statement: str = "KQKD",
+        periods_n: int = 4,
+        ctx: AnyContext | None = None,
+    ) -> dict[str, Any]:
+        """FULL detailed statements, every line item per period. Use for deep BCTC reads.
+
+        statement: KQKD (income), CDKT (balance), LCTT (cashflow), TM (notes),
+        BCTT. periods_n: recent permitted periods (unit VND billions; only
+        IsShowData_Permission=True periods). Real values on the Standard pack
+        via browser-session replay (HAR/env seed) — rows {norm_id, name,
+        values[...]}; report unavailable when the session gate rejects.
+        """
+        if ctx is not None:
+            await ctx.log("info", f"financial_detail {symbol} {statement}")
+        try:
+            data = await run_blocking(
+                functools.partial(vs_p.financial_detail, symbol, statement, periods_n),
+                "financial_detail",
+                timeout_secs=90.0,
+            )
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "financial_detail"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        return make_envelope(data, source="vietstock")
+
     return [
         {"name": "dividends_splits"},
         {"name": "holders"},
@@ -453,4 +485,5 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "ipo_calendar_vn"},
         {"name": "futures_basis"},
         {"name": "planned_targets"},
+        {"name": "financial_detail"},
     ]

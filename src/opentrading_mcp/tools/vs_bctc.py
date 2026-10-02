@@ -46,29 +46,6 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vs_financial_norms", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def vs_financial_values(
-        symbol: str, btype: int = 1, years: int = 3, tids: list[int] | None = None
-    ) -> dict[str, Any]:
-        """Paid BCTC values matrix (default tids [2,3,4,5,9]). Use for statements.
-
-        tids: report term ids (1 full-year, 2 Q1, 3 Q2, 4 Q3, 5 Q4, 9 half-year, 12 9M).
-        Paid JWT package limits exportable periods; when limited the tool reports
-        unavailable — use vs_financeinfo (free mirror) instead.
-        """
-        try:
-            data = await _call("v", vs_p.financial_values, symbol, btype, years, tids)
-            rows = data.get("rows", []) if isinstance(data, dict) else []
-            if not rows:
-                return _na(
-                    "vs_financial_values",
-                    "BCTC package limited or empty for this JWT; "
-                    "use vs_financeinfo (free mirror) instead",
-                )
-            return make_envelope(data, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vs_financial_values", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
     async def vs_company_info(symbol: str) -> dict[str, Any]:
         """Company names, exchange and description. Use for profiles."""
         try:
@@ -193,7 +170,6 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     return [
         {"name": "vs_financial_terms"},
         {"name": "vs_financial_norms"},
-        {"name": "vs_financial_values"},
         {"name": "vs_company_info"},
         {"name": "vs_overview_trading"},
         {"name": "vs_documents"},

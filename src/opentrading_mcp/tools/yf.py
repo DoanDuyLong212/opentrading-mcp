@@ -22,17 +22,21 @@ def _na(tool: str, reason: str) -> dict[str, Any]:
 def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def yf_global_indices(
-        tickers: list[str] | None = None, ctx: AnyContext | None = None
+        tickers: list[str] | None = None,
+        period: str = "2d",
+        interval: str = "1d",
+        ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """9 global benchmarks, 2d daily. Use for overnight context.
+        """9 global benchmarks. Use for overnight context.
 
-        tickers: subset override (default GLOBAL 9).
+        tickers: subset override (default GLOBAL 9). period/interval: yfinance
+        spellings ('2d', '1wk', '1mo'... x '1d'/'1wk').
         """
         if ctx is not None:
             await ctx.report_progress(0, 1, "fetch global")
         try:
             data = await run_blocking(
-                functools.partial(yf_p.batch_last, tickers or yf_p.GLOBAL_9),
+                functools.partial(yf_p.batch_last, tickers or yf_p.GLOBAL_9, period, interval),
                 "yf_global_indices",
                 timeout_secs=50.0,
             )
@@ -41,14 +45,17 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("yf_global_indices", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def yf_commodities(tickers: list[str] | None = None) -> dict[str, Any]:
+    async def yf_commodities(
+        tickers: list[str] | None = None, period: str = "2d", interval: str = "1d"
+    ) -> dict[str, Any]:
         """Gold, oil, metals, BTC, VND and dollar index. Use for input-cost context.
 
-        tickers: subset override (default COMMO 13).
+        tickers: subset override (default COMMO 13). period/interval: yfinance
+        spellings.
         """
         try:
             data = await run_blocking(
-                functools.partial(yf_p.batch_last, tickers or yf_p.COMMO_13),
+                functools.partial(yf_p.batch_last, tickers or yf_p.COMMO_13, period, interval),
                 "yf_commodities",
                 timeout_secs=50.0,
             )

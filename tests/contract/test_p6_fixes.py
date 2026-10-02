@@ -53,39 +53,6 @@ async def test_foreign_rest_errorcode_is_unavailable(monkeypatch):
         dnse_p._coerce_foreign({"errorCode": 400, "message": "range exceeds maximum time range"})
 
 
-async def test_financial_values_empty_rows_is_unavailable(monkeypatch):
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        return {"symbol": "VCB", "norms": 256, "rows": []}
-
-    import opentrading_mcp.tools.vs_bctc as bctc_mod
-
-    monkeypatch.setattr(bctc_mod, "_call", fake_call)
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("vs_financial_values")
-    assert tool is not None
-    env = await tool.fn(symbol="VCB")
-    assert env["availability"] == "unavailable"
-    assert any("mirror" in w for w in env["warnings"])
-
-
-async def test_financial_values_package_error_is_unavailable(monkeypatch):
-    from opentrading_mcp.providers.errors import ProviderAuthMissing
-
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        raise ProviderAuthMissing("vietstock package limited: Package_Permission_Year_Period")
-
-    import opentrading_mcp.tools.vs_bctc as bctc_mod
-
-    monkeypatch.setattr(bctc_mod, "_call", fake_call)
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("vs_financial_values")
-    assert tool is not None
-    env = await tool.fn(symbol="VCB")
-    assert env["availability"] == "unavailable"
-
-
 def test_financial_values_provider_surfaces_package_error(monkeypatch):
     import pytest
 

@@ -26,7 +26,21 @@ SNAPSHOT_KINDS = (
     "futures_basis",
     "documents_feed",
     "events_feed",
+    "news_feed",
 )
+
+
+def _json_safe(obj: Any) -> Any:
+    """Recursively NaN/Inf -> None so PG JSONB accepts the blob."""
+    import math
+
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
 
 
 def save(kind: str, payload: Any, day: str | None = None) -> bool:
@@ -39,7 +53,11 @@ def save(kind: str, payload: Any, day: str | None = None) -> bool:
             cur.execute(
                 "INSERT INTO daily_snapshots (date, kind, payload) VALUES (%s, %s, %s)"
                 " ON CONFLICT (date, kind) DO UPDATE SET payload = EXCLUDED.payload",
-                (day or date.today().isoformat(), kind, json.dumps(payload, default=str)),
+                (
+                    day or date.today().isoformat(),
+                    kind,
+                    json.dumps(_json_safe(payload), default=str, allow_nan=False),
+                ),
             )
         conn.commit()
         return True
@@ -132,6 +150,9 @@ def snapshot_once(day: str | None = None) -> dict[str, Any]:
         },
     )
     _run("vn30_quotes", lambda: vn_p.equity_quote_batch(vn_p.VN30))
+    from opentrading_mcp.providers import intel as intel_p
+
+    _run("news_feed", lambda: intel_p.fireant_posts(None, 50))
     _run("documents_feed", lambda: vs_p.documents("VCB", 60))
     _run("events_feed", lambda: vs_p.event_calendar("dividends", "", 100))
     return out

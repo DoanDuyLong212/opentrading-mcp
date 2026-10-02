@@ -53,7 +53,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData):
             sections["world_pins"] = None
         try:
-            sections["news"] = await _call("n", vs_p.news_search, "thị trường chứng khoán", 10)
+            sections["news"] = await _call("n", intel_p.fireant_posts, None, 10, secs=45.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             try:
                 sections["news"] = (
@@ -92,9 +92,10 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def news_market(limit: int = 10, sources: str | None = None) -> dict[str, Any]:
-        """Market news: Vietstock first, GDELT fallback. Use for catalyst checks.
+        """Market news: Fireant posts first, GDELT fallback. Use for catalyst checks.
 
-        sources: 'gdelt' routes straight to GDELT (default tries Vietstock first).
+        sources: 'gdelt' routes straight to GDELT. Default reads the Fireant
+        crowd feed (token from env) and falls back to GDELT when empty.
         """
         if sources == "gdelt":
             try:
@@ -103,42 +104,44 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             except (ProviderUnavailable, ProviderBadData) as exc:
                 return _na("news_market", str(exc))
         try:
-            data = await _call("n", vs_p.news_search, "thị trường chứng khoán", limit)
-            return make_envelope({"articles": data}, source="vietstock")
+            posts = await _call("f", intel_p.fireant_posts, None, limit, secs=45.0)
+            if posts:
+                return make_envelope({"posts": posts}, source="fireant")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
-            try:
-                data = await _call("g", intel_p.gdelt_events, "vietnam market", 20)
-                return make_envelope(data, source="gdelt")
-            except (ProviderUnavailable, ProviderBadData) as exc:
-                return _na("news_market", str(exc))
+            pass
+        try:
+            data = await _call("g", intel_p.gdelt_events, "vietnam market", 20)
+            return make_envelope(data, source="gdelt")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("news_market", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def news_symbol(
         symbol: str, limit: int = 10, sources: str | None = None
     ) -> dict[str, Any]:
-        """Symbol news via Vietstock search. Use to verify rumors.
+        """Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors.
 
-        sources: 'gdelt' routes straight to GDELT. Default tries Vietstock dc
-        first, falls back to GDELT when the dc route is down (P14 — it is
-        currently down, so expect the GDELT leg to serve).
+        sources: 'gdelt' routes straight to GDELT. Default reads Fireant posts
+        tagged with the symbol and falls back to GDELT when empty.
         """
+        sym = symbol.strip().upper()
         if sources == "gdelt":
             try:
-                data = await _call("g", intel_p.gdelt_events, symbol.upper(), limit)
+                data = await _call("g", intel_p.gdelt_events, sym, limit)
                 return make_envelope(data, source="gdelt")
             except (ProviderUnavailable, ProviderBadData) as exc:
                 return _na("news_symbol", str(exc))
         try:
-            data = await _call("n", vs_p.news_search, symbol.upper(), limit)
-            return make_envelope({"symbol": symbol.upper(), "articles": data}, source="vietstock")
+            posts = await _call("f", intel_p.fireant_posts, sym, limit, secs=45.0)
+            if posts:
+                return make_envelope({"symbol": sym, "posts": posts}, source="fireant")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
-            try:
-                data = await _call(
-                    "g", intel_p.gdelt_events, f"{symbol.upper()} stock", 20, secs=45.0
-                )
-                return make_envelope(data, source="gdelt")
-            except (ProviderUnavailable, ProviderBadData) as exc:
-                return _na("news_symbol", str(exc))
+            pass
+        try:
+            data = await _call("g", intel_p.gdelt_events, f"{sym} stock", 20, secs=45.0)
+            return make_envelope(data, source="gdelt")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return _na("news_symbol", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def economic_calendar(scope: str = "vn", limit: int = 20) -> dict[str, Any]:

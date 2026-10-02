@@ -165,15 +165,15 @@ async def test_yf_global_indices_tickers_subset(monkeypatch):
 
     seen: dict[str, Any] = {}
 
-    def fake_batch(tickers: list[str]):
-        seen["tickers"] = tickers
+    def fake_batch(tickers: list[str], period: str = "2d", interval: str = "1d"):
+        seen.update(tickers=tickers, period=period, interval=interval)
         return [{"ticker": t} for t in tickers]
 
     monkeypatch.setattr(yf_p, "batch_last", fake_batch)
     fn = _tool_fn("yf_global_indices", "market")
-    env = await fn(tickers=["^GSPC"])
+    env = await fn(tickers=["^GSPC"], period="5d", interval="1d")
     _check_envelope(env, "yf_global_indices")
-    assert seen == {"tickers": ["^GSPC"]}
+    assert seen == {"tickers": ["^GSPC"], "period": "5d", "interval": "1d"}
 
 
 async def test_yf_oracle_groups_filter(monkeypatch):

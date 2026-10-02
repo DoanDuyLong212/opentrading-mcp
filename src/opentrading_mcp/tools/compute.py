@@ -54,15 +54,6 @@ def _find_numbers(payload: Any, *needles: str, limit: int = 12) -> list[float]:
     return found
 
 
-def _read_trade_log() -> list[dict[str, Any]] | None:
-    for candidate in ("trade_log.json", "data/trade_log.json"):
-        if os.path.exists(candidate):
-            with open(candidate, encoding="utf-8") as fh:
-                rows = json.load(fh)
-            return rows if isinstance(rows, list) else []
-    return None
-
-
 def _read_runs() -> list[dict[str, Any]] | None:
     path = os.environ.get("MCP_RUNS_FILE", "data/runs.jsonl")
     if not os.path.exists(path):
@@ -76,43 +67,233 @@ def _read_runs() -> list[dict[str, Any]] | None:
     return rows
 
 
+def _fd_series(detail: dict[str, Any], include: str, exclude: str = "") -> list[float]:
+    """Sum values of detail rows whose name matches include (and no exclude)."""
+    if not isinstance(detail, dict):
+        return []
+    series: list[float] | None = None
+    for row in detail.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "").lower()
+        if include not in name or (exclude and exclude in name):
+            continue
+        values = [
+            float(v) if isinstance(v, (int, float)) else 0.0 for v in (row.get("values") or [])
+        ]
+        if not any(values):
+            continue
+        if series is None:
+            series = values
+        else:
+            series = [a + b for a, b in zip(series, values, strict=False)]
+    return series or []
+
+
+def _fd_pick(detail: dict[str, Any], *priority: tuple[str, str]) -> list[float]:
+    """First matching (include, exclude) pair that yields a series."""
+    for include, exclude in priority:
+        got = _fd_series(detail, include, exclude)
+        if got:
+            return got
+    return []
+
+
+def _fd_first(detail: dict[str, Any], *needles: str) -> list[float]:
+    for needle in needles:
+        got = _fd_series(detail, needle)
+        if got:
+            return got
+    return []
+
+
 def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
-    async def stock_forensic(symbol: str, detail: bool = False) -> dict[str, Any]:
-        """M-Score and Piotroski from mirror statements. Use for earnings-quality flags.
+    async def stock_forensic(
+        symbol: str,
+        detail: bool = False,
+        periods_n: int = 4,
+        ctx: AnyContext | None = None,
+    ) -> dict[str, Any]:
+        """Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).
 
-        detail: false returns flags+score only; true adds the raw input series.
+        Sources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,
+        cash, CFO). M-Score is 7-index (DEPI excluded — not exposed); full
+        formula only when every input exists, else partial with missing list.
+        F-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;
+        share-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.
+        detail=true adds raw input series.
         """
+        sym = symbol.strip().upper()
         try:
-            data = await _call("f", vs_p.financeinfo, symbol, "quarter", secs=60.0)
+            kq = await _call(
+                "fk", vs_p.financial_detail, sym, "KQKD", max(int(periods_n), 2), secs=60.0
+            )
+            cd = await _call(
+                "fc", vs_p.financial_detail, sym, "CDKT", max(int(periods_n), 2), secs=60.0
+            )
+            # LCTT detail is empty upstream on Standard pack (norms {} + values 0) —
+            # CFO items are only counted when BCTC paid unlocks LCTT later.
+            try:
+                lc = await _call(
+                    "fl", vs_p.financial_detail, sym, "LCTT", max(int(periods_n), 2), secs=60.0
+                )
+            except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
+                lc = {}
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("stock_forensic", str(exc))
-        rev = _find_numbers(data, "doanh thu", "revenue", "net sales")
-        recv = _find_numbers(data, "phai thu", "receiv")
-        assets = _find_numbers(data, "tong tai san", "total asset")
-        if len(rev) < 2 or not recv or not assets:
+        rev = _fd_pick(
+            kq,
+            ("doanh thu thuần về bán hàng", ""),
+            ("thu nhập lãi thuần", ""),
+            ("doanh thu thuần", ""),
+        )
+        gross = _fd_pick(kq, ("lợi nhuận gộp", ""), ("lợi nhuận gộp về bán hàng", ""))
+        ni = _fd_pick(kq, ("sau thuế", "mẹ"), ("sau thuế", "cổ đông"))
+        recv = _fd_pick(cd, ("phải thu ngắn hạn", "dự phòng"), ("phải thu", "dự phòng"))
+        recv = recv or _fd_pick(cd, ("phải thu", ""))
+        assets = _fd_first(cd, "tổng cộng tài sản", "tổng tài sản")
+        cash = _fd_first(cd, "tiền và tương đương", "tiền ")
+        curr_assets = _fd_first(cd, "tài sản ngắn hạn")
+        curr_liab = _fd_first(cd, "nợ ngắn hạn")
+        debt = _fd_first(cd, "nợ phải trả")
+        equity = _fd_first(cd, "vốn chủ sở hữu")
+        cfo = _fd_pick(lc, ("thuần từ hoạt động kinh doanh", ""), ("kinh doanh", "đầu tư"))
+        selling = _fd_first(kq, "chi phí bán hàng")
+        admin = _fd_first(kq, "chi phí quản lý")
+        if len(rev) < 2 or not assets:
             return make_envelope(
-                {"symbol": symbol.upper(), "note": "insufficient mirror fields"},
+                {"symbol": sym, "note": "insufficient detail fields", "missing": True},
                 source="vietstock",
                 availability="empty",
             )
-        dsri = (recv[0] / rev[0]) / (recv[1] / rev[1]) if rev[1] and recv[1] else None
-        sgi = rev[0] / rev[1] if rev[1] else None
-        flags = []
+
+        def _g(seq: list[float], back: int) -> float | None:
+            """Value back positions from newest end; None when absent/empty."""
+            if not seq or len(seq) <= back:
+                return None
+            return seq[len(seq) - 1 - back]
+
+        def _safe_div(num: Any, den: Any) -> float | None:
+            if num is None or den is None or den == 0:
+                return None
+            return float(num) / float(den)
+
+        rev_t, rev_p = _g(rev, 0), _g(rev, 1)
+        recv_t, recv_p = _g(recv, 0), _g(recv, 1)
+        assets_t, assets_p = _g(assets, 0), _g(assets, 1)
+        dsri = _safe_div(_safe_div(recv_t, rev_t), _safe_div(recv_p, rev_p))
+        gross_t, gross_p = _g(gross, 0), _g(gross, 1)
+        ni_t, ni_p = _g(ni, 0), _g(ni, 1)
+        if gross_t is None and ni_t is not None:
+            gross_t = rev_t - ni_t if rev_t is not None else None
+        if gross_p is None and ni_p is not None:
+            gross_p = rev_p - ni_p if rev_p is not None else None
+        gmi = _safe_div(
+            _safe_div(gross_p, rev_p) or _safe_div((rev_p or 0) - (ni_p or 0), rev_p),
+            _safe_div(gross_t, rev_t) or _safe_div((rev_t or 0) - (ni_t or 0), rev_t),
+        )
+        cash = cash or []
+        cash_t, cash_p = _g(cash, 0) or 0.0, _g(cash, 1) or 0.0
+        ca_t, ca_p = _g(curr_assets, 0), _g(curr_assets, 1)
+        cl_t, cl_p = _g(curr_liab, 0), _g(curr_liab, 1)
+        aqi_num_t = 1 - (_safe_div((ca_t or 0) - (cl_t or 0) - cash_t, assets_t) or 0)
+        aqi_num_p = 1 - (_safe_div((ca_p or 0) - (cl_p or 0) - cash_p, assets_p) or 0)
+        aqi = _safe_div(aqi_num_t, aqi_num_p) if assets_t and assets_p else None
+        sgi = _safe_div(rev_t, rev_p)
+        selling_t, selling_p = _g(selling, 0), _g(selling, 1)
+        admin_t, admin_p = _g(admin, 0), _g(admin, 1)
+        sgai = _safe_div(
+            _safe_div((selling_t or 0) + (admin_t or 0), rev_t),
+            _safe_div((selling_p or 0) + (admin_p or 0), rev_p),
+        )
+        debt_t, debt_p = _g(debt, 0), _g(debt, 1)
+        eq_t, eq_p = _g(equity, 0), _g(equity, 1)
+        lvgi = _safe_div(_safe_div(debt_t, eq_t), _safe_div(debt_p, eq_p))
+        cfo_t = _g(cfo, 0)
+        tata = (
+            _safe_div((ni_t or 0) - (cfo_t or 0), assets_t)
+            if ni_t is not None and assets_t
+            else None
+        )
+        missing = [
+            k
+            for k, v in (
+                ("dsri", dsri),
+                ("gmi", gmi),
+                ("aqi", aqi),
+                ("sgai", sgai),
+                ("lvgi", lvgi),
+                ("tata", tata),
+            )
+            if v is None
+        ]
+        raw_parts = [
+            (0.92, dsri),
+            (0.528, gmi),
+            (0.404, aqi),
+            (0.892, sgi),
+            (0.115, sgai),
+            (4.679, tata),
+            (-0.327, lvgi),
+        ]
+        parts = [c * v for c, v in raw_parts if v is not None]
+        m_score = round(-4.84 + sum(parts), 4) if not missing else None
+        flags: list[str] = []
         if dsri and dsri > 1.2:
             flags.append("receivables growing faster than sales (DSRI>1.2)")
         if sgi and sgi > 1.3:
             flags.append("unusually fast sales growth (SGI>1.3)")
-        score = (0 if dsri and dsri > 1.2 else 1) + (0 if sgi and sgi > 1.3 else 1)
+        if m_score is not None and m_score > -1.78:
+            flags.append(f"M-Score {m_score} above -1.78 (manipulation evidence)")
+        # Piotroski: 6 items always computable here; +2 CFO items when LCTT exists.
+        items: list[tuple[str, bool | None]] = []
+        if ni_t is not None and assets_t:
+            roa_t, roa_p = _safe_div(ni_t, assets_t), _safe_div(ni_p, assets_p)
+            items.append(("ROA>0", roa_t is not None and roa_t > 0))
+            items.append(("dROA>0", roa_t is not None and roa_p is not None and roa_t > roa_p))
+            lev_t, lev_p = _safe_div(debt_t, eq_t), _safe_div(debt_p, eq_p)
+            items.append(
+                ("leverage down", lev_t is not None and lev_p is not None and lev_t < lev_p)
+            )
+            cr_t, cr_p = _safe_div(ca_t, cl_t), _safe_div(ca_p, cl_p)
+            items.append(
+                ("current ratio up", cr_t is not None and cr_p is not None and cr_t > cr_p)
+            )
+            gm_t, gm_p = _safe_div(gross_t, rev_t), _safe_div(gross_p, rev_p)
+            items.append(("gross margin up", gm_t is not None and gm_p is not None and gm_t > gm_p))
+            to_t, to_p = _safe_div(rev_t, assets_t), _safe_div(rev_p, assets_p)
+            items.append(("turnover up", to_t is not None and to_p is not None and to_t > to_p))
+            if cfo_t is not None:
+                items.append(("CFO>0", cfo_t > 0))
+                items.append(("CFO>NI", ni_t is not None and cfo_t > ni_t))
+        counted = sum(1 for _, ok in items if ok is True)
         out: dict[str, Any] = {
-            "symbol": symbol.upper(),
-            "dsri": dsri,
-            "sgi": sgi,
-            "piotroski_lite": f"{score}/2",
+            "symbol": sym,
+            "dsri": round(dsri, 4) if dsri else None,
+            "gmi": round(gmi, 4) if gmi else None,
+            "aqi": round(aqi, 4) if aqi else None,
+            "sgi": round(sgi, 4) if sgi else None,
+            "sgai": round(sgai, 4) if sgai else None,
+            "lvgi": round(lvgi, 4) if lvgi else None,
+            "tata": round(tata, 4) if tata is not None else None,
+            "m_score": m_score,
+            "m_partial": missing or None,
+            "f_score": f"{counted}/{len(items)}",
             "flags": flags,
         }
         if detail:
-            out["series"] = {"revenue": rev, "receivables": recv, "assets": assets}
+            out["series"] = {
+                "revenue": rev,
+                "gross": gross,
+                "net_income": ni,
+                "receivables": recv,
+                "assets": assets,
+                "cash": cash,
+                "cfo": cfo,
+            }
+        if ctx is not None:
+            await ctx.log("info", f"stock_forensic {sym} f={counted}")
         return make_envelope(out, source="computed-local")
 
     @server.tool(annotations=READ_ONLY)
@@ -458,37 +639,6 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def signals_trade_log(days: int = 365, side: str | None = None) -> dict[str, Any]:
-        """Local trade log. Use for label building.
-
-        days: keep trades from the last N days (date-prefixed rows only).
-        side: 'buy' or 'sell' filter (case-insensitive).
-        """
-        try:
-            rows = await run_blocking(_read_trade_log, "signals_trade_log", timeout_secs=10.0)
-        except ProviderUnavailable as exc:
-            return _na("signals_trade_log", str(exc))
-        if rows is None:
-            return make_envelope({"trades": []}, source="local", availability="empty")
-        if side is not None:
-            rows = [r for r in rows if str(r.get("side", "")).lower() == side.lower()]
-        if days is not None:
-            from datetime import date, timedelta
-
-            cutoff = (date.today() - timedelta(days=max(int(days), 0))).isoformat()
-            kept = []
-            for r in rows:
-                stamp = ""
-                for key in ("date", "time", "timestamp", "created_at", "day"):
-                    if r.get(key):
-                        stamp = str(r[key])[:10]
-                        break
-                if not stamp or stamp >= cutoff:
-                    kept.append(r)
-            rows = kept
-        return make_envelope({"trades": rows}, source="local")
-
-    @server.tool(annotations=READ_ONLY)
     async def snapshot_history(kind: str, days: int = 90) -> dict[str, Any]:
         """Daily-snapshot history saved by the worker. Use for data that vanishes.
 
@@ -608,7 +758,6 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "peer_compare"},
         {"name": "signals_scan"},
         {"name": "pattern_match"},
-        {"name": "signals_trade_log"},
         {"name": "event_stats"},
         {"name": "snapshot_history"},
         {"name": "compare_assets"},

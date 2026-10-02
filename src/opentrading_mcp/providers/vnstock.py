@@ -8,19 +8,28 @@ from typing import Any
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
 
-def quote_history(symbol: str, days: int = 365) -> list[dict[str, Any]]:
+def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[dict[str, Any]]:
+    """Daily/weekly/monthly candles; interval 1D|1W|1M (P15, probe-verified)."""
     try:
         from vnstock import Quote
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     symbol = symbol.upper()
+    iv = interval.strip().upper()
+    if iv not in ("1D", "1W", "1M"):
+        raise ProviderBadData(f"unknown interval {interval!r} (1D|1W|1M)")
+    span = max(days, 5) + 30
+    if iv == "1W":
+        span = span * 7 + 40
+    elif iv == "1M":
+        span = span * 31 + 60
     end = date.today().isoformat()
-    start = (date.today() - timedelta(days=max(days, 5) + 30)).isoformat()
+    start = (date.today() - timedelta(days=span)).isoformat()
     frame = None
     for source in ("VCI", "KBS"):
         try:
             candidate = Quote(symbol=symbol, source=source).history(
-                start=start, end=end, interval="1D"
+                start=start, end=end, interval=iv
             )
             if candidate is not None and len(candidate) > 0:
                 frame = candidate

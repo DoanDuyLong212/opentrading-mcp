@@ -239,3 +239,24 @@ X-Forwarded-For: <ip>                        ← Render proxy chèn (dùng cho r
    available-giả; lookup không dấu (NFD+Đ→D); DNSE REST 7/7 sống lại với key thật
    (foreign-trading endpoint từ chối mọi range 10m→30d); orderbook rỗng lúc 00:05 là
    đúng (ngoài giờ). pytest 239 passed.
+
+## 8. P14–P15: storage theo ngày + macro thật + tối ưu catalog
+
+- **DB riêng `opentrading_mcp`** (PG 15432, không đụng db 8010): `dbinit` idempotent
+  6 bảng (watchlists/items, alert_rules, mcp_auth_tokens, mcp_tool_usage đúng schema
+  quota, **daily_snapshots(date,kind,payload)**); watchlist `_pg()` auto-ensure +
+  write-fallback file khi SQL lỗi; `MCP_DB_URL`/`DATABASE_URL` trỏ db mới.
+- **Worker `snapshot_loop`** 17:15 VN/ngày: 13 kinds best-effort (market_board,
+  breadth_3ex, flows_charts NN/prop, heatmap_gics, gold_btmc, sbv_rates, nso_releases,
+  analyst_titles, macro_curated GDP/CPI/FX/XNK, vn30_quotes, news_feed, documents/events
+  feeds) — live 13/13 ok (vàng 552KB, macro 1.5MB). Tool mới **`snapshot_history`**.
+  Fix kèm: `_json_safe` (NaN→None cho PG JSONB), load() chịu dict/list/str.
+- **Vietstock HAR-session replay**: env `VIETSTOCK_COOKIE_HEADER`+`VIETSTOCK_PAGE_TOKEN`
+  hoặc parse `docs/*.har` (gitignore, không commit). Standard pack LẤY ĐƯỢC macro đầy đủ
+  (bằng chứng replay cookie trình duyệt + termType đúng). Redis cache TTL 6h cho macro,
+  10p cho GDELT (retry backoff 20s ×1).
+- **Catalog 136**: xóa macro_reports + 3 alias + vs_financial_values + signals_trade_log
+  (P12–P15, có thay thế documented); thêm polymarket_event + planned_targets +
+  snapshot_history + financial_detail(revive); market_snapshot VN30-30;
+  signals_scan HOSE ≤300; OHLCV interval 1D/1W/1M; news Fireant primary.
+- Verify P15: pytest, ruff + format, mypy (trừ pre-existing) — xem báo cáo commit.

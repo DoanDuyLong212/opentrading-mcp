@@ -225,6 +225,22 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             prices = await run_blocking(vs_p.market_price, "breadth_scan", timeout_secs=30.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            from opentrading_mcp import snapshots
+
+            stale_rows = await run_blocking(
+                functools.partial(snapshots.load, "breadth_3ex", 1),
+                "breadth_scan",
+                timeout_secs=10.0,
+            )
+            if stale_rows:
+                payload = stale_rows[0].get("payload") or {}
+                boards = payload.get("rows", payload) if not isinstance(payload, list) else payload
+                return make_envelope(
+                    {"from_snapshot": True, "exchanges": boards},
+                    source="cache-stale",
+                    warnings=[f"live unavailable, snapshot fallback: {exc}"],
+                    availability="stale",
+                )
             return _unavailable("breadth_scan", str(exc))
         rows = prices if isinstance(prices, list) else []
         warnings: list[str] = []

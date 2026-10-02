@@ -55,6 +55,7 @@ COMMO_13 = [
 def batch_last(
     tickers: list[str], period: str = "2d", interval: str = "1d"
 ) -> list[dict[str, Any]]:
+    """Batch last prices; period/interval pass yfinance spellings through."""
     try:
         import yfinance as yf
     except ImportError as exc:

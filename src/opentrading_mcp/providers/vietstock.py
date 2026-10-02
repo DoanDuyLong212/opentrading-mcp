@@ -525,54 +525,113 @@ _DETAIL_FILTER = {
 }
 
 
-def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -> dict[str, Any]:
-    """Free detailed statements via /data/* chain (P11, no paid package).
+def _detail_session_post(path: str, data: dict[str, Any]) -> Any:
+    """POST the /data detail chain via the browser-session when seeded.
 
-    norms -> periods -> batched detail values. Unit is VND billions.
+    The /data finance detail endpoints are gated by browser session state:
+    the plain JWT-login session receives Package_Permission/HTML while the
+    full cookie-jar (HAR/env seed) serves real values (verified 2026-10-01).
+    Falls back to the login session when no seed exists.
+    """
+    try:
+        client = har_client()
+        token = _env("VIETSTOCK_PAGE_TOKEN") or _har_seed()[1]
+        payload = {**{k: str(v) for k, v in data.items()}, "__RequestVerificationToken": token}
+        response = client.post(f"{BASE}{path}", data=payload)
+        raw = response.content.decode("utf-8-sig")
+        if raw.startswith("<!DOCTYPE") or "<html" in raw[:60].lower():
+            raise ProviderAuthMissing(f"vietstock {path} session rejected")
+        return json.loads(raw)
+    except ProviderAuthMissing:
+        raise
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock {path} unreachable: {exc}") from exc
+
+
+def _batch_objects(key: str, objs: list[dict[str, Any]]) -> dict[str, str]:
+    """Browser-style indexed form keys: key[i][Field]=value (P15 probe-verified)."""
+    out: dict[str, str] = {}
+    for i, obj in enumerate(objs):
+        for field, value in obj.items():
+            out[f"{key}[{i}][{field}]"] = str(value)
+    return out
+
+
+def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -> dict[str, Any]:
+    """Full detailed statements via /data/* chain — REAL values on Standard pack (P15).
+
+    Chain: norms (names for this stock) -> periods (filter
+    IsShowData_Permission=True, latest N) -> values batched by 9 with
+    browser-shaped listReportDataIds[i][...] objects. Unit VND billions.
+    Raises ProviderAuthMissing when the session gate rejects.
     """
     code = statement.strip().upper()
     if code not in _DETAIL_STATEMENTS:
         raise ProviderBadData(f"unknown statement {statement!r} (KQKD|CDKT|LCTT|TM|BCTT)")
     norm_ep, per_ep, val_ep = (f"/data/{name}" for name in _DETAIL_STATEMENTS[code])
-    norms_raw = _post(norm_ep, {"stockCode": symbol.upper()})
+    norms_raw = _detail_session_post(norm_ep, {"stockCode": symbol.upper()})
     norms = norms_raw.get("data", norms_raw) if isinstance(norms_raw, dict) else norms_raw
     if not isinstance(norms, list) or not norms:
         raise ProviderBadData(f"vietstock no norms for {symbol} {code}")
     filt = {**_DETAIL_FILTER, "StockCode": symbol.upper()}
-    per_raw = _post(per_ep, filt)
+    per_raw = _detail_session_post(per_ep, filt)
     periods = per_raw.get("data", per_raw) if isinstance(per_raw, dict) else per_raw
     if not isinstance(periods, list) or not periods:
         raise ProviderBadData(f"vietstock no periods for {symbol} {code}")
-    periods = periods[: max(int(periods_n), 1)]
-    ids: list[Any] = []
-    for period in periods:
-        if not isinstance(period, dict):
-            continue
-        for key in ("ReportDataID", "ReportDataId", "ID", "id"):
-            if period.get(key) is not None:
-                ids.append(period[key])
-                break
-    if not ids:
-        raise ProviderBadData(f"vietstock periods carry no ids for {symbol} {code}")
-    val_raw = _post(
-        val_ep,
+    allowed = [
+        p for p in periods if isinstance(p, dict) and p.get("IsShowData_Permission") is not False
+    ]
+    kept = allowed[-max(int(periods_n), 1) :]
+    if not kept:
+        raise ProviderAuthMissing(f"vietstock no permitted periods for {symbol} {code}")
+    batch = [
         {
-            "StockCode": symbol.upper(),
-            "Unit": 1000000000,
-            "TypeCompare": "1",
-            "listReportDataIds": ids,
-        },
-    )
+            "Index": idx,
+            "ReportDataID": p.get("ReportDataID"),
+            "YearPeriod": p.get("YearPeriod"),
+            "ReportTermID": p.get("ReportTermID"),
+        }
+        for idx, p in enumerate(kept)
+    ]
+    _TERM_LABELS = {2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4"}
+    period_labels = [
+        _TERM_LABELS.get(int(p.get("ReportTermID") or 0), str(p.get("ReportTermID")))
+        + f"/{p.get('YearPeriod')}"
+        if code != "CTKH" and int(p.get("ReportTermID") or 0) in _TERM_LABELS
+        else str(p.get("YearPeriod"))
+        for p in kept
+    ]
+    val_data = {
+        "StockCode": symbol.upper(),
+        "Unit": 1000000000,
+        "TypeCompare": "1",
+        **_batch_objects("listReportDataIds", batch),
+    }
+    val_raw = _detail_session_post(val_ep, val_data)
     rows = val_raw.get("data", val_raw) if isinstance(val_raw, dict) else val_raw
     if not isinstance(rows, list):
         raise ProviderBadData(f"vietstock detail values malformed for {symbol} {code}")
+    name_by_id = {
+        n.get("ReportNormId") or n.get("ReportNormID"): (n.get("ReportNormName") or n.get("Name"))
+        for n in norms
+        if isinstance(n, dict)
+    }
+    series: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        nid = row.get("ReportNormId") or row.get("ReportNormID")
+        values = [
+            row.get(f"Value{i}") if row.get(f"Value{i}") is not None else None
+            for i in range(1, len(kept) + 1)
+        ]
+        series.append({"norm_id": nid, "name": name_by_id.get(nid), "values": values})
     return {
         "symbol": symbol.upper(),
         "statement": code,
         "unit": "VNDbn",
-        "norms": len(norms) if isinstance(norms, list) else 0,
-        "periods": ids,
-        "rows": rows,
+        "periods": period_labels,
+        "rows": series,
     }
 
 
@@ -801,6 +860,16 @@ def macro_report_data(
     """
     import datetime
 
+    from opentrading_mcp.cache import cache_key
+    from opentrading_mcp.providers.store import cache_get, cache_set
+
+    cache_key_str = cache_key(
+        "market", "vs_macro", f"{term_type_id}|{category_id}|{sub_term_type_id}|{from_date}"
+    )
+    hit = cache_get(cache_key_str)
+    if hit is not None:
+        cached: dict[str, Any] = json.loads(hit) if isinstance(hit, str) else hit
+        return cached
     client = har_client()
     token = _env("VIETSTOCK_PAGE_TOKEN")
     if not token:
@@ -828,21 +897,19 @@ def macro_report_data(
             f"vietstock macro {error.get('ErrorCode')}: {error.get('ErrorMessage')}"
         )
     rows = _parse_pipe_rows(body)
-    return {"category": category_id, "term_type": term_type_id, "rows": rows}
+    out = {"category": category_id, "term_type": term_type_id, "rows": rows}
+    cache_set(cache_key_str, out, 21600)
+    return out
 
 
 @guarded("vietstock")
 def planned_targets(symbol: str, years: int = 3) -> dict[str, Any]:
-    """Business-plan targets (CTKH: planned revenue/profit by year) — P14.
+    """Business-plan targets (CTKH: planned revenue/profit by year) — FIXED P15.
 
-    Chain: GetListReportNorm_CTKH -> CTKH_GetListYearPeriods (latest N years)
-    -> GetPlannedTargetsCompanyValue_CTKH_ByYearPeriods (batch). Unit VND bn.
-    Raises ProviderAuthMissing when the gate rejects (dormant until a fresh
-    browser-session env seed).
+    Key shape verified live: YearPeriods[i][YearPeriod] (object-array).
+    Returns named rows {name, plan: {year: value}} in VND billions.
     """
-    client = har_client()
-    token = _env("VIETSTOCK_PAGE_TOKEN") or (_har_seed()[1])
-    periods = _post(
+    rows_per = _detail_session_post(
         "/data/CTKH_GetListYearPeriods",
         {
             "StockCode": symbol.upper(),
@@ -854,42 +921,56 @@ def planned_targets(symbol: str, years: int = 3) -> dict[str, Any]:
             "SortTimeType": "Time_ASC",
         },
     )
-    rows_per = periods.get("data", periods) if isinstance(periods, dict) else periods
-    if not isinstance(rows_per, list):
+    periods = rows_per.get("data", rows_per) if isinstance(rows_per, dict) else rows_per
+    if not isinstance(periods, list) or not periods:
         raise ProviderBadData(f"vietstock CTKH periods malformed for {symbol}")
     years_latest = [
-        p.get("YearPeriod")
-        for p in rows_per
-        if isinstance(p, dict) and p.get("YearPeriod") is not None
+        p.get("YearPeriod") for p in periods if isinstance(p, dict) and p.get("YearPeriod")
     ][-max(int(years), 1) :]
     if not years_latest:
         raise ProviderBadData(f"vietstock CTKH carries no years for {symbol}")
-    try:
-        response = client.post(
-            f"{BASE}/data/GetPlannedTargetsCompanyValue_CTKH_ByYearPeriods",
-            data={
-                "StockCode": symbol.upper(),
-                "Unit": 1000000000,
-                "TypeCompare": "1",
-                "listReportDataIds": json.dumps(years_latest),
-                "__RequestVerificationToken": token,
-            },
+    batch = [{"Index": i, "YearPeriod": y} for i, y in enumerate(years_latest)]
+    val_raw = _detail_session_post(
+        "/data/GetPlannedTargetsCompanyValue_CTKH_ByYearPeriods",
+        {
+            "StockCode": symbol.upper(),
+            "Unit": 1000000000,
+            **_batch_objects("YearPeriods", batch),
+        },
+    )
+    rows = val_raw.get("data", val_raw) if isinstance(val_raw, dict) else val_raw
+    if not isinstance(rows, list):
+        raise ProviderBadData("vietstock CTKH values malformed")
+    norms_raw = _detail_session_post("/data/GetListReportNorm_CTKH", {"stockCode": symbol.upper()})
+    norms = norms_raw.get("data", norms_raw) if isinstance(norms_raw, dict) else norms_raw
+    names: dict[Any, Any] = {}
+    if isinstance(norms, list):
+        for n in norms:
+            if isinstance(n, dict):
+                names[n.get("ReportNormId") or n.get("PlannedTargetID")] = n.get(
+                    "ReportNormName"
+                ) or n.get("PlannedTargetName")
+    out_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        plan = {
+            str(years_latest[i]): row.get(f"Value{i + 1}")
+            for i in range(len(years_latest))
+            if row.get(f"Value{i + 1}") is not None
+        }
+        if not plan:
+            continue
+        out_rows.append(
+            {
+                "name": names.get(row.get("PlannedTargetID")),
+                "planned_target_id": row.get("PlannedTargetID"),
+                "plan": plan,
+            }
         )
-    except httpx.HTTPError as exc:
-        raise ProviderUnavailable(f"vietstock CTKH values unreachable: {exc}") from exc
-    raw = response.content.decode("utf-8-sig")
-    if raw.startswith("<!DOCTYPE") or "<html" in raw[:60].lower():
-        raise ProviderAuthMissing("vietstock CTKH session rejected")
-    try:
-        body = json.loads(raw)
-    except ValueError as exc:
-        raise ProviderBadData("vietstock CTKH values non-JSON") from exc
-    error = body.get("errorModel") if isinstance(body, dict) else None
-    if isinstance(error, dict) and error.get("ErrorCode"):
-        raise ProviderAuthMissing(f"vietstock CTKH {error.get('ErrorCode')}")
     return {
         "symbol": symbol.upper(),
         "unit": "VNDbn",
         "years": years_latest,
-        "rows": body.get("data", body),
+        "rows": out_rows,
     }

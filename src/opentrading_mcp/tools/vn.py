@@ -54,18 +54,20 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         days: int = 365,
         summary: bool = False,
         columns: list[str] | None = None,
+        interval: str = "1D",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Daily candles for a VN symbol, VCI then KBS fallback. Use for any price history.
+        """Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history.
 
-        days: daily bars requested (max 365). summary/columns: summary returns
+        days: bars requested (max 365 nến; weekly/monthly span nhân hệ số).
+        interval: '1D' (mặc định), '1W', '1M'. summary/columns: summary returns
         {count,last,high,low} only; columns keeps named fields.
         """
         if ctx is not None:
-            await ctx.log("info", f"vn_quote_history {symbol} {days}d")
+            await ctx.log("info", f"vn_quote_history {symbol} {days}d {interval}")
         try:
             candles = await run_blocking(
-                functools.partial(vn_p.quote_history, symbol, days),
+                functools.partial(vn_p.quote_history, symbol, days, interval),
                 "vn_quote_history",
             )
             if summary:

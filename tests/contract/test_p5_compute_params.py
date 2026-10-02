@@ -23,15 +23,55 @@ def _check_envelope(env: dict[str, Any], tool: str) -> None:
 
 
 async def test_stock_forensic_detail_includes_series(monkeypatch):
+    fd_detail = {
+        "symbol": "VCB",
+        "statement": "KQKD",
+        "unit": "VNDbn",
+        "periods": ["Q1/2026", "Q2/2026"],
+        "rows": [
+            {"norm_id": 2216, "name": "Doanh thu thuần", "values": [100.0, 110.0]},
+            {"norm_id": 2217, "name": "Lợi nhuận gộp", "values": [40.0, 44.0]},
+            {"norm_id": 990, "name": "Lợi nhuận sau thuế", "values": [20.0, 22.0]},
+            {"norm_id": 991, "name": "Chi phí bán hàng", "values": [5.0, 6.0]},
+            {"norm_id": 992, "name": "Chi phí quản lý", "values": [8.0, 9.0]},
+        ],
+    }
+    cd_detail = {
+        "symbol": "VCB",
+        "statement": "CDKT",
+        "unit": "VNDbn",
+        "periods": ["Q1/2026", "Q2/2026"],
+        "rows": [
+            {"norm_id": 2996, "name": "TỔNG CỘNG TÀI SẢN", "values": [1000.0, 1100.0]},
+            {"norm_id": 3013, "name": "A. TÀI SẢN NGẮN HẠN", "values": [400.0, 440.0]},
+            {"norm_id": 2997, "name": "C. NỢ PHẢI TRẢ", "values": [500.0, 520.0]},
+            {"norm_id": 3014, "name": "I. Nợ ngắn hạn", "values": [300.0, 320.0]},
+            {"norm_id": 2998, "name": "D. VỐN CHỦ SỞ HỮU", "values": [500.0, 580.0]},
+            {"norm_id": 3002, "name": "Tiền và tương đương tiền", "values": [100.0, 110.0]},
+            {"norm_id": 3022, "name": "Phải thu ngắn hạn của khách hàng", "values": [50.0, 60.0]},
+        ],
+    }
+    lc_detail = {
+        "symbol": "VCB",
+        "statement": "LCTT",
+        "unit": "VNDbn",
+        "periods": ["Q1/2026", "Q2/2026"],
+        "rows": [
+            {
+                "norm_id": 3100,
+                "name": "I. Lưu chuyển tiền thuần từ hoạt động kinh doanh",
+                "values": [25.0, 28.0],
+            },
+        ],
+    }
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        return {
-            "revenue_q1": 10.0,
-            "revenue_q2": 8.0,
-            "receivables_q1": 5.0,
-            "receivables_q2": 4.0,
-            "total assets": 100.0,
-        }
+        stmt = args[1] if len(args) > 1 else None
+        if stmt == "KQKD":
+            return fd_detail
+        if stmt == "CDKT":
+            return cd_detail
+        return lc_detail
 
     import opentrading_mcp.tools.compute as comp_mod
 
@@ -40,6 +80,8 @@ async def test_stock_forensic_detail_includes_series(monkeypatch):
     env = await fn(symbol="VCB", detail=True)
     _check_envelope(env, "stock_forensic")
     assert "series" in env["data"]
+    assert env["data"]["f_score"].endswith("/8")
+    assert env["data"]["dsri"] is not None
     env2 = await fn(symbol="VCB")
     assert "series" not in env2["data"]
 
@@ -221,22 +263,6 @@ async def test_pattern_match_limit_top_n(monkeypatch):
     assert len(env["data"]["matches"]) == 3
     corrs = [m["corr"] for m in env["data"]["matches"]]
     assert corrs == sorted(corrs, reverse=True)
-
-
-async def test_trade_log_days_side_filter(monkeypatch):
-    import opentrading_mcp.tools.compute as comp_mod
-
-    rows = [
-        {"side": "buy", "date": "2026-09-20"},
-        {"side": "sell", "date": "2026-09-21"},
-        {"side": "buy", "date": "2020-01-01"},
-    ]
-    monkeypatch.setattr(comp_mod, "_read_trade_log", lambda: rows)
-    fn = _tool_fn("signals_trade_log")
-    env = await fn(days=365, side="buy")
-    _check_envelope(env, "signals_trade_log")
-    assert len(env["data"]["trades"]) == 1
-    assert env["data"]["trades"][0]["date"] == "2026-09-20"
 
 
 async def test_event_stats_limit(monkeypatch):
