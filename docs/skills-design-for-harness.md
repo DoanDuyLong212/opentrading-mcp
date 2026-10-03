@@ -53,6 +53,11 @@ Mọi tool trả `{data, provenance{source,as_of,tz=Asia/Ho_Chi_Minh}, warnings[
 | `stale` | dùng nhưng ghi timestamp + cờ cảnh báo |
 | `unavailable` | đọc `warnings[]` lấy tool fallback được gợi ý, thử fallback 1 lần duy nhất |
 
+Từ 03-10 (M1): kết quả là MỘT khối text JSON gọn (không còn `structuredContent`);
+`availability=unavailable` thì `isError=true` (client như OpenTrading hiện là lỗi tool, text
+vẫn chứa `warnings[]`). `provenance.as_of` là giờ VN `+07:00` lúc dựng kết quả;
+`provenance.data_as_of` (nếu có) là lúc lấy dữ liệu thật, ví dụ khi lấy từ cache.
+
 Quy tắc vàng: **không bao giờ available-giả** — server đã thiết kế honest-availability,
 skill không được đấm ngược lại (vd fill PE null bằng số suy đoán).
 
@@ -314,7 +319,7 @@ tool_budget: 9
 
 | Wave | Tools |
 |---|---|
-| 1 | `news_market`(limit=15) · `corporate_calendar`(limit=20) |
+| 1 | `news_market`(limit=15) · `event_calendar_vn`(limit=20) |
 | 2 | `news_symbol` × 2–3 mã xuất hiện nhiều nhất trong tin |
 | 3 | `sentiment_score`(mã nóng nhất) · `company_events`(mã đó) |
 
@@ -680,7 +685,7 @@ inputs: mode (symbol|vn|global), query
 | | 2 (Fireant mỏng) | `corporate_calendar(symbol)` + `company_events(symbol)` |
 | | 3 (đủ 5 tin CHẤT LƯỢNG → DỪNG, không gọi bù) | `news_market`(tên công ty, gdelt) |
 | | 4 (nếu hỏi dư luận) | `sentiment_score(symbol)` |
-| **B. VN** | 1 | `news_market(limit=10)` + `corporate_calendar(limit=20)` |
+| **B. VN** | 1 | `news_market(limit=10)` + `event_calendar_vn(limit=20)` |
 | | 2 | `news_symbol` × 2–3 mã nổi bật nhất |
 | **C. Toàn cầu** | 1 | `news_market(sources=gdelt, limit=10)` |
 | | 2 | `geo_intel(topic)` hoặc `event_stats(query)` |
@@ -697,7 +702,7 @@ ngôn ngữ đó"; `web_search` ẩn khi thiếu key → degrade `web_fetch`, kh
 RÕ "cache <ngày>"; Fireant posts `id/user null` (đặc trưng payload, không phải lỗi).
 
 **Evidence live**: `news_symbol("VCB")` → lãi suất VCB 0.1–6% posts; mode C "dầu" —
-GDELT articles live 02-10; corporate_calendar VCB → 487 docs.
+GDELT articles live 02-10; corporate_calendar VCB → 487 docs. Từ 03-10 `corporate_calendar` bắt buộc `symbol` (trước đó bỏ trống thì âm thầm trả hồ sơ VCB); tin toàn thị trường dùng `event_calendar_vn`.
 
 **Acceptance**: 3 input mẫu (mã/VN/global) → mỗi output ≥3 tin có provenance, ≤10 calls,
 không lần nào vượt 4 song song.

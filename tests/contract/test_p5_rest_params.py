@@ -269,9 +269,23 @@ async def test_corporate_calendar_limit(monkeypatch):
 
     monkeypatch.setattr(brief_mod, "_call", fake_call)
     fn = _tool_fn("corporate_calendar", "brief")
-    env = await fn(limit=3)
+    env = await fn(symbol="vcb", limit=3)
     _check_envelope(env, "corporate_calendar")
     assert len(env["data"]["docs"]) == 3
+    assert env["data"]["symbol"] == "VCB"
+
+
+async def test_corporate_calendar_without_symbol_is_empty_not_vcb(monkeypatch):
+    import opentrading_mcp.tools.brief as brief_mod
+
+    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
+        raise AssertionError("must not fetch any company's filings")
+
+    monkeypatch.setattr(brief_mod, "_call", fake_call)
+    env = await _tool_fn("corporate_calendar", "brief")()
+    _check_envelope(env, "corporate_calendar")
+    assert env["availability"] == "empty"
+    assert "event_calendar_vn" in env["warnings"][0]
 
 
 async def test_web_search_context_max_chars(monkeypatch):

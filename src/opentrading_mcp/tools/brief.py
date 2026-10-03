@@ -145,10 +145,11 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def economic_calendar(scope: str = "vn", limit: int = 20) -> dict[str, Any]:
-        """Macro series catalogue as event proxy. Use for data-availability checks.
+        """NOT an event calendar: the macro series catalogue (same as vs_categories).
 
+        Use to see which VN macro series exist. For release dates use
+        macro_events_vn; for trading days use dnse_working_dates.
         scope: 'vn' only (others return empty with a warning). limit: max series.
-        Not a real calendar; for trading dates use dnse_working_dates instead.
         """
         if scope != "vn":
             return make_envelope(
@@ -168,7 +169,9 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
                 for c in (cats if isinstance(cats, list) else [])
             ]
             return make_envelope(
-                {"scope": scope, "series": rows[: max(int(limit), 1)]}, source="vietstock"
+                {"scope": scope, "series": rows[: max(int(limit), 1)]},
+                source="vietstock",
+                warnings=["series catalogue, not release dates: use macro_events_vn for dates"],
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("economic_calendar", str(exc))
@@ -199,18 +202,28 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def corporate_calendar(symbol: str | None = None, limit: int = 20) -> dict[str, Any]:
-        """Disclosures feed as corporate actions. Use for dividend/meeting scans.
+        """Disclosures feed of ONE company as corporate actions. Use for dividend/meeting scans.
 
-        symbol: omit for VN overview; limit: max disclosures. Raw feed;
-        company_events classifies the same disclosures into kinds.
+        symbol: the ticker (required for data; market-wide dates are in
+        event_calendar_vn). limit: max disclosures. Raw feed; company_events
+        classifies the same disclosures into kinds.
         """
+        if not symbol:
+            # Used to fall back to VCB silently, presenting one bank's filings as
+            # a market overview.
+            return make_envelope(
+                {"symbol": None, "docs": []},
+                source="local",
+                availability="empty",
+                warnings=[
+                    "symbol required; for market-wide corporate actions use event_calendar_vn"
+                ],
+            )
         try:
-            docs = await _call("d", vs_p.documents, symbol or "VCB", 60)
+            docs = await _call("d", vs_p.documents, symbol, 60)
             if isinstance(docs, list):
                 docs = docs[: max(int(limit), 1)]
-            return make_envelope(
-                {"symbol": (symbol or "VCB").upper(), "docs": docs}, source="vietstock"
-            )
+            return make_envelope({"symbol": symbol.upper(), "docs": docs}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("corporate_calendar", str(exc))
 

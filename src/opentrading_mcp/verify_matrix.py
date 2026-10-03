@@ -60,7 +60,7 @@ MATRIX: list[tuple[str, str, dict[str, Any], float]] = [
     ("brief", "news_market", {"limit": 5}, 60.0),
     ("brief", "news_symbol", {"symbol": "VCB", "limit": 5}, 60.0),
     ("brief", "economic_calendar", {"scope": "vn"}, 45.0),
-    ("brief", "corporate_calendar", {}, 45.0),
+    ("brief", "corporate_calendar", {"symbol": "VCB"}, 45.0),
     ("intel", "world_prediction_odds", {"query": "Fed"}, 90.0),
     ("intel", "geo_intel", {}, 90.0),
     ("intel", "assets_rotation", {}, 150.0),
@@ -166,6 +166,9 @@ def check_envelope(tool: str, payload: Any) -> list[str]:
     warnings = body.get("warnings")
     if not isinstance(warnings, list):
         errors.append(f"{tool}: warnings is not a list")
+    is_error = bool(getattr(payload, "isError", False))
+    if is_error != (availability == "unavailable"):
+        errors.append(f"{tool}: isError={is_error} but availability={availability!r}")
     return errors
 
 

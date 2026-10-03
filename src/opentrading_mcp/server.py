@@ -19,22 +19,32 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from opentrading_mcp.app import OpenTradingMCP
+
+# Read by clients at initialize (Claude Code and OpenTrading cap it at 2048 chars):
+# a routing guide, not a parameter reference — codes live in the term-types resource.
 SERVER_INSTRUCTIONS = (
-    "OpenTrading market-data MCP. Timezone Asia/Ho_Chi_Minh tz-aware. "
-    "Tool names snake_case prefixed by source (vs_|vn_|yf_|dnse_|world_|signals_|"
-    "quant_|brief_|intel_). "
-    "Params: btype auto 1 CTCP/2 CK/3 Bank/5 BH, tids [1,2,3,4,5,9,12], "
-    "termTypeID 1-8, interval (1D/1h/4h) vs resolution (1m/15m), "
-    "source_order VCI->KBS, pageSize 4 financeinfo / 60 document / 10000 DNSE ohlc. "
-    "TTL: snapshot 5s, market 60s, world 60-300s, overview 15m, "
-    "financeinfo 6h, docs 24h, categories 7d, odds 45m."
+    "OpenTrading: Vietnam stock market (HOSE/HNX/UPCOM) plus global market data. "
+    "Times are Asia/Ho_Chi_Minh.\n"
+    "Every result is JSON {data, provenance{source, as_of, timezone}, warnings[], availability}. "
+    "availability: available | partial (use what came back, read warnings) | "
+    "empty (valid 'no data', do not retry) | unavailable (isError; try the fallback "
+    "named in warnings once). Cite provenance.source and as_of with every number.\n"
+    "Routing: unsure ticker -> symbol_lookup. Market pulse -> market_overview. "
+    "Price history -> vn_quote_history; many symbols -> vn_equity_quote_batch or "
+    "market_candles_batch. Foreign/prop flows -> money_flow. Company -> stock_overview, "
+    "financial_statements, company_events, signals_technical, valuation_run. "
+    "Screening -> stock_screener. VN macro -> vs_indicator_data, sbv_rates; global -> "
+    "fred_series, yf_world_indices. News -> news_symbol, news_market. "
+    "Backtests -> quant_backtest, backtest_strategies. Data problems -> source_status.\n"
+    "At most 5 calls in parallel (Vietstock tools 4, Yahoo tools 3). "
+    "Code tables (btype, tids, termTypeID): resource opentrading://reference/term-types."
 )
 
 TIMEOUT_MATRIX: dict[str, int] = {
     "tools_list": 30,
     "market_snapshot": 15,
     "breadth_scan": 15,
-    "vs_financial_values": 60,
     "yf_mega_flows": 60,
     "dnse_ohlc_history": 60,
     "quant_backtest": 120,
@@ -126,7 +136,7 @@ def transport_security() -> TransportSecuritySettings | None:
 def create_server(preset: str = "market") -> FastMCP:
     if preset not in PRESETS:
         raise ValueError(f"unknown preset {preset!r}, expected one of {PRESETS}")
-    return FastMCP(
+    return OpenTradingMCP(
         "opentrading",
         instructions=SERVER_INSTRUCTIONS,
         stateless_http=True,

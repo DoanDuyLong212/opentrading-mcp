@@ -24,7 +24,7 @@ result, follow relevant links recursively until the information need is met.
 ## Quick Reference
 | Situation | Action |
 |---|---|
-| Need background facts | `web_search{query, numResults: 8}` |
+| Need background facts | `web_search{query, num_results: 8}` |
 | Read a result | `web_fetch{url, format: "markdown"}` |
 | Page needs exact markup | `web_fetch{url, format: "html"}` |
 | Plain-text extraction | `web_fetch{url, format: "text"}` |

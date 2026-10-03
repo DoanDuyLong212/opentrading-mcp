@@ -42,6 +42,7 @@ _TERM_TYPES = {
         "resolution": "bar size in minutes for DNSE ohlc (1/5/15/30/60)",
     },
     "page_sizes": {"financeinfo": 4, "document": 60, "dnse_ohlc": 10000},
+    "source_order": {"vn_quote_history": "VCI, then KBS"},
 }
 
 _EXCHANGES = {

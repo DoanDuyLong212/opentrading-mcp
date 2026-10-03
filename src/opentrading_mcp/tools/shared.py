@@ -11,6 +11,21 @@ from mcp.types import ToolAnnotations
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True)
 READ_WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+# Plain INSERTs: calling twice creates two rows (or fails on the unique name).
+WRITE_NOT_IDEMPOTENT = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False
+)
+# Removes stored data; clients should confirm before running these.
+DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True)
+
+# Write tools whose effect READ_WRITE misdescribes; applied by OpenTradingMCP.tool().
+ANNOTATION_OVERRIDES: dict[str, ToolAnnotations] = {
+    "watchlist_create": WRITE_NOT_IDEMPOTENT,
+    "alert_create": WRITE_NOT_IDEMPOTENT,
+    "watchlist_delete": DESTRUCTIVE,
+    "watchlist_remove": DESTRUCTIVE,
+    "alert_delete": DESTRUCTIVE,
+}
 
 AnyContext = Context[Any, Any, Any]
 

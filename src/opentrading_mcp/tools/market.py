@@ -24,7 +24,7 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.providers.store import cache_get, cache_set
-from opentrading_mcp.schemas import make_envelope
+from opentrading_mcp.schemas import make_envelope, now_iso
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     AnyContext,
@@ -88,7 +88,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             import json
 
-            return make_envelope(json.loads(hit), source="cache")
+            cached = json.loads(hit)
+            fetched_at = cached.pop("_fetched_at", None) if isinstance(cached, dict) else None
+            # A cache hit must not look fresh: carry the original fetch time.
+            return make_envelope(cached, source="cache", data_as_of=fetched_at)
         if ctx is not None:
             await ctx.log("info", f"market_snapshot symbols={symbols or []}")
         try:
@@ -96,7 +99,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 functools.partial(vn_p.equity_quote_batch, symbols or vn_p.VN30),
                 "market_snapshot",
             )
-            cache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
+            cache_set(key, {"quotes": quotes, "_fetched_at": now_iso()}, TTL_SECONDS["market"])
             data: dict[str, Any] = {"quotes": quotes}
             if as_of is not None:
                 data["requested_as_of"] = as_of
