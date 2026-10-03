@@ -38,7 +38,8 @@ SERVER_INSTRUCTIONS = (
     "fred_series, yf_world_indices. News -> news_symbol, news_market. "
     "Backtests -> quant_backtest, backtest_strategies. Data problems -> source_status.\n"
     "At most 5 calls in parallel (Vietstock tools 4, Yahoo tools 3). "
-    "Code tables (btype, tids, termTypeID): resource opentrading://reference/term-types."
+    "Code tables (btype, tids, termTypeID): resource opentrading://reference/term-types. "
+    "Tool names refer to preset all; smaller presets expose a subset."
 )
 
 TIMEOUT_MATRIX: dict[str, int] = {

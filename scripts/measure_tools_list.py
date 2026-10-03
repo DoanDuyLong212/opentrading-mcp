@@ -25,7 +25,15 @@ async def main(top: int) -> None:
             t.model_dump(by_alias=True, exclude_none=True, mode="json")
             for t in await server.list_tools()
         ]
-        print(f"{preset:7} {len(tools):4} tools {_size(tools):7} bytes")
+        # What a model is sent: name, description and input schema (no _meta/annotations).
+        visible = [
+            {"name": t["name"], "description": t.get("description"), "schema": t["inputSchema"]}
+            for t in tools
+        ]
+        print(
+            f"{preset:7} {len(tools):4} tools {_size(tools):7} bytes tools/list"
+            f" {_size(visible):7} bytes model-visible"
+        )
         if preset == "all":
             for t in sorted(tools, key=_size, reverse=True)[:top]:
                 print(f"    {_size(t):5}  {t['name']}")
