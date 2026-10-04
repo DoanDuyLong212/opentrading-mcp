@@ -73,7 +73,7 @@ Xoay token mỗi tháng: đổi env là xong, không đụng code.
 - `url` đúng `/mcp`. Opencode tự thử StreamableHTTP trước, SSE fallback sau —
   server hỗ trợ cả hai (`POST /mcp` + legacy `/sse`).
 
-Xong bước này thì restart opencode/harness → server `opentrading` hiện 136 tools là thành công.
+Xong bước này thì restart opencode/harness → server `opentrading` hiện 138 tools là thành công.
 Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
 
 ### Bước 2 — Verify kết nối (3 lệnh, kỳ vọng rõ ràng)
@@ -82,7 +82,7 @@ Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
 BASE=https://opentrading-mcp-web.onrender.com
 HDR=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "Authorization: Bearer $TEAM_TOKEN")
 
-# 1. Liệt kê tools → kỳ vọng: 136 tools (đếm "name": 136 lần).
+# 1. Liệt kê tools → kỳ vọng: 138 tools (đếm "name": 138 lần).
 #    Lưu ý: response là SSE (dòng "data: {json}"), opencode parse tự động;
 #    curl thì grep trên text thô như dưới. Nếu chỉ đếm được 66 → prod đang
 #    chạy preset market cũ (thiếu scan/quant/brief/intel) → redeploy bản mới nhất.
@@ -109,7 +109,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
 | Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` |
-| Tools | 136 (`all`, 137 khi có websearch key — prod đang serve 137), presets `market` 66 / `scan` 47 / `quant` 9 / `brief` 7 / `intel` 8 |
+| Tools | 138 (`all`, 139 khi có websearch key), presets `market` 66 / `scan` 47 / `quant` 10 / `brief` 8 / `intel` 8 |
 | Preset remote | `all` — Render chạy `serve --preset all` (xem `Dockerfile` CMD). Nếu `tools/list` chỉ trả 66 tools = đang chạy preset `market` cũ, cần redeploy bản mới |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
 | Quy tắc dùng | Rate-limit 120 req/phút/IP; quota 1000 calls/ngày/user (team token bypass quota) |
@@ -119,7 +119,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 
 ```bash
 uvx opentrading-mcp serve --preset market   # 65 tools thị trường
-uvx opentrading-mcp serve --preset all      # 136 tools full
+uvx opentrading-mcp serve --preset all      # 138 tools full
 ```
 
 File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
@@ -136,5 +136,5 @@ File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
 | Cold start 20–40s | Render free-tier sleep | Gọi `/healthz` trước để warm-up |
 | Timezone | Mọi timestamp `Asia/Ho_Chi_Minh` tz-aware | Parse theo VN, không UTC |
 | Chi tiết đầy đủ | Kiến trúc, bảo mật, DB, clients | `docs/architecture-review-2026-09-30.md` |
-| Bảng 136 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
+| Bảng 138 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
 | **Thiết kế 19 skills cho harness** | Spec build skills (workflow + budget + acceptance) | `docs/skills-design-for-harness.md` |

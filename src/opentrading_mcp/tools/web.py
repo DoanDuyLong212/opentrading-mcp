@@ -33,9 +33,10 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def web_fetch(
         url: str, format: str = "markdown", timeout_seconds: int = 30
     ) -> dict[str, Any]:
-        """Fetch a URL and convert to markdown, text or html. Use for reading web content.
+        """Fetch a URL and convert to markdown, text, html or pdf-text. Use for reading web content.
 
-        format: 'markdown' (default), 'text' or 'html'. timeout_seconds: max
+        format: 'markdown' (default), 'text', 'html' or 'pdf' (PDF text extraction,
+        best-effort stdlib-only; scanned PDFs report honestly). timeout_seconds: max
         fetch time (default 30).
         """
         try:

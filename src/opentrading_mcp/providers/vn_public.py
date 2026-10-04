@@ -171,6 +171,47 @@ _RATING_RE = re.compile(
 _TARGET_RE = re.compile(r"giá mục tiêu\s*([\d\.,]+)", re.IGNORECASE)
 
 
+def _norm_macro(text: str) -> str:
+    """Uppercase ASCII fold for keyword matching (stdlib only)."""
+    import unicodedata
+
+    folded = unicodedata.normalize("NFD", text or "")
+    stripped = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+    return stripped.upper().replace("Đ", "D")
+
+
+_MACRO_KEYWORDS = (
+    "GDP",
+    "CPI",
+    "LAM PHAT",
+    "LAI SUAT",
+    "TY GIA",
+    "VI MO",
+    "KINH TE",
+    "FED",
+    "FOMC",
+    "CHINH SACH TIEN TE",
+    "TRIEN VONG THI TRUONG",
+    "NHAN DINH THI TRUONG",
+    "XUAT KHAU",
+    "NHAP KHAU",
+    "DAU TU CONG",
+    "NGAN SACH",
+    "NO CONG",
+    "USD/",
+    "DXY",
+)
+
+
+def is_macro_title(title: str) -> str | None:
+    """Return the matched macro topic, or None. Pure function (testable)."""
+    norm = _norm_macro(title)
+    for kw in _MACRO_KEYWORDS:
+        if kw in norm:
+            return kw
+    return None
+
+
 def _parse_consensus_title(title: str) -> dict[str, Any]:
     """Extract ticker/rating/target. Ticker prefix required (rejects 'bán lẻ' noise)."""
     symbol = None
@@ -194,20 +235,43 @@ def _parse_consensus_title(title: str) -> dict[str, Any]:
 
 
 @guarded("vn_public")
-def analyst_reports(limit: int = 30) -> list[dict[str, Any]]:
-    """Analyst report titles with rating/target parsed (Vietstock listing page)."""
+def analyst_reports(limit: int = 30, kind: str = "equity") -> list[dict[str, Any]]:
+    """Analyst report titles with rating/target parsed (Vietstock listing page).
+
+    kind='equity': ticker-prefixed titles only (current behavior).
+    kind='macro': titles WITHOUT ticker prefix that match macro keywords
+    (GDP/CPI/rates/FX/Fed...); rating/target may be absent, macro_topic set.
+    """
     html, tls_off = _fetch(ANALYST_URL)
     soup = _soup(html)
     out: list[dict[str, Any]] = []
     for anchor in soup.find_all("a", href=True):
         title = anchor.get_text(" ", strip=True)
-        parsed = _parse_consensus_title(title)
-        if not parsed["symbol"] or not parsed["rating"]:
+        if not title or len(title) < 10:
             continue
         href = str(anchor["href"])
+        parsed = _parse_consensus_title(title)
+        if kind == "macro":
+            # article links only: skip /vi-mo/ nav, courses, symbol pages
+            if "bao-cao-phan-tich" not in href:
+                continue
+            if parsed["symbol"]:
+                continue  # equity reports belong to the equity feed
+            topic = is_macro_title(title)
+            if not topic:
+                continue
+            parsed = {"symbol": None, "rating": parsed["rating"], "target": parsed["target"]}
+        elif not parsed["symbol"] or not parsed["rating"]:
+            continue
         url = href if href.startswith("http") else f"https://finance.vietstock.vn{href}"
         parent_text = anchor.parent.get_text(" ", strip=True) if anchor.parent else ""
         dates = _DATE_RE.findall(parent_text)
+        extra: dict[str, Any] = {}
+        if kind == "macro":
+            # Vietstock exposes no dated CTCK-macro feed; listing carries section
+            # pointers (/vi-mo/...) plus dated articles when present.
+            dated = bool(dates)
+            extra = {"macro_topic": topic, "entry_kind": "report" if dated else "section"}
         source = None
         for token in re.split("[\u2014\u2013\\-|]", parent_text):
             token = token.strip()
@@ -222,6 +286,7 @@ def analyst_reports(limit: int = 30) -> list[dict[str, Any]]:
                 "url": url,
                 **parsed,
             }
+            | extra
         )
         if len(out) >= max(int(limit), 1):
             break

@@ -265,19 +265,30 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def analyst_consensus(
         symbol: str | None = None,
         limit: int = 30,
+        report_type: str = "equity",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Analyst ratings and price targets parsed from report titles. Use for street views.
 
         symbol: filter one ticker (omit for latest across market). Ratings come
         from title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per
-        symbol shows upgrades/downgrades by history.
+        symbol shows upgrades/downgrades by history. report_type: 'equity'
+        (ticker reports) or 'macro' (CTCK macro outlooks: GDP/CPI/rates/FX/Fed;
+        symbol filter does not apply, macro_topic set per report).
         """
         if ctx is not None:
-            await ctx.log("info", f"analyst_consensus {symbol}")
+            await ctx.log("info", f"analyst_consensus {symbol} {report_type}")
+        kind = (report_type or "equity").strip().lower()
+        if kind not in ("equity", "macro"):
+            return make_envelope(
+                {"tool": "analyst_consensus"},
+                source="unavailable",
+                warnings=[f"unknown report_type {report_type!r} (equity|macro)"],
+                availability="unavailable",
+            )
         try:
             reports = await run_blocking(
-                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10)),
+                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10), kind),
                 "analyst_consensus",
                 timeout_secs=45.0,
             )
@@ -289,12 +300,26 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         rows = [r for r in reports if isinstance(r, dict) and r.get("title")]
-        if symbol:
+        warn: list[str] = []
+        if kind == "macro":
+            if symbol:
+                warn.append("symbol filter ignored for macro reports (no ticker)")
+            if rows and not any(r.get("date") for r in rows):
+                warn.append(
+                    "no dated CTCK macro reports on listing — section pointers only; "
+                    "use vs_indicator_data for hard macro data"
+                )
+        elif symbol:
             want = symbol.strip().upper()
             rows = [r for r in rows if (r.get("symbol") or "").upper() == want]
         return make_envelope(
-            {"symbol": (symbol or "").upper(), "reports": rows[: max(int(limit), 1)]},
+            {
+                "symbol": (symbol or "").upper(),
+                "report_type": kind,
+                "reports": rows[: max(int(limit), 1)],
+            },
             source="vietstock-scrape",
+            warnings=warn,
         )
 
     @server.tool(annotations=READ_ONLY)

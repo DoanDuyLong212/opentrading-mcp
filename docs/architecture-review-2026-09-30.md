@@ -6,7 +6,7 @@ MCP server nghiên cứu thị trường VN: stateless-first, tự fetch trực 
 
 | Hạng mục | Số liệu | Nguồn verify |
 |---|---|---|
-| Tools live (`all`) | 136 (137 khi có websearch key) | `tools/list` live (P16: +symbol_resolve) |
+| Tools live (`all`) | 138 (139 khi có websearch key) | `tools/list` live (P16: +symbol_resolve; P17: +event_study +fireant_thread) |
 | Presets | 6 (market 65 / scan 47 / quant 9 / brief 7 / intel 8 / all) | `server.py:50-78` |
 | Caps | market 75, scan 60, quant/brief/intel 50 | `server.py:94` |
 | Prompts (workflows) | 6 | `prompts.py:112-119` |
@@ -45,7 +45,7 @@ MCP server nghiên cứu thị trường VN: stateless-first, tự fetch trực 
 | quant | quant | 9 | Backtest/rủi ro/tối ưu |
 | brief | brief | 7 | Bản tin + lịch |
 | intel | intel, web | 8 | Odds, địa chính trị, cross-asset |
-| all | 18 modules | 136 | Full (web_fetch dùng chung) |
+| all | 18 modules | 138 | Full (web_fetch dùng chung) |
 
 ## 3. Luồng hoạt động của 1 prompt (ví dụ thật: morning_briefing, chạy live WF1)
 

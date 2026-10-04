@@ -36,6 +36,25 @@ def _last_float(series: pd.Series, nd: int = 2) -> float | None:
     return round(val, nd)
 
 
+def _swing_pivots(
+    h_vals: list[float], l_vals: list[float], order: int = 5
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    """Fractal pivots: strict local max/min over `order` bars each side."""
+    n = min(len(h_vals), len(l_vals))
+    pivots: list[tuple[int, float, str]] = []
+    if n >= 2 * order + 1:
+        for i in range(order, n - order):
+            window_h = h_vals[i - order : i + order + 1]
+            window_l = l_vals[i - order : i + order + 1]
+            if h_vals[i] > max(window_h[:order] + window_h[order + 1 :]):
+                pivots.append((i, h_vals[i], "H"))
+            elif l_vals[i] < min(window_l[:order] + window_l[order + 1 :]):
+                pivots.append((i, l_vals[i], "L"))
+    highs = [(i, p) for i, p, s in pivots if s == "H"]
+    lows = [(i, p) for i, p, s in pivots if s == "L"]
+    return highs, lows
+
+
 def _wma(series: pd.Series, n: int) -> pd.Series:
     weights = np.arange(1, n + 1, dtype=float)
     denom = weights.sum()
@@ -260,18 +279,7 @@ def compute(
     try:
         h_vals = [float(x) for x in high.tolist()]
         l_vals = [float(x) for x in low.tolist()]
-        order = 5
-        pivots: list[tuple[int, float, str]] = []
-        if n >= 2 * order + 1:
-            for i in range(order, n - order):
-                window_h = h_vals[i - order : i + order + 1]
-                window_l = l_vals[i - order : i + order + 1]
-                if h_vals[i] > max(window_h[:order] + window_h[order + 1 :]):
-                    pivots.append((i, h_vals[i], "H"))
-                elif l_vals[i] < min(window_l[:order] + window_l[order + 1 :]):
-                    pivots.append((i, l_vals[i], "L"))
-        highs = [(i, p) for i, p, s in pivots if s == "H"]
-        lows = [(i, p) for i, p, s in pivots if s == "L"]
+        highs, lows = _swing_pivots(h_vals, l_vals, order=5)
         labeled: list[tuple[int, float, str]] = []
         for k, (i, p) in enumerate(highs):
             labeled.append((i, p, "HH" if k and p > highs[k - 1][1] else ("LH" if k else "H")))
@@ -330,6 +338,195 @@ def compute(
     buys = sum(1 for v in votes if v == "Buy")
     sells = sum(1 for v in votes if v == "Sell")
     recommend = "Buy" if buys > sells else ("Sell" if sells > buys else "Neutral")
+
+    # Elliott wave heuristic (P2.1): 5-move impulse vs ABC corrective vs none.
+    # Full wave labeling is interpretive; this flags structure + invalidation only.
+    elliott: dict[str, Any] = {
+        "pattern": "none",
+        "waves": [],
+        "confidence": "low",
+        "invalidation": None,
+    }
+    try:
+        ordered = sorted(
+            [(i, p, "H") for i, p in highs] + [(i, p, "L") for i, p in lows],
+            key=lambda t: t[0],
+        )
+        # strictly alternating tail (merge same-side runs, keep most extreme)
+        alt: list[tuple[int, float, str]] = []
+        for t in ordered[-14:]:
+            if alt and alt[-1][2] == t[2]:
+                prev = alt[-1]
+                if (t[2] == "H" and t[1] > prev[1]) or (t[2] == "L" and t[1] < prev[1]):
+                    alt[-1] = t
+            else:
+                alt.append(t)
+
+        def _moves(win: list[tuple[int, float, str]]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "n": k + 1,
+                    "from_i": win[k][0],
+                    "to_i": win[k + 1][0],
+                    "direction": "up" if win[k + 1][1] > win[k][1] else "down",
+                    "length_pct": round(abs(win[k + 1][1] - win[k][1]) / win[k][1] * 100, 2)
+                    if win[k][1]
+                    else 0.0,
+                }
+                for k in range(len(win) - 1)
+            ]
+
+        def _check_impulse(win: list[tuple[int, float, str]]) -> dict[str, Any] | None:
+            # win: 6 alternating pivots; bullish starts L, bearish starts H
+            bull = win[0][2] == "L"
+            moves = _moves(win)
+            ups = [m for m in moves if m["direction"] == "up"]
+            dns = [m for m in moves if m["direction"] == "down"]
+            if bull and (len(ups) != 3 or len(dns) != 2):
+                return None
+            if not bull and (len(ups) != 2 or len(dns) != 3):
+                return None
+            trend_legs = ups if bull else dns
+            ends = [win[moves.index(m) + 1][1] for m in trend_legs]
+            starts = [win[moves.index(m)][1] for m in trend_legs]
+            from itertools import pairwise
+
+            ascending = (
+                all(b > a for a, b in pairwise(ends)) and all(b > a for a, b in pairwise(starts))
+                if bull
+                else all(b < a for a, b in pairwise(ends))
+                and all(b < a for a, b in pairwise(starts))
+            )
+            if not ascending:
+                return None
+            lens = [m["length_pct"] for m in trend_legs]
+            w3_not_shortest = lens[1] >= min(lens)
+            # wave-4 extreme must not overlap wave-1 extreme
+            w1_end = ends[0]
+            w4_start = starts[2]
+            no_overlap = (w4_start > w1_end) if bull else (w4_start < w1_end)
+            if not (w3_not_shortest and no_overlap):
+                return {"partial": True, "moves": moves, "invalidation": None}
+            gap = abs(w4_start - w1_end) / w1_end if w1_end else 0.0
+            strong = lens[1] == max(lens) and gap > 0.01
+            return {
+                "partial": False,
+                "moves": moves,
+                "invalidation": round(w4_start, 2),
+                "confidence": "high" if strong else "medium",
+            }
+
+        found = None
+        starts = range(len(alt) - 6, -1, -1) if len(alt) >= 6 else []
+        for s in starts:
+            hit = _check_impulse(alt[s : s + 6])
+            if hit and not hit.get("partial"):
+                found = hit
+                break
+            found = found or hit
+        if found and not found.get("partial"):
+            elliott = {
+                "pattern": "impulse",
+                "waves": found["moves"],
+                "confidence": found["confidence"],
+                "invalidation": found["invalidation"],
+            }
+        else:
+            # developing: last 5 pivots = waves 1-4 done, wave 5 pending
+            dev = None
+            for j in range(len(alt) - 5, -1, -1) if len(alt) >= 5 else []:
+                win5 = alt[j : j + 5]
+                if win5[0][2] != "L":
+                    continue
+                moves = _moves(win5)
+                ups = [m for m in moves if m["direction"] == "up"]
+                dns = [m for m in moves if m["direction"] == "down"]
+                if len(ups) != 2 or len(dns) != 2:
+                    continue
+                up_ends = [win5[moves.index(m) + 1][1] for m in ups]
+                dn_starts = [win5[moves.index(m)][1] for m in dns]
+                if (
+                    up_ends[1] > up_ends[0]
+                    and dn_starts[1] > dn_starts[0]
+                    and dn_starts[1] > up_ends[0]
+                ):
+                    dev = moves
+                    break
+            if dev is not None:
+                elliott = {
+                    "pattern": "impulse-developing",
+                    "waves": dev,
+                    "confidence": "low",
+                    "invalidation": None,
+                }
+            elif found:
+                elliott = {
+                    "pattern": "impulse-developing",
+                    "waves": found["moves"],
+                    "confidence": "low",
+                    "invalidation": None,
+                }
+            elif len(alt) >= 4:
+                # ABC corrective: 3 alternating moves, counter-trend drift
+                last3 = _moves(alt[-4:])
+                if len(last3) == 3 and len({m["direction"] for m in last3}) == 2:
+                    elliott = {
+                        "pattern": "corrective",
+                        "waves": last3,
+                        "confidence": "low",
+                        "invalidation": None,
+                    }
+    except Exception:
+        elliott = {"pattern": "none", "waves": [], "confidence": "low", "invalidation": None}
+
+    # Wyckoff phase heuristic (P2.1): range + volume + spring/upthrust.
+    wyckoff: dict[str, Any] = {"phase": "unknown", "confidence": "low", "evidence": []}
+    try:
+        evidence: list[str] = []
+        win_n = min(n, 40)
+        w_close = [float(x) for x in close.tolist()[-win_n:]]
+        w_high = [float(x) for x in high.tolist()[-win_n:]]
+        w_low = [float(x) for x in low.tolist()[-win_n:]]
+        w_vol = [float(x) for x in vol.tolist()[-win_n:] if x == x]
+        rng = (max(w_high) - min(w_low)) / (sum(w_close) / len(w_close)) if w_close else 1.0
+        dry_up = False
+        if len(w_vol) >= 20:
+            first = sum(w_vol[:10]) / 10
+            last_v = sum(w_vol[-10:]) / 10
+            dry_up = last_v < 0.7 * first if first else False
+            if dry_up:
+                evidence.append("volume drying up into range")
+        spring = False
+        upthrust = False
+        if len(w_low) >= 30:
+            prior_lo = min(w_low[:-10])
+            recent_lo = min(w_low[-10:])
+            if recent_lo < prior_lo and w_close[-1] > prior_lo:
+                spring = True
+                evidence.append("spring: false breakdown recovered")
+            prior_hi = max(w_high[:-10])
+            recent_hi = max(w_high[-10:])
+            if recent_hi > prior_hi and w_close[-1] < prior_hi:
+                upthrust = True
+                evidence.append("upthrust: false breakout failed")
+        sma50_v = _last_float(close.rolling(50, min_periods=50).mean())
+        if spring:
+            phase = "accumulation"
+        elif upthrust:
+            phase = "distribution"
+        elif rng < 0.12 and dry_up:
+            phase = "ranging"
+            evidence.append("tight range + dry volume")
+        elif sma50_v is not None and last < sma50_v and swing_trend == "lower-low":
+            phase = "markdown"
+        elif sma50_v is not None and last > sma50_v and swing_trend == "higher-high":
+            phase = "markup"
+        else:
+            phase = "ranging"
+        conf = "high" if len(evidence) >= 2 else ("medium" if evidence else "low")
+        wyckoff = {"phase": phase, "confidence": conf, "evidence": evidence}
+    except Exception:
+        wyckoff = {"phase": "unknown", "confidence": "low", "evidence": []}
 
     # Candle patterns on the last 1-2 bars + 20d swing levels (P6).
     patterns: list[str] = []
@@ -396,6 +593,8 @@ def compute(
         "swings": swings,
         "swing_trend": swing_trend,
         "fib": fib,
+        "elliott": elliott,
+        "wyckoff": wyckoff,
         "recommend": recommend,
         "patterns": patterns,
         "support": support,

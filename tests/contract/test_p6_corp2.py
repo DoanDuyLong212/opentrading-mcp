@@ -228,8 +228,16 @@ async def test_futures_basis_falls_back_to_ohlc(monkeypatch):
         if target is dnse_p.latest_trade:
             return [{"symbol": "VN30F1M", "trades": []}]
         if target is vn_p.index_ohlcv:
-            return [{"time": "2026-09-30", "open": 1790.0, "high": 1805.0,
-                     "low": 1785.0, "close": 1800.0, "volume": 1.0}]
+            return [
+                {
+                    "time": "2026-09-30",
+                    "open": 1790.0,
+                    "high": 1805.0,
+                    "low": 1785.0,
+                    "close": 1800.0,
+                    "volume": 1.0,
+                }
+            ]
         if target is dnse_p.ohlc_history:
             return [{"t": 1, "o": 1805.0, "h": 1812.0, "l": 1804.0, "c": 1810.0, "v": 9}]
         raise AssertionError(f"unexpected upstream {target}")
@@ -242,3 +250,38 @@ async def test_futures_basis_falls_back_to_ohlc(monkeypatch):
     assert env["availability"] == "available"
     assert env["data"]["basis"] == 10.0
     assert env["data"]["spot"] == 1800.0
+
+
+async def test_is_macro_title_keywords():
+    from opentrading_mcp.providers.vn_public import is_macro_title
+
+    assert is_macro_title("Nhận định vĩ mô quý 3: GDP tăng 7%") in ("GDP", "VI MO")
+    assert is_macro_title("Dự báo CPI tháng 10 và lãi suất điều hành") is not None
+    assert is_macro_title("VCB: Khuyến nghị MUA giá 75,000") is None
+    assert is_macro_title("Phân tích kỹ thuật VNINDEX") is None
+
+
+async def test_analyst_consensus_macro_mode(monkeypatch):
+    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        return [
+            {
+                "title": "Vĩ mô tháng 10: CPI hạ nhiệt, kỳ vọng giảm lãi suất",
+                "source": "DSC",
+                "date": "02/10/2026",
+                "url": "https://x",
+                "symbol": None,
+                "rating": None,
+                "target": None,
+                "macro_topic": "CPI",
+            }
+        ]
+
+    import opentrading_mcp.tools.corp as corp_mod
+
+    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
+    from tests.contract.test_p6_corp2 import _tool_fn as _tf
+
+    fn = _tf("analyst_consensus")
+    env = await fn(report_type="macro")
+    assert env["data"]["report_type"] == "macro"
+    assert env["data"]["reports"][0]["macro_topic"] == "CPI"

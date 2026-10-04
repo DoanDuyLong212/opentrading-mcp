@@ -93,21 +93,69 @@ def fireant_posts(symbol: str | None = None, limit: int = 20) -> list[dict[str, 
     for post in items[:limit]:
         if not isinstance(post, dict):
             continue
-        user = post.get("user") or {}
-        out.append(
-            {
-                "id": post.get("id") or post.get("postId"),
-                "user": user.get("username") if isinstance(user, dict) else None,
-                "text": (post.get("description") or "")[:500],
-                "symbols": [
-                    t.get("symbol")
-                    for t in (post.get("taggedSymbols") or [])
-                    if isinstance(t, dict)
-                ],
-                "likes": post.get("likeCount", 0),
-            }
-        )
+        out.append(_fireant_post_row(post))
     return out
+
+
+def _fireant_post_row(post: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one Fireant post (list posts use postID/totalLikes)."""
+    user = post.get("user") or {}
+    uname = (
+        post.get("userName")
+        or (user.get("name") if isinstance(user, dict) else None)
+        or (user.get("username") if isinstance(user, dict) else None)
+    )
+    likes = post.get("totalLikes")
+    if likes is None:
+        likes = post.get("likeCount", post.get("likes", 0))
+    return {
+        "id": post.get("postID") or post.get("id") or post.get("postId") or post.get("post_id"),
+        "user": uname,
+        "text": (post.get("description") or post.get("content") or "")[:500],
+        "symbols": [
+            t.get("symbol") for t in (post.get("taggedSymbols") or []) if isinstance(t, dict)
+        ],
+        "likes": likes,
+        "replies": post.get("totalReplies", 0),
+        "date": post.get("date"),
+    }
+
+
+def fireant_thread(post_id: int | str, limit: int = 20) -> dict[str, Any]:
+    """One post + its replies (rumor threads live in replies)."""
+    token = os.environ.get("FIREANT_TOKEN", "").strip()
+    if not token:
+        raise ProviderAuthMissing("FIREANT_TOKEN is not set")
+    base = os.environ.get("FIREANT_API_BASE", "https://restv2.fireant.vn").strip()
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        root_resp = httpx.get(f"{base}/posts/{post_id}", headers=headers, timeout=30)
+        root_body = root_resp.json() if root_resp.status_code == 200 else None
+        rep_resp = httpx.get(
+            f"{base}/posts/{post_id}/replies",
+            params={"limit": min(limit, 50)},
+            headers=headers,
+            timeout=30,
+        )
+        rep_body = rep_resp.json()
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable("fireant unreachable") from exc
+    except ValueError as exc:
+        raise ProviderBadData("fireant bad json") from exc
+    root = root_body if isinstance(root_body, dict) else None
+    items = (
+        rep_body
+        if isinstance(rep_body, list)
+        else (rep_body.get("posts") or rep_body.get("data") or [])
+        if isinstance(rep_body, dict)
+        else []
+    )
+    replies = [_fireant_post_row(p) for p in items[:limit] if isinstance(p, dict)]
+    return {
+        "post": _fireant_post_row(root) if root else None,
+        "replies": replies,
+        "reply_count": len(replies),
+    }
 
 
 def groq_chat(system_msg: str, user_msg: str, max_tokens: int = 300) -> str:

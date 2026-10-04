@@ -37,7 +37,7 @@ chuyên S22–S27, thêm S20/S21.)
 
 - `type: "remote"` (KHÔNG phải `streamable-http`); `oauth: false` (BẮT BUỘC — server là
   resource-server thuần, không OAuth endpoints).
-- Prod serve preset `all` = 136 tools (135 + web_search khi có key).
+- Prod serve preset `all` = 138 tools (137 + web_search khi có key).
 - Timeout call ≥120s (nhiều tool upstream chậm; opencode mặc định 30s là NGUYÊN NHÂN
   timeout oan — đã kết luận từ live run).
 
@@ -65,7 +65,7 @@ skill không được đấm ngược lại (vd fill PE null bằng số suy đo
   hoặc đề nghị chuyển skill).
 - Mỗi wave xong mới xét wave sau — bước sau dùng dữ kiện bước trước, không gọi dự phòng.
 - `empty` = không có thì dừng nhánh đó, không đổi params retry liên tục.
-- LLM KHÔNG cần đọc hết 136 descriptors: trigger `description` của skill chọn đúng 1 skill,
+- LLM KHÔNG cần đọc hết 138 descriptors: trigger `description` của skill chọn đúng 1 skill,
   làm theo bảng workflow trong skill.
 
 ## 0.4 Song song hóa
@@ -151,7 +151,7 @@ tool_budget: 12 / 4 song song
 | 0 | `source_status`, `vs_auth_status` | pre-flight |
 | 1. Dữ liệu vĩ mô VN chi tiết từ Vietstock (BẮT BUỘC) | `vs_categories` (tra id nếu cần) → `vs_indicator_data` GDP(73,tt3) · CPI(15,tt7,sub2) · XK(38,tt2) · `vs_xnk_detail` (xk + nk) | cặp category/termType phải đúng |
 | 2. Tin tức vĩ mô kinh tế | `news_market` (lọc vĩ mô/lãi suất/tỷ giá) · `macro_events_vn` · `economic_calendar` | Fireant/GDELT + NSO |
-| 3. Báo cáo vĩ mô của CTCK | `analyst_consensus` (limit=30, lọc title chứa GDP/CPI/lãi suất/tỷ giá/vĩ mô) | đặc trưng title-scrape: lọc client-side |
+| 3. Báo cáo vĩ mô của CTCK | `analyst_consensus`(report_type=macro, limit=30 — live P17) | section pointers + dated reports (entry_kind); không có dated thì dùng vs_indicator_data |
 | 4. Data bổ sung | `snapshot_history` (macro_curated — baseline so sánh số mới/cũ) · `yf_yield_curve` + DXY (bối cảnh hút vốn ngoại) · `sbv_rates` · `vn_retail_fx` | mỗi thứ 1 call |
 | 5. Lịch sự kiện câu chuyện | `macro_events_vn` (NSO) + kỳ họp Fed/Mỹ từ S9 cross-ref | lịch VN + lịch ngoại tác động VN |
 
@@ -426,8 +426,8 @@ tool_budget: 12 / timeout-call 120s
 | 1. Dữ liệu | `vn_quote_history` (stock) hoặc `dnse_ohlc_history` (futures/index) · `vn_index_ohlcv` (benchmark) | 1 symbol/lần |
 | 2. Điều kiện KỸ THUẬT | `backtest_strategies` (sma/momentum/buy_hold/**rsi_meanrev** + `rsi_low`/`rsi_high`) | live P16: mua RSI<30, thoát RSI>70 |
 | 3. Điều kiện THỜI GIAN | `seasonality` (mô tả) + filter `months`/`quarters` trong engine | live P16: entries chỉ kỳ chọn, exits luôn mở |
-| 4. Điều kiện SAU SỰ KIỆN | `event_calendar_vn` (ngày chia cổ tức/ĐHĐCĐ) + lịch Tết (local: Tết Nguyên đán ±N phiên) | **Phase B**: thêm `event_window` engine (list ngày + offsets, vd T-10→T+5) |
-| 5. Điều kiện GIÁ HÀNG HÓA | `yf_commodities`/`compare_assets` (lấy series dầu/vàng/thép theo map S13) | **Phase B**: thêm `condition_asset` + rule vào engine (join 2 series) |
+| 4. Điều kiện SAU SỰ KIỆN | `event_study` (CAR quanh ngày sự kiện, nearest-day 3 phiên) + `event_calendar_vn` lấy ngày | live P17: CAR/hit-rate/best-worst + rows từng sự kiện |
+| 5. Điều kiện GIÁ HÀNG HÓA | `backtest_strategies` + `condition_symbol` (BZ=F/GC=F..., vnstock→yfinance fallback) + `condition_rule` above_sma/rising | live P17: gate entries, exits luôn mở |
 | 6. Tổng hợp | `param_sweep` (≤30 combos) · `correlation_matrix` · `portfolio_optimize` (nhiều mã) | best KÈM worst (chống overfit) |
 
 **Pipeline chuẩn mỗi run**: baseline buy-hold → chiến lược → sweep → seasonality →
@@ -435,7 +435,7 @@ kết luận "đáng tin / đáng nghi + lý do". Ghi rõ engine numpy-only, cos
 chưa model.
 
 **Chống tràn lan**: 4 loại điều kiện — (1) sma/momentum/rsi_meanrev + (3) months/quarters
-đã live P16; (4) sự kiện và (5) hàng hóa còn Phase 2 — skill PHẢI nói rõ phần nào đã
+đã live P16–P17 toàn pipeline (sma/momentum/rsi_meanrev + months/quarters + condition + event_study)
 backtest được, không giả vờ đã test.
 
 **Failure modes**: sweep >3 symbol/run → từ chối; combos vượt 30 → engine tự cap.
@@ -445,7 +445,7 @@ backtest được, không giả vờ đã test.
 
 **Acceptance**: "backtest mua RSI<30 FPT" → hiện tại: trả lời trung thực "engine chưa hỗ
 trợ, mới có seasonality + gợi ý"; P16: engine đã có `rsi_meanrev` + filter months/quarters —
-chạy đủ pipeline + bảng kết quả (event_window và condition_asset vẫn Phase 2).
+chạy đủ pipeline + bảng kết quả.
 
 ## S16. `phan-tich-vang-ty-gia` (rev.3 — 5 điểm)
 
@@ -523,7 +523,7 @@ inputs: mode (symbol|vn|global), query
 | Chế độ | Wave | Tools |
 |---|---|---|
 | **A. Theo mã (+ rumor)** | 1 | `news_symbol`(symbol, limit=20) — Fireant-first |
-| | 2. Săn web + comments | `web_search`("tên mã" + "đồn"/"tin đồn"/rumor) → `web_fetch` 1–2 URL đáng ngờ nhất · đọc comments/posts liên quan trong `news_symbol` (rumor có TRƯỚC tin chính thống) |
+| | 2. Săn web + comments | `web_search`("tên mã" + "đồn"/"tin đồn"/rumor) → `web_fetch` 1–2 URL đáng ngờ nhất · đọc thread `fireant_thread`(post_id từ `news_symbol` — rumor nằm ở replies, live P17) |
 | | 3. Đối chiếu | `corporate_calendar`(symbol) + `company_events`(symbol) — tin có khớp công bố không? |
 | | 4. Dư luận | `sentiment_score`(symbol) |
 | **B. VN** | 1 | `news_market`(limit=15) + `corporate_calendar`(limit=20) |
@@ -631,14 +631,14 @@ inputs: symbol, timeframes (default 1D+1W, thêm 1M khi hỏi dài hạn)
 |---|---|---|
 | 1. Nến đa khung | `vn_quote_history`(symbol, 1D) · `vn_quote_history`(symbol, 1W) · [`vn_quote_history`(1M) nếu hỏi dài hạn] | interval 1D/1W/1M đã có từ P15 |
 | 2. Chỉ báo mỗi khung | `signals_technical`(symbol, interval tương ứng) | RSI/MACD/BB/Stoch/ADX/patterns/S-R/RS/pos_52w + **Ichimoku** (Tenkan/Kijun/Senkou/Chikou/signal — live từ P16) |
-| 3. Cấu trúc sóng | `signals_technical` trả sẵn swings + swing_trend + fib (local) | nhãn **HH/HL/LH/LL** + Fibonacci 7 mức — live từ P16; Elliott/Wyckoff full vẫn Phase 2 |
+| 3. Cấu trúc sóng | `signals_technical` trả sẵn swings + swing_trend + fib + elliott + wyckoff (local) | nhãn **HH/HL/LH/LL** + Fibo 7 mức + Elliott impulse/corrective/developing + Wyckoff phase — live P17 (heuristic, kèm invalidation/evidence) |
 | 4. Xác nhận | `pattern_match`(analogy lịch sử) · `dnse_latest_trade`/`dnse_orderbook`/`vn_trades` (intraday) · `vn_index_ohlcv` (trend index) | ≤3, theo câu hỏi |
 
 **Verdict mỗi khung (1D/1W[/1M])**: trend (SMA stack + ADX) · momentum (RSI/MACD/BB +
 Ichimoku) · S-R của khung · cấu trúc (HH/HL/LH/LL + Fibo 7 mức) · **kết luận higher-high
 hay lower-low**. Tổng hợp: đồng thuận đa khung hay phân kỳ + trigger giá.
 
-**Chống tràn lan**: Elliott/Wyckoff full CHƯA có → skill ghi "chưa phân tích được", không
+**Chống tràn lan**: Elliott/Wyckoff là heuristic (không phải nhãn sóng chuẩn) → verdict ghi confidence + invalidation, không
 diễn giải sóng bằng lời văn suông; 1W/1M chạy thật qua `signals_technical(interval)` (live P16).
 
 **Failure modes**: mã <60 nến → indicators null; DNSE hết giờ → orderbook rỗng là đúng.
@@ -818,7 +818,7 @@ inputs: symbol (optional — bỏ trống = quét feed chung), days (default 7)
 | Wave | Tools | Ghi chú |
 |---|---|---|
 | 1 | `analyst_consensus`(limit=30) | **feed chung không symbol** — parse rating (MUA/KHẢ QUAN/THEO DÕI/GIẢM TỶ TRỌNG) + giá mục tiêu từ titles, sort ngày |
-| 2 (mã cụ thể) | `analyst_consensus`(symbol, limit=15) · `vs_documents`(symbol) | report cho mã + tài liệu gốc |
+| 2 (mã cụ thể) | `analyst_consensus`(symbol, limit=15) · `vs_documents`(symbol) · `web_fetch`(format=pdf, URL báo cáo — đọc nội dung PDF, live P17) | report cho mã + tài liệu gốc + nội dung PDF |
 | 3 (xác nhận) | `stock_overview`(mã target) 1–2 call | so giá hiện tại vs mục tiêu → upside % |
 
 **Verdict**: bảng {mã · CTCK · rating · giá mục tiêu · ngày · upside % so giá hiện tại} lọc
@@ -913,10 +913,10 @@ bảng CHỜ DUYỆT để bạn tự điều chỉnh (đúng yêu cầu rev.3).
 | S8 tin nóng global | 1 | `yf_mega_flows`• |
 | S9 fed (0 home — cross-ref) | 0 | — (pure cross-ref) |
 | S13 trước BCTC | 3 | `company_events`• `quant_risk`• `scenario_simulate`• |
-| S15 backtest | 12 | `quant_backtest`• `quant_factors`• `backtest_strategies`• `param_sweep`• `seasonality`• `correlation_matrix`• `portfolio_optimize`• `dnse_ohlc_history`• `vn_equity_ohlcv`• `vn_futures_ohlcv`• `vn_index_ohlcv`• `dnse_vn30f1m_live`• |
+| S15 backtest | 13 | `quant_backtest`• `quant_factors`• `backtest_strategies`• `param_sweep`• `seasonality`• `correlation_matrix`• `portfolio_optimize`• `dnse_ohlc_history`• `vn_equity_ohlcv`• `vn_futures_ohlcv`• `vn_index_ohlcv`• `dnse_vn30f1m_live`• `event_study`• |
 | S16 vàng tỷ giá | 4 | `vn_retail_gold`• `vn_forex_ohlcv`• `vn_msn_fx_gold`• `yf_commodities`• |
 | S17 crypto | 3 | `crypto_spot`• `crypto_derivs`• `vn_crypto_ohlv`• |
-| S19 tìm tin | 1 | `web_fetch`• |
+| S19 tìm tin | 2 | `web_fetch`• `fireant_thread`• |
 | S20 bất ổn quốc gia | 1 | `geo_intel`• |
 | S21 polymarket | 2 | `world_prediction_odds`• `polymarket_event`• |
 | S22 kỹ thuật sâu | 7 | `signals_technical`• `pattern_match`• `dnse_orderbook`• `vn_trades`• `dnse_latest_trade`• `vn_quote_history`• `signals_scan`• |
@@ -929,8 +929,8 @@ bảng CHỜ DUYỆT để bạn tự điều chỉnh (đúng yêu cầu rev.3).
 | Contract chung (pre-flight/ops) | 5 | `source_status`• `vs_auth_status`• `oracle_meta`• `runs_list`• `run_get`• |
 | Phụ lục dùng chung (không phải skill) | 12 | `watchlist_create`• `watchlist_list`• `watchlist_get`• `watchlist_add`• `watchlist_update`• `watchlist_remove`• `watchlist_delete`• `alert_create`• `alert_list`• `alert_pause`• `alert_resume`• `alert_delete`• |
 
-**Tổng gán home: 107** + **chờ duyệt: 29** = 136/136, không trùng, không mồ côi.**
-(P16: `symbol_resolve` mới, home S1 — bước 1 mọi skill khi mã nhập nhằng.)
+**Tổng gán home: 109** + **chờ duyệt: 29** = 138/138, không trùng, không mồ côi.**
+(P16: `symbol_resolve` home S1. P17: `event_study` home S15, `fireant_thread` home S19.)
 
 ## Bảng CHỜ DUYỆT (tools của S2/S10/S11/S12/S14/S18 cũ — bạn tự điều chỉnh sau)
 
@@ -981,7 +981,7 @@ Ghi chú 3 WS tools (home S2 cũ → park chờ duyệt): remote không worker �
 
 # PHẦN 3 — QUY TRÌNH HARNESS BUILD & ACCEPTANCE
 
-1. **Kết nối trước**: config 0.1, chạy `mcp probe` + `tools/list` = 136 tools.
+1. **Kết nối trước**: config 0.1, chạy `mcp probe` + `tools/list` = 138 tools.
 2. **Scaffold**: 22 thư mục `skills/<slug>/SKILL.md` theo template Phần 1 (frontmatter +
    bảng workflow + verdict + budget + failure + evidence + acceptance).
 3. **Test nghiệm thu per skill**: bảng `Acceptance` tương ứng — chạy input mẫu, đối chiếu:

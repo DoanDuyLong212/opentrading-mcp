@@ -64,3 +64,63 @@ async def test_sentiment_score_end_to_end(monkeypatch):
     assert tool is not None
     env = await tool.fn(symbol="VCB", limit=3)
     assert env["availability"] == "available"
+
+
+def test_fireant_posts_reads_postid_fields(monkeypatch):
+    from opentrading_mcp.providers import intel as intel_p
+
+    monkeypatch.setenv("FIREANT_TOKEN", "test-token")
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self) -> Any:
+            return [
+                {
+                    "postID": 42088453,
+                    "description": "PNJ ngon",
+                    "user": {"name": "Vo Thi"},
+                    "totalLikes": 7,
+                    "totalReplies": 2,
+                }
+            ]
+
+    monkeypatch.setattr("httpx.get", lambda *a, **k: FakeResp())
+    out = intel_p.fireant_posts("PNJ", 3)
+    assert out[0]["id"] == 42088453
+    assert out[0]["user"] == "Vo Thi"
+    assert out[0]["likes"] == 7
+    assert out[0]["replies"] == 2
+
+
+def test_fireant_thread_parses_replies(monkeypatch):
+    from opentrading_mcp.providers import intel as intel_p
+
+    monkeypatch.setenv("FIREANT_TOKEN", "test-token")
+
+    class FakeResp:
+        status_code = 200
+
+        def __init__(self, body: Any):
+            self._body = body
+
+        def json(self) -> Any:
+            return self._body
+
+    root = {"postID": 1, "description": "root post", "user": {"name": "a"}}
+    reps = [
+        {"postID": 2, "description": "reply one", "replyToPostID": 1},
+        {"postID": 3, "description": "reply two", "replyToPostID": 1},
+    ]
+
+    def fake_get(url: str, **kwargs: Any) -> Any:
+        if url.endswith("/posts/1"):
+            return FakeResp(root)
+        assert url.endswith("/posts/1/replies")
+        return FakeResp(reps)
+
+    monkeypatch.setattr("httpx.get", fake_get)
+    out = intel_p.fireant_thread(1, limit=10)
+    assert out["post"]["id"] == 1
+    assert out["reply_count"] == 2
+    assert out["replies"][0]["id"] == 2

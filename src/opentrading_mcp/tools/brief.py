@@ -144,6 +144,21 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("news_symbol", str(exc))
 
     @server.tool(annotations=READ_ONLY)
+    async def fireant_thread(post_id: int, limit: int = 20) -> dict[str, Any]:
+        """One Fireant post plus its replies. Use to read comment threads behind a hot post.
+
+        post_id: Fireant postID (from news_symbol posts). limit: max replies.
+        Rumor threads live in replies; root post may be thin.
+        """
+        try:
+            data = await _call(
+                "f", intel_p.fireant_thread, int(post_id), min(int(limit), 50), secs=45.0
+            )
+            return make_envelope(data, source="fireant")
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            return _na("fireant_thread", str(exc))
+
+    @server.tool(annotations=READ_ONLY)
     async def economic_calendar(scope: str = "vn", limit: int = 20) -> dict[str, Any]:
         """Macro series catalogue as event proxy. Use for data-availability checks.
 
@@ -218,6 +233,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "brief_build"},
         {"name": "news_market"},
         {"name": "news_symbol"},
+        {"name": "fireant_thread"},
         {"name": "economic_calendar"},
         {"name": "corporate_calendar"},
         {"name": "sbv_rates"},

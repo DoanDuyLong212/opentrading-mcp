@@ -98,3 +98,66 @@ def test_intel_preset_includes_web_search_with_key(monkeypatch):
     names = sorted(t["name"] for t in register_preset(server, "intel"))
     assert "web_fetch" in names
     assert "web_search" in names
+
+
+def _tiny_pdf(payload: bytes) -> bytes:
+    import zlib
+
+    stream = zlib.compress(b"BT /F1 12 Tf 72 720 Td " + payload + b" Tj ET")
+    head = (
+        b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+        b"3 0 obj<</Type/Page/Parent 2 0 R/Contents 4 0 R>>endobj\n"
+        b"4 0 obj<</Length " + str(len(stream)).encode() + b"/Filter/FlateDecode>>stream\n"
+    )
+    return head + stream + b"\nendstream\nendobj\ntrailer<</Root 1 0 R>>"
+
+
+def test_extract_pdf_text():
+    from opentrading_mcp.providers import webfetch
+
+    data = webfetch._extract_pdf(
+        _tiny_pdf(b"(Cong hoa Xa hoi Chu nghia Viet Nam - Bao cao tai chinh quy 3 nam 2026)"),
+        "t.pdf",
+    )
+    assert "Cong hoa" in data["output"]
+    assert data["chars"] > 10
+
+
+def test_extract_pdf_scanned_fails_honestly():
+    import zlib
+
+    from opentrading_mcp.providers import webfetch
+
+    stream = zlib.compress(b"/Image1 Do")  # no text operators
+    pdf = (
+        b"%PDF-1.4\n4 0 obj<</Length 1/Filter/FlateDecode>>stream\n"
+        + stream
+        + b"\nendstream\nendobj"
+    )
+    try:
+        webfetch._extract_pdf(pdf, "scan.pdf")
+    except Exception as exc:  # any honest failure ok
+        assert "extractable" in str(exc) or "parse" in str(exc) or "PDF" in str(exc)
+    else:
+        raise AssertionError("scanned pdf must not return fake text")
+
+
+async def test_web_fetch_pdf_format(monkeypatch):
+    from opentrading_mcp.providers import webfetch
+    from opentrading_mcp.server import create_server, register_preset
+
+    async def fake_call(tool, fn, *args, **kwargs):
+        return webfetch._extract_pdf(
+            _tiny_pdf(b"(Bao cao tai chinh Q3 nam 2026 cua cong ty co phan chung khoan)"), "r.pdf"
+        )
+
+    import opentrading_mcp.tools.web as web_mod
+
+    monkeypatch.setattr(web_mod, "_call", fake_call)
+    server = create_server("all")
+    register_preset(server, "all")
+    fn = server._tool_manager.get_tool("web_fetch").fn
+    env = await fn(url="https://static2.vietstock.vn/x.pdf", format="pdf")
+    assert env["availability"] == "available"
+    assert "Bao cao" in env["data"]["output"]

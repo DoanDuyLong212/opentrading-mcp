@@ -87,6 +87,67 @@ def _rsi_series(closes: list[float], period: int = 14) -> list[float | None]:
     return out
 
 
+def _yf_closes(symbol: str) -> tuple[list[Any], list[float]]:
+    """Yahoo daily closes + dates for non-VN condition assets (oil, gold...)."""
+    import datetime
+
+    try:
+        import yfinance as yf
+    except ImportError as exc:
+        raise ProviderUnavailable("yfinance not installed") from exc
+    try:
+        df = yf.Ticker(symbol).history(period="2y", auto_adjust=True)
+        closes = [float(x) for x in df["Close"].tolist()]
+        dates = [d.date() if hasattr(d, "date") else datetime.date.today() for d in df.index]
+    except Exception as exc:
+        raise ProviderUnavailable(f"yfinance history failed for {symbol}") from exc
+    if len(closes) < 30:
+        raise ProviderBadData(f"too few yfinance bars for {symbol}")
+    return dates, closes
+
+
+def _condition_gate(
+    stock_dates: list[Any],
+    cond_dates: list[Any],
+    cond_closes: list[float],
+    rule: str,
+    lookback: int,
+) -> list[bool]:
+    """Per-bar entries-allowed flag from a condition asset (aligned by date)."""
+    import statistics
+
+    cmap = dict(zip(cond_dates, cond_closes, strict=False))
+    lb = max(int(lookback), 2)
+    out: list[bool] = []
+    for i, d in enumerate(stock_dates):
+        # exact date else nearest prior close within 5 calendar days
+        c = cmap.get(d)
+        if c is None and hasattr(d, "toordinal"):
+            for back in range(1, 6):
+                try:
+                    import datetime as _dt
+
+                    cand = d - _dt.timedelta(days=back)
+                except Exception:
+                    break
+                if cand in cmap:
+                    c = cmap[cand]
+                    break
+        if c is None:
+            out.append(True)  # no condition data: never block
+            continue
+        hist = [cmap.get(dd) for dd in stock_dates[max(0, i - lb + 1) : i + 1]]
+        vals = [float(x) for x in hist if isinstance(x, (int, float)) and x == x]
+        if len(vals) < lb:
+            out.append(False)
+            continue
+        if rule == "rising":
+            out.append(bool(vals[-1] > vals[0]))
+        else:  # above_sma
+            out.append(bool(vals[-1] > statistics.fmean(vals)))
+    return out
+
+
 def _run_strategy(
     closes: list[float],
     strategy: str,
@@ -98,12 +159,14 @@ def _run_strategy(
     rsi_high: float = 70.0,
     months: list[int] | None = None,
     quarters: list[int] | None = None,
+    cond_ok: list[bool] | None = None,
 ) -> dict[str, Any]:
     """Long-only engine: buy_hold | sma_cross | momentum | rsi_meanrev.
 
     Trades count entries. months/quarters (1-12 / 1-4): entries only allowed on
     matching bars; off-window bars force flat (exits always allowed, so no stuck
     positions). rsi_meanrev: long when RSI14 < rsi_low, flat when RSI14 > rsi_high.
+    cond_ok: optional per-bar entries-allowed flags from a condition asset.
     """
     import statistics
 
@@ -127,15 +190,20 @@ def _run_strategy(
 
     def _allowed(i: int) -> bool:
         if not gated:
-            return True
-        m = _bar_month(i)
-        if m is None:
-            return True  # undated bars never block
-        if month_set is not None and m not in month_set:
-            return False
-        if quarter_set is not None and (m - 1) // 3 + 1 not in quarter_set:
-            return False
-        return True
+            base = True
+        else:
+            m = _bar_month(i)
+            if m is None:
+                base = True  # undated bars never block
+            elif month_set is not None and m not in month_set:
+                base = False
+            elif quarter_set is not None and (m - 1) // 3 + 1 not in quarter_set:
+                base = False
+            else:
+                base = True
+        if cond_ok is not None and i < len(cond_ok):
+            base = base and bool(cond_ok[i])
+        return base
 
     if strategy == "buy_hold":
         pos = [1] * n
@@ -502,6 +570,9 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         rsi_high: float = 70.0,
         months: list[int] | None = None,
         quarters: list[int] | None = None,
+        condition_symbol: str | None = None,
+        condition_rule: str = "above_sma",
+        condition_lookback: int = 20,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Rule-based backtests beyond buy-and-hold. Use to compare timing rules.
@@ -511,6 +582,10 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         RSI14 > rsi_high), 'buy_hold'. fast/slow: lookback bars. cost_bps:
         in+out bps deducted per position flip. months/quarters: entries only on
         matching calendar months (1-12) / quarters (1-4); exits always allowed.
+        condition_symbol: gate entries on another asset (oil/gold/FX: BZ=F, GC=F,
+        USDVND...); condition_rule 'above_sma' (over its SMA) or 'rising'
+        (up over condition_lookback bars). VN symbols via vnstock, others via
+        yfinance daily history.
         """
         if ctx is not None:
             await ctx.log("info", f"backtest_strategies {symbol} {strategy}")
@@ -535,6 +610,46 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         dates, closes, _walked = _dated_closes(candles)
+        cond_ok: list[bool] | None = None
+        cond_warn: list[str] = []
+        if condition_symbol:
+            csym = condition_symbol.strip().upper()
+            rule = (condition_rule or "above_sma").strip().lower()
+            if rule not in ("above_sma", "rising"):
+                return make_envelope(
+                    {"tool": "backtest_strategies"},
+                    source="unavailable",
+                    warnings=[f"unknown condition_rule {condition_rule!r}"],
+                    availability="unavailable",
+                )
+            cd: list[Any] | None = None
+            cc: list[float] | None = None
+            try:
+                cc_candles = await run_blocking(
+                    functools.partial(vn_p.quote_history, csym, 400),
+                    "backtest_strategies",
+                    timeout_secs=60.0,
+                )
+                cd, cc, _ = _dated_closes(cc_candles)
+            except (ProviderUnavailable, ProviderBadData):
+                try:
+                    cd, cc = await run_blocking(
+                        functools.partial(_yf_closes, csym),
+                        "backtest_strategies",
+                        timeout_secs=60.0,
+                    )
+                except (ProviderUnavailable, ProviderBadData) as exc2:
+                    return make_envelope(
+                        {"tool": "backtest_strategies"},
+                        source="unavailable",
+                        warnings=[f"condition asset {csym} unavailable: {exc2}"],
+                        availability="unavailable",
+                    )
+            assert cd is not None and cc is not None
+            cond_ok = _condition_gate(dates, cd, cc, rule, condition_lookback)
+            cond_warn.append(
+                f"condition-gated on {csym} ({rule}/{condition_lookback}); exits always allowed"
+            )
         res = _run_strategy(
             closes,
             strategy,
@@ -546,6 +661,7 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
             rsi_high=rsi_high,
             months=months,
             quarters=quarters,
+            cond_ok=cond_ok,
         )
         out: dict[str, Any] = {
             "symbol": symbol.upper(),
@@ -561,12 +677,17 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         if months or quarters:
             out["months"] = months
             out["quarters"] = quarters
+        if condition_symbol:
+            out["condition_symbol"] = condition_symbol.strip().upper()
+            out["condition_rule"] = (condition_rule or "above_sma").strip().lower()
+            out["condition_lookback"] = condition_lookback
         warn: list[str] = []
         if months or quarters:
             warn.append(
                 "month-filtered: entries only in "
                 f"months={months} quarters={quarters}; exits always allowed"
             )
+        warn.extend(cond_warn)
         return make_envelope(out, source="computed-local", warnings=warn)
 
     @server.tool(annotations=READ_ONLY)
@@ -733,6 +854,135 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
             source="computed-local",
         )
 
+    @server.tool(annotations=READ_ONLY)
+    async def event_study(
+        symbol: str,
+        dates: list[str],
+        window_before: int = 10,
+        window_after: int = 10,
+        benchmark: str = "VNINDEX",
+        ctx: AnyContext | None = None,
+    ) -> dict[str, Any]:
+        """Abnormal returns around event dates vs benchmark. Use for event effects.
+
+        dates: ISO event dates (pre-Tet, dividends, meetings); each needs
+        window_before+window_after trading bars around it (nearest trading day
+        within 3 days is used when the exact date is missing). CAR = cumulative
+        (stock - benchmark) daily returns in %.
+        """
+        import datetime
+
+        if ctx is not None:
+            await ctx.log("info", f"event_study {symbol} {len(dates or [])} dates")
+        if not dates:
+            return make_envelope(
+                {"symbol": symbol.upper(), "events": 0, "rows": []},
+                source="computed-local",
+                warnings=["no event dates given"],
+                availability="empty",
+            )
+        try:
+            candles = await run_blocking(
+                functools.partial(vn_p.quote_history, symbol, 400),
+                "event_study",
+                timeout_secs=90.0,
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "event_study"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        warnings: list[str] = []
+        try:
+            bench_candles = await run_blocking(
+                functools.partial(vn_p.quote_history, benchmark, 400),
+                "event_study",
+                timeout_secs=90.0,
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            bench_candles = []
+            warnings.append(f"benchmark unavailable — raw returns: {exc}")
+        s_dates, s_closes, _ = _dated_closes(candles)
+        b_dates, b_closes, _ = _dated_closes(bench_candles)
+        s_map = dict(zip(s_dates, s_closes, strict=False))
+        b_map = dict(zip(b_dates, b_closes, strict=False))
+        common = sorted(set(s_map) & set(b_map)) if b_map else sorted(s_map)
+        bwd = max(int(window_before), 1)
+        fwd = max(int(window_after), 1)
+        rows = []
+        skipped = 0
+        for raw in dates:
+            try:
+                target = datetime.date.fromisoformat(str(raw).strip()[:10])
+            except ValueError:
+                skipped += 1
+                continue
+            idx = next((i for i, d in enumerate(common) if d == target), None)
+            note = None
+            if idx is None:
+                near = [(abs((d - target).days), i) for i, d in enumerate(common)]
+                dist, idx = min(near, default=(99, None)) if near else (99, None)
+                if idx is None or dist > 3:
+                    skipped += 1
+                    continue
+                note = f"nearest trading day {common[idx]} (off by {dist}d)"
+            if idx is None or idx - bwd < 0 or idx + fwd >= len(common):
+                skipped += 1
+                continue
+            cars = []
+            for k in range(idx - bwd + 1, idx + fwd + 1):
+                d0, d1 = common[k - 1], common[k]
+                rs = (s_map[d1] - s_map[d0]) / s_map[d0] if s_map[d0] else 0.0
+                rb = (b_map[d1] - b_map[d0]) / b_map[d0] if d1 in b_map and b_map[d0] else 0.0
+                cars.append(rs - rb)
+            car = round(sum(cars) * 100, 2)
+            stock_ret = (
+                round(
+                    (s_map[common[idx + fwd]] - s_map[common[idx - bwd]])
+                    / s_map[common[idx - bwd]]
+                    * 100,
+                    2,
+                )
+                if s_map[common[idx - bwd]]
+                else 0.0
+            )
+            rows.append(
+                {
+                    "date": str(target),
+                    "used_date": str(common[idx]),
+                    "car_pct": car,
+                    "stock_ret_pct": stock_ret,
+                    "bars": bwd + fwd,
+                    "note": note,
+                }
+            )
+        if not rows:
+            return make_envelope(
+                {"symbol": symbol.upper(), "events": 0, "rows": [], "skipped": skipped},
+                source="computed-local",
+                warnings=[*warnings, "no event had enough bars around it"],
+                availability="empty",
+            )
+        cars_all = [float(r.get("car_pct") or 0.0) for r in rows]
+        return make_envelope(
+            {
+                "symbol": symbol.upper(),
+                "events": len(rows),
+                "skipped": skipped,
+                "window": [bwd, fwd],
+                "benchmark": benchmark.upper(),
+                "avg_car_pct": round(sum(cars_all) / len(cars_all), 2),
+                "hit_rate": round(sum(1 for c in cars_all if c > 0) / len(cars_all), 4),
+                "best_car_pct": max(cars_all),
+                "worst_car_pct": min(cars_all),
+                "rows": rows,
+            },
+            source="computed-local",
+            warnings=warnings,
+        )
+
     return [
         {"name": "quant_backtest"},
         {"name": "quant_risk"},
@@ -743,4 +993,5 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "backtest_strategies"},
         {"name": "portfolio_optimize"},
         {"name": "param_sweep"},
+        {"name": "event_study"},
     ]
