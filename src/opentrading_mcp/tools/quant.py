@@ -66,16 +66,77 @@ def _align_returns(
     return common, aligned, walked
 
 
+def _rsi_series(closes: list[float], period: int = 14) -> list[float | None]:
+    """Wilder RSI per bar (None until warmed up); pure python for the engine."""
+    out: list[float | None] = [None] * len(closes)
+    if len(closes) < period + 1:
+        return out
+    gains = [max(closes[i] - closes[i - 1], 0.0) for i in range(1, len(closes))]
+    losses = [max(closes[i - 1] - closes[i], 0.0) for i in range(1, len(closes))]
+    avg_g = sum(gains[:period]) / period
+    avg_l = sum(losses[:period]) / period
+    for i in range(period, len(closes)):
+        if i > period:
+            chg = closes[i] - closes[i - 1]
+            avg_g = (avg_g * (period - 1) + max(chg, 0.0)) / period
+            avg_l = (avg_l * (period - 1) + max(-chg, 0.0)) / period
+        if avg_l == 0:
+            out[i] = 100.0 if avg_g > 0 else 50.0
+        else:
+            out[i] = 100 - 100 / (1 + avg_g / avg_l)
+    return out
+
+
 def _run_strategy(
-    closes: list[float], strategy: str, fast: int, slow: int, cost_bps: float
+    closes: list[float],
+    strategy: str,
+    fast: int,
+    slow: int,
+    cost_bps: float,
+    dates: list[Any] | None = None,
+    rsi_low: float = 30.0,
+    rsi_high: float = 70.0,
+    months: list[int] | None = None,
+    quarters: list[int] | None = None,
 ) -> dict[str, Any]:
-    """Long-only engine: buy_hold | sma_cross | momentum. Trades count entries."""
+    """Long-only engine: buy_hold | sma_cross | momentum | rsi_meanrev.
+
+    Trades count entries. months/quarters (1-12 / 1-4): entries only allowed on
+    matching bars; off-window bars force flat (exits always allowed, so no stuck
+    positions). rsi_meanrev: long when RSI14 < rsi_low, flat when RSI14 > rsi_high.
+    """
     import statistics
 
     n = len(closes)
-    need = max(int(fast), int(slow), 2) + 1
-    if n < need or strategy not in ("buy_hold", "sma_cross", "momentum"):
+    need = max(int(fast), int(slow), 15 if strategy == "rsi_meanrev" else 2) + 1
+    if n < need or strategy not in ("buy_hold", "sma_cross", "momentum", "rsi_meanrev"):
         return {"trades": 0, "net_return": 0.0, "note": "too few bars or unknown strategy"}
+    month_set = {int(m) for m in (months or []) if 1 <= int(m) <= 12} or None
+    quarter_set = {int(q) for q in (quarters or []) if 1 <= int(q) <= 4} or None
+    gated = bool(month_set or quarter_set)
+
+    def _bar_month(i: int) -> int | None:
+        if not dates or i >= len(dates):
+            return None
+        d = dates[i]
+        month = getattr(d, "month", None)
+        try:
+            return int(month) if month is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _allowed(i: int) -> bool:
+        if not gated:
+            return True
+        m = _bar_month(i)
+        if m is None:
+            return True  # undated bars never block
+        if month_set is not None and m not in month_set:
+            return False
+        if quarter_set is not None and (m - 1) // 3 + 1 not in quarter_set:
+            return False
+        return True
+
     if strategy == "buy_hold":
         pos = [1] * n
     elif strategy == "sma_cross":
@@ -94,10 +155,24 @@ def _run_strategy(
                 fast_v = sma_f[i]
                 slow_v = sma_s[i]
                 long = fast_v is not None and slow_v is not None and fast_v > slow_v
-            pos.append(1 if long else 0)
-    else:  # momentum: long when close above close[slow] bars ago
+            pos.append(1 if long and _allowed(i) else 0)
+    elif strategy == "momentum":
         lb = max(int(slow), 2)
-        pos = [1 if i >= lb and closes[i] > closes[i - lb] else 0 for i in range(n)]
+        pos = [1 if i >= lb and closes[i] > closes[i - lb] and _allowed(i) else 0 for i in range(n)]
+    else:  # rsi_meanrev: enter oversold, exit overbought, hold between
+        rsi = _rsi_series(closes)
+        pos = []
+        state = 0
+        for i in range(n):
+            r = rsi[i]
+            if r is None:
+                pos.append(0)
+                continue
+            if r < float(rsi_low):
+                state = 1
+            elif r > float(rsi_high):
+                state = 0
+            pos.append(state if _allowed(i) else 0)
     fee = max(float(cost_bps), 0.0) / 10000 * 2  # in+out per flip
     equity = 1.0
     peak = 1.0
@@ -122,13 +197,17 @@ def _run_strategy(
     if in_pos:
         pnls.append(equity - entry_eq)
     wins = sum(1 for p in pnls if p > 0)
-    return {
+    out: dict[str, Any] = {
         "trades": trades,
         "net_return": round(equity - 1, 4),
         "max_drawdown": round(max_dd, 4),
         "win_rate": round(wins / len(pnls), 4) if pnls else 0.0,
         "bars": n,
     }
+    if gated:
+        out["month_filtered"] = True
+        out["note"] = "entries only in selected months/quarters; exits always allowed"
+    return out
 
 
 def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
@@ -419,17 +498,23 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         fast: int = 10,
         slow: int = 30,
         cost_bps: float = 10.0,
+        rsi_low: float = 30.0,
+        rsi_high: float = 70.0,
+        months: list[int] | None = None,
+        quarters: list[int] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Rule-based backtests beyond buy-and-hold. Use to compare timing rules.
 
         strategy: 'sma_cross' (fast SMA over slow), 'momentum' (close over
-        close[slow] ago), 'buy_hold'. fast/slow: lookback bars. cost_bps:
-        in+out bps deducted per position flip.
+        close[slow] ago), 'rsi_meanrev' (long when RSI14 < rsi_low, flat when
+        RSI14 > rsi_high), 'buy_hold'. fast/slow: lookback bars. cost_bps:
+        in+out bps deducted per position flip. months/quarters: entries only on
+        matching calendar months (1-12) / quarters (1-4); exits always allowed.
         """
         if ctx is not None:
             await ctx.log("info", f"backtest_strategies {symbol} {strategy}")
-        if strategy not in ("sma_cross", "momentum", "buy_hold"):
+        if strategy not in ("sma_cross", "momentum", "buy_hold", "rsi_meanrev"):
             return make_envelope(
                 {"tool": "backtest_strategies"},
                 source="unavailable",
@@ -449,19 +534,40 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        closes = [c["c"] for c in candles if c["c"]]
-        res = _run_strategy(closes, strategy, fast, slow, cost_bps)
-        return make_envelope(
-            {
-                "symbol": symbol.upper(),
-                "strategy": strategy,
-                "fast": fast,
-                "slow": slow,
-                "cost_bps": cost_bps,
-                **res,
-            },
-            source="computed-local",
+        dates, closes, _walked = _dated_closes(candles)
+        res = _run_strategy(
+            closes,
+            strategy,
+            fast,
+            slow,
+            cost_bps,
+            dates=dates,
+            rsi_low=rsi_low,
+            rsi_high=rsi_high,
+            months=months,
+            quarters=quarters,
         )
+        out: dict[str, Any] = {
+            "symbol": symbol.upper(),
+            "strategy": strategy,
+            "fast": fast,
+            "slow": slow,
+            "cost_bps": cost_bps,
+            **res,
+        }
+        if strategy == "rsi_meanrev":
+            out["rsi_low"] = rsi_low
+            out["rsi_high"] = rsi_high
+        if months or quarters:
+            out["months"] = months
+            out["quarters"] = quarters
+        warn: list[str] = []
+        if months or quarters:
+            warn.append(
+                "month-filtered: entries only in "
+                f"months={months} quarters={quarters}; exits always allowed"
+            )
+        return make_envelope(out, source="computed-local", warnings=warn)
 
     @server.tool(annotations=READ_ONLY)
     async def portfolio_optimize(
@@ -565,19 +671,22 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
         fast_range: list[int] | None = None,
         slow_range: list[int] | None = None,
         cost_bps: float = 10.0,
+        months: list[int] | None = None,
+        quarters: list[int] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks.
 
         fast_range/slow_range: candidate bars (product capped at 30 combos).
+        rsi_meanrev allowed (fixed 30/70 thresholds). months/quarters passthrough.
         """
         if ctx is not None:
             await ctx.log("info", f"param_sweep {symbol} {strategy}")
-        if strategy not in ("sma_cross", "momentum"):
+        if strategy not in ("sma_cross", "momentum", "rsi_meanrev"):
             return make_envelope(
                 {"tool": "param_sweep"},
                 source="unavailable",
-                warnings=[f"sweep supports sma_cross|momentum, got {strategy!r}"],
+                warnings=[f"sweep supports sma_cross|momentum|rsi_meanrev, got {strategy!r}"],
                 availability="unavailable",
             )
         fasts = [max(int(f), 2) for f in (fast_range or [5, 10, 20])][:6]
@@ -597,9 +706,19 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         closes = [c["c"] for c in candles if c["c"]]
+        dates, _, _ = _dated_closes(candles)
         ranked = []
         for f, s in combos:
-            res = _run_strategy(closes, strategy, f, s, cost_bps)
+            res = _run_strategy(
+                closes,
+                strategy,
+                f,
+                s,
+                cost_bps,
+                dates=dates,
+                months=months,
+                quarters=quarters,
+            )
             ranked.append({"fast": f, "slow": s, **res})
         ranked.sort(key=lambda r: r["net_return"], reverse=True)
         return make_envelope(
@@ -607,6 +726,8 @@ def register_quant_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "symbol": symbol.upper(),
                 "strategy": strategy,
                 "combos_evaluated": len(ranked),
+                "months": months,
+                "quarters": quarters,
                 "ranked": ranked,
             },
             source="computed-local",

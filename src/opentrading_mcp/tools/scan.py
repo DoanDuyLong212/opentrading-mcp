@@ -193,26 +193,32 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         indicators: list[str] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Full technicals rating from local candles (daily only). Use for timing entries.
+        """Full technicals rating from local candles on 1D/1W/1M. Use for timing entries.
 
         indicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend,
-        patterns, support, resistance, rs_vs_bench, pos_52w, sma150);
-        omit for the full set. interval other
-        than '1D' is accepted but ignored.
+        patterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,
+        swings, swing_trend, fib); omit for the full set. interval: 1D (250 bars),
+        1W (long history, min 30 bars) or 1M (min 24 bars); long-MA fields are
+        null when history is short.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
         if ctx is not None:
             await ctx.log("info", f"signals_technical {symbol} {interval}")
         warnings_list: list[str] = []
-        if interval != "1D":
-            # Daily-only compute; other intervals are not resampled.
-            warnings_list.append(
-                f"daily-only: interval {interval!r} ignored, returning 1D daily data"
+        iv = (interval or "1D").strip().upper()
+        if iv not in ("1D", "1W", "1M"):
+            return make_envelope(
+                {"tool": "signals_technical"},
+                source="unavailable",
+                warnings=[f"unknown interval {interval!r} (1D|1W|1M)"],
+                availability="unavailable",
             )
+        days = {"1D": 250, "1W": 600, "1M": 1800}[iv]
+        min_bars = {"1D": 30, "1W": 30, "1M": 24}[iv]
         try:
             candles = await run_blocking(
-                functools.partial(vn_p.quote_history, symbol, 250),
+                functools.partial(vn_p.quote_history, symbol, days, iv),
                 "signals_technical",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -222,11 +228,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        if not isinstance(candles, list) or len(candles) < 30:
+        if not isinstance(candles, list) or len(candles) < min_bars:
             return make_envelope(
                 {
                     "symbol": symbol.upper(),
-                    "interval": "1D",
+                    "interval": iv,
                     "note": "insufficient history",
                     "n": len(candles) if isinstance(candles, list) else 0,
                 },
@@ -236,7 +242,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         try:
             bench_candles = await run_blocking(
-                functools.partial(vn_p.quote_history, "VNINDEX", 250),
+                functools.partial(vn_p.quote_history, "VNINDEX", days, iv),
                 "signals_technical",
             )
             bench = [c["c"] for c in bench_candles if c.get("c")]
@@ -256,7 +262,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             wanted = {i.lower() for i in indicators}
             out = {k: v for k, v in out.items() if str(k).lower() in wanted}
         return make_envelope(
-            {"symbol": symbol.upper(), "interval": "1D", **out},
+            {"symbol": symbol.upper(), "interval": iv, **out},
             source="computed-local",
             warnings=warnings_list,
         )

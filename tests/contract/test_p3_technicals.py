@@ -167,8 +167,8 @@ async def test_signals_technical_interval_non_daily_warns(monkeypatch):
     fn = _scan_tool_fn("signals_technical")
     env = await fn(symbol="VCB", interval="1W")
     _check_envelope(env, "signals_technical")
-    # no raise: non-daily interval gets a warning, daily data returned
+    # P8: weekly interval is honored (no daily-only warning), data returned
     assert env["data"]["symbol"] == "VCB"
     assert env["data"]["recommend"] in {"Buy", "Sell", "Neutral"}
-    assert env["data"]["interval"] == "1D"
-    assert any("daily-only" in w and "1W" in w for w in env["warnings"]), env["warnings"]
+    assert env["data"]["interval"] == "1W"
+    assert not any("daily-only" in w for w in env["warnings"]), env["warnings"]

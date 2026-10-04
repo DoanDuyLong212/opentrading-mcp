@@ -1,18 +1,19 @@
 # Tools + Workflow — opentrading-mcp (báo cáo chi tiết, số liệu live 2026-10-02)
 
-**135 tools unique · 126 READ_ONLY / 9 READ_WRITE · 6 presets · 6 prompts (workflows) · 4 resources**
+**136 tools unique · 127 READ_ONLY / 9 READ_WRITE · 6 presets · 6 prompts (workflows) · 4 resources**
+(P16 mới: `symbol_resolve` — multi-asset resolver; `signals_technical` mở 1W/1M + Ichimoku/swing/fibo; `backtest_strategies` thêm `rsi_meanrev` + filter months/quarters)
 Chạy live 135/135 ngày 2026-10-02 (có key): **129 available · 1 partial · 2 empty (đúng bản chất) · 3 unavailable (WS trio, thiếu worker local)**. 0 tool chết.
 
 ## 0. Tổng quan presets
 
 | Preset | Tools | Cap | Modules |
 |---|---|---|---|
-| market | 65 (64 khi thiếu websearch key) | 75 | market(8), web, vn, vs, vs_bctc, vn_ext, yf, yf_world, dnse_tools, dnse_ext, crypto |
+| market | 66 (65 khi thiếu websearch key) | 75 | market(9), web, vn, vs, vs_bctc, vn_ext, yf, yf_world, dnse_tools, dnse_ext, crypto |
 | scan | 47 | 60 | scan(6) + compute(20) + watchlist(12) + corp(9) |
 | quant | 9 | 50 | quant |
 | brief | 7 | 50 | brief |
 | intel | 8 (9 khi có websearch key — web_search gate theo key) | 50 | intel(7) + web(1+1 key) |
-| all | 135 (136 khi có websearch key; web_fetch dùng chung market+intel) | không cap | 18 modules |
+| all | 136 (137 khi có websearch key; web_fetch dùng chung market+intel) | không cap | 18 modules |
 
 | Kênh avail | Số tools | Ghi chú |
 |---|---|---|
@@ -26,13 +27,14 @@ TIMEOUT_MATRIX (contract client): tools_list 30, market_snapshot 15, breadth_sca
 Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:15432/opentrading_mcp" VIETSTOCK_HAR_FILE="docs/finance.vietstock.vn_Archive [26-10-01 18-35-43].har"`.
 
 ---
-## market.py — 8 tools
+## market.py — 9 tools
 
 | Tool | Params | Descriptor | Mô tả chi tiết (TV) | Source data (upstream) | Dữ liệu mẫu live 2026-10-02 | Avail |
 |---|---|---|---|---|---|---|
 | market_snapshot | ['symbols', 'as_of'] | Snapshot of VN market with provenance. Use when a broad market picture is needed. | Báo giá 30 mã VN30 kèm trần/sàn/tham chiếu/vol + nguồn. Tham số as_of chỉ là nhãn. | vnstock quote_batch (cache 60s) | `{"quotes": [{"symbol": "ACB", "time": 1790910967815.0, "exchange": "HOSE", "ceiling_price": 22550.0, "floor_price": 19650.0, "reference_price": 21100.0, "open_p` | available |
 | source_status | [] | Health of every upstream plus TTL state. Use to debug stale data. | Sức khỏe từng upstream (JWT, vnstock, WS, TTL cache). Gọi đầu tiên khi nghi data cũ. | local aggregator (env + TTL states) | `{"upstreams": {"vietstock": {"authenticated": true, "jwt_expires_at": 1790943335}, "vnstock": "ok", "dnse_ws": "cold"}, "stateless": true, "ttl": {"snapshot": 5` | available |
 | market_candles_batch | ['symbols', 'days', 'summary', 'columns'] | Batch OHLCV for symbols, one request per symbol. Use for multi-chart context. | Nến hàng loạt; mã lỗi vào `missing`, không fail cả batch. | vnstock VCI→KBS per symbol | `{"series": [{"symbol": "VCB", "count": 5, "last": 57.3, "high": 58.5, "low": 57.2}, {"symbol": "HPG", "count": 5, "last": 19.95, "high": 20.8, "low": 19.9}], "m` | available |
+| symbol_resolve | ['query', 'limit'] | Resolve ANY asset code to symbol + class + next tool. Use FIRST when unsure. | Phân giải mọi mã (CK VN, crypto, forex, index TG, futures, vàng/dầu) thành symbol chuẩn + loại tài sản + tool tiếp theo, xếp hạng + cờ ambiguous để fallback. | local tables + vnstock Listing | `{"resolved": {"symbol": "GC=F", "asset_class": "commodity"}}` (live: vàng→GC=F, BTC→BTCUSDT, VN30F1M→futures) | available |
 | symbol_lookup | ['query', 'limit'] | Resolve company name to symbol, venue and sector. Use before any symbol-scoped call. | Tra mã từ tên công ty không dấu (`hoa phat` → HPG). | vnstock Listing + Reference | `{"hits": [{"symbol": "HPG", "name": "CTCP Tập đoàn Hòa Phát"}, {"symbol": "HPA", "name": "CTCP Phát triển Nông nghiệp Hòa Phát"}, {"symbol": "HTP", "name": "CTC` | available |
 | market_movers | ['top_n'] | Top gainers, losers and volume leaders. Use for session pulse checks. | Top tăng/giảm/thanh khoản của bluechip trong phiên. | local snapshot (VN30 universe) | `{"movers": [{"symbol": "VCB", "time": 1790910971687, "exchange": "HOSE", "ceiling_price": 61600, "floor_price": 53600, "reference_price": 57600, "open_price": 5` | available |
 | breadth_scan | ['exchange'] | Advancers, decliners, ceiling and floor counts. Use to judge rally health. | Đếm mã tăng/giảm/trần/sàn toàn sàn (đếm case-insensitive). | Vietstock getmarketprice + marketinfo | `{"advancers": 1, "decliners": 6, "rows": 7}` | available |
@@ -152,7 +154,7 @@ Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_U
 |---|---|---|---|---|---|---|
 | stock_screener | ['filters', 'max_pe', 'min_roe', 'limit', 'technical'] | Screen universe by valuation and quality. Use when hunting candidates. | Lọc 1522 mã 3 stages (universe→fundamentals→technical). | vnstock listing + fundamentals + local filters (3 stages) | `{"universe": 1523, "filters": {}, "candidates": [{"symbol": "DPP", "name": "CTCP Dược Đồng Nai"}, {"symbol": "SDA", "name": "CTCP Simco Sông Đà"}, {"symbol": "C` | available |
 | signals_screener_columns | ['group', 'search'] | Screener column catalog (valuation/quality/universe/price). Use to build filters. | Catalog cột lọc để build filters. | local catalog | `{"count": 2, "group": "valuation", "search": null, "columns": {"pe": {"group": "valuation", "desc": "Price / trailing earnings (P/E). Lower is cheaper."}, "mark` | available |
-| signals_technical | ['symbol', 'interval', 'indicators'] | Full technicals rating from local candles (daily only). Use for timing entries. | Technicals đầy đủ + RS/pos_52w/sma150/patterns/Hỗ trợ-kháng cự. | vnstock candles (250d) → pandas technicals local | `{"symbol": "VCB", "interval": "1D", "rsi14": 39.23, "stoch_k": 2.63, "stoch_d": 4.8, "cci20": -125.54, "adx14": 12.12, "macd": {"line": -0.3102, "signal": -0.13` | available |
+| signals_technical | ['symbol', 'interval', 'indicators'] | Full technicals rating from local candles on 1D/1W/1M. Use for timing entries. | Technicals đầy đủ + RS/pos_52w/sma150/patterns/Hỗ trợ-kháng cự. | vnstock candles (250d) → pandas technicals local | `{"symbol": "VCB", "interval": "1D", "rsi14": 39.23, "stoch_k": 2.63, "stoch_d": 4.8, "cci20": -125.54, "adx14": 12.12, "macd": {"line": -0.3102, "signal": -0.13` | available |
 | sector_performance | ['level', 'top_n'] | GICS heatmap rows. Use for sector rotation reads. | Heatmap GICS (đọc luân chuyển ngành). | Vietstock GetHeatmapGICS | `{"level": 1, "rows": [{"IndustryCode": 10, "ParentCode": 0, "Level": 1, "DisplayOrder": 0, "IndustryName": "Năng lượng", "StockFullName": null, "ImageURL": "/c` | available |
 | money_flow | ['symbols'] | Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money. | NN mua/bán: DNSE WS → Vietstock cross-check. | DNSE WS → Vietstock nn_chart → unavailable | `{"primary": "vietstock", "flow": [["/Date(1790911058990)/"], [{"TradingDate": "/Date(1788714000000)/", "BuyVol": 46533428, "BuyVal": 1813.559809, "SellVol": 651` | available |
 | alert_check | ['rules'] | Evaluate price/RSI rules against live quotes. Use for live watch. | Đánh giá rules giá/RSI trên quotes live. | vnstock quote/candles + Redis cross-state | `{"rules": 1, "evaluated": 1, "triggered": [{"symbol": "VCB", "metric": "price", "price": 57300.0, "op": ">", "threshold": 50.0}]}` | available |
@@ -206,7 +208,7 @@ Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_U
 | scenario_simulate | ['scenario', 'symbol', 'shock_pct'] | Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing. | Shock giá → P/L trên 1000cp (cỡ vị thế). | vnstock candles → local | `{"scenario": "t", "symbol": "VCB", "last_close": 57.3, "shock_pct": -5.0, "shocked_price": 54.43, "pnl_per_1000_shares": -2870.0, "assumptions": ["linear shock,` | available |
 | correlation_matrix | ['symbols', 'days'] | Pairwise Pearson correlation of daily returns. Use for diversification reads. | Tương quan Pearson cặp mã (đa dạng hóa). | vnstock candles inner-join → local | `{"symbols": ["VCB", "HPG"], "common_dates": 91, "matrix": {"VCB": {"VCB": 1.0, "HPG": 0.5045}, "HPG": {"VCB": 0.5045, "HPG": 1.0}}, "date_note": "business-day w` | available |
 | seasonality | ['symbol', 'window'] | Rolling-window return stats per calendar month. Use for seasonal bias. | Stats theo tháng (bias mùa vụ). | vnstock 400d → local buckets | `{"symbol": "VCB", "window": 21, "months": {"1": {"n": 22, "mean_pct": 4.67, "median_pct": -1.55, "hit_rate": 0.32, "best_pct": 33.8, "worst_pct": -5.48}, "2": {` | available |
-| backtest_strategies | ['symbol', 'strategy', 'fast', 'slow', 'cost_bps'] | Rule-based backtests beyond buy-and-hold. Use to compare timing rules. | Backtest sma/momentum vs buy-hold. | vnstock 365d → local engine | `{"symbol": "VCB", "strategy": "sma_cross", "fast": 10, "slow": 30, "cost_bps": 10.0, "trades": 6, "net_return": -0.0872, "max_drawdown": 0.2008, "win_rate": 0.3` | available |
+| backtest_strategies | ['symbol', 'strategy', 'fast', 'slow', 'cost_bps', 'rsi_low', 'rsi_high', 'months', 'quarters'] | Rule-based backtests beyond buy-and-hold (sma/momentum/rsi_meanrev + month filter). Use to compare timing rules. | Backtest sma/momentum vs buy-hold. | vnstock 365d → local engine | `{"symbol": "VCB", "strategy": "sma_cross", "fast": 10, "slow": 30, "cost_bps": 10.0, "trades": 6, "net_return": -0.0872, "max_drawdown": 0.2008, "win_rate": 0.3` | available |
 | portfolio_optimize | ['symbols', 'objective', 'days'] | Long-only weights by rule. Use for allocation starting points. | Tỷ trọng long-only (numpy, fallback equal). | vnstock candles → numpy-only local | `{"symbols": ["VCB", "HPG"], "objective": "max_sharpe", "weights": {"VCB": 0.5, "HPG": 0.5}, "common_dates": 156, "notes": ["long-only heuristic; rebalance and c` | available |
 | param_sweep | ['symbol', 'strategy', 'fast_range', 'slow_range', 'cost_bps'] | Grid-search strategy lookbacks, ranked by net return. Use to avoid overfit picks. | Grid lookbacks ≤30 combos (chống overfit). | vnstock 365d → local grid (≤30 combos) | `{"symbol": "VCB", "strategy": "sma_cross", "combos_evaluated": 8, "ranked": [{"fast": 10, "slow": 20, "trades": 9, "net_return": 0.071, "max_drawdown": 0.142, "` | available |
 

@@ -8,7 +8,9 @@ so tools/list and smoke tests pass everywhere.
 from __future__ import annotations
 
 import asyncio
+import difflib
 import functools
+import re
 import sys
 from typing import Any
 
@@ -55,6 +57,178 @@ def _unavailable(tool: str, reason: str) -> dict[str, Any]:
 
 def _log_stderr(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
+
+
+# symbol_resolve tables: stdlib-only, no network.
+_CRYPTO_BASES = frozenset(
+    "BTC ETH SOL BNB XRP DOGE ADA TON TRX AVAX LINK DOT NEAR ARB OP ATOM "
+    "LTC BCH ETC FIL ICP APT SUI INJ SEI TIA JUP PEPE SHIB WLD RENDER FET "
+    "ONDO LDO AAVE UNI MKR SNX SAND MANA AXS CHZ GAL GMT APE LRC ZEC DASH "
+    "XMR XTZ EOS IOTA HBAR VET ALGO FLOW EGLD KAVA ROSE ONE CELO FTM MINA "
+    "XLM QNT GRT STX IMX BLUR PYTH JASMY BONK FLOKI ORDI TAO STRK ZK ARB "
+    "SFP PENDLE".split()
+)
+_CURRENCIES = frozenset(
+    "USD VND EUR JPY GBP AUD CAD CHF CNY HKD SGD KRW TWD THB MYR IDR PHP "
+    "INR NZD SEK NOK DKK PLN CZK HUF ILS AED SAR QAR KWD ZAR BRL MXN CLP "
+    "COP PEN ARS TRY".split()
+)
+_GLOBAL_TICKERS = frozenset(
+    "^GSPC ^IXIC ^DJI ^N225 ^FTSE ^STOXX ^GDAXI ^HSI ^KS11 ^TWII ^AXJO "
+    "^GSPTSE ^FCHI GC=F SI=F CL=F BZ=F NG=F HG=F BTC-USD ETH-USD DX-Y.NYB "
+    "^TNX ^FVX ^TYX ^IRX ZN=F USA30".split()
+)
+# normalized query -> (symbol, asset_class, venue, name, use_tool, use_args)
+# normalized query -> (symbol, asset_class, venue, name, use_tool, use_args)
+_ALIASES: dict[str, tuple[str, str, str, str, str, dict[str, Any]]] = {
+    "SP500": (
+        "^GSPC",
+        "global_index",
+        "US",
+        "S&P 500",
+        "yf_global_indices",
+        {"tickers": ["^GSPC"]},
+    ),
+    "S&P 500": (
+        "^GSPC",
+        "global_index",
+        "US",
+        "S&P 500",
+        "yf_global_indices",
+        {"tickers": ["^GSPC"]},
+    ),
+    "NASDAQ": (
+        "^IXIC",
+        "global_index",
+        "US",
+        "Nasdaq Composite",
+        "yf_global_indices",
+        {"tickers": ["^IXIC"]},
+    ),
+    "DOW": ("^DJI", "global_index", "US", "Dow Jones", "yf_global_indices", {"tickers": ["^DJI"]}),
+    "DOW JONES": (
+        "^DJI",
+        "global_index",
+        "US",
+        "Dow Jones",
+        "yf_global_indices",
+        {"tickers": ["^DJI"]},
+    ),
+    "NIKKEI": (
+        "^N225",
+        "global_index",
+        "JP",
+        "Nikkei 225",
+        "yf_global_indices",
+        {"tickers": ["^N225"]},
+    ),
+    "HANG SENG": (
+        "^HSI",
+        "global_index",
+        "HK",
+        "Hang Seng",
+        "yf_global_indices",
+        {"tickers": ["^HSI"]},
+    ),
+    "VANG": (
+        "GC=F",
+        "commodity",
+        "global",
+        "Gold futures",
+        "yf_commodities",
+        {"tickers": ["GC=F"]},
+    ),
+    "GOLD": (
+        "GC=F",
+        "commodity",
+        "global",
+        "Gold futures",
+        "yf_commodities",
+        {"tickers": ["GC=F"]},
+    ),
+    "VANG THE GIOI": (
+        "GC=F",
+        "commodity",
+        "global",
+        "Gold futures",
+        "yf_commodities",
+        {"tickers": ["GC=F"]},
+    ),
+    "BAC": (
+        "SI=F",
+        "commodity",
+        "global",
+        "Silver futures",
+        "yf_commodities",
+        {"tickers": ["SI=F"]},
+    ),
+    "SILVER": (
+        "SI=F",
+        "commodity",
+        "global",
+        "Silver futures",
+        "yf_commodities",
+        {"tickers": ["SI=F"]},
+    ),
+    "BRENT": (
+        "BZ=F",
+        "commodity",
+        "global",
+        "Brent crude",
+        "yf_commodities",
+        {"tickers": ["BZ=F"]},
+    ),
+    "DAU BRENT": (
+        "BZ=F",
+        "commodity",
+        "global",
+        "Brent crude",
+        "yf_commodities",
+        {"tickers": ["BZ=F"]},
+    ),
+    "WTI": ("CL=F", "commodity", "global", "WTI crude", "yf_commodities", {"tickers": ["CL=F"]}),
+    "DAU WTI": (
+        "CL=F",
+        "commodity",
+        "global",
+        "WTI crude",
+        "yf_commodities",
+        {"tickers": ["CL=F"]},
+    ),
+    "DAU THO": (
+        "CL=F",
+        "commodity",
+        "global",
+        "WTI crude",
+        "yf_commodities",
+        {"tickers": ["CL=F"]},
+    ),
+    "BITCOIN": ("BTCUSDT", "crypto", "Binance", "Bitcoin", "crypto_spot", {"symbols": ["BTCUSDT"]}),
+    "ETHEREUM": (
+        "ETHUSDT",
+        "crypto",
+        "Binance",
+        "Ethereum",
+        "crypto_spot",
+        {"symbols": ["ETHUSDT"]},
+    ),
+    "DOLLAR INDEX": (
+        "DX-Y.NYB",
+        "global_index",
+        "US",
+        "Dollar index",
+        "yf_global_indices",
+        {"tickers": ["DX-Y.NYB"]},
+    ),
+    "DXY": (
+        "DX-Y.NYB",
+        "global_index",
+        "US",
+        "Dollar index",
+        "yf_global_indices",
+        {"tickers": ["DX-Y.NYB"]},
+    ),
+}
 
 
 # Backward-compat wrappers: logic lives in shared.py, names/signatures kept.
@@ -197,6 +371,213 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         ]
         return make_envelope({"hits": hits[: max(int(limit), 1)]}, source="vnstock")
+
+    # ---- symbol_resolve: multi-asset resolver (local tables + VN listing) ----
+    @server.tool(annotations=READ_ONLY)
+    async def symbol_resolve(query: str, limit: int = 5) -> dict[str, Any]:
+        """Resolve ANY asset code to symbol + class + next tool. Use FIRST when unsure.
+
+        Covers VN stocks, crypto, forex, indices, futures, gold/oil. Returns ranked
+        candidates with fallback order; ambiguous=true means ask the user or try #1 then #2.
+        """
+        cands: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        q_raw = (query or "").strip()
+        if not q_raw:
+            return make_envelope(
+                {"query": query, "resolved": None, "ambiguous": False, "candidates": []},
+                source="local",
+                availability="empty",
+            )
+        qn = _norm_text(q_raw)
+        qc = re.sub(r"[\s\-/_.]", "", qn)
+
+        def _add(
+            symbol: str,
+            asset_class: str,
+            venue: str,
+            name: str,
+            score: int,
+            reason: str,
+            use_tool: str,
+            use_args: dict[str, Any],
+        ) -> None:
+            if not any(c["symbol"] == symbol for c in cands):
+                cands.append(
+                    {
+                        "symbol": symbol,
+                        "asset_class": asset_class,
+                        "venue": venue,
+                        "name": name,
+                        "score": score,
+                        "reason": reason,
+                        "use_tool": use_tool,
+                        "use_args": use_args,
+                    }
+                )
+
+        # 1) forex pair XXXYYY or XXX/YYY
+        if re.fullmatch(r"[A-Z]{6}", qc or "") and qc[:3] in _CURRENCIES and qc[3:] in _CURRENCIES:
+            _add(
+                qc,
+                "forex",
+                "OTC",
+                f"{qc[:3]}/{qc[3:]}",
+                90,
+                "6-letter currency pair",
+                "vn_forex_ohlcv",
+                {"pair": qc},
+            )
+        # 2) VN futures (VN30F1M style)
+        if re.fullmatch(r"[A-Z0-9]{2,12}F[12]M", qc or ""):
+            _add(
+                qc,
+                "vn_futures",
+                "DNSE",
+                qc,
+                90,
+                "futures code pattern",
+                "dnse_ohlc_history",
+                {"symbol": qc},
+            )
+        # 3) crypto: BASE[QUOTE]
+        base, suffix = qc, ""
+        for suf in ("USDT", "USDC", "FDUSD", "TUSD", "USD", "VND", "BTC", "ETH", "EUR", "GBP"):
+            if len(qc) > len(suf) + 1 and qc.endswith(suf) and qc[: -len(suf)] in _CRYPTO_BASES:
+                base, suffix = qc[: -len(suf)], suf
+                break
+        if base in _CRYPTO_BASES and (suffix or len(qc) <= 6):
+            sym = base + (
+                suffix if suffix in ("USDT", "USDC", "FDUSD", "TUSD", "USD", "VND") else "USDT"
+            )
+            if suffix in ("BTC", "ETH"):
+                sym = base + suffix
+            score = 90 if suffix else 85
+            _add(
+                sym,
+                "crypto",
+                "Binance",
+                f"{base}/quote",
+                score,
+                "crypto base" + (f"+{suffix}" if suffix else " (default USDT)"),
+                "crypto_spot",
+                {"symbols": [sym]},
+            )
+        # 4) named aliases (indices, commodities, sponsors)
+        if qn in _ALIASES or qc in _ALIASES:
+            alias = _ALIASES.get(qn, _ALIASES.get(qc))
+            assert alias is not None
+            sym, aclass, venue, nm, tool, args = alias
+            _add(sym, aclass, venue, nm, 95, "known alias", tool, dict(args))
+        # 5) raw global tickers (^GSPC, GC=F, BTC-USD ...)
+        if qc in _GLOBAL_TICKERS:
+            aclass = (
+                "commodity"
+                if re.search(r"=[A-Z]$", qc) and qc not in ("BTC-USD", "ETH-USD")
+                else "global_index"
+            )
+            if qc in ("BTC-USD", "ETH-USD"):
+                aclass = "crypto"
+            _add(
+                qc,
+                aclass,
+                "global",
+                qc,
+                90,
+                "known global ticker",
+                "yf_commodities" if aclass == "commodity" else "yf_global_indices",
+                {"tickers": [qc]},
+            )
+        # 6) VN listing: exact > prefix > substring > name > fuzzy
+        try:
+            rows = await run_blocking(vn_p.listing_symbols, "symbol_resolve")
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            rows = []
+            warnings.append(f"vn listing unavailable — pattern-only: {exc}")
+        for r in rows if isinstance(rows, list) else []:
+            if not isinstance(r, dict):
+                continue
+            sym = str(r.get("symbol", "")).upper()
+            nm = str(r.get("name", ""))
+            if not sym:
+                continue
+            sym_n = _norm_text(sym)
+            if sym_n == qc:
+                _add(
+                    sym,
+                    "vn_equity",
+                    "VN",
+                    nm,
+                    100,
+                    "exact VN symbol",
+                    "stock_overview",
+                    {"symbol": sym},
+                )
+            elif sym_n.startswith(qc) and qc:
+                _add(
+                    sym,
+                    "vn_equity",
+                    "VN",
+                    nm,
+                    75,
+                    "VN symbol prefix",
+                    "stock_overview",
+                    {"symbol": sym},
+                )
+            elif qc and qc in sym_n:
+                _add(
+                    sym,
+                    "vn_equity",
+                    "VN",
+                    nm,
+                    60,
+                    "VN symbol substring",
+                    "stock_overview",
+                    {"symbol": sym},
+                )
+            elif qn and qn in _norm_text(nm):
+                _add(
+                    sym,
+                    "vn_equity",
+                    "VN",
+                    nm,
+                    50,
+                    "company name match",
+                    "stock_overview",
+                    {"symbol": sym},
+                )
+            else:
+                ratio = max(
+                    difflib.SequenceMatcher(None, qn, sym_n).ratio(),
+                    difflib.SequenceMatcher(None, qn, _norm_text(nm)).ratio(),
+                )
+                if ratio >= 0.6:
+                    _add(
+                        sym,
+                        "vn_equity",
+                        "VN",
+                        nm,
+                        round(25 + 35 * ratio),
+                        f"fuzzy {ratio:.2f}",
+                        "stock_overview",
+                        {"symbol": sym},
+                    )
+        cands.sort(key=lambda c: (-c["score"], c["symbol"]))
+        cands = cands[: max(int(limit), 1)]
+        resolved = cands[0] if cands else None
+        ambiguous = bool(
+            cands
+            and (
+                (len(cands) > 1 and cands[0]["score"] - cands[1]["score"] < 15)
+                or cands[0]["score"] < 60
+            )
+        )
+        return make_envelope(
+            {"query": q_raw, "resolved": resolved, "ambiguous": ambiguous, "candidates": cands},
+            source="vnstock+local" if rows else "local",
+            warnings=warnings,
+            availability="available" if cands else "empty",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def market_movers(top_n: int = 10) -> dict[str, Any]:
@@ -364,6 +745,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "source_status"},
         {"name": "market_candles_batch"},
         {"name": "symbol_lookup"},
+        {"name": "symbol_resolve"},
         {"name": "market_movers"},
         {"name": "breadth_scan"},
         {"name": "dnse_market_status"},

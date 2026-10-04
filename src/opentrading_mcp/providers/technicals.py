@@ -214,6 +214,101 @@ def compute(
     boll_upper = _last_float(mid + 2 * std)
     boll_lower = _last_float(mid - 2 * std)
 
+    # Ichimoku (9/26/52): tenkan/kijun/senkou/chikou + cloud signal.
+    def _donchian(s: Any, period: int) -> Any:
+        return (
+            s.rolling(period, min_periods=period).max()
+            + s.rolling(period, min_periods=period).min()
+        ) / 2
+
+    try:
+        tenkan_s = (_donchian(high, 9) + _donchian(low, 9)) / 2
+        kijun_s = (_donchian(high, 26) + _donchian(low, 26)) / 2
+        senkou_a_s = (tenkan_s + kijun_s) / 2
+        senkou_b_s = (_donchian(high, 52) + _donchian(low, 52)) / 2
+        chikou_s = close.shift(26)
+        tenkan = _last_float(tenkan_s)
+        kijun = _last_float(kijun_s)
+        senkou_a = _last_float(senkou_a_s)
+        senkou_b = _last_float(senkou_b_s)
+        chikou = _last_float(chikou_s)
+    except Exception:
+        tenkan = kijun = senkou_a = senkou_b = chikou = None
+    if tenkan is None or kijun is None:
+        ichi_signal = None
+    else:
+        cloud_parts = [x for x in (senkou_a, senkou_b) if x is not None]
+        top = max(cloud_parts)
+        bot = min(cloud_parts)
+        if last > top and tenkan > kijun:
+            ichi_signal = "bullish"
+        elif last < bot and tenkan < kijun:
+            ichi_signal = "bearish"
+        else:
+            ichi_signal = "neutral"
+    ichimoku = {
+        "tenkan": tenkan,
+        "kijun": kijun,
+        "senkou_a": senkou_a,
+        "senkou_b": senkou_b,
+        "chikou": chikou,
+        "signal": ichi_signal,
+    }
+
+    # Swing structure (fractal order 5): HH/HL/LH/LL + trend + Fibonacci.
+    swings: list[dict[str, Any]] = []
+    try:
+        h_vals = [float(x) for x in high.tolist()]
+        l_vals = [float(x) for x in low.tolist()]
+        order = 5
+        pivots: list[tuple[int, float, str]] = []
+        if n >= 2 * order + 1:
+            for i in range(order, n - order):
+                window_h = h_vals[i - order : i + order + 1]
+                window_l = l_vals[i - order : i + order + 1]
+                if h_vals[i] > max(window_h[:order] + window_h[order + 1 :]):
+                    pivots.append((i, h_vals[i], "H"))
+                elif l_vals[i] < min(window_l[:order] + window_l[order + 1 :]):
+                    pivots.append((i, l_vals[i], "L"))
+        highs = [(i, p) for i, p, s in pivots if s == "H"]
+        lows = [(i, p) for i, p, s in pivots if s == "L"]
+        labeled: list[tuple[int, float, str]] = []
+        for k, (i, p) in enumerate(highs):
+            labeled.append((i, p, "HH" if k and p > highs[k - 1][1] else ("LH" if k else "H")))
+        for k, (i, p) in enumerate(lows):
+            labeled.append((i, p, "HL" if k and p > lows[k - 1][1] else ("LL" if k else "L")))
+        labeled.sort(key=lambda t: t[0])
+        swings = [{"i": i, "price": round(p, 2), "side": s} for i, p, s in labeled[-8:]]
+        if len(highs) >= 2 and len(lows) >= 2:
+            up = highs[-1][1] > highs[-2][1] and lows[-1][1] > lows[-2][1]
+            down = highs[-1][1] < highs[-2][1] and lows[-1][1] < lows[-2][1]
+            swing_trend: str | None = "higher-high" if up else ("lower-low" if down else "mixed")
+        else:
+            swing_trend = "insufficient"
+    except Exception:
+        swing_trend = "insufficient"
+    # Fibonacci retracement over the last 60 bars (or all).
+    fib: dict[str, Any] = {"direction": None, "anchor_lo": None, "anchor_hi": None, "levels": {}}
+    try:
+        win = min(n, 60)
+        w_h = [float(x) for x in high.tolist()[-win:]]
+        w_l = [float(x) for x in low.tolist()[-win:]]
+        hi, lo = max(w_h), min(w_l)
+        if hi > lo:
+            up = w_h.index(hi) >= w_l.index(lo)
+            levels = {}
+            for r in (0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0):
+                v = lo + r * (hi - lo) if up else hi - r * (hi - lo)
+                levels[str(r)] = round(v, 2)
+            fib = {
+                "direction": "up" if up else "down",
+                "anchor_lo": round(lo, 2),
+                "anchor_hi": round(hi, 2),
+                "levels": levels,
+            }
+    except Exception:
+        fib = {"direction": None, "anchor_lo": None, "anchor_hi": None, "levels": {}}
+
     # Recommend vote: rsi / macd / adx / stoch / ma trend
     votes: list[str] = []
     votes.append("Buy" if rsi14 > 55 else ("Sell" if rsi14 < 45 else "Neutral"))
@@ -297,6 +392,10 @@ def compute(
         "boll_upper": boll_upper,
         "boll_lower": boll_lower,
         "atr14": atr14,
+        "ichimoku": ichimoku,
+        "swings": swings,
+        "swing_trend": swing_trend,
+        "fib": fib,
         "recommend": recommend,
         "patterns": patterns,
         "support": support,
