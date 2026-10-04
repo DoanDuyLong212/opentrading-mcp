@@ -1,13 +1,13 @@
-# Skills Design cho Harness — opentrading-mcp (2026-10-02, rev.2)
+# Skills Design cho Harness — opentrading-mcp (2026-10-02, rev.3)
 
-**Mục đích**: spec hoàn chỉnh để team harness TỰ BUILD **27 skills** trên nền 135 MCP tools.
+**Mục đích**: spec hoàn chỉnh để team harness TỰ BUILD **22 skills** trên nền 135 MCP tools.
 Không cần code thêm phía server — mọi workflow đã verify live 2026-10-02 (số liệu thật
 trong từng skill là evidence thật, không minh họa).
 
-**rev.2**: tách skills nhồi quá nhiều tools (S1 14 calls → điều phối 6 + 6 skill chuyên
-S22–S27) và thêm 8 skills theo yêu cầu: bất ổn quốc gia (S20), dự đoán polymarket (S21),
-kỹ thuật chuyên sâu (S22), cơ bản chuyên sâu (S23), định giá chuyên sâu (S24), so sánh
-cùng ngành (S25), sentiment Fireant (S26), săn cơ hội báo cáo CTCK (S27).
+**rev.3**: còn **22 skills** — xóa S2/S10/S11/S12/S14/S18 (tools chuyển home hoặc park
+"chờ duyệt" trong ma trận); S1/S13/S15/S16/S17/S19/S21/S22/S25 viết lại theo workflow mới;
+thêm S28 kiểm tra nguồn dữ liệu 1 lượt. (rev.2 trước đó: tách S1 thành điều phối + 6 skill
+chuyên S22–S27, thêm S20/S21.)
 
 - Nguồn tool catalog chi tiết: `docs/tools-review-2026-09-24.md` (bảng 135 tools + 6 workflows).
 - Nguồn kiến trúc/bảo mật/kết nối: `docs/architecture-review-2026-09-30.md`.
@@ -92,122 +92,83 @@ skill không được đấm ngược lại (vd fill PE null bằng số suy đo
 
 ---
 
-# PHẦN 1 — 27 SKILLS
+# PHẦN 1 — 22 SKILLS (rev.3)
 
 Mỗi skill: frontmatter → workflow bảng → verdict → chống tràn lan → failure modes →
 evidence live → acceptance test.
 
-## S1. `phan-tich-chuyen-sau-1-ma` (điều phối — đã tách nhỏ)
+## S1. `phan-tich-chuyen-sau-1-ma` (rev.3 — workflow mới của bạn)
 
 ```yaml
 name: phan-tich-chuyen-sau-1-ma
 description: >
-  Dùng khi người dùng yêu cầu phân tích TOÀN DIỆN một mã cụ thể ("phân tích FPT").
-  Skill này ĐIỀU PHỐI các skill chuyên (S22 kỹ thuật, S23 cơ bản, S24 định giá,
-  S25 so sánh, S26 sentiment, S27 báo cáo CTCK) rồi gộp verdict — KHÔNG tự gọi
-  chồng chéo 14 tools như bản cũ.
-tool_budget: 6 / 2 song song
-inputs: symbol, optional focus (kythuat|dinhgia|baokao|dongtien|toan-dien)
+  Dùng khi yêu cầu phân tích TOÀN DIỆN một mã cụ thể ("phân tích FPT").
+  Skill ĐIỀU PHỐI: tự làm nhận diện + ngành + tin + sự kiện, dispatch kỹ thuật/
+  định giá sang sub-skills rồi gộp verdict. Không dùng khi: sàng lọc nhiều mã,
+  hỏi thị trường chung.
+tool_budget: 8 / 2 song song
+inputs: symbol (bắt buộc)
 ```
 
-| Wave | Tools | Ghi chú |
+| Bước | Việc | Tools |
 |---|---|---|
-| 0 | `source_status` · `vs_auth_status` | pre-flight |
-| 1 | `stock_overview` · `symbol_lookup`(nếu nghi tên) | snapshot nhanh |
-| 2 | `event_calendar_vn`(symbol) | lịch sự kiện 30 ngày tới |
-| 3 | **dispatch theo focus**: toan-dien → chạy S22→S23→S24 (tuần tự, mỗi skill tự lo budget của nó); focus đơn → chỉ chạy 1 skill tương ứng | đây là lý do skill tách nhỏ |
-| 4 | `evidence_bundle` | khóa verdict từ các leg đã chạy |
+| 1. Xác định mã | Chuẩn hóa mã CK (VCB, BID...) | `symbol_lookup` (khi nghi tên) |
+| 2. Ngành + kiếm tiền nhờ đâu | Ngành (GICS), mô hình kinh doanh, nguồn thu chính | `vn_company` · `vs_company_info` · `vs_industry_tree` |
+| 3. Trạng thái kỹ thuật | Dispatch S22 | reuse `ky-thuat-chuyen-sau` |
+| 4. Định giá | Dispatch S24 | reuse `dinh-gia-chuyen-sau` |
+| 5. Lợi nhuận các quý gần đây | KQKD 4 quý + so QoQ/YoY, biên | `financial_detail` (cross-ref S23) |
+| 6. Tin tức doanh nghiệp | Tin + công bố | `news_symbol` (cross-ref S26) · `company_events` |
+| 7. Sự kiện tương lai | Lịch 30–90 ngày (BCTC/ĐHĐCĐ/cổ tức) | `event_calendar_vn` |
+| 8. Tổng hợp | **Điểm tích cực + tiêu cực + động lực tương lai của mã** | `evidence_bundle` (khóa verdict) |
 
-**Verdict template**: gộp 6 mục từ sub-skill verdicts (kỹ thuật · cơ bản · định giá ·
-dòng tiền/sự kiện · sentiment/cơ hội · bull-bear + đổi nhận định), mỗi mục 1–2 dòng + provenance.
+**Verdict template**: 1 câu nhận định · ngành + cách kiếm tiền (2 dòng) · kỹ thuật (từ S22)
+· định giá (từ S24) · lợi nhuận quý (số + trend) · tin + sự kiện sắp tới · **bảng Tích cực /
+Tiêu cực / Động lực tương lai**.
 
-**Chống tràn lan (nguyên tắc điều phối)**: skill này **cấm** gọi trực tiếp
-`signals_technical`/`financial_detail`/`valuation_run`/`stock_forensic`... — ai cần chiều nào
-thì kích sub-skill đó; nếu user chỉ hỏi 1 chiều ("RSI FPT bao nhiêu") → trả lời bằng sub-skill
-tương ứng, không chạy S1. Budget 6 chỉ cho tools nhà; tool của sub-skill tính vào budget
-sub-skill (tổng toàn phiên có thể >6 nhưng mỗi skill ≤8 — mục tiêu "không ép nhiều tools
-trong MỘT skill").
+**Chống tràn lan**: S1 KHÔNG gọi trực tiếp tools của sub-skills (trừ `financial_detail`
+bước 5 — vì cần số quý nhanh, không cần full S23); user chỉ hỏi 1 chiều → chạy sub-skill
+đó, không chạy S1.
 
-**Failure modes**: sub-skill chết 1 chân → S1 vẫn ra verdict với leg còn + ghi leg thiếu.
+**Failure modes**: thiếu mã ngành (mã mới) → ghi "chưa phân loại", vẫn chạy các bước còn.
 
-**Evidence live**: bản điều phối = chính 8/8 calls của WF2 ngày 02-10 nhưng phân bổ vào
-sub-skill; VCB RSI 39.2/F 4-6/57,400; FPT M −2.06/KH 58,580.
+**Evidence live**: VCB — bank, thu từ tín dụng; RSI 39.2; per_pb 57.3k; F 4/6; cổ tức 450đ
+ex 23-07; FPT — công nghệ, M −2.06 sạch, KH 58,580.
 
-**Acceptance**: input "phân tích FPT" → verdict 6 mục; S1 chỉ dùng ≤6 calls của chính nó;
-mỗi sub-skill chạy trong budget riêng; 0 tool trùng giữa S1 và sub-skill trong 1 run.
+**Acceptance**: "phân tích FPT" → đủ 8 bước, bảng 3 cột tích cực/tiêu cực/động lực, ≤8 calls S1.
 
-## S2. `danh-gia-tinh-hinh-thi-truong`
-
-```yaml
-name: danh-gia-tinh-hinh-thi-truong
-description: >
-  Dùng khi hỏi phiên/sức khỏe thị trường VN hôm nay ("thị trường sao rồi", "phiên sáng",
-  "độ rộng thị trường"). Không dùng khi: hỏi 1 mã (→ S1), hỏi ngành (→ luan-chuyen-nganh).
-tool_budget: 12 / 5 song song
-```
-
-| Wave | Tools |
-|---|---|
-| 0 | `source_status` |
-| 1 | `brief_build` · `market_overview` · `breadth_scan` · `futures_basis` · `money_flow` |
-| 2 | `market_movers` · `vs_market_info` · `market_snapshot`(VN30 default) |
-| 3 (nếu hỏi sâu) | `dnse_orderbook`(mã lớn) · `vn_trades`(băng) · `signals_scan`(dòng đầu cơ) · `vs_selftrading`+`vs_nn_flow`(đào dòng tiền sau money_flow) |
-
-**Verdict**: báo cáo phiên 6 mục: xu hướng index · độ rộng (adv/dec/trần/sàn) · phái sinh
-(basis ± bps) · khối ngoại (mua/bán tỷ) · nhóm dẫn–dở · nhận định sức khỏe phiên (1 câu).
-`market_overview` partial (session leg chết khi thiếu WS worker) → DÙNG 3 leg còn + ghi
-"session từ nguồn khác"; `vs_market_info` bù breadth từng sàn. `brief_build` cho luôn tin
-+ world pins trong 1 call (đã gồm fear/greed).
-
-**Chống tràn lan**: `signals_scan` full HOSE ~40s — CHỈ bắn khi user hỏi "momentum/breakout",
-cap `max_symbols=100`. Không gọi `dnse_foreign_flow` trực tiếp (sẽ unavailable ở remote
-không worker) — `money_flow` đã tự fallback vs_nn_flow bên trong.
-
-**Failure modes**: ngoài giờ → board rows cũ là đúng (as_of cho biết), không "làm mới"
-vô ích; basis tool `unavailable` (cả DNSE chết) → bỏ mục phái sinh, nói rõ.
-
-**Evidence live**: breadth 1 tăng/6 giảm (rổ bluechip), VCB −0.35%, HPG −0.50%,
-**basis +6.95 (+37bps)**, NN bán ròng (mua 1,814 vs bán 2,268 tỷ).
-
-**Acceptance**: "thị trường hôm nay" → 6 mục verdict với ≥4 mục có số; budget ≤10.
-
-## S3. `danh-gia-vi-mo-viet-nam`
+## S3. `danh-gia-vi-mo-viet-nam` (rev.3 — Vietstock bắt buộc + câu chuyện dẫn dắt)
 
 ```yaml
 name: danh-gia-vi-mo-viet-nam
 description: >
   Dùng khi hỏi vĩ mô VN: GDP, CPI, xuất nhập khẩu, tỷ giá, lãi suất điều hành, lịch
-  công bố số liệu. Không dùng khi: vĩ mô Mỹ/toàn cầu (→ S4), chính sách VN chung
-  (→ S19 chế độ B).
+  công bố số liệu, câu chuyện dẫn dắt thị trường. Không dùng khi: vĩ mô Mỹ/toàn cầu.
 tool_budget: 12 / 4 song song
 ```
 
-| Wave | Tools |
-|---|---|
-| 0 | `source_status`, `vs_auth_status` |
-| 1 (catalog) | `vs_categories` (tra category_id nếu chưa chắc) |
-| 2 (series) | `vs_indicator_data`(GDP: 73,tt3) · `vs_indicator_data`(CPI: 15,tt7,sub2) · `vs_indicator_data`(XK: 38,tt2) · `vs_xnk_detail`(xk) |
-| 3 (rate/_fx/calendar) | `sbv_rates` · `macro_events_vn` · `vn_msn_fx_gold` · `vn_retail_fx` · `economic_calendar` |
-| 4 (lịch sử) | `snapshot_history`(macro_curated) khi live fail |
+| Wave | Tools | Ghi chú |
+|---|---|---|
+| 0 | `source_status`, `vs_auth_status` | pre-flight |
+| 1. Dữ liệu vĩ mô VN chi tiết từ Vietstock (BẮT BUỘC) | `vs_categories` (tra id nếu cần) → `vs_indicator_data` GDP(73,tt3) · CPI(15,tt7,sub2) · XK(38,tt2) · `vs_xnk_detail` (xk + nk) | cặp category/termType phải đúng |
+| 2. Tin tức vĩ mô kinh tế | `news_market` (lọc vĩ mô/lãi suất/tỷ giá) · `macro_events_vn` · `economic_calendar` | Fireant/GDELT + NSO |
+| 3. Báo cáo vĩ mô của CTCK | `analyst_consensus` (limit=30, lọc title chứa GDP/CPI/lãi suất/tỷ giá/vĩ mô) | đặc trưng title-scrape: lọc client-side |
+| 4. Data bổ sung | `snapshot_history` (macro_curated — baseline so sánh số mới/cũ) · `yf_yield_curve` + DXY (bối cảnh hút vốn ngoại) · `sbv_rates` · `vn_retail_fx` | mỗi thứ 1 call |
+| 5. Lịch sự kiện câu chuyện | `macro_events_vn` (NSO) + kỳ họp Fed/Mỹ từ S9 cross-ref | lịch VN + lịch ngoại tác động VN |
 
-**Verdict**: tăng trưởng (q/dư + trend) · lạm phát (yoy) · thương mại (cán cân, đối tác
-lớn) · tỷ giá (USDVND + spread SBV) · lãi suất điều hành · kỳ công bố sắp tới (ngày).
-GDP/CPI/XK mỗi chuỗi: lấy ≥8 điểm cuối, nói rõ đơn vị (vs IndicatorData trả value thô
-kèm unit từ parser).
+**Verdict**: tăng trưởng · lạm phát · thương mại · tỷ giá · lãi suất · **điểm tích cực /
+tiêu cực · triển vọng tương lai · câu chuyện dẫn dắt thị trường + lịch sự kiện của câu
+chuyện đó** (mỗi câu chuyện: sự kiện nào, ngày nào, tác động gì).
 
-**Chống tràn lan**: CẶP category/termType phải ĐÚNG (sai là rows rỗng — từng trả giá
-bằng chứng: GDP đúng tt3 không phải tt2). Không quét cả 60 categories — chỉ 4–6 cần thiết.
-`vs_xnk_detail` theo direction riêng (xk/xk ngược) — chọn 1 direction theo câu hỏi.
+**Chống tràn lan**: không quét 60 categories — 4–6 series đủ; `analyst_consensus` 1 call
+feed chung rồi lọc, không bắn theo từng từ khóa.
 
-**Failure modes**: thiếu HAR session (env `VIETSTOCK_HAR_FILE`/cookie) → macro trả
-permission message → skill BẢO TRUNG THỰC "macro cần session", fallback `snapshot_history`;
-không được diễn giải message permission thành dữ liệu.
+**Failure modes**: thiếu HAR session → macro trả permission message → nói trung thực +
+dùng `snapshot_history`; feed CTCK cuối tuần rỗng = empty hợp lệ.
 
-**Evidence live**: GDP 504 rows tới Q2/2026 · CPI 1,839 · XK 2,941 · XNK-country 3,675 ·
-SBV tái cấp vốn 4.5% / tái chiết khấu 3% · USDVND 25,970 · NSO lịch CPI tháng 8.
+**Evidence live**: GDP 504 rows tới Q2/2026 · CPI 1,839 · XK 2,941 · XNK 3,675 · SBV 4.5%/3% ·
+USDVND 25,970.
 
-**Acceptance**: "đánh giá vĩ mô VN" → đủ 6 mục, GDP+CPI có số quý gần nhất; thiếu session →
-output nêu đúng tình trạng + dùng snapshot cache.
+**Acceptance**: "vĩ mô VN" → đủ 6 mục + câu chuyện dẫn dắt có lịch sự kiện, ≤12 calls.
 
 ## S4. `danh-gia-vi-mo-quoc-te`
 
@@ -226,8 +187,10 @@ tool_budget: 10 / 3 song song (yf)
 | 3 | `yf_global_indices` · `yf_commodities` · `world_fear_greed` |
 
 **Verdict**: chu kỳ Mỹ (soft/hard landing, dựa DGS10+CPI+curve) · đường cong (inverted?) ·
-chế độ toàn cầu (RISK-ON/OFF từ rotation) · so sánh VN-vs-global (GDP VN S3 cross-ref) ·
-biến số theo dõi.
+chế độ toàn cầu (RISK-ON/OFF từ rotation) · **so sánh VN-vs-global 1 dòng bắt buộc**
+(GDP VN từ S3 cross-ref vs Mỹ/CN) · biến số theo dõi.
+
+> Review rev.3: ỔN, giữ nguyên + dòng VN-vs-global trên.
 
 **Chống tràn lan**: fred series GỌI THEO TÊN (≥3 series cùng lúc là dấu hiệu đọc descriptor
 tràn lan — dừng). yf wave ≤3.
@@ -239,6 +202,7 @@ curve từng flaky (live run thấy fail→tự hồi) → retry 1 lần sau bac
 fear/greed crypto 70–74 (tham lam).
 
 **Acceptance**: "kinh tế Mỹ hiện tại" → 5 mục verdict, curve + ≥2 series fred có spark.
+
 
 ## S5. `danh-gia-tinh-hinh-chinh-tri-toan-cau`
 
@@ -258,7 +222,7 @@ tool_budget: 8
 | 3 | `news_market(sources=gdelt)` · `web_fetch`(1–2 nguồn chính thức trong tin) |
 
 **Verdict**: bản đồ rủi ro 4–6 mục: sự kiện + xác suất (prob_pct) + volume thanh khoản
-(độ tin của odds) + tin GDELT xác nhận + market-impact nếu có (cross-ref S11).
+(độ tin của odds) + tin GDELT xác nhận + market-impact nếu có (cross-ref S4 bối cảnh toàn cầu).
 
 **Chống tràn lan**: odds sort vol24h mặc định — lấy top 5, không kéo cả 20 event;
 `polymarket_event` chỉ cho event THẬT SỰ liên quan câu hỏi.
@@ -270,6 +234,9 @@ Gamma proxy (jina) chậm → fallback direct, chờ 1 lần.
 Brazil presidential event detail OK.
 
 **Acceptance**: "rủi ro chính trị toàn cầu" → ≥4 mục có prob_pct + provenance event URL.
+
+> Review rev.3: ỔN — S5 là skill tổ chức cross-ref (tools home ở S20/S21), giữ nguyên thiết kế.
+
 
 ## S6. `danh-gia-tinh-hinh-xung-dot`
 
@@ -289,7 +256,7 @@ tool_budget: 9
 
 **Verdict**: cường độ (event counts GDELT trend) · giá đã phản ánh chưa (dầu/vàng move
 vs baseline) · kênh truyền dẫn (energy→inflation→rates) · xác suất leo thang (odds) ·
-hàm ý vị thế (cross-ref S14 trước khi hành động).
+hàm ý vị thế (cross-ref S13 điểm 6 cushion/size trước khi hành động).
 
 **Chống tràn lan**: 1 topic/call; từ khóa THỬ cả tiếng Việt lẫn Anh ("biển đông" →
 "south china sea") — tối đa 2 lần thử rồi chấp nhận "ít coverage".
@@ -301,6 +268,9 @@ không phải lỗi, ghi chú.
 articles >0; gold 4,195 USD/oz live cùng phiên.
 
 **Acceptance**: "xung đột X ảnh hưởng gì" → 5 mục verdict, có số dầu/vàng phiên gần nhất.
+
+> Review rev.3: ỔN, giữ nguyên.
+
 
 ## S7. `tin-tuc-nong-viet-nam`
 
@@ -333,6 +303,10 @@ tâm lý; chiến dịch làm sạch mã số thuế); `news_symbol("VCB")` → 
 
 **Acceptance**: "tin nóng hôm nay" → ≥5 headline có provenance, ≤9 calls.
 
+> Ghi chú rev.3: S7/S8 KHÔNG liên quan server 8010 cũ — 8010 đã retire (dbinit.py:3),
+> nguồn tin là Fireant→GDELT hoàn toàn mới.
+
+
 ## S8. `tin-tuc-nong-quoc-te`
 
 ```yaml
@@ -355,6 +329,9 @@ curve nếu liên quan rates) — tin chưa có reaction thì ghi "thị trườ
 **Evidence live**: mega_flows AAPL/MSFT/NVDA OK; fear/greed 70–74 Greed 7 ngày.
 
 **Acceptance**: "tin thế giới" → ≥5 headline + ≥2 mục reaction định lượng.
+
+> Ghi chú rev.3: như S7 — không kế thừa gì từ 8010 (đã retire).
+
 
 ## S9. `du-doan-fed`
 
@@ -387,320 +364,192 @@ volume24h 2.6M; curve US10Y 5.24% không đảo.
 
 **Acceptance**: "Fed tháng tới" → prob ≥2 kịch bản + lịch họp + 1 dòng hàm ý VN.
 
-## S10. `luan-chuyen-nganh-viet-nam`
 
-```yaml
-name: luan-chuyen-nganh-viet-nam
-description: >
-  Dùng khi hỏi ngành nào đang hút/ra tiền ở VN ("ngành nào mạnh", "rotation ngành",
-  "cổ phiếu ngành ngân hàng ra sao"). Toàn cầu → S11. 1 mã → S1.
-tool_budget: 10
-```
-
-| Wave | Tools |
-|---|---|
-| 1 | `sector_performance`(level 1) · `vs_industry_heatmap` |
-| 2 | `money_flow` · `futures_basis` · `vs_gics_index`(group của ngành nóng) |
-| 3 | `compare_equities`(≤4 leaders ngành top) · `ipo_calendar_vn`(áp lực supply) |
-| 4 (đào sâu) | `vs_industry_tree` → `stock_screener`(universe ngành, filters nhỏ) |
-
-**Verdict**: tên rotation ("ngân hàng → vật liệu") bằng số PerChange trong phiên + YTD ·
-xác nhận dòng tiền (NN, basis) · leaders so sánh · cảnh báo supply (IPO/thỏa thuận lớn).
-
-**Chống tràn lan**: top 2 ngành tăng + top 1 giảm, MỖI ngành 1 call `vs_gics_index`;
-`compare_equities` cap 4 — không liệt kê cả 11 ngành.
-
-**Failure modes**: `ipo_calendar_vn` auctions rỗng = bình thường (HNX ít lịch) — ghi
-"không có đấu giá sắp tới", đừng diễn giải thành tín hiệu.
-
-**Evidence live**: Vật liệu **+1.12%** (YTD +8.9) hút tiền; Tài chính −0.8%, BĐS −1.33%
-bị bán; YTD leader Năng lượng +48.2%, Dịch vụ truyền thông +39.8%; HPG 19,950 −0.50% vol 9.6tr.
-
-**Acceptance**: "ngành nào rotation" → tên rotation + ≥6 con số chứng minh, ≤10 calls.
-
-## S11. `luan-chuyen-tai-san-toan-cau`
-
-```yaml
-name: luan-chuyen-tai-san-toan-cau
-description: >
-  Dùng khi hỏi phân bổ tài sản toàn cầu ("allocation", "rủi ro hay trú ẩn", "asset
-  nào mạnh", "regime"). Ngành VN → S10.
-tool_budget: 10
-```
-
-| Wave | Tools |
-|---|---|
-| 1 | `assets_rotation` · `yf_oracle_markets` |
-| 2 | `yf_global_indices` · `yf_commodities` · `crypto_derivs`(funding = risk appetite) |
-| 3 | `yf_alloc_history`(2–3 asset xếp hạng cao/thấp) · `compare_assets` · `yf_market_pins` |
-
-**Verdict**: xếp hạng 1y momentum các nhóm (RISK-ON/OFF kết luận 1 câu) · đường
-allocation history của 3 asset trọng yếu · dòng mega-cap + funding xác nhận · đề xuất
-khung phân bổ (KHÔNG số dư tài khoản cá nhân — disclaimer).
-
-**Chống tràn lan**: `yf_alloc_history` 1 asset/call → cap 3 asset, chọn theo verdict wave 1.
-
-**Failure modes**: yfinance từng flaky (curve live fail→hồi) → retry 1 lần/wave, rồi
-degrade về phần còn lại; DNSE/Binance geo-block (Singapore worker) — funding có thể rỗng
-→ ghi chú, dùng fear/greed bù.
-
-**Evidence live**: S&P 7,651 (1y +14.4%), VIX 16.3 · vàng 4,195 · BTC 83,476 (+0.33%)
-funding 2.8e-05 · oracle BTC +7.8%/30d, ETH +11% · rotation: Neutral/mixed.
-
-**Acceptance**: "phân bổ tài sản toàn cầu" → bảng xếp hạng + kết luận RISK + 3 asset path.
-
-## S12. `san-loc-co-phieu`
-
-```yaml
-name: san-loc-co-phieu
-description: >
-  Dùng khi cần TÌM danh sách mã theo tiêu chí ("PE thấp ROE cao", "RSI quá bán",
-  "breakout", "mã ngành ngân hàng"). 1 mã đã biết → S1.
-tool_budget: 12 / 5 song song
-```
-
-| Wave | Tools |
-|---|---|
-| 1 | `signals_screener_columns`(tra field nếu chưa chắc) · `vn_reference`(exchange/sector pool nhỏ) |
-| 2 | `stock_screener` — **LUÔN truyền filters hẹp + limit ≤20** (xem chống tràn lan) |
-| 3 | `signals_technical` × 5 candidates top (parallel ≤5) |
-| 4 | `peer_compare`(nhóm đạt) · `watchlist_add`(lưu, hỏi user) |
-
-**Verdict**: bảng ≤10 mã × {tiêu chí đạt, RSI/trend, PE/ROE nếu có, 1 dòng lý do} +
-cảnh báo lọc (enrich ratio).
-
-**Chống tràn lan (QUY TẮC SỐ 1 CỦA SKILL)**:
-- `filters=null` full 1522 mã = ~60s → TIMEOUT đã ghi nhận live. Skill phải TRÁY:
-  không có filter → truyền `vn_reference` pool (ngành/sàn) hoặc `universe` nhỏ.
-- `technical:{rsi_lt:30}` chạy trên candidates đã lọc, không trên cả universe.
-- `max_pe/min_roe` kéo enrich tới 30 mã — chỉ dùng khi user thật sự cần valuation;
-  nếu throttle warning "<50% enriched" xuất hiện → CHỐT kết quả, không retry.
-- keys `technical` chỉ 4 cái: rsi_lt/rsi_gt/above_sma20/below_sma20 — sai key là tool trả
-  `unavailable` cả call.
-
-**Failure modes**: stage 0/20 enriched (giờ cao điểm vnstock) → output vẫn có technical
-stage, ghi "định giá chưa kiểm tra"; `signals_scan` 40s cap 300 mã → chỉ khi hỏi "săn
-breakout", cap `max_symbols=100`.
-
-**Evidence live**: screener RSI<70 trên HOSE trả SDA/CLH; scan 5 mã (HPG VCB FPT SSI VIC)
-→ 0 hits (đúng — Donchian không có breakout hôm đó); enrich 0/20 từng xảy ra, degrade đúng.
-
-**Acceptance**: "tìm mã RSI<30 PE<20 ngành ngân hàng" → ≤10 mã + lý do, ≤12 calls,
-0 timeout kể cả giờ cao điểm (có pool-narrowing).
-
-## S13. `danh-gia-truoc-bctc`
+## S13. `danh-gia-truoc-bctc` (rev.3 — 6 điểm kiểm tra quý hiện tại)
 
 ```yaml
 name: danh-gia-truoc-bctc
 description: >
-  Dùng khi mùa BCTC cận kề ("FPT sắp ra báo cáo, đánh giá setup"). Phân tích mã
-  không liên quan earnings → S1. Đây là bản MCP của pre_earnings prompt, có grading.
-tool_budget: 10 / reuse sub-skill leg
+  Dùng khi mùa BCTC cận kề: kiểm tra setup quý HIỆN TẠI của 1 mã ("FPT quý này sao",
+  "HPG có bị phân phối không"). Phân tích mã không liên quan earnings → S1.
+tool_budget: 10
+inputs: symbol
 ```
 
-| Leg | Tools | Ghi chú |
+| # | Điểm kiểm tra | Tools |
 |---|---|---|
-| 1 Ngày | `company_events` + `event_calendar_vn` | dated hay rumor? |
-| 2 Trend | chạy `co-ban-chuyen-sau`(S23, aspect=baokao) | reuse leg, không gọi lại financial_* chồng chéo |
-| 3 Thao túng | S23 aspect=chataluong trả sẵn | M-Score/Piotroski |
-| 4 Kỳ vọng | `planned_targets` (S23) + `analyst_consensus` (S27) + `news_symbol` + `sentiment_score` (S26) | anchor = kế hoạch DN (VN không consensus EPS) |
-| 5 Positioning | `insider_trading` (S23) + `money_flow` + `block_trades` | |
-| 6 Đệm | chạy `dinh-gia-chuyen-sau`(S24) + `scenario_simulate`(-5%) | size gợi ý |
+| 1. Tăng giá quý hiện tại | % tăng từ đầu quý tới nay, so VNINDEX cùng kỳ | `vn_quote_history` (cross-ref S22) + `vn_index_ohlcv` |
+| 2. Phân phối (vol cao bất thường) | Volume các phiên gần nhất vs trung bình 20 phiên; giá đi ngang/giảm trong khi vol cao = dấu hiệu phân phối | volume trong nến `vn_quote_history` (tính local, không tool mới) |
+| 3. Định giá rẻ/đắt vs lịch sử | PER/PB hiện tại vs dải 2 năm | reuse `dinh-gia-chuyen-sau` (S24) |
+| 4. BCTC quý trước bất thường? | M-Score/F-score + đọc dòng bất thường | reuse `co-ban-chuyen-sau` (S23, aspect=chataluong) |
+| 5. Dự đoán quý này (giá hàng hóa theo ngành) | Map ngành → hàng hóa ảnh hưởng, lấy giá quốc tế làm input đoán KQKD | bảng map dưới + `yf_commodities`/`compare_assets` (cross-ref S16) |
+| 6. Tin tức quý này | Tin + rumor + sentiment để dự đoán | `news_symbol` + `phan-tich-sentiment` (S26) |
 
-**Verdict**: grade **A/B/C** + 1 dòng evidence/leg + size đề xuất + unknowns tường minh.
-Rubric: A = ≥5 leg xanh + M-Score sạch + KH rõ; B = 4–5 leg; C = <4 leg hoặc M-Score đỏ
-(> −1.78).
+**Bảng map ngành → hàng hóa (dùng cho điểm 5)**:
 
-**Chống tràn lan**: không forecast KQKD (prompt cấm, skill giữ nguyên); `sentiment_score`
-heuristic không được tính là leg xanh đầy đủ.
+| Ngành VD | Mã VD | Hàng hóa xem | Tool |
+|---|---|---|---|
+| Thép | HPG, HSG, NKG | Giá thép HRC, quặng sắt | `yf_commodities` + `compare_assets` |
+| Dầu khí | GAS, PVD, PVS | Brent/WTI, giá dầu | `yf_commodities` (oil tickers) |
+| Cao su | GVR, DPR, PHR | Giá cao su TOCOM/SICOM | `yf_commodities` |
+| Cà phê/nông sản | — | Coffee C (KC=F), lúa mì | `yf_commodities` |
+| Ngân hàng | VCB, BID, CTG | Lãi suất (SBV + US10Y), tăng trưởng tín dụng | `sbv_rates` + `fred_series` |
+| BĐS/KCN | VIC, VHM, KBC | Lãi suất + giải ngân đầu tư công (tin vĩ mô) | `sbv_rates` + S3 cross-ref |
+| Khác | — | Mặc định: giá dầu + vàng + USD (bối cảnh chung) | `yf_commodities` |
 
-**Evidence live (FPT)**: M **−2.06** sạch · F 2/6 · KH DT 61,850/75,400/**58,580** ·
-thưởng CP 10:1 ex 21-09 · sentiment heuristic −0.25 · NN bán ròng · pt 0% phiên →
-grade B.
+**Verdict**: grade **A/B/C** + 6 dòng evidence (mỗi điểm 1 dòng) + dự đoán quý này
+(TỐT/XẤU/TRUNG TÍNH + lý do giá hàng hóa) + unknowns.
 
-**Acceptance**: "đánh giá trước BCTC HPG" → grade + 6 leg evidence + unknowns, ≤10 calls (reuse legs từ S23/S24/S26/S27).
+**Chống tràn lan**: không forecast số EPS (VN không consensus) — chỉ nêu hướng;
+commodity chỉ lấy tickers trong map, không quét cả bảng.
 
-## S14. `kiem-tra-rui-ro-vi-the`
+**Failure modes**: ngành chưa có trong map → dùng mặc định dầu/vàng/USD + ghi chú;
+nến quý hiện tại <10 phiên → điểm 1–2 "thiếu dữ liệu", vẫn chấm 4 điểm còn.
 
-```yaml
-name: kiem-tra-rui-ro-vi-the
-description: >
-  Dùng TRƯỚC khi vào vị thế: "mua X size Y được không". Không dùng để backtest
-  (→ S15) hay phân tích thuần (→ S1).
-tool_budget: 12
-inputs: symbols (csv), side, size_vnd
-```
+**Evidence live**: FPT — M −2.06 sạch · KH 58,580 · pt 0% (không phân phối) · sentiment
+−0.25 → grade B (bản cũ).
 
-| Wave | Tools |
-|---|---|
-| 1 | `vn_quote_history`(mã 1, days=90) → `quant_risk`(returns, 252) |
-| 2 | `scenario_simulate`(−5%, scale size) · `correlation_matrix`(symbols) |
-| 3 | `stock_forensic` × từng mã (≤4) |
-| 4 | `company_events` + `event_calendar_vn` (blackout 10 ngày) · `valuation_run` ×mã |
+**Acceptance**: "HPG quý này sao" → đủ 6 điểm + bảng commodity của ngành thép, ≤10 calls.
 
-**Verdict**: **GO / HALF / NO-GO** + max size VND + giá invalidation + 3 unknowns.
-Rubric: M-Score đỏ → skip/halve; Sharpe âm + win <45% → HALF trở xuống; blackout
-(BCTC/ĐHĐCĐ ≤10 ngày) → halve; cushion định giá quyết định GO.
-
-**Chống tràn lan**: `quant_risk` nhận returns từ wave 1 — KHÔNG gọi 90 ngày cho 8 mã
-(>4 mã → từ chối, yêu cầu chọn); correlation cap 8.
-
-**Evidence live**: VCB 63 phiên — Sharpe **−1.15**, maxDD 12.3%, win 41.3% · corr
-VCB-HPG **0.50** · VCB M partial/F 4/6, HPG M −2.24/F 2/6 · cổ tức VCB ex 23-07 (không
-blackout) · −5% = −2,870đ/1000cp ⇒ ~−5tr trên 100tr → HALF.
-
-**Acceptance**: "mua 100tr VCB HPG được không" → verdict 3 thành phần + rubric chỉ ra leg nào quyết định.
-
-## S15. `kiem-chien-luoc-backtest`
+## S15. `kiem-chien-luoc-backtest` (rev.3 — code + pipeline 4 loại điều kiện)
 
 ```yaml
 name: kiem-chien-luoc-backtest
 description: >
-  Dùng khi kiểm chứng chiến lược/khung tham số ("SMA20/50 FPT có ăn không", "mùa vụ
-  tháng mấy", "backtest VN30F1M"). Rủi ro vị thế cụ thể → S14.
+  Dùng khi kiểm chứng chiến lược: trạng thái kỹ thuật, theo thời gian, sau sự kiện,
+  theo giá hàng hóa. Rủi ro vị thế cụ thể → S13/S14-logic trong S13.
 tool_budget: 12 / timeout-call 120s
 ```
 
-| Wave | Tools |
-|---|---|
-| 1 | `vn_quote_history`(stock) hoặc `dnse_ohlc_history`(futures/index) · `vn_index_ohlcv`(benchmark) |
-| 2 | `quant_backtest`(baseline buy-hold) · `quant_factors` |
-| 3 | `backtest_strategies` (sma/momentum) · `param_sweep` (fast×slow ≤30 combos) |
-| 4 | `seasonality` · `correlation_matrix` · `portfolio_optimize`(nếu nhiều mã) · `pattern_match` |
+| Wave | Tools | Ghi chú |
+|---|---|---|
+| 1. Dữ liệu | `vn_quote_history` (stock) hoặc `dnse_ohlc_history` (futures/index) · `vn_index_ohlcv` (benchmark) | 1 symbol/lần |
+| 2. Điều kiện KỸ THUẬT | `backtest_strategies` (sma/momentum/buy_hold — engine hiện tại) | **Phase B**: thêm strategy `rsi_threshold` (vd mua khi RSI<30) + params |
+| 3. Điều kiện THỜI GIAN | `seasonality` (tháng/quý nào thường tăng giảm) | **Phase B**: thêm filter `months`/`quarters` vào engine (chỉ giao dịch kỳ chọn) |
+| 4. Điều kiện SAU SỰ KIỆN | `event_calendar_vn` (ngày chia cổ tức/ĐHĐCĐ) + lịch Tết (local: Tết Nguyên đán ±N phiên) | **Phase B**: thêm `event_window` engine (list ngày + offsets, vd T-10→T+5) |
+| 5. Điều kiện GIÁ HÀNG HÓA | `yf_commodities`/`compare_assets` (lấy series dầu/vàng/thép theo map S13) | **Phase B**: thêm `condition_asset` + rule vào engine (join 2 series) |
+| 6. Tổng hợp | `param_sweep` (≤30 combos) · `correlation_matrix` · `portfolio_optimize` (nhiều mã) | best KÈM worst (chống overfit) |
 
-**Verdict**: baseline → chiến lược → best param **KÈM worst param** (chống overfit) →
-seasonality bias → kết luận "đáng tin / đáng nghi + lý do". Ghi rõ engine: numpy-only,
-cost mặc định, T+2 VN chưa model trong backtest.
+**Pipeline chuẩn mỗi run**: baseline buy-hold → chiến lược → sweep → seasonality →
+kết luận "đáng tin / đáng nghi + lý do". Ghi rõ engine numpy-only, cost mặc định, T+2 VN
+chưa model.
 
-**Chống tràn lan**: 1 symbol mỗi lần sweep; `param_sweep` cap 30 combos đã có sẵn — skill
-không tự nới; không chạy sweep >3 symbol trong 1 run.
+**Chống tràn lan (hiện tại, trước Phase B)**: 4 loại điều kiện trên — engine MỚI làm được
+(1) sma/momentum + (3-nửa: seasonality mô tả); các điều kiện (2-RSI/thời gian/sự kiện/
+hàng hóa) skill PHẢI nói rõ "chưa backtest được bằng engine, mới phân tích mô tả" —
+không giả vờ đã test. Sau Phase B: chạy đủ pipeline.
 
-**Evidence live**: VCB buy-hold −4.9% gross · sma_cross HPG-family: 7 trades −10.4% ·
-param_sweep best **+3.7%** · seasonality bucket theo tháng · basis F1M 31–37bps.
+**Failure modes**: sweep >3 symbol/run → từ chối; combos vượt 30 → engine tự cap.
 
-**Acceptance**: "backtest SMA FPT 1 năm" → baseline+strategy+sweep bảng, kèm caveat.
+**Evidence live**: VCB buy-hold −4.9% · sma_cross 6 trades −8.7% · sweep best +7.1% (fast
+10/slow 20) · seasonality tháng 1 mean +4.67%.
 
-## S16. `phan-tich-vang-ty-gia`
+**Acceptance**: "backtest mua RSI<30 FPT" → hiện tại: trả lời trung thực "engine chưa hỗ
+trợ, mới có seasonality + gợi ý"; sau Phase B: full pipeline + bảng kết quả.
+
+## S16. `phan-tich-vang-ty-gia` (rev.3 — 5 điểm)
 
 ```yaml
 name: phan-tich-vang-ty-gia
 description: >
-  Dùng khi hỏi giá vàng SJC/thế giới, tỷ giá USDVND, chênh lệch vàng nội-ngoại,
-  áp lực tỷ giá. Lãi suất điều hành VN chung → S3.
+  Dùng khi hỏi vàng/tỷ giá: giá vàng TG + TA vàng + rủi ro địa chính trị, so lệch
+  VN–TG để dự đoán vàng VN, lãi suất 2 đầu, dự đoán polymarket, bối cảnh macro.
 tool_budget: 10
 ```
 
-| Wave | Tools |
-|---|---|
-| 1 | `vn_retail_gold`(SJC+nhẫn) · `vn_msn_fx_gold`(XAUUSD+USDVND) · `sbv_rates` |
-| 2 | `yf_commodities`(GC) · `fred_series`(DGS10) · `world_prediction_odds`(fed) |
-| 3 | `vn_forex_ohlcv`(USDVND path) · `macro_events_vn` · `vn_retail_fx`(spreads VCB) |
+| # | Điểm | Tools |
+|---|---|---|
+| 1. Giá vàng quốc tế + TA vàng | Giá XAUUSD + đọc trend/momentum trên nến daily (S22-logic thủ công: giá vs SMA20/50, RSI ước từ `yf_commodities` series) | `yf_commodities` (GC) · `vn_msn_fx_gold` |
+| 2. Rủi ro địa chính trị + xung đột | Yếu tố đẩy giá vàng (leo thang = vàng lên) | cross-ref S5/S6 (không gọi lại nếu vừa chạy) |
+| 3. So lệch VN–TG → dự đoán vàng VN | Premium = (giá SJC mua vào − giá TG quy đổi) / giá TG; premium nở = vàng VN khó giảm theo TG | `vn_retail_gold` (SJC mua/bán) · giá TG wave 1 |
+| 4. Lãi suất 2 đầu | SBV (tái cấp vốn/chiết khấu) vs US (DGS10/curve) — chênh lệch hút vốn | `sbv_rates` · `fred_series` (DGS10) · `yf_yield_curve` |
+| 5. Dự đoán + macro | Odds Fed/căng thẳng + bối cảnh vĩ mô | `world_prediction_odds` (cross-ref S9/S21) · `macro_events_vn` |
 
-**Verdict**: premium SJC vs thế giới (qui đổi: giá thế giới × (1+thuế/phí đơn giản hóa)
-so mua vào BTMC — skill tự tính, ghi giả định) · trend tỷ giá + khoảng cách trần ·
-điều khiển (DGS10, Fed odds, SBV) · dự báo khung (KHÔNG point-forecast).
+**Verdict**: giá TG + TA 3 dòng · premium % + dự đoán vàng VN (theo TG / ngược TG khi
+premium nở) · lãi suất 2 đầu + hàm ý tỷ giá · kịch bản odds · KHÔNG point-forecast giá.
 
-**Chống tràn lan**: 1 call `yf_commodities` (đã gồm GC+DXY) thay vì tick riêng lẻ.
+**Chống tràn lan**: 1 call `yf_commodities` (đã gồm GC+DXY); TA vàng đọc từ series có sẵn,
+không bắn thêm tools.
 
-**Evidence live**: VÀNG MIẾNG SJC 999.9 (BTMC live) · XAUUSD 4,195 · USDVND 25,970 (MSN) ·
-SBV 4.5% tái cấp vốn · Fed giữ 74.5%.
+**Failure modes**: BTMC chết → `vnstock Retail` fallback (trong tool); premium âm (hiếm) →
+ghi "bất thường", không diễn giải.
 
-**Acceptance**: "vàng SJC hôm nay đắt hơn thế giới bao nhiêu" → số premium % + giả định +
-2 driver.
+**Evidence live**: XAUUSD 4,195 · SJC 999.9 BTMC live · USDVND 25,970 · SBV 4.5%/3% · Fed giữ 74.5%.
 
-## S17. `nhip-dap-crypto`
+**Acceptance**: "vàng SJC đắt hơn TG bao nhiêu" → premium % + dự đoán hướng + 2 driver, ≤10 calls.
+
+## S17. `nhip-dap-crypto` (rev.3 — đơn giản hóa cho người ít chuyên crypto)
 
 ```yaml
 name: nhip-dap-crypto
 description: >
-  Dùng khi hỏi BTC/ETH/crypto: giá, funding, open interest, sentiment, nến quy VND.
-  Asset allocation toàn cầu → S11.
-tool_budget: 8
+  Dùng khi hỏi giá/độ nóng thị trường crypto (BTC, ETH...). Asset allocation → skill
+  rotation (đã xóa S11 — dùng S4/S16 bối cảnh). Viết bằng ngôn ngữ thường, mỗi thuật
+  ngữ giải thích 1 dòng.
+tool_budget: 6
 ```
 
-| Wave | Tools |
-|---|---|
-| 1 | `crypto_spot`(≤5 symbols) · `crypto_derivs`(BTC ETH SOL) · `world_fear_greed` |
-| 2 | `vn_crypto_ohlv`(path quy VND) · `yf_commodities`(BTC ref) |
-| 3 | `polymarket_event`/`world_prediction_odds`(crypto markets nếu user hỏi xác suất) |
+| Wave | Tools | Đọc thế nào (diễn giải sẵn) |
+|---|---|---|
+| 1 | `crypto_spot` (BTC ETH SOL) | Giá + % 24h = "tăng/giảm bao nhiêu hôm nay" |
+| 2 | `crypto_derivs` | funding rate = "phe mua đang trả tiền cho phe bán (dương = đám đông cược lên)"; OI = "tổng tiền đang cược"; long/short = "bên nào đông hơn" |
+| 3 | `world_fear_greed` · `vn_crypto_ohlv` | Tham lam/Sợ hãi (0–100) + giá quy VND cho người VN |
 
-**Verdict**: giá + 24h volume · leverage read (funding, OI, long/short) · fear/greed +
-label · path VND (nơi khác biệt của MCP này so với tool crypto thường) · rủi ro chính
-sách nếu có tin (cross-ref S8, chỉ khi user hỏi).
+**Verdict (3 câu hỏi)**: 1. Xu hướng gì (lên/xuống/đi ngang + %) · 2. Đòn bẩy có nóng không
+(funding cao + OI cao = dễ đảo chiều) · 3. Liên thông gì tới VN (giá VND + chứng khoán còn
+lại — không thì ghi "độc lập").
 
-**Evidence live**: BTC 83,476 (+0.33%) · funding 2.8e-05 · OI 95.7k · fear/greed 70–74.
+**Cảnh báo bắt buộc trong skill**: Binance có thể geo-block từ worker Singapore (funding
+rỗng = ghi chú, không phải thị trường chết); crypto chạy 24/7 — số "hôm nay" khác phiên
+chứng khoán VN, đừng so lệch phiên.
 
-**Acceptance**: "crypto sao rồi" → 4 mục verdict, funding/OI không fail batch (per-symbol error cho phép).
+**Chống tràn lan**: tối đa 3 đồng/wave 1; không drill polymarket crypto trừ khi user hỏi xác suất.
 
-## S18. `theo-doi-va-bao-thuc`
+**Evidence live**: BTC 83,476 (+0.33%) · funding 2.8e-05 (trung tính) · OI 95.7k · fear/greed 70–74.
 
-```yaml
-name: theo-doi-va-bao-thuc
-description: >
-  Dùng khi user muốn LƯU danh mục theo dõi hoặc đặt cảnh báo giá/RSI ("theo dõi
-  FPT + HPG", "báo khi VCB vượt 60"). Đây là skill ghi (READ_WRITE) duy nhất bộ.
-tool_budget: 10 / 9 write-calls
-```
+**Acceptance**: "BTC sao rồi" → 3 câu trả lời + 0 jargon không giải thích, ≤6 calls.
 
-| Vòng đời | Tools |
-|---|---|
-| Tạo | `watchlist_create` → `watchlist_add(list_id, symbols)` |
-| Đọc | `watchlist_list` · `watchlist_get` → quote bằng `vn_equity_quote_batch`(1 call) |
-| Alert | `alert_create(symbol,op,threshold,metric)` → `alert_list` |
-| Kiểm tra định kỳ | `alert_check(rules)` (metric: price hoặc rsi14; op gồm cross_up/cross_down) |
-| Bảo quản | `alert_pause/resume` · `watchlist_update/remove` · `watchlist_delete` |
-
-**Verdict**: xác nhận state đã lưu (id, rules) + kết quả lần kiểm tra đầu ngay trong run
-(`alert_check`) + nêu vòng đời để user dùng lệnh tiếp theo.
-
-**Chống tràn lan**: KHÔNG tạo alert trùng rule cũ (luôn `alert_list` trước `alert_create`);
-1 watchlist cho 1 chủ đề; không xóa thay user khi chưa xin.
-
-**Failure modes**: PG fail → file fallback (server tự xử lý, output ghi "stored local");
-`alert_check` empty = chưa trigger, ĐÚNG — không phải lỗi; cross-state TTL 3600s: alert
-cross_up cần ≥2 lần gọi mới có prev.
-
-**Acceptance**: "theo dõi FPT+HPG, báo khi FPT>70" → state tạo được, `alert_check` chạy
-xanh, cleanup demo list sau test.
-
-## S19. `tim-kiem-tin-tuc`
+## S19. `tim-kiem-tin-tuc` (rev.3 — săn rumor + đánh giá độ tin)
 
 ```yaml
 name: tim-kiem-tin-tuc
 description: >
-  Dùng khi TÌM tin theo từ khóa/mã/phạm vi ("tin về FPT", "tin VN hôm nay", "tin thế
-  giới về dầu"). Digest tin nóng mặc định → S7/S8.
+  Dùng khi TÌM tin theo từ khóa/mã/phạm vi, KỂ CẢ tin đồn ("nghe đồn FPT ... có thật
+  không", "tin VN hôm nay", "tin thế giới về dầu"). Digest tin nóng mặc định → S7/S8.
 tool_budget: 10 / 4 song song
 inputs: mode (symbol|vn|global), query
 ```
 
 | Chế độ | Wave | Tools |
 |---|---|---|
-| **A. Theo mã** | 1 | `news_symbol(symbol, limit=10)` (Fireant-first, GDELT fallback trong tool) |
-| | 2 (Fireant mỏng) | `corporate_calendar(symbol)` + `company_events(symbol)` |
-| | 3 (đủ 5 tin CHẤT LƯỢNG → DỪNG, không gọi bù) | `news_market`(tên công ty, gdelt) |
-| | 4 (nếu hỏi dư luận) | `sentiment_score(symbol)` |
-| **B. VN** | 1 | `news_market(limit=10)` + `corporate_calendar(limit=20)` |
-| | 2 | `news_symbol` × 2–3 mã nổi bật nhất |
-| **C. Toàn cầu** | 1 | `news_market(sources=gdelt, limit=10)` |
-| | 2 | `geo_intel(topic)` hoặc `event_stats(query)` |
-| | 3 (có key / chọn lọc) | `web_search(query)` → `web_fetch` 1–2 nguồn chính thức |
+| **A. Theo mã (+ rumor)** | 1 | `news_symbol`(symbol, limit=20) — Fireant-first |
+| | 2. Săn web + comments | `web_search`("tên mã" + "đồn"/"tin đồn"/rumor) → `web_fetch` 1–2 URL đáng ngờ nhất · đọc comments/posts liên quan trong `news_symbol` (rumor có TRƯỚC tin chính thống) |
+| | 3. Đối chiếu | `corporate_calendar`(symbol) + `company_events`(symbol) — tin có khớp công bố không? |
+| | 4. Dư luận | `sentiment_score`(symbol) |
+| **B. VN** | 1 | `news_market`(limit=15) + `corporate_calendar`(limit=20) |
+| | 2 | `news_symbol` × 2–3 mã nổi bật + `web_search` tin nóng nhất (xác minh chéo) |
+| **C. Toàn cầu** | 1 | `news_market`(sources=gdelt) |
+| | 2 | `geo_intel`(topic) / `event_stats`(query) + `web_search`(từ khóa EN) |
 
-**Verdict**: bảng tin {tiêu đề · ngày · nguồn · mã/tag liên quan · phân loại catalyst/đồn}
-+ nguồn nào đang chết (pre-flight). Tin đồn → ghi nhãn "chưa xác nhận", không diễn giải.
+**Verdict mỗi tin (4 cột bắt buộc)**: tiêu đề · **tuổi tin** (mấy giờ/ngày trước — tin cũ
+>3 ngày với mã bluechip coi như đã phản ánh giá) · **độ tin cậy** (chính thống / CTCK /
+Fireant-crowd / ẩn danh-nguồn mở) · **triển vọng** (tác động tới DN: doanh thu/lợi nhuận/
+giá — hay chỉ là noise). Tin đồn → nhãn "CHƯA XÁC NHẬN" + điều kiện xác nhận (chờ công bố
+nào, ngày nào).
 
-**Chống tràn lan (quy tắc của skill)**: mode A không gọi `news_market` nếu `news_symbol`
-đã ≥5 tin đạt chuẩn; GDELT rỗng → THỬ từ khóa English 1 lần rồi kết luận "ít coverage
-ngôn ngữ đó"; `web_search` ẩn khi thiếu key → degrade `web_fetch`, không retry.
+**Phân tích chi tiết tin quan trọng nhất**: ai nói → nói gì → bằng chứng kèm theo →
+tác động định lượng được không (vd cổ tức bao nhiêu đồng, thương vụ bao nhiêu tỷ) →
+kịch bản nếu đúng/sai.
 
-**Failure modes**: cả 2 nguồn news chết → `snapshot_history(kind=news_feed)` cache, GHI
-RÕ "cache <ngày>"; Fireant posts `id/user null` (đặc trưng payload, không phải lỗi).
+**Chống tràn lan**: mode A dừng khi đã ≥5 tin đạt chuẩn; `web_search` tối đa 2 query/mode;
+không fetch quá 2 URL.
 
-**Evidence live**: `news_symbol("VCB")` → lãi suất VCB 0.1–6% posts; mode C "dầu" —
-GDELT articles live 02-10; corporate_calendar VCB → 487 docs.
+**Failure modes**: web_search ẩn (thiếu key) → chỉ dùng Fireant+GDELT + ghi chú "chưa quét
+web"; Fireant posts id/user null là đặc trưng payload.
 
-**Acceptance**: 3 input mẫu (mã/VN/global) → mỗi output ≥3 tin có provenance, ≤10 calls,
-không lần nào vượt 4 song song.
+**Evidence live**: VCB lãi suất 0.1–6% posts · GDELT "dầu" live 02-10 · corporate VCB 487 docs.
+
+**Acceptance**: "nghe đồn HPG ... thật không" → verdict 4 cột + phân tích chi tiết + nhãn xác nhận.
 
 ## S20. `bat-on-quoc-gia`
 
@@ -738,75 +587,70 @@ ngày 02-10; pipeline EN-query đã thông trong full-135 run.
 
 **Acceptance**: "bất ổn Thái Lan" → 4 mức verdict + ≥3 evidence lines có URL, ≤6 calls.
 
-## S21. `du-doan-polymarket`
+
+## S21. `du-doan-polymarket` (rev.3 — tìm sự kiện + hiển thị)
 
 ```yaml
 name: du-doan-polymarket
 description: >
-  Dùng khi hỏi/xuất XÁC SUẤT từ Polymarket theo chủ đề ("market nào đang nóng",
-  "odds bầu cử Mỹ", "bao giờ Bitcoin chạm 100k", "sự kiện crypto nào có odds").
-  Fed chuyên biệt → S9; chính trị rộng → S5 (S5 dùng odds như 1 leg).
-tool_budget: 6 / 1 song song
-inputs: query hoặc tag (fed|politics|crypto|sports|economy...), optional slug
+  Dùng khi hỏi/xuất XÁC SUẤT từ Polymarket ("market nào đang nóng", "odds bầu cử",
+  "Bitcoin bao giờ chạm 100k"). Fed chuyên biệt → S9.
+tool_budget: 6
+inputs: query hoặc tag
 ```
 
 | Wave | Tools | Ghi chú |
 |---|---|---|
-| 1 | `world_prediction_odds`(query hoặc tag, limit=10) | tool đã sort vol24h — tin dùng top |
-| 2 | `polymarket_event`(slug — chọn 1 event duy nhất user quan tâm) | drill-down outcomes đầy đủ |
-| 3 (chọn lọc ≤2) | `polymarket_event`(slug thứ 2) | tối đa 2 drill-down/run |
+| 1. Tìm sự kiện | `world_prediction_odds`(query/tag, limit=10) | đã sort vol24h — hiển thị tối đa 10 |
+| 2. Hiển thị chi tiết | `polymarket_event`(slug — tối đa 2 event user chọn) | outcomes + prob + volume + end-date đầy đủ |
 
-**Verdict**: bảng event {title · prob_pct từng outcome · volume24h · liquidity · end-date} +
-2 cờ bắt buộc: (1) liquidity thấp (<50k) → "odds kém tin"; (2) end-date đã qua trong dữ liệu
-→ loại. Kết luận 1 câu "thị trường đặt cược X với xác suất Y".
+**Verdict (bảng hiển thị)**: {sự kiện · outcome · prob % · volume24h · liquidity · end-date}
++ 2 cờ: liquidity <50k = "odds kém tin" · end-date đã qua = loại. Kết luận 1 câu.
 
-**Chống tràn lan**: drill-down tối đa 2 event/run — người dùng chọn, skill không tự
-mở cả top-10; query rỗng kết quả → ĐỔI tag 1 lần rồi kết luận "không có market cho chủ đề".
+**Chống tràn lan**: hiển thị 10, drill 2 — không mở thêm; query rỗng → đổi tag 1 lần rồi kết luận.
 
-**Failure modes**: jina proxy chậm → tool tự fallback direct (bên trong, warnings cho biết);
-Gamma chết cả 2 đường → `unavailable`, nói rõ "không có odds", không bịa xác suất.
+**Failure modes**: Gamma chết cả proxy+direct → "không có odds", không bịa xác suất.
 
-**Evidence live**: Fed T10/2026 no-change **74.5%** (vol 2.6M); Brazil presidential detail
-`polymarket_event` OK; sort vol24h hoạt động (P14).
+**Evidence live**: Fed T10 no-change 74.5% (vol 2.6M) · Brazil detail OK.
 
-**Acceptance**: "polymarket đang nóng gì về kinh tế" → ≥5 event + cờ tin-cậy trên từng dòng.
+**Acceptance**: "polymarket nóng gì về kinh tế" → bảng ≤10 dòng + drill 1 event, ≤6 calls.
 
-## S22. `ky-thuat-chuyen-sau`
+## S22. `ky-thuat-chuyen-sau` (rev.3 — đa khung + Ichimoku/Elliott/Wyckoff)
 
 ```yaml
 name: ky-thuat-chuyen-sau
 description: >
-  Dùng khi hỏi THUẦN kỹ thuật một mã: chỉ báo, pattern, hỗ trợ-kháng cự, vị thế 52w,
-  tương quan quá khứ, intraday/orderbook ("VCB kỹ thuật sao", "FPT có breakout không",
-  "đọc băng HPG"). Cơ bản/định giá → S23/S24; săn toàn thị trường → S12.
+  Dùng khi hỏi THUẦN kỹ thuật một mã đa khung thời gian: RSI/MACD/BB/Ichimoku,
+  Elliott/Wyckoff, hỗ trợ-kháng cự, higher-high vs lower-low ("VCB kỹ thuật đa khung",
+  "FPT có breakout không", "HPG đang higher-high hay lower-low"). Săn toàn thị trường → skill đã xóa (dùng signals_scan trực tiếp khi cần).
 tool_budget: 8 / 3 song song
-inputs: symbol, optional timeframe (swing|intraday)
+inputs: symbol, timeframes (default 1D+1W, thêm 1M khi hỏi dài hạn)
 ```
 
 | Wave | Tools | Ghi chú |
 |---|---|---|
-| 1 | `signals_technical`(symbol) | 1 call = RSI/MACD/Bands/ADX/patterns/S-R/RS/pos_52w/sma150 |
-| 2 (chọn) | `pattern_match`(symbol) · `vn_quote_history`(symbol, days=250) | analogy + tự vẽ đường xu hướng từ nến |
-| 3 (intraday) | `dnse_latest_trade` · `dnse_orderbook` · `vn_trades` | ≤3, cùng upstream DNSE |
-| 4 (index context) | `vn_index_ohlcv`(VNINDEX) | khi cần so trend index |
+| 1. Nến đa khung | `vn_quote_history`(symbol, 1D) · `vn_quote_history`(symbol, 1W) · [`vn_quote_history`(1M) nếu hỏi dài hạn] | interval 1D/1W/1M đã có từ P15 |
+| 2. Chỉ báo mỗi khung | `signals_technical`(symbol, interval tương ứng) | RSI/MACD/BB/Stoch/ADX/patterns/S-R/RS/pos_52w — **Phase B**: thêm **Ichimoku** (Tenkan/Kijun/Senkou/Chikou) vào provider + expose ở đây |
+| 3. Cấu trúc sóng | đọc swing từ nến wave 1 (local): đỉnh/đáy → nhãn **HH/HL/LH/LL** + Fibonacci retracement | **Phase B**: code swing-structure (~100 dòng); **Phase 2**: nhãn sóng Elliott/Wyckoff heuristic (khó — làm sau) |
+| 4. Xác nhận | `pattern_match`(analogy lịch sử) · `dnse_latest_trade`/`dnse_orderbook`/`vn_trades` (intraday) · `vn_index_ohlcv` (trend index) | ≤3, theo câu hỏi |
 
-**Verdict**: trạng thái trend (đỉnh/đáy/downtrend/đi ngang bằng SMA stack + ADX) · momentum
-(RSI/MACD/stoch) · vùng S-R + giá hiện tại trong vùng nào · pattern phát hiện + xác suất
-lịch sử (pattern_match corr) · RS vs VNINDEX · kết luận timing (MUA/CHỜ/BÁN + trigger giá).
+**Verdict mỗi khung (1D/1W[/1M])**: trend (SMA stack + ADX) · momentum (RSI/MACD/BB +
+Ichimoku sau Phase B) · S-R của khung · cấu trúc (HH/HL/LH/LL + Fibo — sau Phase B;
+trước đó: S-R + pattern hiện có) · **kết luận higher-high hay lower-low**. Tổng hợp:
+đồng thuận đa khung hay phân kỳ + trigger giá.
 
-**Chống tràn lan**: wave 2 CHỈ khi user hỏi "mẫu hình/quá khứ"; wave 3 CHỈ khi intraday;
-`interval` khác 1D → tool trả warning — skill tự đổi về 1D, không retry đổi params.
-`signals_technical` 1 call đã đủ 80% verdict — đây là skill mẫu mực "1 tool trụ cột".
+**Chống tràn lan (hiện tại)**: Elliott/Wyckoff/Ichimoku CHƯA có trong tools → skill PHẢI
+ghi "chưa phân tích được, chờ Phase B", không diễn giải sóng bằng lời văn suông; 1W/1M qua
+`vn_quote_history` (không qua `signals_technical` cho tới khi provider mở interval — docstring
+hiện ghi "daily only").
 
-**Failure modes**: mã mới lên sàn <60 nến → indicators null, báo "thiếu lịch sử"; DNSE
-hết giờ → orderbook rỗng là đúng; `pattern_match` corr <0.4 = không có analogy đáng tin.
+**Failure modes**: mã <60 nến → indicators null; DNSE hết giờ → orderbook rỗng là đúng.
 
-**Evidence live**: VCB — RSI 39.2, ADX 12.1 (trend yếu), MACD −0.31/−0.13, EMA10 58.09,
-support/resistance 20d, pos_52w 0.21, recommend Sell (HPG); HPG pattern best_corr 0.409
-(yếu — ghi đúng); orderbook VCB depth live; băng 10:18 giá 58.1.
+**Evidence live**: VCB RSI 39.2/ADX 12.1/MACD −0.31 · HPG dưới sma50/150/200, RS −7.32,
+pos_52w 0.008, support 19.9 · pattern best_corr 0.409 (yếu — ghi đúng).
 
-**Acceptance**: "RSI FPT và vùng hỗ trợ" → trigger 2 mục verdict ≤2 calls; "intraday SSI"
-→ thêm leg orderbook, tổng ≤8.
+**Acceptance**: "FPT kỹ thuật 1D+1W" → verdict 2 khung + HH/LL (sau Phase B; trước đó: S-R +
+patterns), ≤8 calls.
 
 ## S23. `co-ban-chuyen-sau`
 
@@ -848,6 +692,9 @@ cân đối (statement param).
 **Acceptance**: "BCTC FPT có gì lạ" → wave 1 (2 calls) đủ ra M/F + 4 quý; "toàn cảnh cơ bản
 VPL" → ≤9 calls, không leg nào gọi 2 lần.
 
+> Review rev.3: ỔN — aspect-gating giữ run điển hình 4–7/14 tools, giữ nguyên.
+
+
 ## S24. `dinh-gia-chuyen-sau`
 
 ```yaml
@@ -882,41 +729,40 @@ US10Y 5.24% context · overview_trading VCB PE/PB/ROEA đủ.
 
 **Acceptance**: "FPT đắt chưa" → UPSIDE % + so lịch sử 2 dòng, ≤7 calls.
 
-## S25. `so-sanh-cung-nganh`
+> Review rev.3: ỔN — mỏng nhưng đúng bản chất định giá; bổ sung duy nhất: verdict thêm dòng
+> "upside theo target CTCK" (cross-ref S27) để neo kỳ vọng.
+
+
+## S25. `so-sanh-cung-nganh` (rev.3 — điều phối: xác định mã cùng ngành → gọi skills trên)
 
 ```yaml
 name: so-sanh-cung-nganh
 description: >
-  Dùng khi so sánh 2–6 mã CÙNG NGÀNH hoặc chọn leader ngành ("VCB vs BID vs CTG",
-  "steel mạnh nhất là ai", "ngân hàng nào đáng mua nhất"). 1 mã → S1/S23/S24;
-  ngành chảy tiền thế nào → S10.
-tool_budget: 8 / 4 song song
+  Dùng khi so sánh 2–6 mã CÙNG NGÀNH hoặc chọn leader ("VCB vs BID vs CTG",
+  "thép ai mạnh nhất"). Skill ĐIỀU PHỐI: xác định mã cùng ngành rồi gọi S22/S23/S24
+  cho từng mã, gộp xếp hạng. 1 mã → S1.
+tool_budget: 6 (của S25) + budget các sub-skill (mỗi mã ≤1 sub-skill/lượt)
 inputs: symbols (2–6) hoặc sector/industry name
 ```
 
 | Wave | Tools | Ghi chú |
 |---|---|---|
-| 0 (nếu nhập ngành) | `vn_reference`(exchange/industry) → chọn ≤6 mã | hoặc `vs_industry_tree`(tra GICS id) 1 call |
-| 1 | `compare_equities`(≤4, song song được 2 calls khi 5–6 mã: chia 4+2 qua `peer_compare`) | overview + momentum |
-| 2 | `signals_technical` × ≤4 mã (parallel 4) | RS/pos_52w từng ứng viên |
-| 3 | `financial_ratios` × ≤3 (song song 3; cap vnstock burst) | PE/ROE/biên |
-| 4 (bối cảnh ngành) | `vs_gics_index`(group) · `vn_equity_quote_batch`(toàn bộ ≤6, 1 call) | index ngành + bảng giá 1 shot |
+| 0. Xác định mã cùng ngành | `vn_reference`(exchange/industry) hoặc `vs_industry_tree` (tra GICS) → chọn ≤6 mã · `stock_screener` (filter ngành, pool hẹp) khi user chỉ cho tên ngành | cap tuyệt đối 6 mã — trên 6 thì yêu cầu thu hẹp |
+| 1. Bảng nhanh | `compare_equities`(≤4) + `peer_compare` (chia 4+2 khi 5–6 mã) · `vn_equity_quote_batch` (1 shot giá) | overview + momentum |
+| 2. Gọi skills trên | Mỗi mã: S22 (kỹ thuật) HOẶC S23 (cơ bản) HOẶC S24 (định giá) — theo câu hỏi, song song ≤4 | đây là lý do điều phối |
+| 3. Bối cảnh ngành | `vs_gics_index`(group) — index ngành làm nền | 1 call |
 
 **Verdict**: bảng xếp hạng {mã · PE · ROE · momentum · RS · giá} + **1 dòng luận chọn**
-(leader = chất lượng×momentum; định giá tốt = PE thấp trong nhóm ROE cao) + cảnh báo
-(correlation_matrix cross-ref khi user hỏi "chia tiền cả nhóm").
++ cảnh báo tương quan nhóm (cross-ref `correlation_matrix` khi chia tiền cả nhóm).
 
-**Chống tràn lan**: cap tuyệt đối 6 mã/run — trên 6 → yêu cầu thu hẹp; `signals_technical`
-tối đa 4; thiếu dữ liệu 1 tiêu chí → xếp hạng partial + ghi "n/6 mã có đủ", không loại âm thầm.
-`stock_screener` (S12) thay thế khi user đưa FILTER chứ không đưa mã.
+**Chống tràn lan**: không chạy cả 3 sub-skills cho cả 6 mã (6×3=18 calls) — mỗi mã 1 sub-skill
+theo trọng tâm câu hỏi; thiếu 1 tiêu chí → xếp hạng partial + ghi "n/6 mã đủ dữ liệu".
 
-**Failure modes**: enrich throttle giờ cao điểm (0/20 từng live) → ratios rỗng → verdict
-kỹ thuật-only, ghi chú; vn_reference industry không match → thử `vs_industry_tree` 1 lần.
+**Failure modes**: enrich throttle → ratios rỗng → xếp hạng kỹ thuật-only + ghi chú.
 
-**Evidence live**: compare_equities VCB-vs-HPG 2.8s (rows+momentum) · peer_compare cap 6 ·
-vs_gics_index 3 nhóm live · quote_batch 1 request VN30 · HOSE universe 757 mã.
+**Evidence live**: compare VCB-HPG 2.8s · peer cap 6 · HOSE 757 mã universe · quote_batch 1 request.
 
-**Acceptance**: "so sánh bank" → bảng ≥4 mã xếp hạng + luận chọn 1 dòng, ≤8 calls.
+**Acceptance**: "so sánh bank" → peer list ≤6 + sub-skill calls có giới hạn + bảng xếp hạng.
 
 ## S26. `phan-tich-sentiment`
 
@@ -953,6 +799,12 @@ hiện nhãn "heuristic" trong verdict; posts rỗng = mã ít bàn (empty hợp
 crowd≠fundamentals); VCB posts lãi suất 0.1–6%; Groq key có trên prod, thiếu trên local dev.
 
 **Acceptance**: "phố nói gì về FPT" → điểm + ≥3 quotes + nguồn-heuristic label, ≤4 calls.
+
+> Ghi chú rev.3 — dữ liệu CÓ ý nghĩa nếu đọc đúng: sentiment đo *đám đông*, không đo
+> *doanh nghiệp* (live: FPT heuristic −0.25 trong khi M −2.06 sạch). Ngưỡng diễn giải
+> heuristic: <−0.3 hoảng loạn · >+0.3 FOMO · giữa = trung tính; KHÔNG chuẩn hóa chéo 2 mode
+> Groq/heuristic; không bao giờ dùng sentiment làm leg duy nhất của quyết định.
+
 
 ## S27. `tim-co-hoi-bao-cao-ctck`
 
@@ -995,63 +847,144 @@ top, ≤8 calls.
 
 ---
 
-# PHẦN 2 — MA TRẬN BAO PHỦ 135 TOOLS (rev.2)
 
-Mỗi tool có đúng **1 HOME skill**. S5/S9 là skill tổ chức (0 home, chỉ cross-ref —
-không cồng cồng giữa 27 skill). Cross-ref giữa skills là design, không phải vi phạm.
+## S28. `kiem-tra-nguon-du-lieu` (MỚI — check toàn bộ nguồn trong 1 lượt)
+
+```yaml
+name: kiem-tra-nguon-du-lieu
+description: >
+  Dùng khi cần ĐÁNH GIÁ các nguồn dữ liệu có hoạt động ổn không ("server còn sống
+  không", "Vietstock chết chưa", "sáng nay data có đủ không"). Chạy định kỳ mỗi phiên
+  hoặc khi skills khác báo unavailable hàng loạt. Không dùng để phân tích thị trường.
+tool_budget: 12 / 5 song song
+```
+
+| Wave | Tools | Nguồn kiểm tra |
+|---|---|---|
+| 0 | `doctor` | env keys + versions local |
+| 1 (song song 5) | `source_status` · `vs_auth_status` | tổng quan upstream + hạn JWT |
+| 2 (smoke mỗi upstream, song song 5) | `vn_quote_history`(VCB, days=5) · `vs_market_index` · `dnse_latest_trade`(VN30F1M) · `yf_market_pins` · `crypto_spot`(BTCUSDT) | vnstock · Vietstock · DNSE · yfinance · Binance |
+| 3 (smoke tiếp, song song 4) | `news_market`(limit=1) · `fred_series`(DGS10, limit=1) · `world_prediction_odds`(limit=1) · `sbv_rates` | Fireant/GDELT · FRED · Gamma · SBV scrape |
+
+**Verdict (bảng bắt buộc)**:
+
+| Nguồn | Trạng thái | Độ trễ | Skills ảnh hưởng nếu chết |
+|---|---|---|---|
+| vnstock | ok/throttle/down | giây | S22/S23/S25/S15... |
+| Vietstock JWT | còn hạn tới.../HẾT | — | S23/S27/S3... (chuyển mirror/HAR) |
+| Vietstock HAR-session | sống/chết | — | S3 macro/S13-CTKH... |
+| DNSE | ok/lạnh | — | S22-intraday... (WS trio cần worker) |
+| yfinance/Binance/GDELT/Fireant/Gamma/FRED/SBV | ... | ... | ... |
+
++ 1 dòng khuyến nghị ("sáng nay đủ data chạy S1/S13/S22" hay "chỉ chạy legs không-Vietstock").
+
+**Chống tràn lan**: smoke dùng limit/days NHỎ NHẤT có thể (limit=1, days=5) — mục đích là
+ping, không phải lấy dữ liệu; không retry quá 1 lần/upstream.
+
+**Failure modes**: chính skill này cũng có thể partial (1–2 nguồn chết) — verdict vẫn ra đủ
+bảng, đánh dấu đỏ nguồn chết.
+
+**Evidence live**: sự cố JWT 02-10 (hết hạn 19:15, Google-SSO chặn password fallback) —
+skill này sẽ bắt được ở wave 1 (`vs_auth_status` false) trước khi skills khác fail hàng loạt;
+HAR-session sống độc lập (macro vẫn available khi JWT chết).
+
+**Acceptance**: chạy 1 lượt → bảng đủ 9 nguồn + khuyến nghị, ≤12 calls, ≤3 phút.
+
+## Phụ lục dùng chung — watchlist/alert (không phải skill, rev.3)
+
+S18 đã xóa theo yêu cầu. 12 tools watchlist/alert (`watchlist_create/list/get/add/
+update/remove/delete`, `alert_create/list/pause/resume/delete`) + `alert_check` KHÔNG
+thuộc skill nào — mọi skill được phép gọi trực tiếp khi cần LƯU kết quả, với 3 luật:
+(1) luôn `watchlist_list`/`alert_list` trước khi tạo (tránh trùng); (2) 1 watchlist cho
+1 chủ đề; (3) không xóa khi user chưa xin. Vòng đời đầy đủ xem git history rev.2
+(commit trước) của file này.
+
+# PHẦN 2 — MA TRẬN BAO PHỦ 135 TOOLS (rev.3)
+
+Mỗi tool có đúng **1 HOME**. S5/S9 là skill tổ chức (0 home, chỉ cross-ref).
+Tools của skills đã xóa (S2/S10/S11/S12/S14/S18) hoặc đã chuyển home, hoặc park ở
+bảng CHỜ DUYỆT để bạn tự điều chỉnh (đúng yêu cầu rev.3).
 
 | Skill (home) | Số tool | Tools home |
 |---|---|---|
 | S1 điều phối | 4 | `stock_overview`• `symbol_lookup`• `event_calendar_vn`• `evidence_bundle`• |
-| S2 thị trường | 21 | `market_overview`• `market_snapshot`• `market_movers`• `breadth_scan`• `market_candles_batch`• `vs_market_info`• `vs_market_price`• `vs_market_index`• `exchange_calendar`• `dnse_market_status`• `dnse_working_dates`• `vs_selftrading`• `vs_nn_flow`• `money_flow`• `futures_basis`• `block_trades`• `signals_scan`• `brief_build`• `dnse_foreign_flow`• `dnse_ws_snapshot`• `dnse_indices`• |
 | S3 macro VN | 9 | `vs_categories`• `vs_indicator_data`• `vs_xnk_detail`• `sbv_rates`• `macro_events_vn`• `economic_calendar`• `snapshot_history`• `vs_currency`• `vn_retail_fx`• |
 | S4 macro global | 9 | `fred_series`• `world_macro_country`• `yf_yield_curve`• `yf_regime_assets`• `yf_world_indices`• `yf_global_indices`• `assets_rotation`• `world_fear_greed`• `vn_global_index`• |
-| S5 chính trị (0 home — cross-ref S20/S21/S6/S7) | 0 | — (pure cross-ref) |
+| S5 chính trị (0 home — cross-ref) | 0 | — (pure cross-ref) |
 | S6 xung đột | 1 | `event_stats`• |
-| S7+S8 news digest | 3 | `news_market`• `corporate_calendar`• `yf_mega_flows`• |
-| S9 du-doan-fed (0 home — cross-ref S21/S4) | 0 | — (pure cross-ref) |
-| S10 ngành VN | 5 | `sector_performance`• `vs_industry_heatmap`• `vs_industry_tree`• `vs_gics_index`• `ipo_calendar_vn`• |
-| S11 rotation global | 5 | `yf_oracle_markets`• `yf_alloc_history`• `yf_market_pins`• `compare_assets`• `yf_commodities`• |
-| S12 sàng lọc | 6 | `stock_screener`• `signals_screener_columns`• `vn_reference`• `vn_listing`• `vn_equity_quote_batch`• `alert_check`• |
-| S13 trước BCTC | 1 | `company_events`• |
-| S14 risk vị thế | 3 | `vn_quote_history`• `quant_risk`• `scenario_simulate`• |
+| S7 tin nóng VN | 3 | `news_market`• `corporate_calendar`• `brief_build`• |
+| S8 tin nóng global | 1 | `yf_mega_flows`• |
+| S9 fed (0 home — cross-ref) | 0 | — (pure cross-ref) |
+| S13 trước BCTC | 3 | `company_events`• `quant_risk`• `scenario_simulate`• |
 | S15 backtest | 12 | `quant_backtest`• `quant_factors`• `backtest_strategies`• `param_sweep`• `seasonality`• `correlation_matrix`• `portfolio_optimize`• `dnse_ohlc_history`• `vn_equity_ohlcv`• `vn_futures_ohlcv`• `vn_index_ohlcv`• `dnse_vn30f1m_live`• |
-| S16 vàng tỷ giá | 3 | `vn_retail_gold`• `vn_forex_ohlcv`• `vn_msn_fx_gold`• |
+| S16 vàng tỷ giá | 4 | `vn_retail_gold`• `vn_forex_ohlcv`• `vn_msn_fx_gold`• `yf_commodities`• |
 | S17 crypto | 3 | `crypto_spot`• `crypto_derivs`• `vn_crypto_ohlv`• |
-| S18 theo dõi alert | 12 | `watchlist_create`• `watchlist_list`• `watchlist_get`• `watchlist_add`• `watchlist_update`• `watchlist_remove`• `watchlist_delete`• `alert_create`• `alert_list`• `alert_pause`• `alert_resume`• `alert_delete`• |
 | S19 tìm tin | 1 | `web_fetch`• |
 | S20 bất ổn quốc gia | 1 | `geo_intel`• |
-| S21 dự đoán polymarket | 2 | `world_prediction_odds`• `polymarket_event`• |
-| S22 kỹ thuật sâu | 5 | `signals_technical`• `pattern_match`• `dnse_orderbook`• `vn_trades`• `dnse_latest_trade`• |
+| S21 polymarket | 2 | `world_prediction_odds`• `polymarket_event`• |
+| S22 kỹ thuật sâu | 7 | `signals_technical`• `pattern_match`• `dnse_orderbook`• `vn_trades`• `dnse_latest_trade`• `vn_quote_history`• `signals_scan`• |
 | S23 cơ bản sâu | 14 | `financial_detail`• `financial_statements`• `financial_ratios`• `planned_targets`• `vs_financeinfo`• `vs_financial_terms`• `vs_financial_norms`• `vs_company_info`• `vn_fundamentals`• `vn_company`• `holders`• `insider_trading`• `dividends_splits`• `stock_forensic`• |
 | S24 định giá sâu | 3 | `valuation_run`• `vs_overview_trading`• `vs_trading_info`• |
-| S25 so sánh ngành | 2 | `compare_equities`• `peer_compare`• |
+| S25 so sánh ngành | 7 | `compare_equities`• `peer_compare`• `vn_reference`• `vs_industry_tree`• `stock_screener`• `signals_screener_columns`• `vn_equity_quote_batch`• |
 | S26 sentiment | 2 | `sentiment_score`• `news_symbol`• |
 | S27 cơ hội CTCK | 2 | `analyst_consensus`• `vs_documents`• |
-| Contract chung (pre-flight/ops) | 6 | `source_status`• `vs_auth_status`• `doctor`• `oracle_meta`• `runs_list`• `run_get`• |
+| S28 kiểm tra nguồn | 1 | `doctor`• |
+| Contract chung (pre-flight/ops) | 5 | `source_status`• `vs_auth_status`• `oracle_meta`• `runs_list`• `run_get`• |
+| Phụ lục dùng chung (không phải skill) | 12 | `watchlist_create`• `watchlist_list`• `watchlist_get`• `watchlist_add`• `watchlist_update`• `watchlist_remove`• `watchlist_delete`• `alert_create`• `alert_list`• `alert_pause`• `alert_resume`• `alert_delete`• |
 
-**Tổng home: 135/135 = 100%, không trùng, không mồ côi**
-`web_search` = tool thứ 136 gate theo key, ngoài catalog.
+**Tổng gán home: 106** + **chờ duyệt: 29** = 135/135, không trùng, không mồ côi.**
 
-Cross-ref đáng nhớ: `alert_check`•(S12) — S18 bước kiểm tra · `news_market`•(S7) —
-S5/S6/S8/S19/S20 · `geo_intel`•(S20) — S5/S6/S8/S19 · `event_stats`•(S6) — S5/S19/S20 ·
+## Bảng CHỜ DUYỆT (tools của S2/S10/S11/S12/S14/S18 cũ — bạn tự điều chỉnh sau)
+
+| Tool | Nguồn cũ | Gợi ý gán khi bạn duyệt |
+|---|---|---|
+| `market_overview` | ex-skill đã xóa | S7/S13 |
+| `market_snapshot` | ex-skill đã xóa | S7 |
+| `market_movers` | ex-skill đã xóa | S7 |
+| `breadth_scan` | ex-skill đã xóa | S7 |
+| `market_candles_batch` | ex-skill đã xóa | S22 |
+| `vs_market_info` | ex-skill đã xóa | S7 |
+| `vs_market_price` | ex-skill đã xóa | S7 |
+| `vs_market_index` | ex-skill đã xóa | S7 |
+| `exchange_calendar` | ex-skill đã xóa | S28 |
+| `dnse_market_status` | ex-skill đã xóa | S28 |
+| `dnse_working_dates` | ex-skill đã xóa | S28 |
+| `vs_selftrading` | ex-skill đã xóa | S13 |
+| `vs_nn_flow` | ex-skill đã xóa | S13 |
+| `money_flow` | ex-skill đã xóa | S13 |
+| `futures_basis` | ex-skill đã xóa | S13 |
+| `block_trades` | ex-skill đã xóa | S13 |
+| `dnse_foreign_flow` | ex-skill đã xóa | S28 (cần worker) |
+| `dnse_ws_snapshot` | ex-skill đã xóa | S28 |
+| `dnse_indices` | ex-skill đã xóa | S28 |
+| `sector_performance` | ex-skill đã xóa | S25 |
+| `vs_industry_heatmap` | ex-skill đã xóa | S25 |
+| `vs_gics_index` | ex-skill đã xóa | S25 |
+| `ipo_calendar_vn` | ex-skill đã xóa | S25 |
+| `vn_listing` | ex-skill đã xóa | S25 |
+| `alert_check` | ex-skill đã xóa | phụ lục dùng chung |
+| `yf_oracle_markets` | ex-skill đã xóa | S4 |
+| `yf_alloc_history` | ex-skill đã xóa | S4 |
+| `yf_market_pins` | ex-skill đã xóa | S4 |
+| `compare_assets` | ex-skill đã xóa | S4 |
+
+Cross-ref đáng nhớ: `news_market`•(S7) — S5/S6/S8/S19/S20 · `geo_intel`•(S20) —
+S5/S6/S8/S19 · `event_stats`•(S6) — S5/S19/S20 ·
 `world_prediction_odds`/`polymarket_event`•(S21) — S5/S9/S16/S17 ·
-`yf_commodities`•(S11) — S6/S16/S17 · `money_flow`/`futures_basis`/`block_trades`•(S2) —
-S10/S13 · `stock_forensic`/`financial_*`/`planned_targets`/`holders`/`insider_trading`•(S23) —
-S13 reuse leg · `valuation_run`•(S24) — S13/S14 · `sentiment_score`/`news_symbol`•(S26/S19
-home S26) — S7/S13 · `analyst_consensus`•(S27) — S13/S1 · `signals_technical`•(S22) —
-S12/S25/S5-ai · `vn_quote_history`•(S14) — S22/S24/S15 · `pattern_match`•(S22) —
-S15/S5-ai · `evidence_bundle`•(S1) — mọi verdict cuối · `snapshot_history`•(S3) —
-news/macro cache khi upstream chết.
+`yf_commodities`•(S16) — S4/S6/S13/S17 · `stock_forensic`/`financial_*`•(S23) —
+S13 reuse · `valuation_run`•(S24) — S1/S13 · `sentiment_score`•(S26) — S7/S13 ·
+`analyst_consensus`•(S27) — S3/S13 · `signals_technical`•(S22) — S1/S25 ·
+`vn_quote_history`•(S22) — S13/S15/S24 · `pattern_match`•(S22) — S15 ·
+`evidence_bundle`•(S1) — mọi verdict cuối · `snapshot_history`•(S3) — cache khi
+upstream chết · `quant_risk`/`scenario_simulate`•(S13) — cushion pre-BCTC.
 
-Ghi chú 3 WS tools (`dnse_foreign_flow`•/`dnse_ws_snapshot`•/`dnse_indices`•, home S2):
-remote không worker → `unavailable`; mọi skill đã thiết kế đi qua `money_flow` (tự
-fallback vs_nn_flow) — harness đừng bắn trực tiếp.
+Ghi chú 3 WS tools (home S2 cũ → park chờ duyệt): remote không worker →
+`unavailable`; mọi skill đã thiết kế đi qua `money_flow` (tự fallback vs_nn_flow).
 
 # PHẦN 3 — QUY TRÌNH HARNESS BUILD & ACCEPTANCE
 
 1. **Kết nối trước**: config 0.1, chạy `mcp probe` + `tools/list` = 136 tools.
-2. **Scaffold**: 27 thư mục `skills/<slug>/SKILL.md` theo template Phần 1 (frontmatter +
+2. **Scaffold**: 22 thư mục `skills/<slug>/SKILL.md` theo template Phần 1 (frontmatter +
    bảng workflow + verdict + budget + failure + evidence + acceptance).
 3. **Test nghiệm thu per skill**: bảng `Acceptance` tương ứng — chạy input mẫu, đối chiếu:
    đủ số mục verdict · trong budget · không có số bịa · xử lý đúng `empty/unavailable`.
