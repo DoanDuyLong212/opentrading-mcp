@@ -4,6 +4,7 @@
 (P17 mới: `event_study`, `fireant_thread`; Elliott/Wyckoff vào technicals; `analyst_consensus` filter macro; `web_fetch` đọc PDF; Fireant parser đọc postID; engine thêm condition_symbol)
 (P16 mới: `symbol_resolve` — multi-asset resolver; `signals_technical` mở 1W/1M + Ichimoku/swing/fibo; `backtest_strategies` thêm `rsi_meanrev` + filter months/quarters)
 Chạy live 135/135 ngày 2026-10-02 (có key): **129 available · 1 partial · 2 empty (đúng bản chất) · 3 unavailable (WS trio, thiếu worker local)**. 0 tool chết.
+P16–P17 verify live riêng cùng ngày: `symbol_resolve` (vàng→GC=F, BTC→BTCUSDT, hoa phat→ambiguous đúng) · `event_study` (VCB 1 event CAR +0.25%) · `fireant_thread` (post PNJ 2 replies thật) · `analyst_consensus` macro (entry section/report trung thực) · VCB 1W bearish/lower-low · rsi_meanrev 1 trade → **tổng 132/138 available** (3 tools mới đều xanh).
 
 ## 0. Tổng quan presets
 
@@ -18,7 +19,7 @@ Chạy live 135/135 ngày 2026-10-02 (có key): **129 available · 1 partial · 
 
 | Kênh avail | Số tools | Ghi chú |
 |---|---|---|
-| available | 129 | gồm 3 tools re-run xác nhận (signals_scan, valuation_run, financial_statements — lỗi thoáng qua) |
+| available | 132 | 129 từ run full-135 (gồm 3 tools re-run: signals_scan, valuation_run, financial_statements) + 3 tools P16–P17 (`symbol_resolve`, `event_study`, `fireant_thread` — verify live riêng, đều xanh) |
 | partial | 1 | market_overview (session leg null, thiếu WS worker) |
 | empty (đúng) | 2 | runs_list, run_get (chưa có runs local) |
 | unavailable | 3 | dnse_foreign_flow, dnse_ws_snapshot, dnse_indices (cần worker local; prod có) |
