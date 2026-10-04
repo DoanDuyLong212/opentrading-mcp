@@ -1,9 +1,13 @@
 # SKILLS.md — Gộp toàn bộ skills của harness OpenTrading (để kiểm duyệt)
 
-> Nguồn sự thật: repo **OpenTrading** `skills/<slug>/SKILL.md` (30 skills: 27 theo
-> thiết kế `docs/skills-design-for-harness.md` + 3 skill nền: devil-advocate,
+> Nguồn sự thật: repo **OpenTrading** `skills/<slug>/SKILL.md` (24 skills: 21 theo
+> thiết kế `docs/skills-design-for-harness.md` rev.3 + 3 skill nền: devil-advocate,
 > explain-term, vn-market-basics). File gộp này chỉ để ĐỌC/DUYỆT — chỉnh sửa
 > phải làm trên từng file SKILL.md trong OpenTrading rồi gộp lại.
+>
+> **rev.3 (Phase A)**: đã XÓA 6 skills theo yêu cầu — `danh-gia-tinh-hinh-thi-truong`,
+> `kiem-tra-rui-ro-vi-the`, `luan-chuyen-nganh-viet-nam`, `luan-chuyen-tai-san-toan-cau`,
+> `san-loc-co-phieu`, `theo-doi-va-bao-thuc`. Cross-refs trong skills còn lại đã sửa.
 >
 > **Bản P17 (02-10-2026, MCP-server `89db45b`)** — skills chịu ảnh hưởng, đã cập nhật dưới đây:
 > `ky-thuat-chuyen-sau` (1W/1M + Ichimoku/swing/Elliott/Wyckoff),
@@ -20,7 +24,7 @@
 | `description` | ✔ | 1-2 câu; có "Dùng khi…/Không dùng khi…" để skill tự loại khỏi scope nhau |
 | `activation` | ✔ | `auto` (model nạp khi khớp) / `always` (luôn trong system) / `manual` (chỉ /skill <tên>) |
 | `requires_tools` | khuyến khích | skill chỉ hiện trong catalog khi MỌI tool này có mặt (gate theo preset) |
-| `tool_budget` | với 27 skill thiết kế | số lần gọi tool tối đa mỗi run; harness chặn cứng 20/lượt |
+| `tool_budget` | với skill thiết kế | số lần gọi tool tối đa mỗi run; harness chặn cứng 20/lượt |
 | `triggers.keywords` | khuyến khích | pre-routing: khớp keyword → gợi ý skill ở reminder |
 | `version` | ✔ | semver, lưu cùng phiên bản session |
 
@@ -31,38 +35,31 @@
 | 1 | `bat-on-quoc-gia` | auto | 6 | geo_intel |
 | 2 | `co-ban-chuyen-sau` | auto | 9 | financial_detail |
 | 3 | `danh-gia-tinh-hinh-chinh-tri-toan-cau` | auto | 8 | — |
-| 4 | `danh-gia-tinh-hinh-thi-truong` | auto | 12 | market_overview |
-| 5 | `danh-gia-tinh-hinh-xung-dot` | auto | 9 | event_stats |
-| 6 | `danh-gia-truoc-bctc` | auto | 10 | company_events |
-| 7 | `danh-gia-vi-mo-quoc-te` | auto | 10 | fred_series |
-| 8 | `danh-gia-vi-mo-viet-nam` | auto | 12 | vs_indicator_data |
-| 9 | `devil-advocate` | auto | — | — |
-| 10 | `dinh-gia-chuyen-sau` | auto | 7 | valuation_run |
-| 11 | `du-doan-fed` | auto | 8 | world_prediction_odds |
-| 12 | `du-doan-polymarket` | auto | 6 | world_prediction_odds |
-| 13 | `explain-term` | auto | — | — |
-| 14 | `kiem-chien-luoc-backtest` | auto | 12 | quant_backtest |
-| 15 | `kiem-tra-rui-ro-vi-the` | auto | 12 | quant_risk |
-| 16 | `ky-thuat-chuyen-sau` | auto | 8 | signals_technical |
-| 17 | `luan-chuyen-nganh-viet-nam` | auto | 10 | sector_performance |
-| 18 | `luan-chuyen-tai-san-toan-cau` | auto | 10 | assets_rotation |
-| 19 | `nhip-dap-crypto` | auto | 8 | crypto_spot |
-| 20 | `phan-tich-chuyen-sau-1-ma` | auto | 6 | stock_overview |
-| 21 | `phan-tich-sentiment` | auto | 6 | sentiment_score |
-| 22 | `phan-tich-vang-ty-gia` | auto | 10 | vn_retail_gold |
-| 23 | `san-loc-co-phieu` | auto | 12 | stock_screener |
-| 24 | `so-sanh-cung-nganh` | auto | 8 | compare_equities |
-| 25 | `theo-doi-va-bao-thuc` | auto | 10 | watchlist_create |
-| 26 | `tim-co-hoi-bao-cao-ctck` | auto | 8 | analyst_consensus |
-| 27 | `tim-kiem-tin-tuc` | auto | 10 | news_symbol |
-| 28 | `tin-tuc-nong-quoc-te` | auto | 8 | news_market |
-| 29 | `tin-tuc-nong-viet-nam` | auto | 9 | news_market |
-| 30 | `vn-market-basics` | auto | — | — |
+| 4 | `danh-gia-tinh-hinh-xung-dot` | auto | 9 | event_stats |
+| 5 | `danh-gia-truoc-bctc` | auto | 10 | company_events |
+| 6 | `danh-gia-vi-mo-quoc-te` | auto | 10 | fred_series |
+| 7 | `danh-gia-vi-mo-viet-nam` | auto | 12 | vs_indicator_data |
+| 8 | `devil-advocate` | auto | — | — |
+| 9 | `dinh-gia-chuyen-sau` | auto | 7 | valuation_run |
+| 10 | `du-doan-fed` | auto | 8 | world_prediction_odds |
+| 11 | `du-doan-polymarket` | auto | 6 | world_prediction_odds |
+| 12 | `explain-term` | auto | — | — |
+| 13 | `kiem-chien-luoc-backtest` | auto | 12 | quant_backtest |
+| 14 | `ky-thuat-chuyen-sau` | auto | 8 | signals_technical |
+| 15 | `nhip-dap-crypto` | auto | 8 | crypto_spot |
+| 16 | `phan-tich-chuyen-sau-1-ma` | auto | 6 | stock_overview |
+| 17 | `phan-tich-sentiment` | auto | 6 | sentiment_score |
+| 18 | `phan-tich-vang-ty-gia` | auto | 10 | vn_retail_gold |
+| 19 | `so-sanh-cung-nganh` | auto | 8 | compare_equities |
+| 20 | `tim-co-hoi-bao-cao-ctck` | auto | 8 | analyst_consensus |
+| 21 | `tim-kiem-tin-tuc` | auto | 10 | news_symbol |
+| 22 | `tin-tuc-nong-quoc-te` | auto | 8 | news_market |
+| 23 | `tin-tuc-nong-viet-nam` | auto | 9 | news_market |
+| 24 | `vn-market-basics` | auto | — | — |
 
 ---
 
 ## 1 · bat-on-quoc-gia
-
 > File thật: `OpenTrading/skills/bat-on-quoc-gia/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -116,8 +113,9 @@ geo_intel("Vietnam") + event_stats("vietnam") trả articles counts OK; pipeline
 
 ---
 
-## 2 · co-ban-chuyen-sau
+---
 
+## 2 · co-ban-chuyen-sau
 > File thật: `OpenTrading/skills/co-ban-chuyen-sau/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -177,8 +175,9 @@ SBV 74.8% · VCB cổ tức 450đ · insider empty là đúng data.
 
 ---
 
-## 3 · danh-gia-tinh-hinh-chinh-tri-toan-cau
+---
 
+## 3 · danh-gia-tinh-hinh-chinh-tri-toan-cau
 > File thật: `OpenTrading/skills/danh-gia-tinh-hinh-chinh-tri-toan-cau/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -231,65 +230,9 @@ Fed October 2026: "no change" **74.5%** (volume 24h ~2.6M USD) · Brazil preside
 
 ---
 
-## 4 · danh-gia-tinh-hinh-thi-truong
-
-> File thật: `OpenTrading/skills/danh-gia-tinh-hinh-thi-truong/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
-
-```markdown
----
-name: danh-gia-tinh-hinh-thi-truong
-description: Đánh giá phiên/sức khỏe thị trường VN — xu hướng index, độ rộng, phái sinh, khối ngoại, nhóm dẫn dắt.
-when_to_use: "Thị trường sao rồi, phiên sáng, độ rộng thị trường, basis VN30. Không dùng khi: hỏi 1 mã (phan-tich-chuyen-sau-1-ma), hỏi ngành (luan-chuyen-nganh-viet-nam), vĩ mô (danh-gia-vi-mo-viet-nam)."
-activation: auto
-requires_tools: [mcp__opentrading__market_overview]
-tool_budget: 12
-triggers:
-  keywords: [thị trường, phiên hôm nay, độ rộng, breadth, vn-index, vn30, basis, market, khối ngoại phiên]
-version: 1.0.0
 ---
 
-# Đánh giá tình hình thị trường VN
-
-## Workflow
-
-| Wave | Tools |
-|---|---|
-| 0 | `source_status` |
-| 1 | `brief_build` · `market_overview` · `breadth_scan` · `futures_basis` · `money_flow` |
-| 2 | `market_movers` · `vs_market_info` · `market_snapshot` (VN30 default) |
-| 3 (chỉ khi hỏi sâu) | `dnse_orderbook`(mã lớn) · `vn_trades`(băng) · `vs_selftrading`+`vs_nn_flow` (đào dòng tiền sau money_flow) |
-
-## Verdict — báo cáo phiên 6 mục
-
-Xu hướng index · độ rộng (adv/dec/trần/sàn) · phái sinh (basis ± bps) · khối ngoại
-(mua/bán tỷ) · nhóm dẫn – dở · nhận định sức khỏe phiên (1 câu).
-
-## Chống tràn lan
-
-- `signals_scan` full HOSE ~40s — CHỈ khi user hỏi "momentum/breakout", cap `max_symbols=100`.
-- Không gọi `dnse_foreign_flow` trực tiếp (unavailable ở remote không worker) — `money_flow` đã tự fallback `vs_nn_flow`.
-- `market_overview` partial (session leg chết khi thiếu WS worker) → dùng 3 leg còn + ghi "session từ nguồn khác".
-
-## Lỗi thường gặp
-
-Ngoài giờ: board rows cũ là đúng (đọc as_of), không "làm mới" vô ích. Basis unavailable
-(cả DNSE chết) → bỏ mục phái sinh, nói rõ.
-
-## Bằng chứng live (02-10-2026)
-
-Breadth 1 tăng/6 giảm (rổ bluechip) · VCB −0.35% · HPG −0.50% · basis +6.95 (+37bps) ·
-NN bán ròng (mua 1,814 vs bán 2,268 tỷ).
-
-## Nghiệm thu
-
-"Thị trường hôm nay" → 6 mục verdict với ≥4 mục có số; ≤10 calls.
-```
-
-
----
-
-## 5 · danh-gia-tinh-hinh-xung-dot
-
+## 4 · danh-gia-tinh-hinh-xung-dot
 > File thật: `OpenTrading/skills/danh-gia-tinh-hinh-xung-dot/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -318,8 +261,7 @@ version: 1.0.0
 ## Verdict — 5 mục
 
 Cường độ (event counts GDELT trend) · giá đã phản ánh chưa (dầu/vàng move vs baseline) ·
-kênh truyền dẫn (energy→inflation→rates) · xác suất leo thang (odds) · hàm ý vị thế
-(kiem-tra-rui-ro-vi-the trước khi hành động).
+kênh truyền dẫn (energy→inflation→rates) · xác suất leo thang (odds) · hàm ý vị thế (đánh giá cushion/size trong danh-gia-truoc-bctc leg 6 trước khi hành động).
 
 ## Chống tràn lan
 
@@ -341,8 +283,9 @@ geo_intel("Vietnam") trả articles · event_stats("vietnam") articles >0 · gol
 
 ---
 
-## 6 · danh-gia-truoc-bctc
+---
 
+## 5 · danh-gia-truoc-bctc
 > File thật: `OpenTrading/skills/danh-gia-truoc-bctc/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -393,8 +336,9 @@ sentiment heuristic −0.25 · NN bán ròng · pt 0% phiên → grade B.
 
 ---
 
-## 7 · danh-gia-vi-mo-quoc-te
+---
 
+## 6 · danh-gia-vi-mo-quoc-te
 > File thật: `OpenTrading/skills/danh-gia-vi-mo-quoc-te/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -446,8 +390,9 @@ US10Y 5.24% / 2Y 4.61%, không đảo chiều · WorldBank GDP VN 8.02% · fear/
 
 ---
 
-## 8 · danh-gia-vi-mo-viet-nam
+---
 
+## 7 · danh-gia-vi-mo-viet-nam
 > File thật: `OpenTrading/skills/danh-gia-vi-mo-viet-nam/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -504,8 +449,9 @@ GDP 504 rows tới Q2/2026 · CPI 1,839 · XK 2,941 · XNK-country 3,675 · SBV 
 
 ---
 
-## 9 · devil-advocate
+---
 
+## 8 · devil-advocate
 > File thật: `OpenTrading/skills/devil-advocate/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -531,8 +477,9 @@ Vai trò của bạn là người phản biện. Người dùng thường hỏi 
 
 ---
 
-## 10 · dinh-gia-chuyen-sau
+---
 
+## 9 · dinh-gia-chuyen-sau
 > File thật: `OpenTrading/skills/dinh-gia-chuyen-sau/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -586,8 +533,9 @@ VCB per_pb @57,400 (2 method đồng thuận) · FPT per_pb @62,700 · US10Y 5.2
 
 ---
 
-## 11 · du-doan-fed
+---
 
+## 10 · du-doan-fed
 > File thật: `OpenTrading/skills/du-doan-fed/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -639,8 +587,9 @@ odds", KHÔNG thay bằng nhận định riêng.
 
 ---
 
-## 12 · du-doan-polymarket
+---
 
+## 11 · du-doan-polymarket
 > File thật: `OpenTrading/skills/du-doan-polymarket/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -694,8 +643,9 @@ Fed T10/2026 no-change **74.5%** (vol 2.6M) · Brazil presidential detail OK · 
 
 ---
 
-## 13 · explain-term
+---
 
+## 12 · explain-term
 > File thật: `OpenTrading/skills/explain-term/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -721,15 +671,16 @@ Khi người dùng hỏi một thuật ngữ (P/E, EPS, ROE, margin, ATO/ATC, ro
 
 ---
 
-## 14 · kiem-chien-luoc-backtest
+---
 
+## 13 · kiem-chien-luoc-backtest
 > File thật: `OpenTrading/skills/kiem-chien-luoc-backtest/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
 ---
 name: kiem-chien-luoc-backtest
 description: Kiểm chứng chiến lược/backtest — baseline, best param KÈM worst param, seasonality, verdict đáng tin.
-when_to_use: "SMA20/50 FPT có ăn không, mùa vụ tháng mấy, backtest VN30F1M. Không dùng khi: rủi ro vị thế cụ thể (kiem-tra-rui-ro-vi-the)."
+when_to_use: "SMA20/50 FPT có ăn không, mùa vụ tháng mấy, backtest VN30F1M. Không dùng khi: cỡ vị thế/sizing trước lệnh (xem leg Đệm trong danh-gia-truoc-bctc)."
 activation: auto
 requires_tools: [mcp__opentrading__quant_backtest]
 tool_budget: 12
@@ -778,67 +729,16 @@ warning `month-filtered` · event_study VCB 2026-09-21: 1 event, CAR +0.25%.
 
 ---
 
-## 15 · kiem-tra-rui-ro-vi-the
-
-> File thật: `OpenTrading/skills/kiem-tra-rui-ro-vi-the/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
-
-```markdown
----
-name: kiem-tra-rui-ro-vi-the
-description: Kiểm tra rủi ro TRƯỚC khi vào vị thế — GO/HALF/NO-GO, max size, invalidation, unknowns.
-when_to_use: "Mua X size Y được không, rủi ro vị thế VCB. Không dùng khi: backtest chiến lược (kiem-chien-luoc-backtest), phân tích thuần (phan-tich-chuyen-sau-1-ma)."
-activation: auto
-requires_tools: [mcp__opentrading__quant_risk]
-tool_budget: 12
-triggers:
-  keywords: [rủi ro vị thế, mua được không, size, position, stop loss, cắt lỗ, vào tiền, check risk]
-version: 1.0.0
 ---
 
-# Kiểm tra rủi ro vị thế
-
-## Workflow
-
-| Wave | Tools |
-|---|---|
-| 1 | `vn_quote_history`(mã 1, days=90) → `quant_risk`(returns, 252) |
-| 2 | `scenario_simulate`(−5%, scale size) · `correlation_matrix`(symbols) |
-| 3 | `stock_forensic` × từng mã (≤4) |
-| 4 | `company_events` + `event_calendar_vn` (blackout 10 ngày) · `valuation_run` ×mã |
-
-## Verdict
-
-**GO / HALF / NO-GO** + max size VND + giá invalidation + 3 unknowns.
-Rubric: M-Score đỏ → skip/halve; Sharpe âm + win <45% → HALF trở xuống; blackout (BCTC/ĐHĐCĐ
-≤10 ngày) → halve; cushion định giá quyết định GO.
-
-## Chống tràn lan
-
-- `quant_risk` nhận returns từ wave 1 — KHÔNG gọi 90 ngày cho 8 mã (>4 mã → từ chối, yêu cầu chọn); correlation cap 8.
-
-## Bằng chứng live (02-10-2026)
-
-VCB 63 phiên — Sharpe **−1.15**, maxDD 12.3%, win 41.3% · corr VCB-HPG **0.50** · VCB M
-partial/F 4/6, HPG M −2.24/F 2/6 · cổ tức VCB ex 23-07 (không blackout) · −5% = −2,870đ/1000cp
-⇒ ~−5tr trên 100tr → HALF.
-
-## Nghiệm thu
-
-"Mua 100tr VCB HPG được không" → verdict 3 thành phần + rubric chỉ ra leg nào quyết định.
-```
-
-
----
-
-## 16 · ky-thuat-chuyen-sau
-
+## 14 · ky-thuat-chuyen-sau
 > File thật: `OpenTrading/skills/ky-thuat-chuyen-sau/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
 ---
 name: ky-thuat-chuyen-sau
 description: Phân tích THUẦN kỹ thuật 1 mã — chỉ báo, pattern, S-R, RS vs index, intraday/orderbook.
-when_to_use: "VCB kỹ thuật sao, FPT có breakout không, đọc băng HPG, RSI và hỗ trợ-kháng cự. Không dùng khi: cơ bản (co-ban-chuyen-sau), định giá (dinh-gia-chuyen-sau), săn toàn thị trường (san-loc-co-phieu)."
+when_to_use: "VCB kỹ thuật sao, FPT có breakout không, đọc băng HPG, RSI và hỗ trợ-kháng cự. Không dùng khi: cơ bản (co-ban-chuyen-sau), định giá (dinh-gia-chuyen-sau), săn breakout toàn thị trường (gọi signals_scan trực tiếp, cap max_symbols=100)."
 activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 tool_budget: 8
@@ -894,125 +794,16 @@ P17: VCB 1W bearish/lower-low/fib-down nhất quán (ichimoku + swing + fib live
 
 ---
 
-## 17 · luan-chuyen-nganh-viet-nam
-
-> File thật: `OpenTrading/skills/luan-chuyen-nganh-viet-nam/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
-
-```markdown
----
-name: luan-chuyen-nganh-viet-nam
-description: Rotation ngành VN — ngành nào đang hút/ra tiền, leaders, cảnh báo supply.
-when_to_use: "Ngành nào mạnh, rotation ngành, cổ phiếu ngành ngân hàng ra sao. Không dùng khi: phân bổ toàn cầu (luan-chuyen-tai-san-toan-cau), 1 mã (phan-tich-chuyen-sau-1-ma)."
-activation: auto
-requires_tools: [mcp__opentrading__sector_performance]
-tool_budget: 10
-triggers:
-  keywords: [luân chuyển, rotation, ngành nào, ngành ngân hàng, ngành bất động sản, sector, dẫn dắt ngành]
-version: 1.0.0
 ---
 
-# Luân chuyển ngành Việt Nam
-
-## Workflow
-
-| Wave | Tools |
-|---|---|
-| 1 | `sector_performance`(level 1) · `vs_industry_heatmap` |
-| 2 | `money_flow` · `futures_basis` · `vs_gics_index`(group của ngành nóng) |
-| 3 | `compare_equities`(≤4 leaders ngành top) · `ipo_calendar_vn`(áp lực supply) |
-| 4 (đào sâu) | `vs_industry_tree` → `stock_screener`(universe ngành, filters hẹp) |
-
-## Verdict
-
-Tên rotation ("ngân hàng → vật liệu") bằng số PerChange phiên + YTD · xác nhận dòng tiền
-(NN, basis) · leaders so sánh · cảnh báo supply (IPO/thỏa thuận lớn).
-
-## Chống tràn lan
-
-- Top 2 ngành tăng + top 1 giảm, MỖI ngành 1 call `vs_gics_index`; `compare_equities` cap 4 — không liệt kê cả 11 ngành.
-
-## Lỗi thường gặp
-
-`ipo_calendar_vn` auctions rỗng = bình thường (HNX ít lịch) — ghi "không có đấu giá sắp tới",
-đừng diễn giải thành tín hiệu.
-
-## Bằng chứng live (02-10-2026)
-
-Vật liệu **+1.12%** (YTD +8.9) hút tiền; Tài chính −0.8%, BĐS −1.33% bị bán; YTD leader
-Năng lượng +48.2%, Dịch vụ truyền thông +39.8%; HPG 19,950 −0.50% vol 9.6tr.
-
-## Nghiệm thu
-
-"Ngành nào rotation" → tên rotation + ≥6 con số chứng minh, ≤10 calls.
-```
-
-
----
-
-## 18 · luan-chuyen-tai-san-toan-cau
-
-> File thật: `OpenTrading/skills/luan-chuyen-tai-san-toan-cau/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
-
-```markdown
----
-name: luan-chuyen-tai-san-toan-cau
-description: Phân bổ tài sản toàn cầu — xếp hạng momentum, regime RISK-ON/OFF, khung allocation.
-when_to_use: "Allocation, rủi ro hay trú ẩn, asset nào mạnh, regime. Không dùng khi: ngành VN (luan-chuyen-nganh-viet-nam), crypto riêng (nhip-dap-crypto)."
-activation: auto
-requires_tools: [mcp__opentrading__assets_rotation]
-tool_budget: 10
-triggers:
-  keywords: [phân bổ tài sản, allocation, regime, risk off, risk on, vàng hay cổ phiếu, phân bổ danh mục toàn cầu]
-version: 1.0.0
----
-
-# Luân chuyển tài sản toàn cầu
-
-## Workflow
-
-| Wave | Tools |
-|---|---|
-| 1 | `assets_rotation` · `yf_oracle_markets` |
-| 2 | `yf_global_indices` · `yf_commodities` · `crypto_derivs`(funding = risk appetite) |
-| 3 | `yf_alloc_history`(2-3 asset xếp hạng cao/thấp) · `compare_assets` · `yf_market_pins` |
-
-## Verdict
-
-Xếp hạng 1y momentum các nhóm (kết luận RISK-ON/OFF 1 câu) · đường allocation history của
-3 asset trọng yếu · dòng mega-cap + funding xác nhận · đề xuất khung phân bổ (KHÔNG số dư
-tài khoản cá nhân — disclaimer).
-
-## Chống tràn lan
-
-- `yf_alloc_history` 1 asset/call → cap 3 asset, chọn theo verdict wave 1.
-
-## Lỗi thường gặp
-
-yfinance flaky (curve từng fail→hồi) → retry 1 lần/wave rồi degrade. DNSE/Binance geo-block
-(SG worker) — funding có thể rỗng → ghi chú, dùng fear/greed bù.
-
-## Bằng chứng live (02-10-2026)
-
-S&P 7,651 (1y +14.4%), VIX 16.3 · vàng 4,195 · BTC 83,476 (+0.33%) funding 2.8e-05 ·
-oracle BTC +7.8%/30d, ETH +11% · rotation: Neutral/mixed.
-
-## Nghiệm thu
-
-"Phân bổ tài sản toàn cầu" → bảng xếp hạng + kết luận RISK + 3 asset path.
-```
-
-
----
-
-## 19 · nhip-dap-crypto
-
+## 15 · nhip-dap-crypto
 > File thật: `OpenTrading/skills/nhip-dap-crypto/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
 ---
 name: nhip-dap-crypto
 description: Nhịp đập crypto — giá, funding, OI, sentiment, nến quy VND.
-when_to_use: "BTC/ETH sao rồi, funding rate, crypto quy VND. Không dùng khi: allocation toàn cầu (luan-chuyen-tai-san-toan-cau), odds sự kiện crypto (du-doan-polymarket)."
+when_to_use: "BTC/ETH sao rồi, funding rate, crypto quy VND. Không dùng khi: bối cảnh regime toàn cầu (danh-gia-vi-mo-quoc-te), odds sự kiện crypto (du-doan-polymarket)."
 activation: auto
 requires_tools: [mcp__opentrading__crypto_spot]
 tool_budget: 8
@@ -1048,15 +839,16 @@ BTC 83,476 (+0.33%) · funding 2.8e-05 · OI 95.7k · fear/greed 70-74.
 
 ---
 
-## 20 · phan-tich-chuyen-sau-1-ma
+---
 
+## 16 · phan-tich-chuyen-sau-1-ma
 > File thật: `OpenTrading/skills/phan-tich-chuyen-sau-1-ma/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
 ---
 name: phan-tich-chuyen-sau-1-ma
 description: Phân tích TOÀN DIỆN một mã cụ thể — điều phối các skill chuyên (S22 kỹ thuật, S23 cơ bản, S24 định giá, S25 so sánh, S26 sentiment, S27 báo cáo CTCK) rồi gộp verdict. KHÔNG tự gọi chồng chéo hàng chục tools.
-when_to_use: "Người dùng yêu cầu phân tích toàn diện một mã (phân tích FPT). Không dùng khi: user chỉ hỏi 1 chiều (RSI → ky-thuat-chuyen-sau; BCTC → co-ban-chuyen-sau; fair value → dinh-gia-chuyen-sau); hỏi thị trường chung → danh-gia-tinh-hinh-thi-truong."
+when_to_use: "Người dùng yêu cầu phân tích toàn diện một mã (phân tích FPT). Không dùng khi: user chỉ hỏi 1 chiều (RSI → ky-thuat-chuyen-sau; BCTC → co-ban-chuyen-sau; fair value → dinh-gia-chuyen-sau)."
 activation: auto
 requires_tools: [mcp__opentrading__stock_overview]
 tool_budget: 6
@@ -1103,8 +895,9 @@ Sub-skill chết 1 chân → vẫn ra verdict với leg còn sống + ghi leg th
 
 ---
 
-## 21 · phan-tich-sentiment
+---
 
+## 17 · phan-tich-sentiment
 > File thật: `OpenTrading/skills/phan-tich-sentiment/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -1161,8 +954,9 @@ VCB posts lãi suất 0.1-6% · Groq key có trên prod, thiếu trên local dev
 
 ---
 
-## 22 · phan-tich-vang-ty-gia
+---
 
+## 18 · phan-tich-vang-ty-gia
 > File thật: `OpenTrading/skills/phan-tich-vang-ty-gia/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -1209,74 +1003,16 @@ VÀNG MIẾNG SJC 999.9 (BTMC live) · XAUUSD 4,195 · USDVND 25,970 (MSN) · SB
 
 ---
 
-## 23 · san-loc-co-phieu
-
-> File thật: `OpenTrading/skills/san-loc-co-phieu/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
-
-```markdown
----
-name: san-loc-co-phieu
-description: Sàng lọc danh sách mã theo tiêu chí định giá/chất lượng/kỹ thuật — bảng ≤10 mã kèm lý do.
-when_to_use: "PE thấp ROE cao, RSI quá bán, breakout, mã ngành ngân hàng. Không dùng khi: 1 mã đã biết (phan-tich-chuyen-sau-1-ma), so sánh nhóm mã cụ thể (so-sanh-cung-nganh)."
-activation: auto
-requires_tools: [mcp__opentrading__stock_screener]
-tool_budget: 12
-triggers:
-  keywords: [sàng lọc, screener, lọc cổ phiếu, tìm cổ phiếu, mã nào, rsi, oversold, quá bán, breakout, breach, danh sách mã]
-version: 1.0.0
 ---
 
-# Sàng lọc cổ phiếu
-
-## Workflow
-
-| Wave | Tools |
-|---|---|
-| 1 | `signals_screener_columns`(tra field nếu chưa chắc) · `vn_reference`(exchange/sector pool) |
-| 2 | `stock_screener` — **LUÔN truyền filters hẹp + limit ≤20** |
-| 3 | `signals_technical` × 5 candidates top (song song ≤5) |
-| 4 | `peer_compare`(nhóm đạt) · `watchlist_add`(lưu, hỏi user) |
-
-## Verdict
-
-Bảng ≤10 mã × {tiêu chí đạt, RSI/trend, PE/ROE nếu có, 1 dòng lý do} + cảnh báo lọc (enrich ratio).
-
-## Chống tràn lan (QUY TẮC SỐ 1)
-
-- `filters=null` full 1522 mã = ~60s → TIMEOUT đã ghi nhận live. TRÁNH: không filter →
-  truyền `vn_reference` pool (ngành/sàn) hoặc universe nhỏ.
-- `technical:{rsi_lt:30}` chạy trên candidates đã lọc, không trên cả universe.
-- `max_pe/min_roe` kéo enrich tới 30 mã — chỉ dùng khi user thật sự cần valuation;
-  warning "<50% enriched" → CHỐT kết quả, không retry.
-- keys `technical` chỉ 4: rsi_lt/rsi_gt/above_sma20/below_sma20 — sai key = unavailable cả call.
-
-## Lỗi thường gặp
-
-Stage 0/20 enriched (giờ cao điểm vnstock) → output vẫn có technical, ghi "định giá chưa
-kiểm tra". `signals_scan` ~40s → chỉ khi hỏi "săn breakout", cap `max_symbols=100`.
-
-## Bằng chứng live (02-10-2026)
-
-Screener RSI<70 HOSE trả SDA/CLH · scan 5 mã (HPG VCB FPT SSI VIC) → 0 hits (đúng —
-Donchian không breakout hôm đó) · enrich 0/20 từng xảy ra, degrade đúng.
-
-## Nghiệm thu
-
-"Tìm mã RSI<30 PE<20 ngành ngân hàng" → ≤10 mã + lý do, ≤12 calls, 0 timeout giờ cao điểm.
-```
-
-
----
-
-## 24 · so-sanh-cung-nganh
-
+## 19 · so-sanh-cung-nganh
 > File thật: `OpenTrading/skills/so-sanh-cung-nganh/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
 ---
 name: so-sanh-cung-nganh
 description: So sánh 2-6 mã CÙNG NGÀNH / chọn leader — bảng xếp hạng + 1 dòng luận chọn.
-when_to_use: "VCB vs BID vs CTG, steel mạnh nhất là ai, ngân hàng nào đáng mua nhất. Không dùng khi: 1 mã (phan-tich-chuyen-sau-1-ma / co-ban-chuyen-sau / dinh-gia-chuyen-sau), ngành chảy tiền thế nào (luan-chuyen-nganh-viet-nam), user đưa FILTER chứ không đưa mã (san-loc-co-phieu)."
+when_to_use: "VCB vs BID vs CTG, steel mạnh nhất là ai, ngân hàng nào đáng mua nhất. Không dùng khi: 1 mã (phan-tich-chuyen-sau-1-ma / co-ban-chuyen-sau / dinh-gia-chuyen-sau), ngành chảy tiền thế nào: dùng sector_performance + vs_industry_heatmap trực tiếp; user đưa FILTER: gọi stock_screener trực tiếp (universe hẹp, limit ≤20)."
 activation: auto
 requires_tools: [mcp__opentrading__compare_equities]
 tool_budget: 8
@@ -1326,59 +1062,9 @@ quote_batch 1 request VN30 · HOSE universe 757 mã.
 
 ---
 
-## 25 · theo-doi-va-bao-thuc
-
-> File thật: `OpenTrading/skills/theo-doi-va-bao-thuc/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
-
-```markdown
----
-name: theo-doi-va-bao-thuc
-description: Lưu watchlist + đặt cảnh báo giá/RSI — vòng đời đầy đủ, skill ghi (READ_WRITE) duy nhất.
-when_to_use: Theo dõi FPT + HPG, báo khi VCB vượt 60, tạo watchlist. Skill duy nhất thay đổi state server.
-activation: auto
-requires_tools: [mcp__opentrading__watchlist_create]
-tool_budget: 10
-triggers:
-  keywords: [theo dõi, watchlist, cảnh báo, alert, báo khi, nhắc giá, lưu danh mục]
-version: 1.0.0
 ---
 
-# Theo dõi & báo thức
-
-## Vòng đời
-
-| Giai đoạn | Tools |
-|---|---|
-| Tạo | `watchlist_create` → `watchlist_add(list_id, symbols)` |
-| Đọc | `watchlist_list` · `watchlist_get` → quote bằng `vn_equity_quote_batch`(1 call) |
-| Alert | `alert_create(symbol,op,threshold,metric)` → `alert_list` |
-| Kiểm tra định kỳ | `alert_check(rules)` (metric: price hoặc rsi14; op gồm cross_up/cross_down) |
-| Bảo quản | `alert_pause/resume` · `watchlist_update/remove` · `watchlist_delete` |
-
-## Verdict
-
-Xác nhận state đã lưu (id, rules) + kết quả lần kiểm tra đầu ngay trong run (`alert_check`)
-+ nêu vòng đời để user dùng lệnh tiếp theo.
-
-## Chống tràn lan
-
-- KHÔNG tạo alert trùng rule cũ (luôn `alert_list` trước `alert_create`); 1 watchlist cho 1 chủ đề; không xóa thay user khi chưa xin.
-
-## Lỗi thường gặp
-
-PG fail → file fallback (server tự xử lý, output ghi "stored local"). `alert_check` empty =
-chưa trigger, ĐÚNG — không phải lỗi. Cross-state TTL 3600s: alert cross_up cần ≥2 lần gọi mới có prev.
-
-## Nghiệm thu
-
-"Theo dõi FPT+HPG, báo khi FPT>70" → state tạo được, `alert_check` chạy xanh, cleanup demo list sau test.
-```
-
-
----
-
-## 26 · tim-co-hoi-bao-cao-ctck
-
+## 20 · tim-co-hoi-bao-cao-ctck
 > File thật: `OpenTrading/skills/tim-co-hoi-bao-cao-ctck/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -1437,8 +1123,9 @@ Feed chung **7 reports** — MBB MUA 28,200 · **MSN MUA 89,200 (30/09)** · VPB
 
 ---
 
-## 27 · tim-kiem-tin-tuc
+---
 
+## 21 · tim-kiem-tin-tuc
 > File thật: `OpenTrading/skills/tim-kiem-tin-tuc/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -1501,8 +1188,9 @@ postID/totalLikes, trước đây id/user null).
 
 ---
 
-## 28 · tin-tuc-nong-quoc-te
+---
 
+## 22 · tin-tuc-nong-quoc-te
 > File thật: `OpenTrading/skills/tin-tuc-nong-quoc-te/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -1545,8 +1233,9 @@ mega_flows AAPL/MSFT/NVDA OK · fear/greed 70-74 Greed 7 ngày.
 
 ---
 
-## 29 · tin-tuc-nong-viet-nam
+---
 
+## 23 · tin-tuc-nong-viet-nam
 > File thật: `OpenTrading/skills/tin-tuc-nong-viet-nam/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
@@ -1600,8 +1289,9 @@ sạch mã số thuế) · `news_symbol("VCB")` → posts lãi suất 0.1-6%.
 
 ---
 
-## 30 · vn-market-basics
+---
 
+## 24 · vn-market-basics
 > File thật: `OpenTrading/skills/vn-market-basics/SKILL.md` — sửa file này ở repo OpenTrading, đừng sửa bản gộp.
 
 ```markdown
