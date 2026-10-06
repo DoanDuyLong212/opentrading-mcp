@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+
+
+def _candle_day(value: Any) -> str:
+    """ISO date of a candle. vnstock keeps the date in a ``time`` column under a RangeIndex,
+    so the index alone gave "15", "16", ... and models wrote "T-15" instead of dates."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    try:
+        return date.fromisoformat(text[:10]).isoformat()
+    except ValueError:
+        return text
 
 
 @guarded("vnstock")
@@ -46,7 +60,7 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
         for ts, row in tail.iterrows():
             rows.append(
                 {
-                    "t": str(ts),
+                    "t": _candle_day(row.get("time", ts)),
                     "o": float(row.get("open", 0)),
                     "h": float(row.get("high", 0)),
                     "l": float(row.get("low", 0)),
