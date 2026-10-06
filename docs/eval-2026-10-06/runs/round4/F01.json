@@ -1,0 +1,20 @@
+{
+ "id": "F01",
+ "q": "Bây giờ là mấy giờ (giờ VN)?",
+ "ms": 123787,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 22:50:00 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T22:50:00+07:00"
+  }
+ ],
+ "text": "Bây giờ là **22:50, Thứ ba 06/10/2026** (giờ Việt Nam, UTC+7).\n\nCả ba sàn HOSE, HNX, UPCoM đều đã đóng cửa — phiên hôm nay kết thúc rồi."
+}

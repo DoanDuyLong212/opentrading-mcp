@@ -270,3 +270,16 @@ compact #23) vào nhánh `MCP-server` OpenTrading (`baf7a2c` + follow-ups `da103
   thấy tên trong catalog, nạp schema khi gọi `tool_search`/gọi trực tiếp).
 - Verify: **238 tests pass · tsc clean**. session.test fail lúc full-run là cross-file
   pollution của bun (pass riêng).
+
+## 9. Skills tiếng Anh (06-10, tối ưu token)
+
+Toàn bộ 26 skills chuyển body + `description` sang English — tiktoken cl100k_base:
+**36,131 → 27,736 tokens (−23%)**. GIỮ nguyên: slug tên skill, `triggers.keywords`
+tiếng Việt (match input user), câu user mẫu tiếng Việt trong description, verdict labels
+user-visible (ỔN ĐỊNH/CẢNH BÁO/BẤT ỔN/NGHIÊM TRỌNG, Tích cực/Tiêu cực/Động lực, kVND,
+CHƯA XÁC NHẬN), tool names/budgets/live evidence. Mỗi skill thêm dòng disclaimer
+("Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer
+in the user's language"). Version bump minor (1.2.0/1.3.0).
+Verify: routing TV→English **6/6 câu** (T01 verdict thật 3897 ch + chart_render pipeline;
+S07/S16 đúng skill + đúng nguồn; F01/S09/F10 đúng workflow); 238 tests pass · tsc clean.
+Nguồn sự thật: `OpenTrading/skills/<slug>/SKILL.md`; bản gộp: `SKILLS.md` (26/26 IN SYNC).

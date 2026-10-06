@@ -1,0 +1,73 @@
+{
+ "id": "S07",
+ "q": "Đánh giá vĩ mô Việt Nam: CPI, GDP, lãi suất, tỷ giá",
+ "ms": 300030,
+ "error": null,
+ "calls": [
+  {
+   "t": "notice",
+   "text": "Đang hoãn 139 tool MCP (139 của opentrading); model tự nạp bằng tool_search khi cần. Đổi trong /config."
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "danh-gia-vi-mo-viet-nam"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã nạp tool: mcp__opentrading__vs_indicator_data\nThư mục skill: /home/doanlong/OpenTrading/skills/danh-gia-vi-mo-viet-nam\n\n# Reading Vietnam Macro\n\nAlways open with the mandatory 2-call pre-flight (source_status + vs_auth_status) because VN macro depends on JWT and HAR-sessions that die easily. The category/termType pairs must be exactly right (wrong = empty rows): GDP 73/tt3, CPI 15/tt7/sub2, XK 38/tt2. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the"
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 22:45:19 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T22:45:19+07:00"
+  },
+  {
+   "t": "start",
+   "name": "tool_search",
+   "input": {
+    "query": "select:source_status,vs_auth_status,vs_categories,vs_xnk_detail,news_market,macro_events_vn,economic_calendar,analyst_consensus,snapshot_history,yf_yield_curve,sbv_rates,vn_retail_fx",
+    "max_results": 15
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã nạp tool: mcp__opentrading__source_status, mcp__opentrading__vs_auth_status, mcp__opentrading__vs_categories, mcp__opentrading__vs_xnk_detail, mcp__opentrading__news_market, mcp__opentrading__macro_events_vn, mcp__opentrading__economic_calendar, mcp__opentrading__analyst_consensus, mcp__opentrading__snapshot_history, mcp__opentrading__yf_yield_curve, mcp__opentrading__sbv_rates, mcp__opentrading__vn_retail_fx\n\n## mcp__opentrading__source_status\nHealth of every upstream plus TTL state. Use to "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__source_status",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_auth_status",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 20,
+   "out": "{\n  \"data\": {\n    \"authenticated\": false,\n    \"reason\": \"no jwt configured\"\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T22:47:51.753473+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 5021,
+   "out": "{\n  \"data\": {\n    \"upstreams\": {\n      \"vietstock\": {\n        \"authenticated\": false,\n        \"reason\": \"no jwt configured\"\n      },\n      \"vnstock\": \"unavailable\",\n      \"dnse_ws\": \"cold\"\n    },\n    \"stateless\": true,\n    \"ttl\": {\n      \"snapshot\": 5,\n      \"market\": 60,\n      \"world\": 300,\n      \"overview\": 900,\n      \"financeinfo\": 21600,\n      \"documents\": 86400,\n      \"categories\": 604800,\n      \"odds\": 2700\n    }\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T22:47:"
+  }
+ ],
+ "text": ""
+}

@@ -1,0 +1,110 @@
+{
+ "id": "S16",
+ "q": "Thị trường crypto hôm nay sao, funding thế nào",
+ "ms": 300024,
+ "error": null,
+ "calls": [
+  {
+   "t": "notice",
+   "text": "Đang hoãn 139 tool MCP (139 của opentrading); model tự nạp bằng tool_search khi cần. Đổi trong /config."
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "nhip-dap-crypto"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Đã nạp tool: mcp__opentrading__crypto_spot\nThư mục skill: /home/doanlong/OpenTrading/skills/nhip-dap-crypto\n\n# Reading Crypto Pulse in Plain Language\n\nWritten for people who aren't crypto experts: every term must be explained in 1 line alongside its number. Answer in exactly 3 sentences. Crypto runs 24/7 so \"today\" numbers differ from VN stock sessions — don't compare across mismatched sessions. Verdict labels, units and output formatting stay in Vietnamese (user-visible); answer in the user's l"
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thứ ba, 06/10/2026 22:45:20 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T22:45:20+07:00"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__crypto_spot",
+   "input": {
+    "symbols": [
+     "BTCUSDT",
+     "ETHUSDT",
+     "SOLUSDT"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "tool_search",
+   "input": {
+    "query": "select:crypto_derivs,world_fear_greed,vn_crypto_ohlcv"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã nạp tool: mcp__opentrading__crypto_derivs, mcp__opentrading__world_fear_greed, mcp__opentrading__vn_crypto_ohlcv\n\n## mcp__opentrading__crypto_derivs\nBinance futures funding, OI and long/short ratios. Use for leverage reads. symbols: up to 5 perpetual symbols (BTCUSDT ...). Rows carry per-symbol error instead of failing the batch when one symbol is delisted.\nTham số:\n- symbols (string[], bắt buộc)\n## mcp__opentrading__world_fear_greed\nCrypto fear/greed index. Use for risk-appetite reads. limit"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 262,
+   "out": "{\n  \"data\": {\n    \"tickers\": [\n      {\n        \"symbol\": \"BTCUSDT\",\n        \"last\": 86053.9,\n        \"change_pct\": 0.81,\n        \"high\": 86698.99,\n        \"low\": 84972.01,\n        \"volume\": 12587.04029,\n        \"quote_volume\": 1080588417.4304383\n      },\n      {\n        \"symbol\": \"ETHUSDT\",\n        \"last\": 2712.32,\n        \"change_pct\": 0.405,\n        \"high\": 2725.13,\n        \"low\": 2679.63,\n        \"volume\": 239499.4307,\n        \"quote_volume\": 647896983.776388\n      },\n      {\n        \"symbol\""
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__crypto_derivs",
+   "input": {
+    "symbols": [
+     "BTCUSDT",
+     "ETHUSDT"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_fear_greed",
+   "input": {
+    "limit": 7
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2307,
+   "out": "{\n  \"data\": {\n    \"derivs\": [\n      {\n        \"symbol\": \"BTCUSDT\",\n        \"mark_price\": 86046.3,\n        \"funding_rate\": 0.0000317,\n        \"next_funding_time\": 1791302400000,\n        \"open_interest\": 95489.908,\n        \"ls_ratio\": 1.1825,\n        \"taker_ls_ratio\": 0.9596\n      },\n      {\n        \"symbol\": \"ETHUSDT\",\n        \"mark_price\": 2712.12,\n        \"funding_rate\": 0.00006416,\n        \"next_funding_time\": 1791302400000,\n        \"open_interest\": 2310423.549,\n        \"ls_ratio\": 1.4027,\n   "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1153,
+   "out": "{\n  \"data\": {\n    \"series\": [\n      {\n        \"t\": \"1791244800\",\n        \"v\": \"73\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791158400\",\n        \"v\": \"70\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791072000\",\n        \"v\": \"65\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790985600\",\n        \"v\": \"67\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790899200\",\n        \"v\": \"72\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"17908128"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "BTCUSDT",
+    "count": 2
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 4081,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"BTCUSDT\",\n    \"bars\": [\n      {\n        \"time\": \"2026-10-05T00:00:00\",\n        \"open\": 2202971018.71,\n        \"high\": 2254965474.95,\n        \"low\": 2201458633.04,\n        \"close\": 2247536657.04,\n        \"volume\": 390657558139078\n      },\n      {\n        \"time\": \"2026-10-06T00:00:00\",\n        \"open\": 2247528957.15,\n        \"high\": 2260309673.58,\n        \"low\": 2208333804.68,\n        \"close\": 2229507804.46,\n        \"volume\": 785976266819555\n      }\n    ]\n  },\n  \"proven"
+  }
+ ],
+ "text": ""
+}
