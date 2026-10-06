@@ -148,7 +148,7 @@ Skill/harness **không được** fill số bịa (quy tắc vàng `skills-desig
 - Giữ remote: toàn bộ 139 data tools + `runs_list/run_get/doctor` server (phục vụ clients khác; harness đã có `session_list/session_get/doctor_local` tương đương và được ưu tiên).
 - Trùng lắp có chủ ý: `web_search/web_fetch` tồn tại cả 2 nơi — harness dùng bản local (không cần key), remote giữ cho CI/clients khác.
 
-## 5. Harness skills — 26 skills (OpenTrading, nhánh MCP-server @695d2bb)
+## 5. Harness skills — 26 skills (OpenTrading, nhánh MCP-server @da10329)
 
 > Nguồn sự thật: `OpenTrading/skills/<slug>/SKILL.md`; bản gộp duyệt: MCP-server `SKILLS.md`.
 > Cấu trúc chuẩn skill-creator: description pushy + When to Use / Workflow checklist / Template / Examples.
@@ -188,7 +188,7 @@ Routing tổng r1: 24/26 load đúng ngay (S19 miss sang skill tin-tức, S14 ma
 Round2 sau fix: 11/12 đạt (S07/S09/S13/S16/S24/W1 + F08/F09/F11/S12/W4); W5 cải thiện (0 preset/hallucination) nhưng vẫn miss `quant_risk`.
 Vấn đề còn mở: **timeout 300s** (câu phức tạp không ra verdict — đợt 2), `spawn_subagent` (60s + allowlist), `quant_risk` leg trong W5.
 
-## 6. Harness tools — 16 local (chạy trong tiến trình OpenTrading, không qua MCP)
+| 6. Harness tools — sau merge upstream 06-10: **21 local** (16 của mình + 5 upstream: `ask_user`, `todo_write`, `tool_search`, `list/read_mcp_resource`); turn-guards (doom-loop/budget 20) bị upstream thay bằng `PermissionGate` (ask trước tool side-effect). Chi tiết bảng trước merge:
 
 | Tool | Vai | Ranh giới với remote | Eval fallback 06-10 |
 |---|---|---|---|
@@ -203,13 +203,15 @@ Vấn đề còn mở: **timeout 300s** (câu phức tạp không ra verdict —
 | web_search | tìm web (Exa→Parallel→DuckDuckGo) | remote chỉ có web_search gated-key | ✓ F02; nhưng bị lạm dụng thay tools chuyên (S06/S21/S26) |
 | spawn_subagent | worker opencode con | không remote tương đương | ✕ timeout 60s ×7 (F10/S08/S10/W6); allowlist từ chối tên tool MCP (W6) |
 
-Tổng registry live: **156 tools** (140 remote gồm alias + 16 local), verify qua `mcp.start()` headless
-[06-10 sau khi xóa `switch_preset`; trước đó 157].
+Tổng registry live sau merge upstream: **160 tools** (139 MCP deferred sau `tool_search` +
+21 local), verify qua `mcp.start()` headless [trước merge: 156; trước khi xóa switch_preset: 157].
 
 ## 7. Ma trận phủ tools ↔ skills (trả lời: tools có được phủ hết trong skills không?)
 
 > Phương pháp: static (requires_tools + tên tool trong body skill) ∪ observed (89 tools được gọi trong 55 runs live: 43 round1 + 12 round2)
-> ∪ prompts (29 tools trong 6 prompt texts). Chi tiết: `docs/eval-2026-10-06/` (questions/report/runs/round2).
+> ∪ prompts (29 tools trong 6 prompt texts). Chi tiết: `docs/eval-2026-10-06/` (questions/report/runs/round2+round3).
+> Sau merge upstream 06-10: tool-search deferral — 139 MCP tools vẫn callable, model thấy
+> tên trong catalog + nạp qua `tool_search`; ma trận phủ skills bên dưới không đổi.
 
 - **KHÔNG — 118/153 phủ (77%), 35 tools mồ côi (23%)** [06-10: trước fix là 114/154 (74%), 40 mồ côi; sau round2 + xóa switch_preset: signals_scan/market_snapshot/ipo_calendar_vn/... đã được gọi], không skill nào nhắc tên, live không gọi, prompts không dùng:
   - `alert_*` (6) + `watchlist_*` remote (7): mồ côi từ rev.3 (xóa `theo-doi-va-bao-thuc`) — GAP cần skill mới hoặc xóa tools.
@@ -249,3 +251,22 @@ nearest-zone gaza 82km, signal-loss diff); `event_stats` aggregate tách vai;
 `valuation_run` btype→method + warning btype lạ. Round3: T-questions ky-thuat 6/6 đạt
 (verdict thật 1344–4007 ch); S03/S04/S09 0 fails; S05 bỏ Step 1 BCTC ✓ + fix thêm
 skill 1.1.2 (load_skill chỉ với tên, không aspect-file); S18 còn spawn timeout (đợt 2 #4).
+
+### 8.5 Merge upstream harness (06-10, PR pending)
+
+Merge `origin/main` (tool-search #19, mcp-instructions #20, prompt-tuning #21, todo #22-24,
+compact #23) vào nhánh `MCP-server` OpenTrading (`baf7a2c` + follow-ups `da10329`).
+- **Theirs** (pipeline rework): `agent.ts` (`requestFor/activeFor/nudge`), `mcp/config.ts`
+  (`enabledTools/disabledTools/alwaysLoad` thay preset), `mcp/manager.ts`, `session/store.ts`
+  (one-clock), `tools/registry.ts` (cap 128 + image handling + `deferrable`), `tools/wrap.ts`,
+  `tui/state.ts`/`app.tsx` (flash/exitArmed/question/liveTodos/compact), `/tools` rich detail,
+  `/mcp` dialog được upstream thay mới (xóa file cũ), `docs/mcp.md`, `prompts/tools.md`.
+- **Ours giữ lại**: `runtime.ts` combine — upstream tools (`ask_user/todo_write/tool_search` +
+  `loadSkillTool` signature mới) + local tools (chart/session/watchlist/web/subagent/doctor_local).
+- **Turn-guards bị upstream thay thế**: doom-loop + budget 20/lượt + `approvals.ts` →
+  `PermissionGate` mới (queued, once/session/always/deny, không silent-allow headless).
+  Skill `tool_budget` vẫn là hướng dẫn model đọc trong body.
+- **Registry sau merge: 160 tools** (21 local + 139 MCP deferred sau `tool_search` — model
+  thấy tên trong catalog, nạp schema khi gọi `tool_search`/gọi trực tiếp).
+- Verify: **238 tests pass · tsc clean**. session.test fail lúc full-run là cross-file
+  pollution của bun (pass riêng).

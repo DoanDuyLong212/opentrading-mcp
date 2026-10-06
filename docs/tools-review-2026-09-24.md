@@ -45,8 +45,9 @@ P16–P17 verify live riêng cùng ngày: `symbol_resolve` (vàng→GC=F, BTC→
 
 > Cột **Nơi chạy** trong mọi bảng tool bên dưới: `remote` = thực thi trên MCP-server
 > (Python/FastMCP, qua `tools/call`); `local` = tools của harness OpenTrading (xem
-> section riêng cuối Phần I — 16 tools: chart/render, session, doctor, watchlist cá nhân,
-> web_fetch/web_search, spawn_subagent).
+> section riêng cuối Phần I — sau merge upstream 06-10: **21 local** = 16 của mình
+> (chart/render, session, doctor, watchlist cá nhân, web_fetch/web_search, spawn_subagent)
+> + 5 upstream (`ask_user`, `todo_write`, `tool_search`, `list/read_mcp_resource`).
 
 | Kênh avail (live 2026-10-02, giữ nguyên) | Số tools | Ghi chú |
 |---|---|---|
@@ -308,16 +309,20 @@ Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_U
 
 ## Tools local của harness OpenTrading (không qua MCP)
 
-> 16 tools chạy **local** trong tiến trình harness (`OpenTrading/src/core/`), không
-> phải tools của MCP-server. Nguyên tắc chia: secrets + network + team-shared state →
-> remote; session-local + render + deterministic → local. Xem chi tiết review trong
-> `docs/architecture-review-2026-10-05.md` §2 (rev 2026-10-06: +spawn_subagent, web_fetch, web_search).
+> Sau merge upstream 06-10: **21 tools** chạy **local** trong tiến trình harness
+> (`OpenTrading/src/core/`), không phải tools của MCP-server. Nguyên tắc chia: secrets +
+> network + team-shared state → remote; session-local + render + deterministic → local.
+> Turn-guards (doom-loop/budget 20) bị upstream thay bằng `PermissionGate` (ask trước tool
+> side-effect). Chi tiết: `docs/architecture-review-2026-10-05.md` §8.5.
 
 | Tool | Params | Descriptor | Mô tả chi tiết (TV) | Nguồn | Nơi chạy |
 |---|---|---|---|---|---|
 | current_time | [] | Trả về ngày giờ hiện tại theo giờ Việt Nam (Asia/Ho_Chi_Minh, UTC+7) và thứ trong tuần. | Đồng hồ VN deterministic để model không đoán "now". | `tools/builtin/current-time.ts` (Intl, không mạng) | local |
 | load_skill | ['name', 'file?'] | Nạp hướng dẫn chi tiết của một skill trong catalog rồi làm theo. | Progressive skill loading: system prompt chỉ list tên, body fetch khi cần. | `tools/builtin/load-skill.ts` + `skills/<slug>/SKILL.md` | local |
-| switch_preset | ['preset', 'server?'] | Đổi preset tool của một MCP server (cần người dùng phê duyệt). | Tool duy nhất đổi những gì model được thấy; mô tả là overview preset live. | `runtime.ts` + registry `activePreset` + approval dialog | local |
+| ask_user | [questions] | Hỏi người dùng 1–4 câu trắc nghiệm khi thiếu thông tin. | Upstream merge 06-10; thay denial khi thiếu data. | `tools/builtin/ask-user.ts` + AskBroker | local |
+| todo_write | [items] | Ghi danh sách việc cần làm; ghim trên prompt, nhắc mỗi lượt. | Upstream merge 06-10 (PR #22-24); items viết cho user. | `tools/builtin/todo-write.ts` | local |
+| tool_search | [query] | Tìm + nạp tool đang hoãn theo tên. | Tool-search deferral: 139 MCP tools deferred — model thấy tên, nạp schema khi cần. | `tools/builtin/tool-search.ts` | local |
+| list_mcp_resources / read_mcp_resource | [uri?] | Liệt kê/đọc resources MCP. | Upstream merge 06-10; đọc catalog/reference. | `tools/builtin/` | local |
 | chart_render | ['kind', 'symbol?', 'bars?', 'series?', 'labels?', 'matrix?', 'value?', 'max?', 'unit?', 'width?', 'height?', 'color?'] | Vẽ biểu đồ text có màu từ dữ liệu đã có. | 10 kinds: candlestick/line/sparkline/bar/histogram/heatmap/gauge/donut/area/winloss; màu ANSI theo chiều (tăng xanh/giảm đỏ); chỉ render, không fetch. | `@crafter/charts` (zero-dep) | local |
 | chart_compare | ['title?', 'series[2-5]', 'width?', 'height?', 'color?'] | Vẽ nhiều đường giá chồng nhau để so sánh. | Overlay + legend, chuẩn hóa % từ điểm đầu, chuỗi ngắn tự căn phải. | `@crafter/charts` multi-mark | local |
 | chart_depth | ['symbol?', 'bids', 'asks', 'depth?'] | Vẽ ladder bid/ask text từ orderbook đã có. | ASK/mid/BID + thanh volume; rỗng 2 bên → báo trung thực (ngoài giờ). | thuần local | local |
@@ -331,7 +336,7 @@ Env chạy lại: `set -a; source ~/Trading_Agents/.env; set +a; export MCP_DB_U
 | watchlist_local_delete | ['name'] | Xóa watchlist cá nhân. | Xóa key local. | `~/.opentrading/watchlists.json` | local |
 | spawn_subagent | ['task', 'skills?', 'tools?', 'workdir?', 'timeout?'] | Chạy worker AI con (opencode) cho việc nặng song song. | Tiered spawn (local CLI trước, API fallback), transcript đầy đủ vào trace; thay thế pattern spawn thủ công. | `tools/subagent/spawn.ts` (opencode CLI/API) | local |
 | web_fetch | ['url', 'maxChars?'] | Đọc 1 URL → text sạch (đệ quy nội bộ). | Render song song (browser headless → Readability → html thô), không denial text; khác `web_fetch` remote (server-side, PDF). | `tools/web/fetch.ts` | local |
-| web_search | ['query', 'count?'] | Tìm web (song ngữ) trả URL + snippet + text. | Ưu tiên tool `parallel` (trước là Exa), rỗng → DuckDuckGo HTML; 60s timeout, top 5. | `tools/web/search.ts` | local |
+| web_search | ['query', 'count?'] | Tìm web (song ngữ) trả URL + snippet + text. | Exa→Parallel→DuckDuckGo HTML (theo key có sẵn); 60s timeout, top 5. | `tools/web/search.ts` | local |
 
 ---
 
@@ -451,3 +456,4 @@ Prompts không fetch data — chúng chỉ dẫn agent gọi tools theo thứ t�
 | P19/P20 | Tách compute→3 + quant→2 files; `@guarded` vnstock/intel; vocab `source` chuẩn (`ALLOWED_SOURCES`); verify 139 + assert; mount `/sse`; `as_of` tz-aware; crypto caps; world_prediction_odds retry; local harness +3 (spawn_subagent/web_fetch/web_search) | working-tree 2026-10-06 |
 | P21 | Xóa preset-gating harness + descriptors coerce/vd/phủ định (vs_indicator_data, quant_risk, dnse_latest_trade, valuation, analyst, quote_history, trading_info) + 7 skills source-guard | working-tree 2026-10-06 |
 | P22 | geo_intel lọc chính trị + aggregate + military (adsb.lol, port oracle 8010); event_stats aggregate tách vai; valuation btype validation; 9 skills bỏ call-count + feedback fixes (forensic explanation, bỏ Step 1 BCTC, top-20 posts+comments) | 0157d2a |
+| P23 | Merge upstream harness (tool-search #19, mcp-instructions #20, prompt-tuning #21, todo #22-24, compact #23): theirs pipeline + ours local tools, registry 160 (21 local + 139 deferred); turn-guards → PermissionGate | baf7a2c, da10329 |

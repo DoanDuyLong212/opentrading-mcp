@@ -56,6 +56,13 @@
 > planned_targets session-gated + scenario_simulate tuyến tính); `vi-mo-quoc-te/vn`
 > 1.1.1/1.2.1; `ky-thuat` 1.2.1; `sentiment` 1.1.1 (top 20 posts + comments);
 > `so-sanh` 1.2.1.
+>
+> **Bản 06-10-2026 (merge upstream harness)** — merge `origin/main` (tool-search, permission,
+> todos, compact) vào nhánh `MCP-server` OpenTrading (`baf7a2c` + `da10329`): harness giờ có
+> `ask_user`/`todo_write`/`tool_search` + 139 MCP tools deferred sau `tool_search` (model thấy
+> tên trong catalog, nạp schema khi cần — vẫn callable); registry 160 (21 local). Turn-guards
+> (doom-loop + budget cứng 20) bị upstream thay bằng `PermissionGate` (ask trước tool có side
+> effect); `tool_budget` trong skill vẫn là hướng dẫn model đọc. Verify: 238 tests pass · tsc clean.
 
 ## Đặc tả frontmatter chung
 
@@ -65,8 +72,8 @@
 | `description` | ✔ | front-load keywords user hay nói; có "Dùng khi…/Không dùng khi…" + tên skill loại trừ (opencode chỉ thấy field này để routing) |
 | `when_to_use` | ✔ (harness) | câu hỏi mẫu + loại trừ chi tiết, mirror vào body `Khi nào dùng` |
 | `activation` | ✔ | `auto` (model nạp khi khớp) / `manual` (chỉ /skill <tên>, ví dụ kiem-tra-nguon-du-lieu) |
-| `requires_tools` | khuyến khích | skill chỉ hiện trong catalog khi MỌI tool này có mặt (gate theo tool hiện có; single surface, không preset từ 06-10) |
-| `tool_budget` | với skill thiết kế | số lần gọi tool tối đa mỗi run; harness chặn cứng 20/lượt; mirror vào `Chống tràn lan` |
+| `requires_tools` | khuyến khích | skill chỉ hiện trong catalog khi MỌI tool này có mặt (gate theo tool hiện có; sau merge upstream 06-10: 139 MCP tools deferred sau `tool_search` — vẫn callable) |
+| `tool_budget` | với skill thiết kế | số lần gọi tool tối đa mỗi run; hướng dẫn model đọc trong body [merge upstream 06-10: turn-guard cứng 20/lượt + doom-loop bị thay bằng `PermissionGate` — ask trước tool side-effect] |
 | `triggers.keywords` | khuyến khích | pre-routing: khớp keyword → gợi ý skill ở reminder |
 | `version` | ✔ | semver (skill-creator 06-10 bump minor → 1.1.0/1.2.0; eval-fix đợt 1 bump → 1.1.1/1.2.1/1.2.2) |
 
