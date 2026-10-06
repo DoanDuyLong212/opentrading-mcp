@@ -297,8 +297,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def valuation_run(symbol: str, btype: int = 1, method: str = "auto") -> dict[str, Any]:
         """PER/PB ensemble. Use for fair-value ranges.
 
-        btype: 1 general, 2 securities, 3 bank, 5 insurance. method: 'auto'
-        (default, picks per_pb or pb_bank_broker by btype) or force 'per'/'pb'/'ensemble'.
+        btype→method reference (method is ALWAYS set, never null):
+        1 general → per_pb · 2 securities → pb_bank_broker · 3 bank → pb_bank_broker
+        5 insurance → per_pb. Unknown btype → warnings + method auto.
+        method: 'auto' (default, picks by btype above) or force 'per'/'pb'/'ensemble'.
         DCF/EV are NOT implemented. There is no tool named valuation_band —
         use this tool's per_pb/pb range output instead.
         """
@@ -316,6 +318,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         eps = info.get("EPS") or info.get("eps")
         bvps = info.get("BVPS") or info.get("bvps")
         out: dict[str, Any] = {"symbol": symbol.upper(), "price": price, "method": "per_pb"}
+        warnings: list[str] = []
         try:
             if price and eps and float(eps) > 0:
                 out["per"] = round(price / float(eps), 2)
@@ -326,10 +329,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             elif btype in (2, 3):
                 out["method"] = "pb_bank_broker"
             else:
+                if btype not in (1, 5):
+                    warnings.append(
+                        f"unknown btype {btype!r} (valid: 1/2/3/5) — method auto"
+                    )
                 out["method"] = "per_pb"
         except (TypeError, ValueError):
             pass
-        return make_envelope(out, source="computed-local")
+        return make_envelope(out, source="computed-local", warnings=warnings or None)
 
     @server.tool(annotations=READ_ONLY)
     async def financial_statements(

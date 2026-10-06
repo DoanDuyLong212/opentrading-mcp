@@ -47,6 +47,15 @@
 > tool chuyên): `phan-tich-chuyen-sau-1-ma` 1.2.2, `kiem-chien-luoc-backtest` 1.2.2,
 > `ve-bieu-do-ky-thuat`/`nhip-dap-crypto`/`tim-kiem-tin-tuc` → 1.2.1,
 > `danh-gia-vi-mo-quoc-te`/`bat-on-quoc-gia` → 1.1.1. Chi tiết: `docs/eval-2026-10-06/`.
+>
+> **Bản 06-10-2026 (fix feedback review, đợt 2)** — bỏ "trong tối đa X calls" khỏi
+> descriptions (tool_budget frontmatter đã phủ); `bat-on` 1.2.0 (bỏ tên nước khỏi keywords,
+> geo_intel đã lọc chính trị + aggregate); `co-ban` 1.1.1 (bắt buộc giải thích con số
+> forensic); `xung-dot` 1.1.1 (+Step 2b máy bay quân sự `geo_intel military=true`, port
+> oracle 8010); `truoc-bctc` 1.1.1 (bỏ Step 1 chốt ngày BCTC — không công khai; notes
+> planned_targets session-gated + scenario_simulate tuyến tính); `vi-mo-quoc-te/vn`
+> 1.1.1/1.2.1; `ky-thuat` 1.2.1; `sentiment` 1.1.1 (top 20 posts + comments);
+> `so-sanh` 1.2.1.
 
 ## Đặc tả frontmatter chung
 
@@ -65,13 +74,13 @@
 
 | # | Skill | Kích hoạt | Budget | Version | Tools yêu cầu (đã bỏ prefix mcp__) |
 |---|---|---|---|---|---|
-| 1 | `bat-on-quoc-gia` | auto | 6 | 1.1.1 | geo_intel |
-| 2 | `co-ban-chuyen-sau` | auto | 9 | 1.1.0 | financial_detail |
+| 1 | `bat-on-quoc-gia` | auto | 6 | 1.2.0 | geo_intel |
+| 2 | `co-ban-chuyen-sau` | auto | 9 | 1.1.1 | financial_detail |
 | 3 | `danh-gia-tinh-hinh-chinh-tri-toan-cau` | auto | 8 | 1.1.0 | — |
-| 4 | `danh-gia-tinh-hinh-xung-dot` | auto | 9 | 1.1.0 | event_stats |
-| 5 | `danh-gia-truoc-bctc` | auto | 10 | 1.1.0 | company_events |
+| 4 | `danh-gia-tinh-hinh-xung-dot` | auto | 9 | 1.1.1 | event_stats |
+| 5 | `danh-gia-truoc-bctc` | auto | 10 | 1.1.1 | company_events |
 | 6 | `danh-gia-vi-mo-quoc-te` | auto | 10 | 1.1.1 | fred_series |
-| 7 | `danh-gia-vi-mo-viet-nam` | auto | 12 | 1.2.0 | vs_indicator_data |
+| 7 | `danh-gia-vi-mo-viet-nam` | auto | 12 | 1.2.1 | vs_indicator_data |
 | 8 | `devil-advocate` | auto | — | 1.2.0 | — |
 | 9 | `dinh-gia-chuyen-sau` | auto | 7 | 1.1.0 | valuation_run |
 | 10 | `du-doan-fed` | auto | 8 | 1.1.0 | world_prediction_odds |
@@ -79,12 +88,12 @@
 | 12 | `explain-term` | auto | — | 1.2.0 | — |
 | 13 | `kiem-chien-luoc-backtest` | auto | 12 | 1.2.2 | quant_backtest |
 | 14 | `kiem-tra-nguon-du-lieu` | manual | 12 | 1.1.0 | doctor |
-| 15 | `ky-thuat-chuyen-sau` | auto | 8 | 1.2.0 | signals_technical |
+| 15 | `ky-thuat-chuyen-sau` | auto | 8 | 1.2.1 | signals_technical |
 | 16 | `nhip-dap-crypto` | auto | 6 | 1.2.1 | crypto_spot |
 | 17 | `phan-tich-chuyen-sau-1-ma` | auto | 8 | 1.2.2 | stock_overview |
-| 18 | `phan-tich-sentiment` | auto | 6 | 1.1.0 | sentiment_score |
+| 18 | `phan-tich-sentiment` | auto | 6 | 1.1.1 | sentiment_score |
 | 19 | `phan-tich-vang-ty-gia` | auto | 10 | 1.2.0 | vn_retail_gold |
-| 20 | `so-sanh-cung-nganh` | auto | 8 | 1.2.0 | compare_equities |
+| 20 | `so-sanh-cung-nganh` | auto | 8 | 1.2.1 | compare_equities |
 | 21 | `tim-co-hoi-bao-cao-ctck` | auto | 8 | 1.2.0 | analyst_consensus |
 | 22 | `tim-kiem-tin-tuc` | auto | 10 | 1.2.1 | news_symbol |
 | 23 | `tin-tuc-nong-quoc-te` | auto | 8 | 1.1.0 | news_market |
@@ -104,8 +113,8 @@ activation: auto
 requires_tools: [mcp__opentrading__geo_intel]
 tool_budget: 6
 triggers:
-  keywords: [bất ổn, bất ổn quốc gia, biểu tình, đảo chính, ổn định, thái lan, bangladesh]
-version: 1.1.1
+  keywords: [bất ổn, bất ổn quốc gia, biểu tình, đảo chính, ổn định]
+version: 1.2.0
 ```
 
 
@@ -133,7 +142,7 @@ Task Progress:
 
 **Step 1: Đo cường độ (bắt buộc).**
 
-Chạy song song 2 calls cùng upstream GDELT: `geo_intel` (topic = tên nước tiếng Anh) + `event_stats` (query = tên nước tiếng Anh). CẤM đi web_search/web_fetch trước khi có counts GDELT — web chỉ dùng ở Step 2 khi Step 1 mỏng. Query tiếng Anh 1 lần + tối đa 1 biến thể; query tiếng Việt rỗng là đặc trưng data, không phải lỗi. GDELT rate-limit thì retry tối đa 1 lần sau backoff (server đã cache 600s); vẫn lỗi thì ghi trung thực và verdict dựa trên dữ liệu cũ.
+Chạy song song 2 calls cùng upstream GDELT: `geo_intel` (topic = tên nước tiếng Anh) + `event_stats` (query = tên nước tiếng Anh). `geo_intel` đã lọc tin chính trị (bỏ thể thao/nhiễu) và trả aggregate (count/by_day/top_sources); `event_stats` trả aggregate base-rate — dùng geo_intel cho articles, event_stats cho count so baseline. CẤM đi web_search/web_fetch trước khi có counts GDELT — web chỉ dùng ở Step 2 khi Step 1 mỏng. Query tiếng Anh 1 lần + tối đa 1 biến thể; query tiếng Việt rỗng là đặc trưng data, không phải lỗi. GDELT rate-limit thì retry tối đa 1 lần sau backoff (server đã cache 600s); vẫn lỗi thì ghi trung thực và verdict dựa trên dữ liệu cũ.
 
 **Step 2: Xác minh bằng tin (chỉ khi Step 1 mỏng).**
 
@@ -174,14 +183,15 @@ Output: Verdict kèm ghi chú trung thực "low-coverage ≠ stable", không suy
 
 ```yaml
 name: co-ban-chuyen-sau
-description: Đọc BCTC và đánh giá chất lượng cơ bản của 1 mã (M-Score thao túng, F-score, tăng trưởng, sở hữu, cổ tức) trong tối đa 9 calls. Luôn dùng skill này khi user hỏi đọc BCTC, chất lượng lợi nhuận, M-Score, cổ đông lớn, insider hay cổ tức của một mã — ví dụ "BCTC FPT có gì lạ", "VCB có thao túng không", "cổ đông lớn HPG" — ngay cả khi user không nói rõ muốn "phân tích cơ bản".
+description: Đọc BCTC và đánh giá chất lượng cơ bản của 1 mã (M-Score thao túng, F-score, tăng trưởng, sở hữu, cổ tức). Luôn dùng skill này khi user hỏi đọc BCTC, chất lượng lợi nhuận, M-Score, cổ đông lớn, insider hay cổ tức của một mã — ví dụ "BCTC FPT có gì lạ", "VCB có thao túng không", "cổ đông lớn HPG" — ngay cả khi user không nói rõ muốn "phân tích cơ bản".
 activation: auto
 requires_tools: [mcp__opentrading__financial_detail]
 tool_budget: 9
 triggers:
   keywords: [bctc, báo cáo tài chính, cơ bản, lợi nhuận gộp, nợ phải trả, vốn chủ, m-score, thao túng, cổ đông lớn, cổ tức, kế hoạch kinh doanh]
-version: 1.1.0
+version: 1.1.1
 ```
+
 
 # Analyzing Single-Stock Fundamentals
 
@@ -239,6 +249,11 @@ ALWAYS use this exact verdict structure, mỗi mục ghi số + trend + provenan
 5. Cấu trúc sở hữu + thay đổi insider (`provenance: holders` / `insider_trading`).
 6. Chính sách cổ tức (`provenance: dividends_splits`).
 7. Kết luận 1 câu: CƠ BẢN TỐT/TRUNG BÌNH/YẾU + 3 rủi ro lớn nhất.
+
+**Giải thích con số forensic (bắt buộc khi có leg 3):** không chỉ liệt kê số — giải thích nghĩa từng biến và vì sao dẫn tới kết luận:
+- M-Score từng biến: DSRI (chất lượng doanh thu — >1.03 nghi kê khớp doanh thu), GMI (biên gộp xấu đi), AQI (chất lượng tài sản), SGI (tăng trưởng), SGAI (chi phí bán hàng), LVGI (đòn bẩy), TATA (accruals). M < −1.78 = ít dấu thao túng; M > −1.78 = nghi ngờ.
+- F-score từng điểm mất/giữ (ROA, CF>ROA, dROA, leverage, margin, turnover) — điểm mất vì sao (kỳ nào, dòng nào).
+- Kết luận "sạch/đỏ" bắt buộc dẫn từng con số làm căn cứ, không kết luận chay.
 
 ## Examples
 
@@ -328,14 +343,15 @@ Output: Fed October 2026 "no change" 74.5% (volume 24h ~2.6M USD) · Brazil pres
 
 ```yaml
 name: danh-gia-tinh-hinh-xung-dot
-description: Đánh giá 1 cuộc xung đột vũ trang (cường độ, giá dầu/vàng đã phản ánh chưa, kênh truyền dẫn, xác suất leo thang) trong tối đa 9 calls. Luôn dùng skill này khi user hỏi xung đột/chiến sự cụ thể và ảnh hưởng của nó tới thị trường — ví dụ "Trung Đông leo thang, dầu lên không", "Biển Đông căng thẳng ảnh hưởng gì" — ngay cả khi user không nói rõ muốn "đánh giá xung đột".
+description: Đánh giá 1 cuộc xung đột vũ trang (cường độ, giá dầu/vàng đã phản ánh chưa, kênh truyền dẫn, xác suất leo thang). Luôn dùng skill này khi user hỏi xung đột/chiến sự cụ thể và ảnh hưởng của nó tới thị trường — ví dụ "Trung Đông leo thang, dầu lên không", "Biển Đông căng thẳng ảnh hưởng gì" — ngay cả khi user không nói rõ muốn "đánh giá xung đột".
 activation: auto
 requires_tools: [mcp__opentrading__event_stats]
 tool_budget: 9
 triggers:
   keywords: [xung đột, chiến tranh, biển đông, trung đông, leo thang, dầu hay vàng lên, chiến sự]
-version: 1.1.0
+version: 1.1.1
 ```
+
 
 # Assessing Armed-Conflict Market Impact
 
@@ -357,6 +373,7 @@ Copy checklist và tick theo tiến độ:
 Task Progress:
 - [ ] Step 1: đo cường độ (GDELT, song song)
 - [ ] Step 2: kiểm tra giá đã phản ánh (dầu/vàng, song song)
+- [ ] Step 2b: tần suất máy bay quân sự gần vùng xung đột (geo_intel military=true)
 - [ ] Step 3: odds leo thang + xác minh (chỉ khi cần)
 - [ ] Step 4: verdict 5 mục
 ```
@@ -368,6 +385,10 @@ Chạy `geo_intel` (topic xung đột) + `event_stats` (query) cùng lúc. Từ 
 **Step 2: Kiểm tra giá đã phản ánh (song song, tuần tự sau Step 1).**
 
 Chạy `yf_commodities` (dầu + vàng) + `assets_rotation`. Thiếu phiên mới thì dùng phiên gần nhất có + ghi rõ date, không bịa giá hiện tại. Đủ counts Step 1 + giá dầu/vàng Step 2 là đủ verdict cơ bản.
+
+**Step 2b: Tần suất máy bay quân sự (tham chiếu oracle 8010, 1 call).**
+
+Chạy `geo_intel` với `military=true` — trả máy bay quân sự live từ adsb.lol (count, by_country, by_type), khoảng cách tới vùng xung đột gần nhất (km) và signal-loss diff (máy bay biến mất gần zone = nghi tắt transponder, tín hiệu OSINT). Đọc: count cao + nhiều máy tankers/recon gần zone → tăng cường hoạt động; "Unknown" operator nhiều → mất dấu vết chính thức. Tool chết (adsb.lol 429/geo-block) thì ghi trung thực, không bịa số máy bay.
 
 **Step 3: Odds leo thang + xác minh (chỉ khi cần).**
 
@@ -405,8 +426,9 @@ requires_tools: [mcp__opentrading__company_events]
 tool_budget: 10
 triggers:
   keywords: [trước bctc, sắp ra báo cáo, pre earnings, công bố lợi nhuận, setup bctc]
-version: 1.1.0
+version: 1.1.1
 ```
+
 
 # Grading Pre-Earnings Setup
 
@@ -427,15 +449,15 @@ Copy checklist và tick theo tiến độ:
 
 ```
 Task Progress:
-- [ ] Step 1: chốt ngày BCTC (dated hay rumor)
+- [ ] Step 1: kiểm tra ngày công bố (thường không công khai — chỉ đối chiếu, không chốt)
 - [ ] Step 2: reuse trend + thao túng từ co-ban-chuyen-sau
 - [ ] Step 3: kỳ vọng + positioning (gọi trực tiếp)
 - [ ] Step 4: reuse đệm định giá + grade A/B/C
 ```
 
-**Step 1: Chốt ngày BCTC (bắt buộc, gọi trực tiếp đầu tiên).**
+**Step 1: Kiểm tra ngày công bố (chỉ đối chiếu, KHÔNG chốt dated).**
 
-Chạy `company_events` + `event_calendar_vn`. Chưa rõ ngày thì các leg còn lại ghi `unknown ngày` và grade tối đa B.
+Ngày công bố BCTC tại VN thường KHÔNG công khai chính xác (công ty chỉ báo trước tháng/quý; `event_calendar_vn` không có earnings-date type). Chạy `company_events` + `news_symbol` chỉ để đối chiếu tin lịch công bố nếu user hỏi; nếu không thấy ngày rõ ràng → coi như `unknown ngày`, các leg ghi accordingly và grade tối đa B (đây là mặc định, không cần cố chốt ngày).
 
 **Step 2: Reuse trend + thao túng (không gọi tool gốc).**
 
@@ -443,11 +465,11 @@ LOAD `co-ban-chuyen-sau` aspect=baokao (trend) và aspect=chataluong (M-Score/Pi
 
 **Step 3: Kỳ vọng + positioning (gọi trực tiếp).**
 
-Chạy `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` (anchor = kế hoạch DN vì VN không có consensus EPS; sentiment là heuristic, không tính là leg xanh) và `insider_trading` + `money_flow` + `block_trades`.
+Chạy `planned_targets` + `analyst_consensus` + `news_symbol` + `sentiment_score` (anchor = kế hoạch DN vì VN không có consensus EPS; sentiment là heuristic, không tính là leg xanh) và `insider_trading` + `money_flow` + `block_trades`. `planned_targets` trả số THẬT từ Vietstock CTKH (chain verified live) nhưng session-gated: Render/không session → `unavailable` — ghi trung thực "thiếu neo kế hoạch", không bịa số kế hoạch.
 
 **Step 4: Reuse đệm định giá + chấm grade.**
 
-LOAD `dinh-gia-chuyen-sau` + chạy `scenario_simulate` (−5%) để lấy size gợi ý. Không gọi trực tiếp `valuation_run` ở đây. Đủ 6 leg evidence (kể cả partial) thì dừng — không gọi thêm vòng tin/dòng tiền thứ hai, không thêm leg thứ 7.
+LOAD `dinh-gia-chuyen-sau` + chạy `scenario_simulate` (−5%) để lấy size gợi ý. `scenario_simulate` là PHÉP TÍNH TUYẾN TÍNH chính xác trên giá close gần nhất (shock × giá, P/L/1000cp) — dùng để đệm cỡ vị thế, KHÔNG phải dự báo giá. Không gọi trực tiếp `valuation_run` ở đây. Đủ 6 leg evidence (kể cả partial) thì dừng — không gọi thêm vòng tin/dòng tiền thứ hai, không thêm leg thứ 7.
 
 ## Template
 
@@ -473,7 +495,7 @@ Output: M **−2.06** sạch · F 2/6 · KH DT 61,850/75,400/**58,580** · thư�
 
 ```yaml
 name: danh-gia-vi-mo-quoc-te
-description: Đọc chu kỳ kinh tế Mỹ và chế độ rủi ro toàn cầu (soft/hard landing, đường cong lợi suất, RISK-ON/OFF, so VN-vs-global) trong tối đa 10 calls. Luôn dùng skill này khi user hỏi bối cảnh vĩ mô Mỹ/global, việc làm, GDP các nước, risk regime — ví dụ "kinh tế Mỹ soft landing không", "yield curve đảo chưa" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
+description: Đọc chu kỳ kinh tế Mỹ và chế độ rủi ro toàn cầu (soft/hard landing, đường cong lợi suất, RISK-ON/OFF, so VN-vs-global). Luôn dùng skill này khi user hỏi bối cảnh vĩ mô Mỹ/global, việc làm, GDP các nước, risk regime — ví dụ "kinh tế Mỹ soft landing không", "yield curve đảo chưa" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
 activation: auto
 requires_tools: [mcp__opentrading__fred_series]
 tool_budget: 10
@@ -540,14 +562,15 @@ Output: US10Y 5.24% / 2Y 4.61%, không đảo chiều · WorldBank GDP VN 8.02% 
 
 ```yaml
 name: danh-gia-vi-mo-viet-nam
-description: Đọc vĩ mô Việt Nam (GDP, CPI, XNK, tỷ giá USDVND, lãi suất SBV, câu chuyện dẫn dắt thị trường + lịch sự kiện) trong tối đa 12 calls. Luôn dùng skill này khi user hỏi số liệu, bối cảnh hoặc lịch công bố vĩ mô VN — ví dụ "GDP quý này bao nhiêu", "lãi suất SBV bao nhiêu" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
+description: Đọc vĩ mô Việt Nam (GDP, CPI, XNK, tỷ giá USDVND, lãi suất SBV, câu chuyện dẫn dắt thị trường + lịch sự kiện). Luôn dùng skill này khi user hỏi số liệu, bối cảnh hoặc lịch công bố vĩ mô VN — ví dụ "GDP quý này bao nhiêu", "lãi suất SBV bao nhiêu" — ngay cả khi user không nói rõ muốn "đánh giá vĩ mô".
 activation: auto
 requires_tools: [mcp__opentrading__vs_indicator_data]
 tool_budget: 12
 triggers:
   keywords: [vĩ mô, GDP, CPI, lạm phát, xuất khẩu, nhập khẩu, lãi suất điều hành, sbv, xnk, cán cân, câu chuyện thị trường, dẫn dắt]
-version: 1.2.0
+version: 1.2.1
 ```
+
 
 # Reading Vietnam Macro
 
@@ -1082,14 +1105,15 @@ Output: sự cố JWT hết hạn 19:15 bắt được ở Step 1 (`vs_auth_stat
 
 ```yaml
 name: ky-thuat-chuyen-sau
-description: Đọc kỹ thuật thuần 1 mã đa khung 1D/1W/1M (RSI/MACD/BB/Ichimoku/ADX, Elliott/Wyckoff, hỗ trợ-kháng cự, higher-high hay lower-low) trong tối đa 8 calls. Luôn dùng skill này khi user hỏi kỹ thuật, breakout, đọc băng, sóng Elliott hay HH/LL của một mã — ví dụ "VCB kỹ thuật sao", "FPT có breakout không" — ngay cả khi user không nói rõ muốn "phân tích kỹ thuật".
+description: Đọc kỹ thuật thuần 1 mã đa khung 1D/1W/1M (RSI/MACD/BB/Ichimoku/ADX, Elliott/Wyckoff, hỗ trợ-kháng cự, higher-high hay lower-low). Luôn dùng skill này khi user hỏi kỹ thuật, breakout, đọc băng, sóng Elliott hay HH/LL của một mã — ví dụ "VCB kỹ thuật sao", "FPT có breakout không" — ngay cả khi user không nói rõ muốn "phân tích kỹ thuật".
 activation: auto
 requires_tools: [mcp__opentrading__signals_technical]
 tool_budget: 8
 triggers:
   keywords: [kỹ thuật, rsi, macd, bb, bollinger, ichimoku, elliott, wyckoff, hỗ trợ, kháng cự, breakout, pattern, orderbook, băng giá, chỉ báo, adx, ema, sma, higher high, lower low, đa khung]
-version: 1.2.0
+version: 1.2.1
 ```
+
 
 # Reading Single-Stock Technicals
 
@@ -1299,14 +1323,15 @@ Output: đủ 8 bước, có bảng 3 cột tích cực/tiêu cực/động lự
 
 ```yaml
 name: phan-tich-sentiment
-description: Đo dư luận crowd về 1 mã trên Fireant (điểm sentiment + quotes + cảnh báo FOMO), trong tối đa 6 calls. Luôn dùng skill này khi user hỏi phố/crowd nói gì về một mã, sentiment hay FOMO — ví dụ "Phố nói gì về FPT", "crowd có FOMO HPG không" — ngay cả khi user không nói rõ muốn "đo sentiment".
+description: Đo dư luận crowd về 1 mã trên Fireant (điểm sentiment + quotes + cảnh báo FOMO). Luôn dùng skill này khi user hỏi phố/crowd nói gì về một mã, sentiment hay FOMO — ví dụ "Phố nói gì về FPT", "crowd có FOMO HPG không" — ngay cả khi user không nói rõ muốn "đo sentiment".
 activation: auto
 requires_tools: [mcp__opentrading__sentiment_score]
 tool_budget: 6
 triggers:
   keywords: [sentiment, dư luận, phố nói gì, crowd, fomo, tâm lý nhà đầu tư, comment]
-version: 1.1.0
+version: 1.1.1
 ```
+
 
 # Measuring Single-Stock Crowd Sentiment
 
@@ -1323,14 +1348,14 @@ Copy checklist và tick theo tiến độ:
 
 ```
 Task Progress:
-- [ ] Step 1: posts + điểm (song song)
+- [ ] Step 1: top 20 posts + điểm + comments post nóng nhất (song song)
 - [ ] Step 2: đối chiếu công bố (chỉ khi mâu thuẫn)
-- [ ] Step 3: verdict (điểm + quotes + FOMO + cảnh báo)
+- [ ] Step 3: verdict (điểm + quotes + comments + FOMO + cảnh báo)
 ```
 
-**Step 1: Posts + điểm (song song).**
+**Step 1: Top 20 posts + điểm + comments (song song).**
 
-Chạy `news_symbol` (symbol, limit=20) + `sentiment_score` (symbol, limit=20) — cùng nguồn Fireant. Đủ điểm + ≥3 quotes + nhãn nguồn thì dừng.
+Chạy `sentiment_score` (symbol, limit=20) — điểm + posts từ Fireant. Chạy `news_symbol`/Fireant posts (limit=20) đọc title/summary top 20. Chọn post nóng nhất (interact/comment cao nhất) → chạy `fireant_thread` (post_id) lấy comments (replies) thực tế — đọc mood comments, không chỉ đọc điểm. Đủ điểm + ≥3 quotes + comments ≥3 + nhãn nguồn thì dừng.
 
 **Step 2: Đối chiếu công bố (chỉ khi mâu thuẫn, tuần tự).**
 
@@ -1428,14 +1453,15 @@ Output: VÀNG MIẾNG SJC 999.9 (BTMC live) · XAUUSD 4,195 · USDVND 25,970 (MS
 
 ```yaml
 name: so-sanh-cung-nganh
-description: "Xếp hạng 2-6 mã cùng ngành và chọn leader (chất lượng × momentum) trong tối đa 8 calls nhà. Luôn dùng skill này khi user hỏi so sánh mã cùng ngành, mã nào mạnh nhất/đáng mua — ví dụ 'VCB vs BID vs CTG', 'steel mạnh nhất là ai' — ngay cả khi user không nói rõ muốn 'so sánh cùng ngành'."
+description: "Xếp hạng 2-6 mã cùng ngành và chọn leader (chất lượng × momentum). Luôn dùng skill này khi user hỏi so sánh mã cùng ngành, mã nào mạnh nhất/đáng mua — ví dụ 'VCB vs BID vs CTG', 'steel mạnh nhất là ai' — ngay cả khi user không nói rõ muốn 'so sánh cùng ngành'."
 activation: auto
 requires_tools: [mcp__opentrading__compare_equities]
 tool_budget: 8
 triggers:
   keywords: [so sánh, vs, so với, cùng ngành, mạnh nhất, leader, hơn kém, xếp hạng mã]
-version: 1.2.0
+version: 1.2.1
 ```
+
 
 # Ranking Same-Sector Stocks
 

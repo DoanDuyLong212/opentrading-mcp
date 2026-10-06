@@ -146,7 +146,13 @@ async def test_odds_limit_status_tag(monkeypatch):
 async def test_geo_limit(monkeypatch):
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        return {"articles": [{"t": i} for i in range(10)]}
+        return {
+            "articles": [
+                {"title": f"sanctions imposed {i}", "url": f"https://r.com/{i}",
+                 "date": f"2026-10-{i + 1:02d}"}
+                for i in range(10)
+            ]
+        }
 
     import opentrading_mcp.tools.intel as intel_mod
 
@@ -155,6 +161,7 @@ async def test_geo_limit(monkeypatch):
     env = await fn(limit=4)
     _check_envelope(env, "geo_intel")
     assert len(env["data"]["articles"]) == 4
+    assert env["data"]["count"] == 10
 
 
 async def test_compare_equities_metrics(monkeypatch):

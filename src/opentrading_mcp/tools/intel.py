@@ -68,13 +68,48 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY_OPEN)
     async def geo_intel(
-        topic: str | None = None, limit: int = 20, days: int | None = None
+        topic: str | None = None, limit: int = 20, days: int | None = None,
+        military: bool = False,
     ) -> dict[str, Any]:
-        """Geopolitical coverage via GDELT. Use when geopolitics threatens markets.
+        """Geopolitical coverage via GDELT (politics-filtered) or military ADS-B flights.
 
-        limit: max articles. days: keep articles from the last N days
-        (undated articles are kept).
+        Default: political articles only (sports/noise dropped) + aggregate
+        {top_sources, by_day, date_range}. military=true: live military flights from
+        adsb.lol with nearest conflict-zone distance and signal-loss diff
+        {count, by_country, by_type, near_zone, lost_near_zone} — use for
+        military-activity reads around conflicts. limit: max articles. days: keep
+        articles from the last N days (undated articles are kept).
         """
+        if military:
+            from opentrading_mcp.providers import geo as geo_p
+
+            try:
+                flights = await _call("m", geo_p.military_flights, secs=30.0)
+                track = geo_p.track_signal_loss(flights)
+                by_country: dict[str, int] = {}
+                by_type: dict[str, int] = {}
+                for f in flights:
+                    by_country[f.get("operator_country", "Unknown")] = (
+                        by_country.get(f.get("operator_country", "Unknown"), 0) + 1
+                    )
+                    by_type[f.get("type", "mil-other")] = by_type.get(
+                        f.get("type", "mil-other"), 0
+                    ) + 1
+                near = sorted(flights, key=lambda f: f.get("zone_km", 1e9))[:10]
+                return make_envelope(
+                    {
+                        "count": len(flights),
+                        "by_country": dict(
+                            sorted(by_country.items(), key=lambda x: x[1], reverse=True)
+                        ),
+                        "by_type": by_type,
+                        "near_zone": near,
+                        **track,
+                    },
+                    source="adsb.lol",
+                )
+            except ProviderUnavailable as exc:
+                return _na("geo_intel(military)", str(exc))
         try:
             data = await _call(
                 "g", intel_p.gdelt_events, topic or "geopolitical conflict sanctions", secs=60.0
@@ -90,9 +125,20 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                     if not stamp or stamp >= cutoff:
                         dated.append(article)
                 articles = dated
+            from opentrading_mcp.providers import geo as geo_p
+
+            political = geo_p.political_filter(articles)
+            agg = geo_p.aggregate(political)
+            dropped = len(articles) - len(political)
+            warnings = [f"dropped {dropped} non-political articles"] if dropped else []
             return make_envelope(
-                {"query": data.get("query"), "articles": articles[: max(int(limit), 1)]},
+                {
+                    "query": data.get("query"),
+                    **agg,
+                    "articles": political[: max(int(limit), 1)],
+                },
                 source="gdelt",
+                warnings=warnings or None,
             )
         except ProviderUnavailable as exc:
             return make_envelope(

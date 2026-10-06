@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import functools
 import json
 import os
@@ -188,17 +187,33 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def event_stats(query: str = "stock market", limit: int = 20) -> dict[str, Any]:
-        """GDELT event counts for a query. Use for base-rate checks.
+        """GDELT event aggregates for a query. Use for base-rate checks.
 
-        limit: max articles fetched from GDELT.
+        Returns {query, count, by_day, top_sources, date_range} + up to 5 sample
+        articles — distinct from geo_intel (politics-filtered article list).
+        limit: max articles fetched from GDELT before aggregating.
         """
         try:
             data = await _call("e", intel_p.gdelt_events, query, max(int(limit), 1))
-            return make_envelope(data, source="gdelt")
+            from opentrading_mcp.providers import geo as geo_p
+
+            articles = data.get("articles", []) if isinstance(data, dict) else []
+            agg = geo_p.aggregate(articles)
+            return make_envelope(
+                {"query": data.get("query"), **agg, "articles": articles[:5]},
+                source="gdelt",
+            )
         except ProviderUnavailable:
-            await asyncio.sleep(10)
             try:
-                return make_envelope(await _call("e", intel_p.gdelt_events, query), source="gdelt")
+                data = await _call("e", intel_p.gdelt_events, query)
+                from opentrading_mcp.providers import geo as geo_p
+
+                articles = data.get("articles", []) if isinstance(data, dict) else []
+                agg = geo_p.aggregate(articles)
+                return make_envelope(
+                    {"query": data.get("query"), **agg, "articles": articles[:5]},
+                    source="gdelt",
+                )
             except (ProviderUnavailable, ProviderBadData) as exc:
                 return _na("event_stats", str(exc))
         except ProviderBadData as exc:
