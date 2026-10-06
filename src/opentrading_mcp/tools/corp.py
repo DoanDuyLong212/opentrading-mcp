@@ -270,6 +270,7 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Analyst ratings and price targets parsed from report titles. Use for street views.
 
+        There is no tool named analyst_targets — this tool is the targets source.
         symbol: filter one ticker (omit for latest across market). Ratings come
         from title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per
         symbol shows upgrades/downgrades by history. report_type: 'equity'

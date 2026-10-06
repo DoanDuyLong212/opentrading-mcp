@@ -1,0 +1,123 @@
+{
+ "id": "S05",
+ "q": "FPT sắp ra BCTC, đánh giá setup trước giờ G",
+ "ms": 300002,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "danh-gia-truoc-bctc"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/danh-gia-truoc-bctc\n\n# Grading Pre-Earnings Setup\n\nChấm grade cho setup trước BCTC. Không forecast KQKD — không bao giờ đưa số DT/LN dự báo. BCTC đã ra rồi thì dừng ngay, chuyển sang `co-ban-chuyen-sau`, không cố chấm grade.\n\n## When to Use\n\n- Dùng khi: BCTC chưa ra và user hỏi setup trước BCTC (`FPT sắp ra báo cáo`, `đánh giá setup HPG trước BCTC`, `pre-earnings`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Phân tích mã thường (không gắn BC"
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 12:25:36 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T12:25:36+07:00"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__symbol_resolve",
+   "input": {
+    "query": "FPT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "co-ban-chuyen-sau",
+    "file": "baokao"
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 1,
+   "out": "Không có file \"baokao\" trong skill co-ban-chuyen-sau."
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1292,
+   "out": "{\n  \"data\": {\n    \"query\": \"FPT\",\n    \"resolved\": {\n      \"symbol\": \"FPT\",\n      \"asset_class\": \"vn_equity\",\n      \"venue\": \"VN\",\n      \"name\": \"CTCP FPT\",\n      \"score\": 100,\n      \"reason\": \"exact VN symbol\",\n      \"use_tool\": \"stock_overview\",\n      \"use_args\": {\n        \"symbol\": \"FPT\"\n      }\n    },\n    \"ambiguous\": false,\n    \"candidates\": [\n      {\n        \"symbol\": \"FPT\",\n        \"asset_class\": \"vn_equity\",\n        \"venue\": \"VN\",\n        \"name\": \"CTCP FPT\",\n        \"score\": 100,\n        "
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "co-ban-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/co-ban-chuyen-sau\n\n# Analyzing Single-Stock Fundamentals\n\nPhân tích THUẦN cơ bản 1 mã theo aspect: hỏi khía cạnh nào thì chỉ chạy leg đó rồi dừng — đừng quét hết BCTC vì \"cho chắc\".\n\n## When to Use\n\n- Dùng khi: user hỏi BCTC, chất lượng lợi nhuận, M-Score/thao túng, F-score, kế hoạch kinh doanh, cổ đông lớn, insider, cổ tức của 1 mã.\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Hỏi kỹ thuật (RSI, MACD, breakout, hỗ trợ/kháng cự) → `ky-thuat-ch"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__company_events",
+   "input": {
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__event_calendar_vn",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 475,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"events\": [\n      {\n        \"FileExt\": \".pdf \",\n        \"UpdateTime\": null,\n        \"TotalRow\": 466,\n        \"FileInfoID\": 556696,\n        \"Url\": \"https://static2.vietstock.vn/data/HOSE/2026/NGHI QUYET HDQT/VN/20260731___fpt___nghi_quyet_hdqt_so_02_07_2026_vv_phat_hanh_cp_de_tang_von_tu_nvcsh.pdf\",\n        \"Title\": \"Nghị quyết HĐQT về việc triển khai phương án phát hành cổ phiếu để tăng vốn cổ phần từ nguồn vốn chủ sở hữu\",\n        \"FullName\": \"Nghị quyết H"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1649,
+   "out": "{\n  \"data\": {\n    \"event\": \"dividends\",\n    \"symbol\": \"\",\n    \"events\": [\n      {\n        \"event_id\": 227053,\n        \"code\": \"SBH\",\n        \"note\": \"Trả cổ tức  năm 2025  bằng tiền, 1,500 đồng/CP\",\n        \"ex_date\": \"2026-10-21\",\n        \"record_date\": \"2026-10-22\",\n        \"file_url\": \"\"\n      },\n      {\n        \"event_id\": 227374,\n        \"code\": \"SPB\",\n        \"note\": \"Trả cổ tức  đợt 1/2026 bằng tiền, 500 đồng/CP\",\n        \"ex_date\": \"2026-10-20\",\n        \"record_date\": \"2026-10-21\",\n     "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_auth_status",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 221,
+   "out": "{\n  \"data\": {\n    \"authenticated\": true,\n    \"jwt_expires_at\": 1793446501\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T12:29:38.925071+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__financial_detail",
+   "input": {
+    "symbol": "FPT",
+    "statement": "KQKD",
+    "periods_n": 4
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 85,
+   "out": "{\n  \"data\": {\n    \"tool\": \"financial_detail\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:29:44.281326+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n\n\n"
+}

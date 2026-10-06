@@ -1,0 +1,145 @@
+{
+ "id": "S26",
+ "q": "Bất ổn chính trị Thái Lan ảnh hưởng gì tới Việt Nam",
+ "ms": 300001,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "bat-on-quoc-gia"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/bat-on-quoc-gia\n\n# Assessing Single-Country Stability\n\nĐánh giá 1 quốc gia theo thang ỔN ĐỊNH / CẢNH BÁO / BẤT ỔN / NGHIÊM TRỌNG, mỗi mức kèm evidence có URL. Hỏi nhiều nước thì chạy lặp skill này mỗi nước 1 lượt thay vì gộp.\n\n## When to Use\n\n- Dùng khi: user nêu tên MỘT quốc gia + hỏi bất ổn/ổn định/biểu tình/đảo chính.\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - So sánh/bản đồ nhiều nước, bầu cử/chính sách toàn cầu → `danh-gia-tinh-hinh-chi"
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 12:57:20 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T12:57:20+07:00"
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "Thailand political instability October 2026",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "Thai Lan bat on chinh tri 2026 ảnh hưởng kinh tế",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 875,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. Thailand After the 2026 Election: Coalition, Economy and Foreign Policy ...\n   https://www.mcg-asia.com/featured-insights/thailand-election-2026-coalition-government-outlook\n   Analysis of Thailand&#x27;s post-election political landscape, coalition formation, economic challenges, ASEAN competition and foreign policy outlook after the 2026 election.\n2. Thailand Political Risk 2026: Floods & Dissolution Outlook — Maverick "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 762,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. Lũ lụt tại Thái Lan ảnh hưởng lớn đến sản xuất và vận tải\n   https://www.vietnamplus.vn/lu-lut-tai-thai-lan-gay-gian-doan-nghiem-trong-hoat-dong-kinh-te-post1139261.vnp\n   Lũ lụt đã bắt đầu tác động rõ rệt đến hoạt động kinh tế. Phó Thống đốc Ngân hàng Trung ương Thái Lan Chayawadee Chai-anant cho biết các lĩnh vực dịch vụ, bán lẻ, bán buôn và xây dựng đã bị ảnh hưởng.\n2. Kinh tế Thái Lan giữa bất ổn chính trị - Tuổi Trẻ "
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://bowergroupasia.com/thailand-forecast/",
+    "format": "markdown"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 498,
+   "out": "Thailand Forecast: Political Stability Amid Growth Constraints and Investment Challenges | BowerGroupAsia\nSkip to Content\nWho We Are\nSolutions\nInsights &#038; News\nOur Teams\nBGA in Africa\nCareers\nSolutions\nSectors\nCrisis Management and Preparedness\nGovernment Affairs and Public Policy\nStrategic Communications\nMarket Entry and Expansion\nStakeholder Mapping and Engagement\nForecasting and Risk Assessment\nConsumer Products and Retail\nAgriculture, Food and Beverages\nDefense and Aerospace\nEducation an"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://www.mcg-asia.com/featured-insights/thailand-election-2026-coalition-government-outlook",
+    "format": "markdown"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 614,
+   "out": "Thailand After the 2026 Election: Coalition, Economy and Foreign Policy &mdash; Maverick Consulting Group\n0\nSkip to Content\nHOME\nOUR SERVICES\nPA/GR Public Affairs & Government Relations\nBD/GMX Business Diplomacy & Global Market Expansion\nSC/PR Strategic Communications & Public Relations\nBusiness Setup & BOI Services\nPublic Sector Solutions\nOUR EXPERIENCES\nCase Studies\nOur Expertise\nOUR TEAM\nMCG ARABIA\nFEATURED INSIGHTS\nOpen Menu\nClose Menu\nHOME\nOUR SERVICES\nPA/GR Public Affairs & Government Rela"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://vietstock.vn/2026/08/kinh-te-thai-lan-cham-lai-viet-nam-va-malaysia-di-nguoc-xu-huong-775-1481633.htm",
+    "format": "markdown"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 821,
+   "out": "Kinh tế Thái Lan chậm lại, Việt Nam và Malaysia đi ngược xu hướng | Vietstock\nThứ Ba, 06/10/2026\nVietstock - Trang thông tin điện tử tổng hợp\nVietstockFinance\nĐấu trường chứng khoán\nDiễn đàn\nIR Awards\nDịch vụ\nĐăng nhập\nEnglish\nVietstock - Trang thông tin điện tử tổng hợp\nEnglish\nTIN TỨC\nEng. Version\nChứng khoán\nDoanh nghiệp\nBất động sản\nTài chính\nHàng hóa\nVĩ mô\nKinh tế - Đầu tư\nThế giới\nĐông Dương\nTài chính cá nhân\nPhân tích\nTin mới nhất\nTin đọc nhiều\nCông bố thông tin\nPhái sinh\nChứng quyền\nTrái"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://www.thaienquirer.com/74763/thai-enquirer-news-summary-october-1-2026/",
+    "format": "markdown"
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 225,
+   "out": "HTTP 403: https://www.thaienquirer.com/74763/thai-enquirer-news-summary-october-1-2026/"
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "kim ngạch thương mại Việt Nam Thái Lan 2025 2026 tỷ USD",
+    "numResults": 8
+   }
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "Thailand investment Vietnam FDI 2026 SCG CP Thailand Vietnam trade",
+    "numResults": 8
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 732,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. Kim ngạch nhập khẩu Việt Nam - Thái Lan năm 2025 đạt hơn 13,28 tỷ USD\n   https://asemconnectvietnam.gov.vn/default.aspx?ZID1=66&ID1=1&ID8=147810\n   AsemconnectVietnam - Theo số liệu tính toán từ Cục Hải quan, năm 2025 kim ngạch nhập khẩu hàng hóa của Việt Nam từ Thái Lan đạt 13,28 tỷ USD, tăng 6,7% so với năm 2024.\n2. Việt Nam - Thái Lan: Tăng kết nối, mở rộng hợp tác thương mại\n   https://thuehaiquan.tapchikinhtetaichinh"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 938,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. Business - &quot;Overview of Thai Investment in Vietnam: Insights and 2026 ...\n   https://thailandtv.news/business-overview-of-thai-investment-in-vietnam-insights-and-2026-forecast/\n   Thailand is Vietnam&#x27;s second-largest ASEAN investor, with 805 active projects and US$15.4 billion in registered capital. This guide covers key sectors, leading Thai conglomerates, market entry strategies, and the 2026 investment outloo"
+  }
+ ],
+ "text": "\n\nTôi sẽ tra cứu tình hình thực tế trước khi đánh giá. Lưu ý bộ công cụ hiện có không bao gồm các nguồn đo cường độ sự kiện (GDELT) mà quy trình thường dùng, nên tôi dùng nguồn tin web để xác minh.\n\nĐã có bức tranh tổng thể. Tôi đọc sâu vài nguồn chính để xác minh trạng thái hiện tại và kênh tác động sang Việt Nam.\n\nĐã đủ về phía Thái Lan. Tôi lấy thêm dữ liệu quan hệ thương mại–đầu tư Việt–Thái để định lượng kênh truyền dẫn.\n\n"
+}

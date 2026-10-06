@@ -94,6 +94,7 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Latest match price and totals per symbol. Use for realtime fallback.
 
+        symbols: REQUIRED non-empty list (e.g. {"symbols": ["VN30F1M"]}).
         summary/columns: summary returns {count,symbols} only; columns keeps
         named fields per trade.
         """

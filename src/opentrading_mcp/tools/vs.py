@@ -27,6 +27,28 @@ async def _call(tool: str, fn: Any, *args: Any) -> Any:
     return await run_blocking(functools.partial(fn, *args), tool, timeout_secs=45.0)
 
 
+def _coerce_id(value: Any, field: str) -> int:
+    """Accept numeric strings from models ("3", '"3"' → 3); raise BadData otherwise."""
+    if isinstance(value, bool):
+        raise ProviderBadData(f"{field} must be an integer id, got boolean")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        s = value.strip().strip('"').strip("'").strip()
+        if s.lstrip("-").isdigit():
+            return int(s)
+    raise ProviderBadData(
+        f"{field} must be an integer id (e.g. 3), got {value!r}"
+    )
+
+
+def _coerce_sub(value: Any) -> str:
+    """Normalize sub id: None → "", int → str, strip stray quotes."""
+    if value is None:
+        return ""
+    return str(value).strip().strip('"').strip("'").strip()
+
+
 def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vs_auth_status() -> dict[str, Any]:
@@ -102,8 +124,8 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vs_indicator_data(
         category_id: int,
-        term_type_id: int = 3,
-        sub_term_type_id: str | None = None,
+        term_type_id: int | str = 3,
+        sub_term_type_id: str | int | None = None,
         from_date: str = "2022-01-01",
         to_date: str | None = None,
     ) -> dict[str, Any]:
@@ -114,14 +136,19 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
         (e.g. GDP 73 tt=3, CPI 15 tt=7 sub=2). from_date default 2022-01-01.
         Uses the full browser cookie jar (HAR/env seed); Standard pack serves it.
         Rows: {name, group, period, year, value, unit, timeorder}.
+        Example: {"category_id": 73, "term_type_id": 3} (GDP quarterly);
+        {"category_id": 15, "term_type_id": 7, "sub_term_type_id": "2"} (CPI YoY).
+        Numbers accepted as strings and coerced (e.g. "3" → 3).
         """
         try:
+            ttid = _coerce_id(term_type_id, "term_type_id")
+            sub = _coerce_sub(sub_term_type_id)
             out = await _call(
                 "vs_indicator_data",
                 vs_p.macro_report_data,
-                term_type_id,
+                ttid,
                 category_id,
-                sub_term_type_id or "",
+                sub or "",
                 from_date,
                 to_date,
             )
@@ -133,7 +160,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_trading_info(symbol: str) -> dict[str, Any]:
-        """Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot."""
+        """Ceiling, floor, room, EPS, BVPS, PE, PB per symbol. Use for reference snapshot.
+
+        There is no tool named vs_prices or vs_financial_ratios — use this tool
+        (snapshot) or financial_ratios (sets) instead."""
         try:
             data = await _call(
                 "vs_trading_info",

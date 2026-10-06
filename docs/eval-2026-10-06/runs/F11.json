@@ -1,0 +1,87 @@
+{
+ "id": "F11",
+ "q": "Depth orderbook VN30F1M hiện tại thế nào",
+ "ms": 300001,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "doctor_local",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Model: xem /model (chưa resolve ở đây để tránh đọc key)\n- MCP opentrading: connected (140 tools)"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__symbol_resolve",
+   "input": {
+    "query": "VN30F1M"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1284,
+   "out": "{\n  \"data\": {\n    \"query\": \"VN30F1M\",\n    \"resolved\": {\n      \"symbol\": \"VN30F1M\",\n      \"asset_class\": \"vn_futures\",\n      \"venue\": \"DNSE\",\n      \"name\": \"VN30F1M\",\n      \"score\": 90,\n      \"reason\": \"futures code pattern\",\n      \"use_tool\": \"dnse_ohlc_history\",\n      \"use_args\": {\n        \"symbol\": \"VN30F1M\"\n      }\n    },\n    \"ambiguous\": false,\n    \"candidates\": [\n      {\n        \"symbol\": \"VN30F1M\",\n        \"asset_class\": \"vn_futures\",\n        \"venue\": \"DNSE\",\n        \"name\": \"VN30F1M\",\n   "
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ky-thuat-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ky-thuat-chuyen-sau\n\n# Reading Single-Stock Technicals\n\nMặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill \"1 tool trụ cột\" mẫu mực, đừng gọi thêm tool cho đủ số.\n\n## When to Use\n\n- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__dnse_orderbook",
+   "input": {
+    "symbol": "VN30F1M"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 40276,
+   "out": "{\n  \"data\": {\n    \"tool\": \"dnse_orderbook\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:39:32.984431+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"no orderbook for VN30F1M\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__dnse_latest_trade",
+   "input": {
+    "symbol": "VN30F1M"
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 90,
+   "out": "Error executing tool dnse_latest_trade: 1 validation error for dnse_latest_tradeArguments\nsymbols\n  Field required [type=missing, input_value={'symbol': 'VN30F1M'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__dnse_latest_trade",
+   "input": {
+    "symbols": [
+     "VN30F1M"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 20163,
+   "out": "{\n  \"data\": {\n    \"tool\": \"dnse_latest_trade\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:41:26.046236+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"dnse timeout: /price/VN30F1M/trades/latest\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n"
+}

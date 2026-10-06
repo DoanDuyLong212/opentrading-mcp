@@ -1,0 +1,65 @@
+{
+ "id": "F02",
+ "q": "Tìm trên web xem giá cà phê robusta hôm nay bao nhiêu",
+ "ms": 186940,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "giá cà phê robusta hôm nay",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "robusta coffee price today London futures",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 793,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. Giá Cà phê Robusta Hôm Nay Trực Tuyến 24/7 - Simplize\n   https://simplize.vn/hang-hoa/gia-ca-phe-robusta\n   Giá Cà phê Robusta hôm nay 3,528 USD/T, tăng 1.70% so với hôm qua. Xem biểu đồ, lịch sử giá và phân tích cập nhật trực tuyến 24/7 trên Simplize.\n2. Giá cà phê trực tuyến sàn London, New York, BMF-Brazil\n   https://giacaphe.com/gia-ca-phe-truc-tuyen/\n   Giá cà phê trực tuyến hôm nay của ba sàn giao dịch cà phê kỳ hạn"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 785,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. London Robusta Coffee Futures Price Today - Investing.com\n   https://www.investing.com/commodities/london-coffee\n   Explore real-time London Robusta Coffee Futures price data and key metrics crucial for understanding and navigating the London Robusta Coffee Futures market.\n2. Robusta Coffee Futures Pricing\n   https://www.ice.com/products/37089079/Robusta-Coffee-Futures/data\n   The Robusta Coffee futures contract is used a"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://giacaphe.com/gia-ca-phe-truc-tuyen/",
+    "format": "text"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 244,
+   "out": "Giá cà phê trực tuyến sàn London, New York, BMF (Brazil)\nGiới thiệu\nTin tức\nTin cà phê\nKiến thức thị trường\nCà phê Việt Nam\nCộng đồng Y5cafe\nHỏi đáp\nBà con viết\nDiện tích - Sản lượng\nChăm sóc\nChế biến\nNông sản\nNông nghiệp\nCafe & Cuộc sống\nGiao thương\nChuyên đề\nBảng giá\nGiá cà phê hôm nay\nGiá cà phê trực tuyến\nGiá cà phê Brazil\nGiá tiêu hôm nay\nGiá tiêu thế giới\nGiá cao su trực tuyến\nGiá cacao trực tuyến\nGiá vàng hôm nay\nTỷ giá hôm nay\nCông cụ\nLịch sử giá cà phê\nDanh mục đầu tư\nTính mức Stoploss\n"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://dantocphattrien.vietnamnet.vn/gia-ca-phe",
+    "format": "text"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1105,
+   "out": "Giá cà phê hôm nay 06/10/2026: 93.400 – 94.000 đồng/kg\nMới nhất\nĐường dây nóng: 02437674981\nC&#244;ng t&#225;c D&#226;n tộc\nT&#237;n ngưỡng t&#244;n gi&#225;o\nBản l&#224;ng h&#244;m nay\nSắc m&#224;u 54\nNgười giữ lửa\nMedia\nTh&#224;nh tựu v&#224; Ph&#225;t triển\nTrang chủ /\nGiá cà phê\nGiá cà phê hôm nay 06/10/2026 mới nhất\nCập nhật giá cà phê hôm nay tại các vùng trồng trọng điểm Tây Nguyên: Đắk Lắk, Gia Lai, Lâm Đồng, khu vực Đắk Nông (tỉnh cũ) cùng giá cà phê trực tuyến sàn London (Robusta) và N"
+  }
+ ],
+ "text": "Để mình tìm giá cà phê robusta mới nhất.\n\n\n\n<｜DSML｜ calls>\n**Giá cà phê robusta hôm nay (06/10/2026): khoảng 3.528 USD/tấn trên sàn London** — tăng 59 USD (+1,7%) so với phiên trước [dantocphattrien.vietnamnet.vn · cập nhật 10:38 06/10/2026].\n\n**Trên sàn thế giới (Robusta London, kỳ hạn 11/2026)**\n- Giá khớp gần nhất: 3.528 USD/tấn\n- Thay đổi: +59 USD (+1,70%)\n- Biên độ phiên: cao 3.570 – thấp 3.447 USD/tấn\n- Giá phiên trước: 3.469 USD/tấn\n\n**Trong nước (cà phê robusta nhân xô, tham chiếu)**\n- Đắk Lắk: 94.000 đồng/kg\n- Gia Lai: 94.000 đồng/kg\n- Đắk Nông (tỉnh cũ): 94.000 đồng/kg\n- Lâm Đồng: 93.400 đồng/kg\n- Bình quân 4 vùng: 93.850 đồng/kg [dantocphattrien.vietnamnet.vn · 10:38 06/10/2026]\n\nLịch sử 7 phiên gần nhất (bình quân, đồng/kg): 28/09: 93.500 → 29/09: 93.700 → 30/09: 93.500 → 01/10: 94.500 → 02/10: 93.700 → 03/10: 93.875 → 06/10: 93.850 [dantocphattrien.vietnamnet.vn].\n\n**Lưu ý về độ tin cậy của số liệu**\n- Đây là giá hợp đồng tương lai kỳ hạn 11/2026, không phải giá thu mua thực tế tại đại lý; giá trong nước còn phụ thuộc tỷ giá, chất lượng hạt, độ ẩm, tạp chất và điểm giao dịch.\n- Nguồn Y5Cafe/giacaphe.com tự ghi dữ liệu trễ khoảng 10 phút so với sàn; sàn London mở cửa 15:00 và đóng 23:30 (giờ VN) nên mức \"trong ngày\" có thể chưa phải giá chốt cuối phiên.\n- Nên đối chiếu trực tiếp tại điểm thu mua hoặc bảng giá sàn trước khi giao dịch.\n\nBạn muốn mình vẽ biểu đồ diễn biến giá robusta 30 ngày hay so với arabica không?"
+}

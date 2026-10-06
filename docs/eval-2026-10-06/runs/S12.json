@@ -1,0 +1,22 @@
+{
+ "id": "S12",
+ "q": "Giải thích cổ tức là gì",
+ "ms": 92463,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "explain-term"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/explain-term\n\n# Explaining Securities Terms Simply\n\nTrả lời đúng 5 bước, gọn nhẹ, không lan sang phân tích mã hay khuyến nghị. Mọi số minh họa là số tròn giả định — bắt buộc ghi rõ \"ví dụ giả định\", không bao giờ để user tưởng là số thật.\n\n## When to Use\n\n- Dùng khi: user hỏi một thuật ngữ, chỉ số hoặc khái niệm là gì (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2...).\n- Khi KHÔNG dùng (dùng skill khác thay thế): phản biện luận điểm mua/giữ (dùn"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n**Cổ tức là gì**\n\n- **Định nghĩa:** Cổ tức là phần lợi nhuận sau thuế mà doanh nghiệp chia lại cho cổ đông, thay vì giữ toàn bộ để tái đầu tư.\n\n- **Công thức bằng chữ:**\n  - Cổ tức tiền mặt mỗi cổ phần = tổng tiền đem chia ÷ số cổ phiếu đang lưu hành.\n  - Tỷ lệ cổ tức thường công bố theo % mệnh giá (mệnh giá cổ phiếu VN là 10.000đ/cp) hoặc bằng số tiền/cp.\n  - Tỷ suất cổ tức = cổ tức tiền mặt một năm ÷ giá thị trường của cổ phiếu.\n\n- **Ví dụ giả định** (số tròn, không phải số thật): công ty chia cổ tức tiền mặt 1.000đ mỗi cổ phần; bạn giữ 1.000 cổ phiếu → nhận 1.000.000đ trước thuế. Nếu giá thị trường đang 20.000đ, tỷ suất cổ tức ≈ 5,0% (1.000 ÷ 20.000, tính từ ví dụ giả định).\n\n- **Cách dùng ở VN + bẫy hay gặp:**\n  - Hai hình thức phổ biến: **tiền mặt** (nhận tiền) và **cổ phiếu/thưởng** (nhận thêm cổ phiếu, không có tiền nhưng số cổ phần tăng).\n  - Có 3 mốc ngày: ngày công bố, **ngày đăng ký cuối cùng (chốt danh sách)**, và **ngày giao dịch không hưởng quyền (ex-date)**. Muốn hưởng cổ tức phải mua trước ex-date; mua đúng ngày ex-date là không được nhận.\n  - Cổ tức tiền mặt ở VN bị trừ thuế thu nhập cá nhân khi chi trả — nên số thực nhận ít hơn con số công bố. Đối chiếu tỷ lệ thuế hiện hành với thông báo của công ty/cơ quan thuế.\n  - **Bẫy chính:** giá cổ phiếu điều chỉnh giảm tương ứng vào ngày ex-date (sàn trừ quyền), nên \"mua để lấy cổ tức\" không tự động sinh lời; cộng thêm thuế và thời gian chờ tiền về, phần lợi có thể bị bào mòn. Bẫy thứ hai là nhầm cổ tức cao = công ty khỏe — cổ tức cao bất thường có thể do bán tài sản một lần, không bền.\n\n- **Câu hỏi gợi mở:** Bạn muốn mình giải thích tiếp cách tra **ngày ex-date/chốt quyền** của một mã cụ thể, hay so tỷ suất cổ tức của vài mã cùng ngành?"
+}

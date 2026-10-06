@@ -1,0 +1,94 @@
+{
+ "id": "S03",
+ "q": "Địa chính trị tuần này có gì đáng lo cho thị trường chứng khoán",
+ "ms": 300005,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "danh-gia-tinh-hinh-chinh-tri-toan-cau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/danh-gia-tinh-hinh-chinh-tri-toan-cau\n\n# Mapping Global Political Risk\n\nSkill tổ chức cross-ref (không có home tool riêng — ghép odds + tin từ nhiều nguồn). Mỗi mục verdict bắt buộc có event URL + tin URL, thiếu một trong hai thì ghi rõ.\n\n## When to Use\n\n- Dùng khi: user hỏi bản đồ rủi ro chính trị toàn cầu, bầu cử, chính sách, căng thẳng quốc tế (nhiều sự kiện, cần ghép odds + tin).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Xung đột vũ tra"
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thứ ba, 06/10/2026 12:15:29 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T12:15:29+07:00"
+  },
+  {
+   "t": "start",
+   "name": "switch_preset",
+   "input": {
+    "preset": "all",
+    "server": "opentrading"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã đổi preset sang all (21 tool đang thấy): ."
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__event_stats",
+   "input": {
+    "query": "geopolitical risk market",
+    "limit": 20
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 17819,
+   "out": "{\n  \"data\": {\n    \"query\": \"geopolitical risk market\",\n    \"articles\": [\n      {\n        \"title\": \"国泰海通 ： 风险资产维持高性价比 建议超配A股 、 H股与美股 _ 股市直播 _ 市场 _ 中金在线\",\n        \"url\": \"http://sc.stock.cnfol.com/gushizhibo/20260728/32318964.shtml\",\n        \"source\": null,\n        \"date\": \"20260727T234500Z\"\n      },\n      {\n        \"title\": \"Risiko Geopolitik Makin Besar , Apa Dampaknya ke Laporan Keuangan ? \",\n        \"url\": \"https://money.kompas.com/read/2026/08/21/200511226/risiko-geopolitik-makin-besar-apa-da"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_prediction_odds",
+   "input": {
+    "tag": "politics"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__geo_intel",
+   "input": {
+    "topic": "geopolitical risk"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_market",
+   "input": {
+    "sources": "gdelt"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 7357,
+   "out": "{\n  \"data\": {\n    \"source\": \"https://r.jina.ai/https://gamma-api.polymarket.com\",\n    \"events\": [\n      {\n        \"title\": \"Brazil Presidential Election\",\n        \"slug\": \"brazil-presidential-election\",\n        \"tags\": [\n          \"Politics\",\n          \"Macro Election 2\",\n          \"Main Election\",\n          \"Brazil\",\n          \"Global Elections\",\n          \"World Elections\",\n          \"World\"\n        ],\n        \"volume24h\": 3161205.1411729986,\n        \"liquidity\": 1887263.62644,\n        \"end\": "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 14955,
+   "out": "{\n  \"data\": {\n    \"query\": \"geopolitical risk\",\n    \"articles\": [\n      {\n        \"title\": \"Πόσα ακριβά πληρώνει τους πολέμους το παγκόσμιο ΑΕΠ\",\n        \"url\": \"https://economytoday.sigmalive.com/posa-akriba-plironei-toys-polemoys-to-pagkosmio-aep/\",\n        \"source\": null,\n        \"date\": \"20260816T101500Z\"\n      },\n      {\n        \"title\": \"Risiko Geopolitik Makin Besar , Apa Dampaknya ke Laporan Keuangan ? \",\n        \"url\": \"https://money.kompas.com/read/2026/08/21/200511226/risiko-geopoliti"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n"
+}

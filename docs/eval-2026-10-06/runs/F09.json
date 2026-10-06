@@ -1,0 +1,64 @@
+{
+ "id": "F09",
+ "q": "Nạp skill phan-tich-sentiment rồi phân tích VCB",
+ "ms": 300002,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "phan-tich-sentiment"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/phan-tich-sentiment\n\n# Measuring Single-Stock Crowd Sentiment\n\nĐo *đám đông*, không đo *doanh nghiệp* — crowd có thể sai, sentiment không bao giờ là leg duy nhất của quyết định. Chỉ 1 symbol/run; limit 20 đủ 90% mẫu, không nới limit.\n\n## When to Use\n\n- Dùng khi: hỏi dư luận/crowd/FOMO/comment về 1 mã cụ thể trên Fireant.\n- Khi KHÔNG dùng (dùng skill khác thay thế): tin chính thống/rumor → `tim-kiem-tin-tuc`; fear/greed chung → `danh-gia-vi-mo-quoc"
+  },
+  {
+   "t": "start",
+   "name": "switch_preset",
+   "input": {
+    "preset": "intel",
+    "server": "opentrading"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã đổi preset sang intel (30 tool đang thấy): assets_rotation, compare_equities, evidence_bundle, geo_intel, oracle_meta, polymarket_event, web_fetch, web_search, world_prediction_odds."
+  },
+  {
+   "t": "start",
+   "name": "switch_preset",
+   "input": {
+    "preset": "brief",
+    "server": "opentrading"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã đổi preset sang brief (28 tool đang thấy): brief_build, corporate_calendar, economic_calendar, macro_events_vn, news_market, news_symbol, sbv_rates."
+  },
+  {
+   "t": "start",
+   "name": "switch_preset",
+   "input": {
+    "preset": "all",
+    "server": "opentrading"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Đã đổi preset sang all (21 tool đang thấy): ."
+  }
+ ],
+ "text": "\n\n\n\n<｜DSML｜ calls>\n\n\n\n\n<｜DSML｜ calls>\n"
+}

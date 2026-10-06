@@ -108,3 +108,25 @@ async def test_vs_indicator_data_accepts_range_params(monkeypatch):
     assert seen == {"tt": 3, "cat": 73, "sub": "M1", "frm": "2020-01-01", "to": None}
     assert env["data"]["rows"][0]["name"] == "GDP"
     assert seen["cat"] == 73
+
+
+async def test_vs_indicator_data_coerces_model_typing(monkeypatch):
+    """Eval 06-10 (S07): model passes ids as int/str/quoted-str — all must coerce."""
+    from opentrading_mcp.providers import vietstock as vs_p
+
+    seen: dict[str, Any] = {}
+
+    def fake_macro(
+        tt: int, cat: int, sub: str = "", frm: str = "2022-01-01", to: str | None = None
+    ) -> Any:
+        seen.update(tt=tt, cat=cat, sub=sub)
+        return {"rows": [{"name": "X", "value": 1.0}]}
+
+    monkeypatch.setattr(vs_p, "macro_report_data", fake_macro)
+    fn = _tool_fn("vs_indicator_data")
+    env = await fn(category_id=76, term_type_id=7, sub_term_type_id=3)
+    _check_envelope(env, "vs_indicator_data")
+    assert seen == {"tt": 7, "cat": 76, "sub": "3"}, seen
+    env = await fn(category_id=15, term_type_id='"7"', sub_term_type_id='"2"')
+    _check_envelope(env, "vs_indicator_data")
+    assert seen == {"tt": 7, "cat": 15, "sub": "2"}, seen

@@ -1,0 +1,103 @@
+{
+ "id": "S23",
+ "q": "Tin chứng khoán Việt Nam hôm nay",
+ "ms": 300001,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "tin-tuc-nong-viet-nam"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/tin-tuc-nong-viet-nam\n\n# Digesting Daily Vietnam News\n\nDigest nhanh tin VN trong ngày — headline + phân loại + sentiment, có provenance rõ ràng. Không suy diễn sentiment heuristic thành khuyến nghị mua/bán.\n\n## When to Use\n\n- Dùng khi: hỏi tin nóng VN hôm nay, VN30, thị trường/doanh nghiệp VN, cần 5–7 headline nhanh.\n- Khi KHÔNG dùng (dùng skill khác thay thế): có mã/từ khóa cụ thể hoặc rumor → `tim-kiem-tin-tuc`; tin Mỹ/Trung/toàn cầu → `tin-tuc-"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_market",
+   "input": {
+    "limit": 15
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__corporate_calendar",
+   "input": {
+    "limit": 20
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 649,
+   "out": "{\n  \"data\": {\n    \"posts\": [\n      {\n        \"id\": 42119992,\n        \"user\": \"Trần Quốc Khiêm\",\n        \"text\": \"Hôm nay 6/10, có 6 doanh nghiệp bắt đầu giao dịch cổ phiếu số lượng lớn, trong đó có nhiều mã chứng khoán là tâm điểm chú ý trên thị trường: DBC, MBB, NTH...\",\n        \"symbols\": [\n          \"DBC\",\n          \"DDB\",\n          \"MBB\",\n          \"NTH\",\n          \"VTR\",\n          \"YBM\"\n        ],\n        \"likes\": 0,\n        \"replies\": 0,\n        \"date\": \"2026-10-06T12:24:00+07:00\"\n      },"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 18329,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"docs\": [\n      {\n        \"FileExt\": \".pdf \",\n        \"UpdateTime\": null,\n        \"TotalRow\": 487,\n        \"FileInfoID\": 559412,\n        \"Url\": \"https://static2.vietstock.vn/data/HOSE/2026/NGHI QUYET HDQT/VN/20260825___vcb___nq_hdqt_phe_duyet_chu_truong_thay_doi_dia_diem_chi_nhanh_vcb_gia_dinh.pdf\",\n        \"Title\": \"Nghị quyết HĐQT phê duyệt chủ trương thay đổi địa điểm trụ sở chi nhánh VCB Gia Định\",\n        \"FullName\": \"Nghị quyết HĐQT phê duyệt chủ trươ"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_symbol",
+   "input": {
+    "symbol": "MBB",
+    "limit": 8
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 313,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"MBB\",\n    \"posts\": [\n      {\n        \"id\": 42119992,\n        \"user\": \"Trần Quốc Khiêm\",\n        \"text\": \"Hôm nay 6/10, có 6 doanh nghiệp bắt đầu giao dịch cổ phiếu số lượng lớn, trong đó có nhiều mã chứng khoán là tâm điểm chú ý trên thị trường: DBC, MBB, NTH...\",\n        \"symbols\": [\n          \"DBC\",\n          \"DDB\",\n          \"MBB\",\n          \"NTH\",\n          \"VTR\",\n          \"YBM\"\n        ],\n        \"likes\": 0,\n        \"replies\": 0,\n        \"date\": \"2026-10-06T12:"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_symbol",
+   "input": {
+    "symbol": "DXG",
+    "limit": 8
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 439,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"DXG\",\n    \"posts\": [\n      {\n        \"id\": 42119908,\n        \"user\": \"Võ Thị Thủy Tiên\",\n        \"text\": \"Lãi suất neo cao, thanh khoản suy giảm trong khi nguồn cung tiếp tục gia tăng đang khiến thị trường bất động sản tiếp tục điều chỉnh trong năm 2026. Theo MBS Research, áp lực từ thị trường không tác động đồng đều, mà ngày càng làm rõ sự phân hóa giữa các doanh nghiệp, khi nhóm sở hữu quỹ đất lớn và các đại dự án vẫn duy trì lợi thế về nguồn hàng và khả năng ghi n"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__sentiment_score",
+   "input": {
+    "symbol": "MBB"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__company_events",
+   "input": {
+    "symbol": "MBB",
+    "limit": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 696,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"MBB\",\n    \"posts\": 20,\n    \"score_heuristic\": -0.19\n  },\n  \"provenance\": {\n    \"source\": \"fireant\",\n    \"as_of\": \"2026-10-06T12:48:55.887488+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"groq unavailable, heuristic fallback\"\n  ],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 505,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"MBB\",\n    \"events\": [\n      {\n        \"FileExt\": \".pdf \",\n        \"UpdateTime\": null,\n        \"TotalRow\": 407,\n        \"FileInfoID\": 562391,\n        \"Url\": \"https://static2.vietstock.vn/data/HOSE/2026/KHAC/VN/MBB_DIEULE_2026_1.pdf\",\n        \"Title\": \"Điều lệ năm 2026 \",\n        \"FullName\": \"Điều lệ năm 2026 \",\n        \"LastUpdate\": \"/Date(1791250503757)/\"\n      },\n      {\n        \"FileExt\": \".PDF \",\n        \"UpdateTime\": null,\n        \"TotalRow\": 407,\n        \"FileIn"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n**Tin chứng khoán VN sáng 06/10/2026** (dữ liệu Fireant/vietstock, cập nhật ~12:48)\n\nThị trường đang ở giai đoạn \"chờ thông tin\": dòng vốn ngoại nhích lên sau nâng hạng FTSE, nhưng tâm lý thận trọng khi NĐT chờ đánh giá triển vọng doanh nghiệp quý cuối năm [Fireant · 06/10 11:38].\n\n**Headline chính**\n\n1. **Nâng hạng FTSE → vốn quốc tế bắt đầu gia tăng** — tin vĩ mô, sentiment tích cực. Chuyên gia lưu ý cần cải cách thị trường + nâng chất lượng DN mới hút được vốn dài hạn [Fireant · 06/10 11:32].\n\n2. **BĐS tiếp tục phân hóa** (DXG, KDH, NLG, VHM, VRE) — tin vĩ mô/ngành. Theo MBS Research: lãi suất neo cao + thanh khoản suy giảm + nguồn cung tăng → nhóm có quỹ đất lớn/đại dự án vẫn giữ lợi thế ghi nhận lợi nhuận [Fireant · 06/10 11:50].\n\n3. **6 DN giao dịch khối lượng lớn hôm nay 6/10**: DBC, MBB, NTH, VTR, YBM, DDB — catalyst. Cần theo dõi khối lượng thực tế trong phiên chiều để phân biệt thoái vốn hay cơ cấu [Fireant · 06/10 12:24].\n\n4. **MB huy động 500 tỷ đồng trái phiếu** mã MBBL12631, kỳ hạn 6 năm, lãi suất thả nổi 9%/năm (MBB) — catalyst. Cộng với việc đang triển khai phương án phát hành thêm/tăng vốn cấp 2 [Fireant · 06/10 11:04; vietstock · 29/09].\n\n5. **Thông tư 50/2026/TT-NHNN**: cho phép nâng trần cho vay trên tiền gửi lên 95% khi NH chuyển cơ chế mới — tin vĩ mô ngành ngân hàng. Khả năng tận dụng còn phụ thuộc nguồn vốn từng NH, chưa tác động đồng đều [Fireant · 06/10 11:39].\n\n6. **Đầu tư công là động lực quý cuối năm** (HBC) — tin vĩ mô. Rủi ro: áp lực vốn trung–dài hạn và thanh khoản khi hệ thống NH vẫn là kênh cung vốn chủ đạo [Fireant · 06/10 11:58].\n\n7. **Fed giảm khả năng tăng lãi suất tháng 10** sau báo cáo việc làm yếu, nhưng USD vẫn lên do lợi suất trái phiếu Mỹ cao — tin vĩ mô quốc tế [Fireant · 06/10 11:34].\n\n**Đối chiếu sentiment mã nóng: MBB**\n- Điểm sentiment **-0,19** trên 20 post, mức hơi tiêu cực — nhưng đây là **heuristic** (công cụ chấm sentiment tự động không khả dụng, phải dùng phương pháp thay thế), nên chỉ mang tính tham kh"
+}

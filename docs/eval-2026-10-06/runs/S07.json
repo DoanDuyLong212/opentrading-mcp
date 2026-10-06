@@ -1,0 +1,176 @@
+{
+ "id": "S07",
+ "q": "Đánh giá vĩ mô Việt Nam: CPI, GDP, lãi suất, tỷ giá",
+ "ms": 300003,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "danh-gia-vi-mo-viet-nam"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/danh-gia-vi-mo-viet-nam\n\n# Reading Vietnam Macro\n\nMở đầu bắt buộc bằng pre-flight 2 calls (source_status + vs_auth_status) vì macro VN phụ thuộc JWT và HAR-session dễ chết. Cặp category/termType phải đúng tuyệt đối (sai là rows rỗng): GDP 73/tt3, CPI 15/tt7/sub2, XK 38/tt2.\n\n## When to Use\n\n- Dùng khi: user hỏi số liệu VN (GDP/CPI/XK/NK), lãi suất SBV, tỷ giá USDVND bối cảnh vĩ mô, lịch công bố NSO, báo cáo vĩ mô CTCK, câu chuyện dẫn dắt thị trườn"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__source_status",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_auth_status",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 174,
+   "out": "{\n  \"data\": {\n    \"authenticated\": true,\n    \"jwt_expires_at\": 1793446501\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T12:36:35.259178+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 899,
+   "out": "{\n  \"data\": {\n    \"upstreams\": {\n      \"vietstock\": {\n        \"authenticated\": true,\n        \"jwt_expires_at\": 1793446501\n      },\n      \"vnstock\": \"ok\",\n      \"dnse_ws\": \"worker\"\n    },\n    \"stateless\": true,\n    \"ttl\": {\n      \"snapshot\": 5,\n      \"market\": 60,\n      \"world\": 300,\n      \"overview\": 900,\n      \"financeinfo\": 21600,\n      \"documents\": 86400,\n      \"categories\": 604800,\n      \"odds\": 2700\n    }\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T12:36:35.817278"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_categories",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 597,
+   "out": "{\n  \"data\": {\n    \"categories\": [\n      {\n        \"CategoryID\": 7,\n        \"ParentID\": 0,\n        \"CategoryName\": \"1. Tài khoản quốc gia (GDP)\",\n        \"Level\": 1,\n        \"DisplayOrder\": 1,\n        \"HasData\": false,\n        \"ListTermType\": \"[]\",\n        \"IsDefaultOpen\": true,\n        \"IsDefaultSelected\": false,\n        \"DefaultTermTypeIDSelected\": 0,\n        \"JsonDefaultTimeFrame\": \"{\\\"Type\\\":\\\"5Y\\\",\\\"FromDate\\\":null,\\\"ToDate\\\":null}\",\n        \"JsonDefaultChart\": null,\n        \"CatDataTypeID\":"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 76,
+    "term_type_id": 7,
+    "sub_term_type_id": 3,
+    "limit": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 169,
+   "out": "Error executing tool vs_indicator_data: 1 validation error for vs_indicator_dataArguments\nsub_term_type_id\n  Input should be a valid string [type=string_type, input_value=3, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 76,
+    "term_type_id": "7",
+    "sub_term_type_id": "\"3\"",
+    "limit": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 161,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_indicator_data\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:38:42.832054+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 15,
+    "term_type_id": "\"7\"",
+    "sub_term_type_id": "\"2\"",
+    "limit": 14
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 88,
+   "out": "Error executing tool vs_indicator_data: 1 validation error for vs_indicator_dataArguments\nterm_type_id\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='\"7\"', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 38,
+    "term_type_id": "\"2\"",
+    "limit": 12
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 91,
+   "out": "Error executing tool vs_indicator_data: 1 validation error for vs_indicator_dataArguments\nterm_type_id\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='\"2\"', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 76,
+    "limit": 10,
+    "sub_term_type_id": "\"3\"",
+    "term_type_id": 7
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 15,
+    "limit": 14,
+    "sub_term_type_id": "\"2\"",
+    "term_type_id": 7
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 38,
+    "limit": 12,
+    "term_type_id": 2
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_xnk_detail",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 228,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_indicator_data\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:39:28.315130+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 731,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_indicator_data\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:39:28.819187+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 840,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_xnk_detail\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:39:28.929880+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 936,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_indicator_data\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:39:29.017976+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  }
+ ],
+ "text": "\n\n\n\n\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n"
+}

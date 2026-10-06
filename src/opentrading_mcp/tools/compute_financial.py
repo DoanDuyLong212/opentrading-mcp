@@ -299,7 +299,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         btype: 1 general, 2 securities, 3 bank, 5 insurance. method: 'auto'
         (default, picks per_pb or pb_bank_broker by btype) or force 'per'/'pb'/'ensemble'.
-        DCF/EV are NOT implemented.
+        DCF/EV are NOT implemented. There is no tool named valuation_band —
+        use this tool's per_pb/pb range output instead.
         """
         try:
             overview = await _call("v", vs_p.overview_trading, symbol, secs=45.0)

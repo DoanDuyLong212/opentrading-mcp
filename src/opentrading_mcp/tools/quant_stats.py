@@ -19,8 +19,12 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def quant_risk(returns: list[float], periods_per_year: int = 252) -> dict[str, Any]:
         """Sharpe, max drawdown and win rate from a return series. Use to gate models.
 
-        returns: per-period simple returns. periods_per_year: annualization
+        returns: per-period simple returns (REQUIRED — build it first, e.g. from
+        vn_quote_history columns=close as pct changes, or vn_equity_ohlcv closes).
+        Do NOT call without returns. There is no tool named risk_metrics —
+        use this tool. periods_per_year: annualization
         factor for Sharpe (252 daily, 52 weekly, 12 monthly).
+        Example: {"returns": [0.01, -0.005, 0.02], "periods_per_year": 252}.
         """
         if not returns:
             return make_envelope({"note": "empty series"}, source="local", availability="empty")

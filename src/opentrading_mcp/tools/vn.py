@@ -59,6 +59,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history.
 
+        There is no tool named stock_history — use this tool.
         days: bars requested (max 365 nến; weekly/monthly span nhân hệ số).
         interval: '1D' (mặc định), '1W', '1M'. summary/columns: summary returns
         {count,last,high,low} only; columns keeps named fields.

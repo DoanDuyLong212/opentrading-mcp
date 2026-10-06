@@ -1,0 +1,76 @@
+{
+ "id": "S20",
+ "q": "Công ty chứng khoán tuần này khuyên mua mã gì",
+ "ms": 300004,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "tim-co-hoi-bao-cao-ctck"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/tim-co-hoi-bao-cao-ctck\n\n# Hunting Broker-Report Opportunities\n\nKhuyến nghị CTCK là INPUT, không phải chân lý — bắt buộc kiểm chứng upside bằng giá hiện tại và kèm disclaimer. Không bao giờ suy diễn khuyến nghị thành \"nên mua\", không bịa giá mục tiêu khi feed không có.\n\n## When to Use\n\n- Dùng khi: hỏi rating/target/báo cáo CTCK theo feed chung hoặc theo mã cụ thể, cần bảng upside %.\n- Khi KHÔNG dùng (dùng skill khác thay thế): rumor/crowd → `phan-"
+  },
+  {
+   "t": "start",
+   "name": "switch_preset",
+   "input": {
+    "preset": "all",
+    "server": "opentrading"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã đổi preset sang all (21 tool đang thấy): ."
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__event_study",
+   "input": {
+    "symbol": "VNINDEX",
+    "dates": [
+     "2026-10-01"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "doctor_local",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Model: xem /model (chưa resolve ở đây để tránh đọc key)\n- MCP opentrading: connected (140 tools)"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1760,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VNINDEX\",\n    \"events\": 0,\n    \"rows\": [],\n    \"skipped\": 1\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T12:33:05.124425+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"no event had enough bars around it\"\n  ],\n  \"availability\": \"empty\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__analyst_consensus",
+   "input": {
+    "limit": 30
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1558,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"\",\n    \"report_type\": \"equity\",\n    \"reports\": [\n      {\n        \"title\": \"TPB: Khuyến nghị KHẢ QUAN với giá mục tiêu 16,600 đồng/cổ phiếu\",\n        \"source\": null,\n        \"date\": \"05/10/2026\",\n        \"url\": \"https://finance.vietstock.vn/bao-cao-phan-tich/22379/tpb-khuyen-nghi-kha-quan-voi-gia-muc-tieu-16600-dongco-phieu.htm\",\n        \"symbol\": \"TPB\",\n        \"rating\": \"KHẢ QUAN\",\n        \"target\": 16600.0\n      },\n      {\n        \"title\": \"GMD: Khuyến nghị MUA với"
+  }
+ ],
+ "text": "\n\nCâu hỏi này khớp skill săn cơ hội theo báo cáo CTCK. Bộ tool hiện tại (preset brief) chưa có dữ liệu khuyến nghị/target giá, nên mình cần đổi preset để lấy được feed báo cáo và giá hiện tại.\n\n\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n"
+}

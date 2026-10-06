@@ -1,0 +1,115 @@
+{
+ "id": "S11",
+ "q": "Polymarket đang đặt cược gì về kinh tế Mỹ",
+ "ms": 300003,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "du-doan-polymarket"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/du-doan-polymarket\n\n# Reading Polymarket Odds\n\nTrả về bảng event có prob_pct + volume + liquidity + end-date, mỗi dòng đủ 2 cờ tin cậy. Drill-down tối đa 2 events/run — người dùng chọn, không tự mở cả top-10.\n\n## When to Use\n\n- Dùng khi: user hỏi odds/xác suất Polymarket theo chủ đề (kinh tế, bầu cử, crypto...), \"market nào đang nóng\", drill-down 1–2 events.\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Fed chuyên biệt (cần curve + FOMC + hàm ý"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__symbol_resolve",
+   "input": {
+    "query": "Polymarket US economy odds"
+   }
+  },
+  {
+   "t": "start",
+   "name": "doctor_local",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Model: xem /model (chưa resolve ở đây để tránh đọc key)\n- MCP opentrading: connected (140 tools)"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 3026,
+   "out": "{\n  \"data\": {\n    \"query\": \"Polymarket US economy odds\",\n    \"resolved\": null,\n    \"ambiguous\": false,\n    \"candidates\": []\n  },\n  \"provenance\": {\n    \"source\": \"vnstock+local\",\n    \"as_of\": \"2026-10-06T12:56:34.816759+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"empty\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_prediction_odds",
+   "input": {
+    "query": "US economy",
+    "limit": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 8667,
+   "out": "{\n  \"data\": {\n    \"source\": \"https://r.jina.ai/https://gamma-api.polymarket.com\",\n    \"events\": []\n  },\n  \"provenance\": {\n    \"source\": \"polymarket\",\n    \"as_of\": \"2026-10-06T12:57:30.115629+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_prediction_odds",
+   "input": {
+    "tag": "economy",
+    "limit": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_prediction_odds",
+   "input": {
+    "query": "recession",
+    "limit": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 3132,
+   "out": "{\n  \"data\": {\n    \"source\": \"https://r.jina.ai/https://gamma-api.polymarket.com\",\n    \"events\": [\n      {\n        \"title\": \"Fed Decision in October?\",\n        \"slug\": \"fed-decision-in-october-20260617190323537\",\n        \"tags\": [\n          \"Fed\",\n          \"fomc\",\n          \"Trump\",\n          \"Economy\",\n          \"Fed Rates\",\n          \"Kevin Warsh\",\n          \"Global Rates\",\n          \"Economic Policy\"\n        ],\n        \"volume24h\": 1588287.069704,\n        \"liquidity\": 2880197.10547,\n        \""
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 9294,
+   "out": "{\n  \"data\": {\n    \"source\": \"https://r.jina.ai/https://gamma-api.polymarket.com\",\n    \"events\": []\n  },\n  \"provenance\": {\n    \"source\": \"polymarket\",\n    \"as_of\": \"2026-10-06T12:58:19.424194+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__polymarket_event",
+   "input": {
+    "slug": "fed-decision-in-october-20260617190323537"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_prediction_odds",
+   "input": {
+    "tag": "inflation",
+    "limit": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 507,
+   "out": "{\n  \"data\": {\n    \"slug\": \"fed-decision-in-october-20260617190323537\",\n    \"title\": \"Fed Decision in October?\",\n    \"description\": \"The FED interest rates are defined in this market by the upper bound of the target federal funds range. The decisions on the target federal funds range are made by the Federal Open Market Committee (FOMC) meetings.\\n\\nThis market will resolve to the amount of basis points the upper bound of the target federal funds rate is changed by versus the level it was prior to"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1689,
+   "out": "{\n  \"data\": {\n    \"source\": \"https://r.jina.ai/https://gamma-api.polymarket.com\",\n    \"events\": [\n      {\n        \"title\": \"Brazil Annual Inflation 2026\",\n        \"slug\": \"brazil-annual-inflation-2026\",\n        \"tags\": [\n          \"Brazil\",\n          \"CPI\",\n          \"Inflation\",\n          \"World\",\n          \"Economy\",\n          \"IPCA\",\n          \"IBGE\"\n        ],\n        \"volume24h\": 3955.9861750000005,\n        \"liquidity\": 19165.00223,\n        \"end\": \"2027-01-13T04:59:00Z\",\n        \"top_market"
+  }
+ ],
+ "text": "\n\n\n\n<｜DSML｜ calls>\n\n\n"
+}

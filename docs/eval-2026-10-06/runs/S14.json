@@ -1,0 +1,73 @@
+{
+ "id": "S14",
+ "q": "Kiểm tra nhanh nguồn dữ liệu nào đang sống",
+ "ms": 300001,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "doctor_local",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Model: xem /model (chưa resolve ở đây để tránh đọc key)\n- MCP opentrading: connected (140 tools)"
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 13:07:55 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T13:07:55+07:00"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__symbol_resolve",
+   "input": {
+    "query": "VCB"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1237,
+   "out": "{\n  \"data\": {\n    \"query\": \"VCB\",\n    \"resolved\": {\n      \"symbol\": \"VCB\",\n      \"asset_class\": \"vn_equity\",\n      \"venue\": \"VN\",\n      \"name\": \"Ngân hàng TMCP Ngoại thương Việt Nam\",\n      \"score\": 100,\n      \"reason\": \"exact VN symbol\",\n      \"use_tool\": \"stock_overview\",\n      \"use_args\": {\n        \"symbol\": \"VCB\"\n      }\n    },\n    \"ambiguous\": false,\n    \"candidates\": [\n      {\n        \"symbol\": \"VCB\",\n        \"asset_class\": \"vn_equity\",\n        \"venue\": \"VN\",\n        \"name\": \"Ngân hàng TMC"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "BTCUSDT",
+    "summary": true,
+    "count": 5
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 698,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"BTCUSDT\",\n    \"count\": 5,\n    \"last\": 2247536657.04,\n    \"high\": 2264846430.38,\n    \"low\": 2155212522.58\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T13:10:01.922809+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "VNINDEX chứng khoán Việt Nam",
+    "numResults": 3
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 840,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. VNIndex Chỉ Số (VNI) - Investing.com\n   https://vn.investing.com/indices/vn\n   Xem thêm thông tin chi tiết về chỉ số chứng khoán Việt Nam bao gồm biểu đồ, phân tích kỹ thuật, các cổ phiếu thành phần và hơn thế nữa.\n2. VNIndex.ai — Giá cổ phiếu, chỉ số & phân tích chứng khoán Việt Nam\n   https://vnindex.ai/\n   Nền tảng dữ liệu chứng khoán Việt Nam: giá 1.544+ cổ phiếu thời gian thực, chỉ số VN-Index, HNX-Index, UPCOM-Index"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\nĐã ping thử vài nhóm nguồn. Kết quả:\n\n**Đang sống**\n- **MCP opentrading: connected, 140 tool** — `doctor_local` xác nhận kết nối.\n- **Resolver mã + dữ liệu cổ phiếu VN**: resolve \"VCB\" → Ngân hàng TMCP Ngoại thương Việt Nam, tín hiệu khớp 100%, `availability: available` [vnstock+local · 06/10 13:10].\n- **Web search**: có phản hồi (backend đang dùng DuckDuckGo, không có key nên độ ổn định trung bình) [web_search · 06/10 13:10].\n\n**Sống nhưng số liệu đáng ngờ**\n- **Feed crypto**: trả về BTCUSDT `last = 2.247.536.657`, high 2.264.846.430 [vnstock · 06/10 13:10] — mức này phi lý với BTC (kh"
+}

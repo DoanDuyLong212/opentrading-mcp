@@ -1,0 +1,20 @@
+{
+ "id": "F01",
+ "q": "Bây giờ là mấy giờ (giờ VN)?",
+ "ms": 91975,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 12:05:22 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T12:05:22+07:00"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\nBây giờ là **12:05:22, Thứ ba 06/10/2026** (giờ Việt Nam, UTC+7) [current_time].\n\nĐúng lúc cả 3 sàn HOSE/HNX/UPCoM đang nghỉ trưa, mở lại phiên chiều lúc 13:00."
+}

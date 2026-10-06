@@ -1,0 +1,209 @@
+{
+ "id": "S18",
+ "q": "So sánh VCB BID CTG, ngân hàng nào tốt nhất",
+ "ms": 300004,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "so-sanh-cung-nganh"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/so-sanh-cung-nganh\n\n# Ranking Same-Sector Stocks\n\nSkill điều phối thứ hai (cùng họ `phan-tich-chuyen-sau-1-ma`): xác định mã cùng ngành, gọi 1 sub-skill cho từng mã, gộp xếp hạng. Mỗi mã chỉ 1 sub-skill theo câu hỏi (momentum → kỹ thuật; chất lượng → cơ bản; đắt rẻ → định giá) — không chạy full 3 chiều/mã, không chạy vòng sub-skill thứ hai.\n\n## When to Use\n\n- Dùng khi: user hỏi so sánh/xếp hạng 2–6 mã cùng ngành (`VCB vs BID vs CTG`, `steel mạnh n"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_equity_quote_batch",
+   "input": {
+    "symbols": [
+     "VCB",
+     "BID",
+     "CTG"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_overview_trading",
+   "input": {
+    "symbol": "VCB"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_overview_trading",
+   "input": {
+    "symbol": "BID"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 560,
+   "out": "{\n  \"data\": {\n    \"overview\": {\n      \"data\": [\n        {\n          \"StockCode\": \"VCB\",\n          \"TradingDate\": \"/Date(1791219600000)/\",\n          \"ClosePrice\": 56400,\n          \"ColorID\": -1,\n          \"Change\": -600,\n          \"PerChange\": -1.05,\n          \"TotalVol\": 2284300,\n          \"TotalVal\": 129188860000,\n          \"TotalBuyTrade\": 0,\n          \"TotalSellTrade\": 0,\n          \"BuyAvgTrade\": 0.0,\n          \"SellAvgTrade\": 0.0,\n          \"ForeignBuyVal\": 8292000000,\n          \"ForeignSell"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 579,
+   "out": "{\n  \"data\": {\n    \"overview\": {\n      \"data\": [\n        {\n          \"StockCode\": \"BID\",\n          \"TradingDate\": \"/Date(1791219600000)/\",\n          \"ClosePrice\": 34100,\n          \"ColorID\": -1,\n          \"Change\": -500,\n          \"PerChange\": -1.45,\n          \"TotalVol\": 2674000,\n          \"TotalVal\": 91552405000,\n          \"TotalBuyTrade\": 0,\n          \"TotalSellTrade\": 0,\n          \"BuyAvgTrade\": 0.0,\n          \"SellAvgTrade\": 0.0,\n          \"ForeignBuyVal\": 7579730000,\n          \"ForeignSellV"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1461,
+   "out": "{\n  \"data\": {\n    \"quotes\": [\n      {\n        \"symbol\": \"VCB\",\n        \"time\": 1791264081548,\n        \"exchange\": \"HOSE\",\n        \"ceiling_price\": 60900,\n        \"floor_price\": 53100,\n        \"reference_price\": 57000,\n        \"open_price\": 56900,\n        \"high_price\": 57000,\n        \"low_price\": 56100,\n        \"close_price\": 56400,\n        \"average_price\": 56555,\n        \"volume_accumulated\": 2284300,\n        \"total_value\": 129188860000,\n        \"price_change\": -600,\n        \"percent_change\": -1"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_overview_trading",
+   "input": {
+    "symbol": "CTG"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 167,
+   "out": "{\n  \"data\": {\n    \"overview\": {\n      \"data\": [\n        {\n          \"StockCode\": \"CTG\",\n          \"TradingDate\": \"/Date(1791219600000)/\",\n          \"ClosePrice\": 29150,\n          \"ColorID\": -1,\n          \"Change\": -500,\n          \"PerChange\": -1.69,\n          \"TotalVol\": 3640400,\n          \"TotalVal\": 106824995000,\n          \"TotalBuyTrade\": 0,\n          \"TotalSellTrade\": 0,\n          \"BuyAvgTrade\": 0.0,\n          \"SellAvgTrade\": 0.0,\n          \"ForeignBuyVal\": 3404770000,\n          \"ForeignSell"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_gics_index",
+   "input": {
+    "group": 1
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 195,
+   "out": "{\n  \"data\": {\n    \"group\": 1,\n    \"rows\": [\n      {\n        \"IndustryCode\": 1010,\n        \"Url\": \"/nganh/1010-nang-luong.htm\",\n        \"Text\": \"Năng lượng\",\n        \"ChangeClose\": 0.37,\n        \"CloseIndex\": 352.44,\n        \"SectionID\": 0,\n        \"Css\": \"bg-up\",\n        \"Value\": \"0,37\",\n        \"TradingDate\": \"/Date(1791219600000)/\",\n        \"Vol\": 18964000,\n        \"Val\": 471178635000,\n        \"ForeignBuyVol\": 1058600,\n        \"ForeignSellVol\": 1660600\n      },\n      {\n        \"IndustryCode\":"
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "co-ban-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/co-ban-chuyen-sau\n\n# Analyzing Single-Stock Fundamentals\n\nPhân tích THUẦN cơ bản 1 mã theo aspect: hỏi khía cạnh nào thì chỉ chạy leg đó rồi dừng — đừng quét hết BCTC vì \"cho chắc\".\n\n## When to Use\n\n- Dùng khi: user hỏi BCTC, chất lượng lợi nhuận, M-Score/thao túng, F-score, kế hoạch kinh doanh, cổ đông lớn, insider, cổ tức của 1 mã.\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Hỏi kỹ thuật (RSI, MACD, breakout, hỗ trợ/kháng cự) → `ky-thuat-ch"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_fundamentals",
+   "input": {
+    "symbol": "VCB",
+    "period": "quarter"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_fundamentals",
+   "input": {
+    "symbol": "BID",
+    "period": "quarter"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_fundamentals",
+   "input": {
+    "symbol": "CTG",
+    "period": "quarter"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_trading_info",
+   "input": {
+    "symbol": "VCB"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_trading_info",
+   "input": {
+    "symbol": "BID"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_trading_info",
+   "input": {
+    "symbol": "CTG"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 4634,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"BID\",\n    \"info\": {\n      \"StockCode\": \"BID\",\n      \"TradingDate\": \"/Date(1791261000007)/\",\n      \"KLCPLH\": 7778261912,\n      \"KLCPNY\": 7778229473,\n      \"PriorClosePrice\": 34600,\n      \"CeilingPrice\": 37000,\n      \"FloorPrice\": 32200,\n      \"TotalVol\": 2674000,\n      \"TotalVal\": 91552405000,\n      \"MarketCapital\": 265238731199200,\n      \"HighestPrice\": 34750,\n      \"LowestPrice\": 33950,\n      \"OpenPrice\": 34600,\n      \"LastPrice\": 34100,\n      \"AvrPrice\": 34257,\n   "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 4816,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"info\": {\n      \"StockCode\": \"VCB\",\n      \"TradingDate\": \"/Date(1791261000007)/\",\n      \"KLCPLH\": 8355675094,\n      \"KLCPNY\": 8355675094,\n      \"PriorClosePrice\": 57000,\n      \"CeilingPrice\": 60900,\n      \"FloorPrice\": 53100,\n      \"TotalVol\": 2284300,\n      \"TotalVal\": 129188860000,\n      \"MarketCapital\": 471260075301600,\n      \"HighestPrice\": 57000,\n      \"LowestPrice\": 56100,\n      \"OpenPrice\": 56900,\n      \"LastPrice\": 56400,\n      \"AvrPrice\": 56542,\n  "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 5834,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"CTG\",\n    \"info\": {\n      \"StockCode\": \"CTG\",\n      \"TradingDate\": \"/Date(1791261000007)/\",\n      \"KLCPLH\": 7766944637,\n      \"KLCPNY\": 7766944637,\n      \"PriorClosePrice\": 29650,\n      \"CeilingPrice\": 31700,\n      \"FloorPrice\": 27600,\n      \"TotalVol\": 3640400,\n      \"TotalVal\": 106824995000,\n      \"MarketCapital\": 226406436168550,\n      \"HighestPrice\": 29700,\n      \"LowestPrice\": 29050,\n      \"OpenPrice\": 29650,\n      \"LastPrice\": 29150,\n      \"AvrPrice\": 29346,\n  "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 8735,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"ratios\": [\n      {\n        \"item\": \"Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS)\",\n        \"item_id\": \"trailing_eps\",\n        \"2026-Q2\": 5008.22,\n        \"2025-Q4\": 6037.9,\n        \"2026-Q1\": 4542.29,\n        \"2025-Q4_1\": 5008.22\n      },\n      {\n        \"item\": \"Giá trị sổ sách của cổ phiếu (BVPS)\",\n        \"item_id\": \"book_value_per_share_bvps\",\n        \"2026-Q2\": 26663.5,\n        \"2025-Q4\": 24527.26,\n        \"2026-Q1\": 27231.3,\n        \"2025-Q4_1\""
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 8501,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"BID\",\n    \"ratios\": [\n      {\n        \"item\": \"Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS)\",\n        \"item_id\": \"trailing_eps\",\n        \"2026-Q2\": 3889.69,\n        \"2025-Q4\": 4121.88,\n        \"2026-Q1\": 4277.87,\n        \"2025-Q4_1\": 3889.69\n      },\n      {\n        \"item\": \"Giá trị sổ sách của cổ phiếu (BVPS)\",\n        \"item_id\": \"book_value_per_share_bvps\",\n        \"2026-Q2\": 23925.09,\n        \"2025-Q4\": 22204.57,\n        \"2026-Q1\": 24726.16,\n        \"2025-Q4"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 8245,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"CTG\",\n    \"ratios\": [\n      {\n        \"item\": \"Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS)\",\n        \"item_id\": \"trailing_eps\",\n        \"2026-Q2\": 6206.54,\n        \"2025-Q4\": 4804.77,\n        \"2026-Q1\": 6441.47,\n        \"2025-Q4_1\": 6206.54\n      },\n      {\n        \"item\": \"Giá trị sổ sách của cổ phiếu (BVPS)\",\n        \"item_id\": \"book_value_per_share_bvps\",\n        \"2026-Q2\": 31635.24,\n        \"2025-Q4\": 28674.56,\n        \"2026-Q1\": 33452.79,\n        \"2025-Q4"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__market_candles_batch",
+   "input": {
+    "symbols": [
+     "VCB",
+     "BID",
+     "CTG",
+     "VNINDEX"
+    ],
+    "days": 130,
+    "columns": [
+     "t",
+     "c",
+     "v"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2302,
+   "out": "{\n  \"data\": {\n    \"series\": [\n      {\n        \"symbol\": \"VCB\",\n        \"candles\": [\n          {\n            \"t\": \"0\",\n            \"c\": 59.01,\n            \"v\": 4265679.0\n          },\n          {\n            \"t\": \"1\",\n            \"c\": 59.6,\n            \"v\": 6454430.0\n          },\n          {\n            \"t\": \"2\",\n            \"c\": 59.11,\n            \"v\": 6397484.0\n          },\n          {\n            \"t\": \"3\",\n            \"c\": 58.91,\n            \"v\": 3021615.0\n          },\n          {\n            \""
+  }
+ ],
+ "text": "\n\n\n\n<｜DSML｜ calls>\n"
+}

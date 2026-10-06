@@ -1,0 +1,31 @@
+{
+ "id": "F05",
+ "q": "Kiểm tra sức khỏe hệ thống",
+ "ms": 72377,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "doctor_local",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Model: xem /model (chưa resolve ở đây để tránh đọc key)\n- MCP opentrading: connected (140 tools)"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__doctor",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 309,
+   "out": "{\n  \"data\": {\n    \"mcp_sdk\": \"1.x\",\n    \"vietstock_jwt\": true,\n    \"dnse_keys\": true,\n    \"redis\": true,\n    \"database\": true,\n    \"fred\": true,\n    \"groq\": true,\n    \"fireant\": true\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T12:13:10.937666+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  }
+ ],
+ "text": "\n\n**Hệ thống khỏe, không có cảnh báo.**\n\n**Harness (máy này)**\n- Model: chưa resolve ở lớp này (xem bằng lệnh `/model`) — không phải lỗi\n- MCP `opentrading`: đã kết nối, 140 tool khả dụng\n\n**MCP server (opentrading)** — trạng thái `available`, `warnings: []` [local · 06/10 12:13]\n| Thành phần | Trạng thái |\n|---|---|\n| Vietstock JWT | ✅ có |\n| DNSE keys | ✅ có |\n| Redis | ✅ có |\n| Database | ✅ có |\n| FRED | ✅ có |\n| Groq | ✅ có |\n| Fireant | ✅ có |\n| MCP SDK | 1.x |\n\n**Lưu ý vận hành**\n- Đang là nghỉ trưa, cả 3 sàn mở lại lúc 13:00 hôm nay, Thứ ba 06/10/2026.\n- Lịch phiên trong nhắc nhở *chưa được kiểm chứng* và dữ liệu nền dừng ở 2026-09-29 — nếu cần giao dịch thật, đối chiếu thông báo chính thức của HOSE/HNX/UPCoM.\n\nMuốn mình kiểm tra sâu hơn phần nào không (ví dụ thử gọi thử vài nguồn giá/BCTC để xác nhận dữ liệu thực sự chảy về)?"
+}

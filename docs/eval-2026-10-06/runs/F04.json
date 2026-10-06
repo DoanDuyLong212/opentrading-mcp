@@ -1,0 +1,22 @@
+{
+ "id": "F04",
+ "q": "Liệt kê các phiên chat đã lưu của tôi",
+ "ms": 101909,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "session_list",
+   "input": {
+    "limit": 30
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 9,
+   "out": "- 20261002-125706-2jlw · 4 lượt · phân tích cho tôi báo cáo tài chính cổ phiếu FPT và tìm kiếm (2026-10-02T13:08:39.935Z)"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\nMáy này hiện lưu **1 phiên chat**:\n\n- `20261002-125706-2jlw` · 4 lượt · \"phân tích cho tôi báo cáo tài chính cổ phiếu FPT và tìm kiếm...\" · lưu lúc 02/10/2026 13:08\n\nBạn muốn mình mở lại nội dung phiên đó không? Nếu muốn xem chi tiết, mình đọc theo id `20261002-125706-2jlw`."
+}

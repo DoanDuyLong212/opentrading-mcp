@@ -1,0 +1,141 @@
+{
+ "id": "S21",
+ "q": "Tin mới nhất về Hòa Phát",
+ "ms": 300001,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "tim-kiem-tin-tuc"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/tim-kiem-tin-tuc\n\n# Hunting News Including Rumors\n\nRumor có trước tin chính thống — săn cả hai nhưng bắt buộc phân loại rõ chính thống vs CHƯA XÁC NHẬN. Không bao giờ suy diễn rumor thành sự thật, không bỏ nhãn độ tin.\n\n## When to Use\n\n- Dùng khi: user nêu mã/từ khóa/phạm vi cụ thể, muốn săn tin + rumor + dư luận, muốn xác minh tin đồn, muốn phân tích chi tiết 1 tin.\n- Khi KHÔNG dùng (dùng skill khác thay thế): digest mặc định không từ khóa → `tin"
+  },
+  {
+   "t": "start",
+   "name": "doctor_local",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Model: xem /model (chưa resolve ở đây để tránh đọc key)\n- MCP opentrading: connected (140 tools)"
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "Hòa Phát HPG tin mới nhất",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "Hòa Phát HPG tin đồn tháng 10 2026",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 825,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. HPG: CTCP Tập đoàn Hòa Phát - Hoa Phat Group - Tin tức và sự kiện ...\n   https://finance.vietstock.vn/HPG/tin-tuc-su-kien.htm\n   HPG: Tin tức, sự kiện cập nhật mới nhất: kinh doanh, cổ tức, tăng vốn và MA, giao dịch cổ đông lớn và cổ đông nội bộ, thay đổi nhân sự, lịch chi trả cổ tức, niêm yết, đại hội cổ đông\n2. Giá Cổ Phiếu HPG Hôm Nay + Biểu Đồ & Lịch Trả Cổ Tức\n   https://simplize.vn/co-phieu/HPG\n   Xem thông tin chi "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 810,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. HPG: CTCP Tập đoàn Hòa Phát - Hoa Phat Group - Tin tức và sự kiện ...\n   https://finance.vietstock.vn/HPG/tin-tuc-su-kien.htm\n   HPG: Tin tức, sự kiện cập nhật mới nhất: kinh doanh, cổ tức, tăng vốn và MA, giao dịch cổ đông lớn và cổ đông nội bộ, thay đổi nhân sự, lịch chi trả cổ tức, niêm yết, đại hội cổ đông\n2. HPG: CTCP Tập đoàn Hòa Phát - Hoa Phat Group | VietstockFinance\n   https://finance.vietstock.vn/HPG-ctcp-tap-d"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://www.vietnam.vn/tap-doan-hoa-phat-hpg-rot-gan-10-000-ty-dong-vao-tuong-lai-song-hong-qua-thuong-vu-hoan-doi-co-phan"
+   }
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://nguoiquansat.vn/hoa-phat-hpg-ve-day-1-nam-con-trai-ty-phu-tran-dinh-long-dang-ky-mua-50-trieu-co-phieu-319796.html"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 646,
+   "out": "Tập đoàn Hòa Phát (HPG) rót gần 10.000 tỷ đồng vào Tương Lai Sông Hồng qua thương vụ hoán đổi cổ phần Tiếng Việt Đăng nhập Trang chủ Chủ đề Thời sự Hệ thống Chính trị Địa phương Sự kiện Du lịch Việt Nam Hạnh Phúc Doanh nghiệp Sản phẩm Di sản Bảo tàng Nhân vật Đa phương tiện Dữ liệu Trang chủ Thời sự Kinh tế Tập đoàn Hòa Phát (HPG) rót gần 10.000 tỷ đồng vào Tương Lai Sông Hồng qua thương vụ hoán đổi cổ phần Công ty Cổ phần Tập đoàn Hòa Phát vừa hoàn tất thương vụ mua lại gần 800 triệu cổ phần củ"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 156,
+   "out": "H&#242;a Ph&#225;t: HPG về đ&#225;y 1 năm, con trai tỷ ph&#250; Trần Đ&#236;nh Long đăng k&#253; mua 50 triệu cổ phiếu\nMarket Watch list\nChứng kho&#225;n\nChuyển động thị trường\nDoanh nghiệp A-Z\nC&#226;u chuyện đầu tư\nChuy&#234;n gia - KOL\nBất động sản\nThị trường nh&#224; đất\nHạ tầng - Quy hoạch\nChuyển động dự &#225;n\nKh&#244;ng gian sống\nT&#224;i ch&#237;nh Ng&#226;n h&#224;ng\nNg&#226;n h&#224;ng\nV&#224;ng - Tỷ gi&#225;\nT&#224;i sản số\nDoanh nghiệp\nDoanh nh&#226;n\nG&#243;c nh&#236;n\nC&#226;u chu"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://www.hoaphat.com.vn/tin-tuc/tin-tuc-tap-doan"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 235,
+   "out": "Tin tức tập đoàn\nGiới thiệu\nGiới thiệu chung\nSứ mệnh tầm nhìn\nLịch sử hình thành\nSơ đồ tổ chức\nCông ty thành viên\nVăn hóa doanh nghiệp\nSản phẩm\nGang thép\nỐng thép\nTôn mạ màu - mạ kẽm\nĐiện máy gia dụng\nChế tạo kim loại\nBất động sản\nNông nghiệp\nContainer\nVán sàn\nChất lượng hòa phát\nChứng chỉ chất lượng\nCông nghệ\nGiải thưởng\nQuan hệ cổ đông\nCông bố thông tin\nBáo cáo tài chính\nBáo cáo thường niên\nĐại hội đồng cổ đông\nVăn bản pháp lý\nVăn bản cáo bạch\nPhát triển bền vững\nTrợ giúp cổ đông\nTin tức\nTin t"
+  },
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://dantri.com.vn/kinh-doanh/con-trai-ty-phu-tran-dinh-long-sap-chi-hon-1000-ty-dong-mua-co-phieu-hpg-20261002191940884.htm"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 61,
+   "out": "Con trai tỷ phú Trần Đình Long sắp chi hơn 1.000 tỷ đồng mua cổ phiếu HPG | Báo Dân trí Fica DTiNews Nội vụ & Xã hội Xu hướng # Máy bay Flydubai nghi suýt bị không tặc # Asiad 20 # Bỏ điểm cộng IELTS # Phim ngắn AI và hậu quả của cơn nghiện giải trí # FIFA ASEAN Cup 2026 # Phát hiện trống đồng 32 năm chưa khen thưởng # Go Global Bắc Ninh 2026 # Himass và TanVuu bị khóa tài khoản PUBG # Ra mắt iPhone 18 Tin tức mới nhất Mới nhất Thế giới Quân sự Phân tích - Bình luận Thế giới đó đây Kiều bào Thời"
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "Hòa Phát HPG ngày 5 6 tháng 10 2026 cổ phiếu",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "HPG Hòa Phát nợ vay kỷ lục 98.530 tỷ Dung Quất 2 lợi nhuận quý 3 2026",
+    "numResults": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 762,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. HPG | Giá quá khứ | Lịch sử giá cổ phiếu giao dịch\n   https://web.stockbiz.vn/Stocks/HPG/HistoricalQuotes.aspx\n   HPG | Giá quá khứ | Lịch sử giá cổ phiếu giao dịch. Stockbiz.vn là cổng thông tin tài chính, chứng khoán, kinh tế hàng đầu Việt Nam.\n2. HPG: CTCP Tập đoàn Hòa Phát - Hoa Phat Group | VietstockFinance\n   https://finance.vietstock.vn/HPG-ctcp-tap-doan-hoa-phat.htm\n   CTCP Tập đoàn Hòa Phát (HOSE: HPG) là doanh n"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 981,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. Hòa Phát tăng tốc với HRC, nợ vay tiến sát mốc 100.000 tỷ đồng\n   https://kinhtechungkhoan.vn/hoa-phat-tang-toc-voi-hrc-no-vay-tien-sat-moc-100000-ty-dong\n   Theo báo cáo tài chính hợp nhất quý II/2026, tổng dư nợ vay của Tập đoàn Hòa Phát (HPG) tại ngày 30/6 đạt hơn 98.530 tỷ đồng, tăng gần 7.913 tỷ đồng so với cuối quý I. Mức tăng chủ yếu đến từ vay ngắn hạn nhằm bổ sung vốn lưu động cho hoạt động sản xuất.\n2. Nợ vay củ"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n\n\n\n\n<｜DSML｜ calls>\n## Tóm tắt\n\nTâm điểm tin Hòa Phát (HPG) mấy ngày qua nằm ở **2 sự kiện doanh nghiệp** (không phải rumor): con trai Chủ tịch đăng ký mua 50 triệu cổ phiếu, và thương vụ hoán đổi cổ phần ~10.000 tỷ với Tương Lai Sông Hồng. Nền tảng cơ bản vẫn là câu chuyện Dung Quất 2 đã vận hành + gánh nợ vay kỷ lục. Giá hiện quanh **20.350đ** [24hmoney/vietstock · 06/10/2026], vùng thấp nhất ~15 tháng.\n\n## Verdict tin (4 cột)\n\n| Tiêu đề | Tuổi tin | Độ tin cậy + provenance | Triển vọng |\n|---|---|---|---|\n| Ông Trần Vũ Minh (con Chủ tịch) đăng ký mua 50 triệu cp HPG, 7/10–5/11/2026, giá trị ~1.002 tỷ | ~4 ngày | Chính thống (công bố HPG) · web | Tín hiệu nội bộ mua vào; chỉ là noise cho KQKD, nhưng hỗ trợ tâm lý/cầu |\n| Hoàn tất mua 799,5 triệu cp (25,13%) của Tương Lai Sông Hồng qua hoán đổi tài sản, giá trị sổ sách 9.915 tỷ | ~5 ngày (NQ 1/10) | Chính thống (NQ HĐQT) · web | Tái cấu trúc mảng BĐS: Hòa Phát Real Estate từ công ty con → liên kết; Tương Lai Sông Hồng thành liên kết mới |\n| Nhà máy ray & thép đặc biệt Dung Quất hoàn thành ~70% tiến độ | ~2 tuần | Chính thống (HPG) · web | Động lực trung hạn, chưa đóng góp doanh thu |\n| Nợ vay kỷ lục 98.530 tỷ đồng (30/6/2026), +9% so đầu năm | ~1–3 tháng (BCTC Q2) | Chính thống (BCTC) · web | Rủi ro chi phí lãi vay khi mở rộng công suất |\n| HPG được vinh danh Top 10 Thương hiệu mạnh VN 2026; đạt chứng chỉ xuất khẩu cáp dự ứng lực sang Ba Lan | ~3–5 ngày | Chính thống (HPG) · web | Noise/PR, chứng chỉ Ba Lan là tín hiệu xuất khẩu nhỏ |\n\n**Không phát hiện tin đồn/rumor chưa xác nhận** nào đáng chú ý quanh HPG trong các nguồn quét được. Lưu ý: chưa quét được dư luận Fireant (sentiment) trong phiên này.\n\n## Phân tích chi tiết tin quan trọng nhất\n\n**1) Nội bộ gom hàng — ông Trần Vũ Minh đăng ký mua 50 triệu cp (7/10–5/11/2026)**\n- Trước giao dịch ông Minh nắm gần 231 triệu cp; nếu mua đủ sẽ lên ~281 triệu cp (~2,74% vốn). Tính cả gia đình ông Long, nhóm liên quan ~35,5% vốn [dantri/nguoiquansat · 02/10/2026].\n- Tiền lệ: tháng 3–4/2026 ông Minh đăng ký 50 triệu cp nhưng chỉ mua được **33,3 triệu** (66%), lý do \"thị trường không phù hợp kế hoạch giải ngân\" → đừng coi đăng ký là cam kết mua đủ.\n- Đây là giao dịch người nội bộ/liên quan: bản chất là **tín hiệu niềm tin**, không làm thay đổi hoạt động kinh doanh.\n\n**2) Hoán đổi cổ phần với Tương Lai Sông Hồng ~10.000 tỷ**\n- HPG dùng **778,4 triệu cp Hòa Phát Real Estate** (định giá 32.000đ/cp) để góp vốn thanh toán, nhận 799,5 triệu cp Tương Lai Sông Hồng, ghi nhận 9.915 tỷ, sở hữu **25,13%** [Doanh Nhân/Báo Pháp Luật · 05/10/2026].\n- Hệ quả kế toán: tỷ lệ tại Hòa Phát Real Estate giảm còn 26,55% → **mất quyền kiểm soát**, chuyển từ công ty con sang liên kết. Việc này có thể làm thay đổi đáng kể bảng cân đối và các chỉ tiêu hợp nhất (doanh thu, nợ) kể từ kỳ tới — cần theo dõi BCTC, không nên suy đoán số.\n- Tương Lai Sông Hồng (lập 11/2025, vốn điều lệ đã tăng lên 39.450 tỷ) đang làm các dự án đô thị lớn ở Đông Anh/Thư Lâm, Lĩnh Nam. Đây là cú đặt cược BĐS dài hạn.\n\n## Rủi ro (bear case)\n- **Đòn bẩy cao**: nợ vay 98.530 tỷ đồng cuối Q2/2026, chi phí lãi vay gộp ~15.000 tỷ từ 2022 — nhạy cảm với lãi suất [kinhtechungkhoan/nguoiquansat · web]. Bù lại, lợi nhuận chưa phân phối ~54.128 tỷ đồ"
+}

@@ -1,0 +1,23 @@
+{
+ "id": "F03",
+ "q": "Đọc giúp tôi nội dung trang https://example.com",
+ "ms": 92635,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "web_fetch",
+   "input": {
+    "url": "https://example.com",
+    "format": "text"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 102,
+   "out": "Example Domain This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes."
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\nNội dung trang https://example.com:\n\n- Tiêu đề: **Example Domain**\n- Toàn văn: \"This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.\"\n\n[example.com · tải trực tiếp hôm nay]\n\nĐây chỉ là trang minh hoạ mặc định của IANA, không có nội dung thị trường hay dữ liệu gì để phân tích. Nếu bạn muốn mình đọc một bài báo, công bố doanh nghiệp hay báo cáo cụ thể, gửi link thật là mình xử lý ngay."
+}

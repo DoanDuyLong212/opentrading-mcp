@@ -1,0 +1,156 @@
+{
+ "id": "S16",
+ "q": "Thị trường crypto hôm nay sao, funding thế nào",
+ "ms": 300002,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "nhip-dap-crypto"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/nhip-dap-crypto\n\n# Reading Crypto Pulse in Plain Language\n\nViết cho người ít chuyên crypto: mọi thuật ngữ bắt buộc giải thích 1 dòng kèm theo số. Trả lời đúng 3 câu. Crypto chạy 24/7 nên số \"hôm nay\" khác phiên chứng khoán VN — đừng so lệch phiên.\n\n## When to Use\n\n- Dùng khi: user hỏi BTC/ETH/SOL sao rồi, crypto lên hay xuống, funding/OI nói gì, giá crypto quy ra VND, crypto có liên thông gì tới chứng khoán VN.\n- Khi KHÔNG dùng (dùng skill khác th"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "BTCUSDT",
+    "count": 30,
+    "summary": true
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "ETHUSDT",
+    "count": 30,
+    "summary": true
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 710,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"BTCUSDT\",\n    \"count\": 30,\n    \"last\": 2247536657.04,\n    \"high\": 2270496675.48,\n    \"low\": 1947735147.03\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T12:11:22.317257+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "SOLUSDT",
+    "count": 30,
+    "summary": true
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 566,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"ETHUSDT\",\n    \"count\": 30,\n    \"last\": 70859245.0,\n    \"high\": 72912113.51,\n    \"low\": 61281001.65\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T12:11:22.922015+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_fear_greed",
+   "input": {
+    "limit": 7
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1737,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"SOLUSDT\",\n    \"count\": 30,\n    \"last\": 3158406.79,\n    \"high\": 3238681.61,\n    \"low\": 2500804.52\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T12:11:24.561978+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1986,
+   "out": "{\n  \"data\": {\n    \"series\": [\n      {\n        \"t\": \"1791244800\",\n        \"v\": \"73\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791158400\",\n        \"v\": \"70\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791072000\",\n        \"v\": \"65\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790985600\",\n        \"v\": \"67\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790899200\",\n        \"v\": \"72\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"17908128"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "count": 14,
+    "columns": [
+     "time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume"
+    ],
+    "symbol": "BTCUSDT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__compare_assets",
+   "input": {
+    "assets": [
+     "BTC-USD",
+     "ETH-USD",
+     "SOL-USD"
+    ],
+    "timeframe": "1d"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 3013,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"BTCUSDT\",\n    \"bars\": [\n      {\n        \"time\": \"2026-09-22T00:00:00\",\n        \"open\": 2108841758.49,\n        \"high\": 2270496675.48,\n        \"low\": 2101654645.04,\n        \"close\": 2250723116.35,\n        \"volume\": 1498947371793276\n      },\n      {\n        \"time\": \"2026-09-23T00:00:00\",\n        \"open\": 2250761101.88,\n        \"high\": 2253246313.13,\n        \"low\": 2211612209.15,\n        \"close\": 2239531322.55,\n        \"volume\": 1060369074789528\n      },\n      {\n        \""
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 5463,
+   "out": "{\n  \"data\": [\n    {\n      \"ticker\": \"BTC-USD\",\n      \"price\": 85697.640625,\n      \"prev\": null\n    },\n    {\n      \"ticker\": \"ETH-USD\",\n      \"price\": 2705.02001953125,\n      \"prev\": null\n    },\n    {\n      \"ticker\": \"SOL-USD\",\n      \"price\": 120.19000244140625,\n      \"prev\": null\n    }\n  ],\n  \"provenance\": {\n    \"source\": \"yfinance\",\n    \"as_of\": \"2026-10-06T12:12:29.929198+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "columns": [
+     "time",
+     "close"
+    ],
+    "count": 3,
+    "symbol": "ETHUSDT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "columns": [
+     "time",
+     "close"
+    ],
+    "count": 3,
+    "symbol": "SOLUSDT"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 797,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"ETHUSDT\",\n    \"bars\": [\n      {\n        \"time\": \"2026-10-03T00:00:00\",\n        \"close\": 69342581.54\n      },\n      {\n        \"time\": \"2026-10-04T00:00:00\",\n        \"close\": 69839077.99\n      },\n      {\n        \"time\": \"2026-10-05T00:00:00\",\n        \"close\": 70859245.0\n      }\n    ]\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T12:13:48.417032+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 657,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"SOLUSDT\",\n    \"bars\": [\n      {\n        \"time\": \"2026-10-03T00:00:00\",\n        \"close\": 3082687.83\n      },\n      {\n        \"time\": \"2026-10-04T00:00:00\",\n        \"close\": 3109456.5\n      },\n      {\n        \"time\": \"2026-10-05T00:00:00\",\n        \"close\": 3158406.79\n      }\n    ]\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T12:13:49.016571+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\nDữ liệu crypto mới nhất (nến ngày gần nhất 05/10, crypto chạy 24/7 nên khác nhịp phiên VN):\n\n| Đồng | Giá (VND) | Giá (USD) | Biến động phiên |\n|---|---|---|---|\n| BTC | 2.247.536.657"
+}

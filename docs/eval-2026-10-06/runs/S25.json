@@ -1,0 +1,22 @@
+{
+ "id": "S25",
+ "q": "Biên độ giá sàn HOSE là bao nhiêu",
+ "ms": 87377,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "vn-market-basics"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/vn-market-basics\n\n# Explaining Vietnam Market Mechanics\n\nTrả lời gọn theo từng sàn (nếu khác nhau) + ghi chú KRX/CCP/nâng hạng có thể đã cũ + 1 dòng khuyên đối chiếu nguồn chính thức. Không bao giờ đưa ra con số giá hay chỉ số thị trường hiện tại trong skill này.\n\n## When to Use\n\n- Dùng khi: user hỏi sàn HOSE/HNX/UPCoM, phiên ATO/liên tục/ATC, biên độ giá, bước giá, lô chẵn/lẻ, chu kỳ thanh toán, loại lệnh (LO, MP, ATO, ATC...).\n- Khi KHÔNG dùng ("
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n**Biên độ giá theo sàn (quy định đang áp dụng theo hiểu biết của mình):**\n\n- **HOSE: ±7%** so với giá tham chiếu.\n- **HNX: ±10%**\n- **UPCoM: ±15%**\n\n**Một số trường hợp đặc biệt (HOSE):**\n- **Ngày giao dịch đầu tiên (IPO/niêm yết mới): ±20%**\n- **Phiên giao dịch trở lại sau khi bị tạm ngừng ≥ 1 ngày: ±7%** như bình thường (khác với một số sàn, ngày trở lại thường áp biên độ như ngày đầu).\n\n**Lưu ý về độ mới của thông tin:**\n- Đây là cơ chế theo hiểu biết của mình, **có thể đã cũ**. Quy định biên độ/bước giá/lô có thể thay đổi theo lộ trình hệ thống **KRX**, tiến trình **CCP** (đối tác bù trừ trung tâm) và việc **nâng hạng FTSE**. Mình không xác nhận được trạng thái áp dụng mới nhất — bạn nên đối chiếu thông báo chính thức của **Sở Giao dịch (HOSE)** hoặc **công ty chứng khoán** bạn giao dịch trước khi dùng để tính toán.\n\nBạn có muốn mình giải thích thêm **bước giá** (tick) và **lô giao dịch tối thiểu** của từng sàn không?"
+}

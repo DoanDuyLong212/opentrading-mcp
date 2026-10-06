@@ -1,0 +1,78 @@
+{
+ "id": "F07",
+ "q": "So sánh nhanh giá VCB HPG MSN cùng lúc cho đỡ chờ",
+ "ms": 300006,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ve-bieu-do-ky-thuat"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ve-bieu-do-ky-thuat\n\n# Drawing Charts Inside the TUI\n\nSkill thuần hiển thị: số liệu lấy từ tool dữ liệu mỗi lần gọi, không có số live cố định — không bịa số minh họa thành số thật. Dùng lại dữ liệu đã có trong context, không fetch lại.\n\n## When to Use\n\n- Dùng khi: user nói vẽ, chart, nến, candlestick, đường giá, sparkline, so sánh 2–5 mã, bar ngành/top tăng giảm, gauge fear/greed, heatmap tương quan, donut tỷ trọng, histogram phân phối, depth orde"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__compare_assets",
+   "input": {
+    "assets": [
+     "VCB.VN",
+     "HPG.VN",
+     "MSN.VN"
+    ],
+    "timeframe": "1mo"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 993,
+   "out": "{\n  \"data\": [\n    {\n      \"ticker\": \"VCB.VN\",\n      \"price\": 56400.0,\n      \"prev\": 57000.0\n    },\n    {\n      \"ticker\": \"HPG.VN\",\n      \"price\": 20350.0,\n      \"prev\": 20500.0\n    },\n    {\n      \"ticker\": \"MSN.VN\",\n      \"price\": 71300.0,\n      \"prev\": 71300.0\n    }\n  ],\n  \"provenance\": {\n    \"source\": \"yfinance\",\n    \"as_of\": \"2026-10-06T12:19:58.226407+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "chart_compare",
+   "input": {
+    "title": "VCB vs HPG vs MSN — gia phien gan nhat (%)",
+    "series": [
+     {
+      "label": "VCB",
+      "values": [
+       57000,
+       56400
+      ]
+     },
+     {
+      "label": "HPG",
+      "values": [
+       20500,
+       20350
+      ]
+     },
+     {
+      "label": "MSN",
+      "values": [
+       71300,
+       71300
+      ]
+     }
+    ],
+    "width": 60,
+    "height": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 11,
+   "out": "VCB vs HPG vs MSN — gia phien gan nhat (%) · so sánh % thay đổi từ điểm đầu (3 chuỗi):\n      0┤\u001b[33m⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉\u001b[0m\n       │     \u001b[32m⠉⠒\u001b[0m\u001b[36m⠉⠉⠒⠢⠤⢄⣀⡀\u001b[0m                                     \n       │          \u001b[32m⠉⠑⠒⠤\u001b[0m\u001b[36m⠈⠉⠑⠒⠢⠤⢄⣀\u001b[0m                              \n       │               \u001b[32m⠈⠉⠒⠤⢄⡀\u001b[0m \u001b[36m⠉⠉⠒⠒⠤⠤⣀⣀\u001b[0m                      \n -0.500┤                    \u001b[32m⠈⠉⠒⠢⢄⣀\u001b[0m    \u001b[36m⠉⠑⠒⠢⠤⢄⣀⡀\u001b[0m              \n       │                   "
+  }
+ ],
+ "text": "\n\n\n\n<｜DSML｜ calls>\n"
+}

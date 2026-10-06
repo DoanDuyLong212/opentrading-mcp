@@ -1,0 +1,69 @@
+{
+ "id": "S10",
+ "q": "Fed tháng tới cắt hay giữ lãi suất",
+ "ms": 300000,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "du-doan-fed"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/du-doan-fed\n\n# Reading the Next Fed Decision\n\nTrả về đúng 5 mục: xác suất từng kịch bản → đường cong → lịch FOMC → biến số theo dõi → hàm ý VN. Chỉ drill 1 event Fed chính (slug mới nhất, đã sort vol24h) — không bắn 5 query biến thể.\n\n## When to Use\n\n- Dùng khi: user hỏi Fed kỳ tới (cắt/giữ/tăng), FOMC, dot plot, xác suất odds + đường cong + hàm ý VN.\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Bối cảnh vĩ mô Mỹ chung (chu kỳ, việc làm, risk "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__symbol_resolve",
+   "input": {
+    "query": "world_prediction_odds fed"
+   }
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 12:51:54 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T12:51:54+07:00"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1690,
+   "out": "{\n  \"data\": {\n    \"query\": \"world_prediction_odds fed\",\n    \"resolved\": null,\n    \"ambiguous\": false,\n    \"candidates\": []\n  },\n  \"provenance\": {\n    \"source\": \"vnstock+local\",\n    \"as_of\": \"2026-10-06T12:51:56.224890+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"empty\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "spawn_subagent",
+   "input": {
+    "description": "Lấy odds Fed kỳ tới",
+    "task": "Bạn là subagent thu thập dữ liệu dự đoán Fed.\n\nNhiệm vụ:\n1. Gọi tool world_prediction_odds với query=\"fed\" để lấy các event dự đoán về Fed, kèm prob_pct, volume, end-date, URL.\n2. Gọi tool polymarket_event với slug dạng \"fed-decision-*\" (chọn slug mới nhất, volume 24h cao nhất) để drill-down chi tiết các kịch bản cắt/giữ/tăng.\n3. Gọi tool fred_series cho DGS10 và DGS2 (lợi suất Mỹ 10Y, 2Y); nếu được thêm EFFR.\n4. Gọi tool yf_yield_curve để lấy đường cong lợi suất Mỹ.\n\nYêu cầu: trả về nguyên văn số liệu thô (prob_pct từng kịch bản, volume, end-date, URL event; giá trị lợi suất US10Y/US2Y; có đảo ngược hay không), KHÔNG suy diễn thêm. Nếu tool nào lỗi hoặc không tồn tại, ghi rõ tên tool và lỗi. Kèm thời điểm asof của từng dữ liệu.",
+    "maxSteps": 10,
+    "tools": [
+     "mcp__opentrading__world_prediction_odds",
+     "mcp__opentrading__polymarket_event",
+     "mcp__opentrading__fred_series",
+     "mcp__opentrading__yf_yield_curve",
+     "web_fetch",
+     "web_search"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 60000,
+   "out": "Tool spawn_subagent quá thời gian (60s)."
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n"
+}

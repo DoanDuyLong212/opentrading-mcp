@@ -41,6 +41,12 @@
 > (đã đủ: render/compare/depth + màu/size). Không tạo skills mới — các tên
 > `giam-sat-canh-bao`, `quet-thi-truong-tim-co-hoi`, `tim-kiem-web`, `doc-trang-web`,
 > `chay-xac-minh-cuoi-phien` hiện chưa tồn tại trong repo OpenTrading.
+>
+> **Bản 06-10-2026 (fix từ eval live, đợt 1)** — 7 skills thêm guard chọn nguồn đúng
+> (eval phát hiện model dùng `vn_crypto_ohlcv` cho cổ phiếu, đi web trực tiếp thay vì
+> tool chuyên): `phan-tich-chuyen-sau-1-ma` 1.2.2, `kiem-chien-luoc-backtest` 1.2.2,
+> `ve-bieu-do-ky-thuat`/`nhip-dap-crypto`/`tim-kiem-tin-tuc` → 1.2.1,
+> `danh-gia-vi-mo-quoc-te`/`bat-on-quoc-gia` → 1.1.1. Chi tiết: `docs/eval-2026-10-06/`.
 
 ## Đặc tả frontmatter chung
 
@@ -59,31 +65,31 @@
 
 | # | Skill | Kích hoạt | Budget | Version | Tools yêu cầu (đã bỏ prefix mcp__) |
 |---|---|---|---|---|---|
-| 1 | `bat-on-quoc-gia` | auto | 6 | 1.1.0 | geo_intel |
+| 1 | `bat-on-quoc-gia` | auto | 6 | 1.1.1 | geo_intel |
 | 2 | `co-ban-chuyen-sau` | auto | 9 | 1.1.0 | financial_detail |
 | 3 | `danh-gia-tinh-hinh-chinh-tri-toan-cau` | auto | 8 | 1.1.0 | — |
 | 4 | `danh-gia-tinh-hinh-xung-dot` | auto | 9 | 1.1.0 | event_stats |
 | 5 | `danh-gia-truoc-bctc` | auto | 10 | 1.1.0 | company_events |
-| 6 | `danh-gia-vi-mo-quoc-te` | auto | 10 | 1.1.0 | fred_series |
+| 6 | `danh-gia-vi-mo-quoc-te` | auto | 10 | 1.1.1 | fred_series |
 | 7 | `danh-gia-vi-mo-viet-nam` | auto | 12 | 1.2.0 | vs_indicator_data |
 | 8 | `devil-advocate` | auto | — | 1.2.0 | — |
 | 9 | `dinh-gia-chuyen-sau` | auto | 7 | 1.1.0 | valuation_run |
 | 10 | `du-doan-fed` | auto | 8 | 1.1.0 | world_prediction_odds |
 | 11 | `du-doan-polymarket` | auto | 6 | 1.1.0 | world_prediction_odds |
 | 12 | `explain-term` | auto | — | 1.2.0 | — |
-| 13 | `kiem-chien-luoc-backtest` | auto | 12 | 1.2.1 | quant_backtest |
+| 13 | `kiem-chien-luoc-backtest` | auto | 12 | 1.2.2 | quant_backtest |
 | 14 | `kiem-tra-nguon-du-lieu` | manual | 12 | 1.1.0 | doctor |
 | 15 | `ky-thuat-chuyen-sau` | auto | 8 | 1.2.0 | signals_technical |
-| 16 | `nhip-dap-crypto` | auto | 6 | 1.2.0 | crypto_spot |
-| 17 | `phan-tich-chuyen-sau-1-ma` | auto | 8 | 1.2.1 | stock_overview |
+| 16 | `nhip-dap-crypto` | auto | 6 | 1.2.1 | crypto_spot |
+| 17 | `phan-tich-chuyen-sau-1-ma` | auto | 8 | 1.2.2 | stock_overview |
 | 18 | `phan-tich-sentiment` | auto | 6 | 1.1.0 | sentiment_score |
 | 19 | `phan-tich-vang-ty-gia` | auto | 10 | 1.2.0 | vn_retail_gold |
 | 20 | `so-sanh-cung-nganh` | auto | 8 | 1.2.0 | compare_equities |
 | 21 | `tim-co-hoi-bao-cao-ctck` | auto | 8 | 1.2.0 | analyst_consensus |
-| 22 | `tim-kiem-tin-tuc` | auto | 10 | 1.2.0 | news_symbol |
+| 22 | `tim-kiem-tin-tuc` | auto | 10 | 1.2.1 | news_symbol |
 | 23 | `tin-tuc-nong-quoc-te` | auto | 8 | 1.1.0 | news_market |
 | 24 | `tin-tuc-nong-viet-nam` | auto | 9 | 1.1.0 | news_market |
-| 25 | `ve-bieu-do-ky-thuat` | auto | 8 | 1.2.0 | chart_render (local) |
+| 25 | `ve-bieu-do-ky-thuat` | auto | 8 | 1.2.1 | chart_render (local) |
 | 26 | `vn-market-basics` | auto | — | 1.2.0 | — |
 
 ---
@@ -99,8 +105,9 @@ requires_tools: [mcp__opentrading__geo_intel]
 tool_budget: 6
 triggers:
   keywords: [bất ổn, bất ổn quốc gia, biểu tình, đảo chính, ổn định, thái lan, bangladesh]
-version: 1.1.0
+version: 1.1.1
 ```
+
 
 # Assessing Single-Country Stability
 
@@ -126,7 +133,7 @@ Task Progress:
 
 **Step 1: Đo cường độ (bắt buộc).**
 
-Chạy song song 2 calls cùng upstream GDELT: `geo_intel` (topic = tên nước tiếng Anh) + `event_stats` (query = tên nước tiếng Anh). Query tiếng Anh 1 lần + tối đa 1 biến thể; query tiếng Việt rỗng là đặc trưng data, không phải lỗi. GDELT rate-limit thì retry tối đa 1 lần sau backoff (server đã cache 600s); vẫn lỗi thì ghi trung thực và verdict dựa trên dữ liệu cũ.
+Chạy song song 2 calls cùng upstream GDELT: `geo_intel` (topic = tên nước tiếng Anh) + `event_stats` (query = tên nước tiếng Anh). CẤM đi web_search/web_fetch trước khi có counts GDELT — web chỉ dùng ở Step 2 khi Step 1 mỏng. Query tiếng Anh 1 lần + tối đa 1 biến thể; query tiếng Việt rỗng là đặc trưng data, không phải lỗi. GDELT rate-limit thì retry tối đa 1 lần sau backoff (server đã cache 600s); vẫn lỗi thì ghi trung thực và verdict dựa trên dữ liệu cũ.
 
 **Step 2: Xác minh bằng tin (chỉ khi Step 1 mỏng).**
 
@@ -472,8 +479,9 @@ requires_tools: [mcp__opentrading__fred_series]
 tool_budget: 10
 triggers:
   keywords: [kinh tế mỹ, recession, suy thoái, đường cong lợi suất, yield curve, risk-on, risk-off, fed bối cảnh, kinh tế toàn cầu]
-version: 1.1.0
+version: 1.1.1
 ```
+
 
 # Reading US and Global Macro Regime
 
@@ -500,7 +508,7 @@ Task Progress:
 
 **Step 1: Chu kỳ Mỹ (song song).**
 
-Chạy `fred_series` (DGS10) + `fred_series` (CPIAUCSL) + `yf_yield_curve`. FRED thiếu key → trả unavailable → chuyển nhánh không-FRED (dùng `yf_yield_curve` + `yf_global_indices`) + ghi chú trung thực thiếu series nào. Curve flaky thì retry tối đa 1 lần sau backoff rồi bỏ.
+Chạy `fred_series` (DGS10) + `fred_series` (CPIAUCSL) + `yf_yield_curve`. CẤM đi web_search/web_fetch trước khi gọi tool chuyên — web chỉ bổ sung sau khi đã có số FRED. FRED thiếu key → trả unavailable → chuyển nhánh không-FRED (dùng `yf_yield_curve` + `yf_global_indices`) + ghi chú trung thực thiếu series nào. Curve flaky thì retry tối đa 1 lần sau backoff rồi bỏ.
 
 **Step 2: Chế độ rủi ro (song song, tuần tự sau Step 1).**
 
@@ -945,8 +953,9 @@ requires_tools: [mcp__opentrading__quant_backtest]
 tool_budget: 12
 triggers:
   keywords: [backtest, kiểm chứng, chiến lược, sma cross, rsi dưới, quá bán, momentum chiến lược, param sweep, mùa vụ tháng, sau tết, sau chia cổ tức, theo giá dầu, theo giá vàng]
-version: 1.2.1
+version: 1.2.2
 ```
+
 
 # Backtesting Trading Strategies Honestly
 
@@ -973,7 +982,7 @@ Task Progress:
 
 **Step 1: Dữ liệu (tuần tự đầu tiên).**
 
-Chạy `vn_quote_history` (stock) hoặc `dnse_ohlc_history` (futures/index) + `vn_index_ohlcv` (benchmark). Chỉ 1 symbol mỗi lần sweep.
+Chạy `vn_quote_history` (stock) hoặc `dnse_ohlc_history` (futures/index) + `vn_index_ohlcv` (benchmark). Chỉ 1 symbol mỗi lần sweep. Mã cổ phiếu VN thì dùng nến equity — CẤM dùng `vn_crypto_ohlcv`.
 
 **Step 2: Điều kiện kỹ thuật.**
 
@@ -1147,8 +1156,9 @@ requires_tools: [mcp__opentrading__crypto_spot]
 tool_budget: 6
 triggers:
   keywords: [btc, bitcoin, eth, ethereum, crypto, tiền số, tiền ảo, funding]
-version: 1.2.0
+version: 1.2.1
 ```
+
 
 # Reading Crypto Pulse in Plain Language
 
@@ -1173,7 +1183,7 @@ Task Progress:
 
 **Step 1: Giá spot.**
 
-Chạy `crypto_spot` (BTC ETH SOL — tối đa 3 đồng/wave 1). Giá + % 24h = "tăng/giảm bao nhiêu hôm nay".
+Chạy `crypto_spot` (BTC ETH SOL — tối đa 3 đồng/wave 1). Giá + % 24h = "tăng/giảm bao nhiêu hôm nay". CẤM dùng `vn_crypto_ohlcv` thay thế (giá quy VND ≠ giá USD thật) — tool đó chỉ dùng ở Step 3 khi user hỏi giá VND.
 
 **Step 2: Đòn bẩy derivs.**
 
@@ -1207,8 +1217,9 @@ requires_tools: [mcp__opentrading__stock_overview]
 tool_budget: 8
 triggers:
   keywords: [phân tích, phân tích cổ phiếu, phân tích mã, toàn diện, chi tiết mã, mã này sao]
-version: 1.2.1
+version: 1.2.2
 ```
+
 
 # Coordinating Full Single-Stock Analysis
 
@@ -1240,7 +1251,7 @@ Task Progress:
 
 **Step 1: Xác định mã (gọi trực tiếp).**
 
-Chạy `symbol_lookup` (tên công ty) · `symbol_resolve` (mã đa loại, có fallback xếp hạng). Mã nhập nhằng (vàng/BTC/USD) thì bắt buộc `symbol_resolve` trước. `symbol_resolve` trả nhiều ứng viên → chọn hạng cao nhất + ghi rõ đã resolve từ tên nào sang mã nào; thiếu mã thì dừng và hỏi lại, không đoán mã.
+Chạy `symbol_lookup` (tên công ty) · `symbol_resolve` (mã đa loại, có fallback xếp hạng). Mã nhập nhằng (vàng/BTC/USD) thì bắt buộc `symbol_resolve` trước. `symbol_resolve` trả nhiều ứng viên → chọn hạng cao nhất + ghi rõ đã resolve từ tên nào sang mã nào; thiếu mã thì dừng và hỏi lại, không đoán mã. Sau khi có mã: cổ phiếu VN → nến/tools `vn_*`/`vs_*`; crypto → `crypto_spot` (USD, không dùng `vn_crypto_ohlcv` trừ khi hỏi giá VND).
 
 **Step 2: Ngành + kiếm tiền nhờ đâu (gọi trực tiếp).**
 
@@ -1556,8 +1567,9 @@ requires_tools: [mcp__opentrading__news_symbol]
 tool_budget: 10
 triggers:
   keywords: [tin về, tìm tin, tin tức về, news về, tin trên, dư luận về, nghe đồn, tin đồn, có thật không]
-version: 1.2.0
+version: 1.2.1
 ```
+
 
 # Hunting News Including Rumors
 
@@ -1582,7 +1594,7 @@ Task Progress:
 
 **Mode A — Theo mã (+ rumor).**
 
-1. Chạy `news_symbol` (symbol, limit=20) trước.
+1. Chạy `news_symbol` (symbol, limit=20) trước. CẤM đi web_search trước khi có kết quả `news_symbol` — web chỉ để xác minh chéo sau.
 2. Săn web + comments song song: `web_search` ("tên mã" + "đồn"/"tin đồn"/rumor, tối đa 2 query) → `web_fetch` 1–2 URL đáng ngờ nhất + `fireant_thread` (post_id từ bước 1 — rumor nằm ở replies; Fireant posts giờ có id thật, không bịa post_id).
 3. Đối chiếu tuần tự: `corporate_calendar` (symbol) + `company_events` (symbol) — tin có khớp công bố không?
 4. Dư luận: `sentiment_score` (symbol). Đủ ≥5 tin đạt chuẩn thì dừng.
@@ -1747,8 +1759,9 @@ requires_tools: [chart_render]
 triggers:
   keywords: [vẽ, chart, nến, candlestick, đường giá, sparkline, biểu đồ, đồ thị, so sánh, bar, gauge, heatmap, donut, histogram, fear, greed, tương quan, tỷ trọng]
 tool_budget: 8
-version: 1.2.0
+version: 1.2.1
 ```
+
 
 # Drawing Charts Inside the TUI
 
@@ -1787,7 +1800,7 @@ Task Progress:
 
 **Step 1: Lấy dữ liệu.**
 
-Lấy tool dữ liệu theo bảng tra trên. Thiếu thì báo trung thực, không vẽ chay. Ngưỡng tối thiểu: candlestick ≥5 nến; line/sparkline/area/winloss ≥2 điểm; histogram ≥5 điểm; heatmap matrix phi rỗng; gauge/donut cần value+max. Chưa đủ thì không vẽ, báo thiếu data.
+Lấy tool dữ liệu theo bảng tra trên. Chọn nguồn đúng trước khi vẽ: mã VN → `vn_equity_ohlcv`/`vn_quote_history` (KHÔNG dùng `vn_crypto_ohlcv` cho cổ phiếu); crypto USD → `crypto_spot`. Thiếu thì báo trung thực, không vẽ chay. Ngưỡng tối thiểu: candlestick ≥5 nến; line/sparkline/area/winloss ≥2 điểm; histogram ≥5 điểm; heatmap matrix phi rỗng; gauge/donut cần value+max. Chưa đủ thì không vẽ, báo thiếu data.
 
 **Step 2: Vẽ.**
 

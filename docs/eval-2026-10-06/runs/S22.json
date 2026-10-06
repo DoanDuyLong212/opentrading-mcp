@@ -1,0 +1,106 @@
+{
+ "id": "S22",
+ "q": "Tin thế giới hôm nay có gì nóng",
+ "ms": 300002,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "tin-tuc-nong-quoc-te"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/tin-tuc-nong-quoc-te\n\n# Digesting Global Hot News With Market Reaction\n\nTin thế giới + market reaction xác nhận bằng SỐ — không đưa tin suông. Tin chưa có reaction thì bắt buộc ghi \"thị trường chưa phản ánh\", không bịa reaction. Tin đồn quốc tế bắt buộc nhãn `CHƯA XÁC NHẬN`.\n\n## When to Use\n\n- Dùng khi: tin quốc tế/Mỹ/Trung, Fed, Wall Street, cần headline + số liệu thị trường xác nhận.\n- Khi KHÔNG dùng (dùng skill khác thay thế): tin VN → `tin-tuc"
+  },
+  {
+   "t": "start",
+   "name": "doctor_local",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Model: xem /model (chưa resolve ở đây để tránh đọc key)\n- MCP opentrading: connected (140 tools)"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_market",
+   "input": {
+    "sources": "gdelt"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__geo_intel",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 43965,
+   "out": "{\n  \"data\": {\n    \"tool\": \"news_market\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:42:59.320464+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"rate limited: https://api.gdeltproject.org/api/v2/doc/doc\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 44173,
+   "out": "{\n  \"data\": {\n    \"tool\": \"geo_intel\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:42:59.586452+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"rate limited: https://api.gdeltproject.org/api/v2/doc/doc (retry-after-gdelt)\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__yf_mega_flows",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_fear_greed",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__snapshot_history",
+   "input": {
+    "kind": "news_feed"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_market",
+   "input": {
+    "sources": "gdelt",
+    "query": "world markets"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 4476,
+   "out": "{\n  \"data\": {\n    \"series\": [\n      {\n        \"t\": \"1791244800\",\n        \"v\": \"73\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791158400\",\n        \"v\": \"70\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791072000\",\n        \"v\": \"65\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790985600\",\n        \"v\": \"67\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790899200\",\n        \"v\": \"72\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"17908128"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 5970,
+   "out": "{\n  \"data\": {\n    \"universe\": \"mega-cap leaders\",\n    \"leaders\": [\n      {\n        \"ticker\": \"AAPL\",\n        \"price\": 332.8900146484375,\n        \"prev\": 333.69000244140625\n      },\n      {\n        \"ticker\": \"MSFT\",\n        \"price\": 525.1799926757812,\n        \"prev\": 517.530029296875\n      },\n      {\n        \"ticker\": \"NVDA\",\n        \"price\": 238.89999389648438,\n        \"prev\": 233.9499969482422\n      },\n      {\n        \"ticker\": \"AMZN\",\n        \"price\": 251.39999389648438,\n        \"prev\": 251.52"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 6073,
+   "out": "{\n  \"data\": {\n    \"kind\": \"news_feed\",\n    \"rows\": []\n  },\n  \"provenance\": {\n    \"source\": \"postgres\",\n    \"as_of\": \"2026-10-06T12:44:01.838622+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"empty\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 48414,
+   "out": "{\n  \"data\": {\n    \"tool\": \"news_market\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:44:44.423858+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"g timed out after 45.0s\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n\n\n"
+}

@@ -1,0 +1,39 @@
+{
+ "id": "F06",
+ "q": "Tạo watchlist cá nhân tên bank gồm VCB CTG",
+ "ms": 138693,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "watchlist_local_create",
+   "input": {
+    "name": "bank"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2,
+   "out": "Đã tạo watchlist \"BANK\"."
+  },
+  {
+   "t": "start",
+   "name": "watchlist_local_add",
+   "input": {
+    "name": "bank",
+    "symbols": [
+     "VCB",
+     "CTG"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "\"BANK\": CTG, VCB"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\nĐã tạo xong watchlist cá nhân **BANK** gồm 2 mã: **VCB, CTG**.\n\nBạn có muốn mình lấy giá khớp gần nhất hoặc chỉ số kỹ thuật nhanh cho 2 mã này không?"
+}

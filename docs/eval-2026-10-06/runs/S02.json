@@ -1,0 +1,111 @@
+{
+ "id": "S02",
+ "q": "Đọc BCTC FPT quý gần nhất, có dấu hiệu thao túng lợi nhuận không",
+ "ms": 300005,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "co-ban-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/co-ban-chuyen-sau\n\n# Analyzing Single-Stock Fundamentals\n\nPhân tích THUẦN cơ bản 1 mã theo aspect: hỏi khía cạnh nào thì chỉ chạy leg đó rồi dừng — đừng quét hết BCTC vì \"cho chắc\".\n\n## When to Use\n\n- Dùng khi: user hỏi BCTC, chất lượng lợi nhuận, M-Score/thao túng, F-score, kế hoạch kinh doanh, cổ đông lớn, insider, cổ tức của 1 mã.\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Hỏi kỹ thuật (RSI, MACD, breakout, hỗ trợ/kháng cự) → `ky-thuat-ch"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__financial_detail",
+   "input": {
+    "symbol": "FPT",
+    "statement": "KQKD",
+    "periods_n": 4
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 192,
+   "out": "{\n  \"data\": {\n    \"tool\": \"financial_detail\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:11:10.693776+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__stock_forensic",
+   "input": {
+    "symbol": "FPT",
+    "periods_n": 4
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 90,
+   "out": "{\n  \"data\": {\n    \"tool\": \"stock_forensic\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T12:11:11.107770+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__financial_statements",
+   "input": {
+    "symbol": "FPT",
+    "statement": "KQKD",
+    "period": "quarter",
+    "periods_n": 8
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__financial_ratios",
+   "input": {
+    "symbol": "FPT",
+    "set": "all",
+    "period": "quarter"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1174,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"period\": \"quarter\",\n    \"ratios\": {\n      \"data\": [\n        {\n          \"StockCode\": \"FPT\",\n          \"TradingDate\": \"/Date(1791219600000)/\",\n          \"ClosePrice\": 60500,\n          \"ColorID\": -1,\n          \"Change\": -1400,\n          \"PerChange\": -2.26,\n          \"TotalVol\": 3973500,\n          \"TotalVal\": 241651740000,\n          \"TotalBuyTrade\": 0,\n          \"TotalSellTrade\": 0,\n          \"BuyAvgTrade\": 0.0,\n          \"SellAvgTrade\": 0.0,\n          \"Forei"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1771,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"periods\": [\n      [\n        [\n          {\n            \"ID\": 5,\n            \"Row\": 5,\n            \"CompanyID\": 191,\n            \"YearPeriod\": 2025,\n            \"TermCode\": \"Q2\",\n            \"TermName\": \"Quý 2\",\n            \"TermNameEN\": \"Quarter 2\",\n            \"ReportTermID\": 3,\n            \"DisplayOrdering\": 25,\n            \"United\": \"HN\",\n            \"AuditedStatus\": \"CKT\",\n            \"PeriodBegin\": \"202504\",\n            \"PeriodEnd\": \"202506\",\n         "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__financial_statements",
+   "input": {
+    "period": "quarter",
+    "periods_n": 4,
+    "statement": "CDKT",
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__company_events",
+   "input": {
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 980,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"periods\": [\n      [\n        [\n          {\n            \"ID\": 5,\n            \"Row\": 5,\n            \"CompanyID\": 191,\n            \"YearPeriod\": 2025,\n            \"TermCode\": \"Q2\",\n            \"TermName\": \"Quý 2\",\n            \"TermNameEN\": \"Quarter 2\",\n            \"ReportTermID\": 3,\n            \"DisplayOrdering\": 25,\n            \"United\": \"HN\",\n            \"AuditedStatus\": \"CKT\",\n            \"PeriodBegin\": \"202504\",\n            \"PeriodEnd\": \"202506\",\n         "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 963,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"events\": [\n      {\n        \"FileExt\": \".pdf \",\n        \"UpdateTime\": null,\n        \"TotalRow\": 466,\n        \"FileInfoID\": 556696,\n        \"Url\": \"https://static2.vietstock.vn/data/HOSE/2026/NGHI QUYET HDQT/VN/20260731___fpt___nghi_quyet_hdqt_so_02_07_2026_vv_phat_hanh_cp_de_tang_von_tu_nvcsh.pdf\",\n        \"Title\": \"Nghị quyết HĐQT về việc triển khai phương án phát hành cổ phiếu để tăng vốn cổ phần từ nguồn vốn chủ sở hữu\",\n        \"FullName\": \"Nghị quyết H"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\nVietstock cần cookie/HAR chưa cấu hình nên kênh số chi tiết bị chặn. Mình chuyển sang nhánh mirror.\n\nKênh số chi tiết (Vietstock có cookie) bị chặn, mình đang dùng nhánh mirror. Cần chốt đúng kỳ của số liệu nên mình kiểm tra thêm.\n\n"
+}
