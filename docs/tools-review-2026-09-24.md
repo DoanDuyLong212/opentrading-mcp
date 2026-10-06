@@ -1,6 +1,6 @@
-# Tools + Workflow — opentrading-mcp (báo cáo chi tiết, cập nhật 2026-10-05)
+# Tools + Workflow — opentrading-mcp (báo cáo chi tiết, cập nhật 2026-10-06)
 
-**139 tools unique (+1 alias `vn_crypto_ohlv`) · single full surface, không preset · 6 prompts (workflows) · 4 resources**
+**138 tools unique + alias `vn_crypto_ohlv` (=139, matrix) · +1 gated `web_search` → 140 entries live · single full surface, không preset · 6 prompts (workflows) · 4 resources**
 (Nâng cấp 2026-10-05 / P18: hủy preset custom `market/scan/quant/brief/intel/all` → 1 hình dạng `tools/list` duy nhất chuẩn MCP;
 CLI `--preset` còn như deprecated alias; cache key `mcp:{tool}:{fp}`; catalog bỏ preset.
 Annotations chuẩn hóa `READ_ONLY/CREATE/DELETE/STATE` (`alert_check` → STATE, deletes → destructive);
@@ -11,6 +11,7 @@ Envelope thêm optional `page{total,offset,limit,next}` + `error`; `symbol_looku
 `@guarded` 15 fn vnstock + 9 fn intel; vocab `source` chuẩn `ALLOWED_SOURCES` (`v`→`vietstock`);
 `verify_matrix.py` đủ 139 + assert; mount `/sse` thật; `as_of` tz-aware; crypto caps 10/5; local harness +3 tools.)
 (P17 mới: `event_study`, `fireant_thread`; Elliott/Wyckoff vào technicals; `analyst_consensus` filter macro; `web_fetch` đọc PDF; Fireant parser đọc postID; engine thêm condition_symbol)
+(P21 06-10: xóa preset-gating harness (switch_preset/presets.ts/filters/UI/tests → registry 156); descriptors coerce + ví dụ + phủ định (`vs_indicator_data` int|str, `quant_risk`, `dnse_latest_trade`, `valuation_run`, `analyst_consensus`, `vn_quote_history`, `vs_trading_info`); 7 skills source-guard; headless `/cmd` parity)
 (P16 mới: `symbol_resolve` — multi-asset resolver; `signals_technical` mở 1W/1M + Ichimoku/swing/fibo; `backtest_strategies` thêm `rsi_meanrev` + filter months/quarters)
 Chạy live 135/135 ngày 2026-10-02 (có key): **129 available · 1 partial · 2 empty (đúng bản chất) · 3 unavailable (WS trio, thiếu worker local)**. 0 tool chết.
 P16–P17 verify live riêng cùng ngày: `symbol_resolve` (vàng→GC=F, BTC→BTCUSDT, hoa phat→ambiguous đúng) · `event_study` (VCB 1 event CAR +0.25%) · `fireant_thread` (post PNJ 2 replies thật) · `analyst_consensus` macro (entry section/report trung thực) · VCB 1W bearish/lower-low · rsi_meanrev 1 trade → **tổng 132/138 available** (3 tools mới đều xanh).
@@ -40,7 +41,7 @@ P16–P17 verify live riêng cùng ngày: `symbol_resolve` (vàng→GC=F, BTC→
 | quant_stats | 6 | tách từ `quant.py`: risk/factors/correlation/seasonality/optimize/event_study |
 | brief | 8 | `brief_build` bỏ hardcode vietstock-unavailable, warnings live từ `auth_status` |
 | intel | 7 | không đổi |
-| **Tổng** | **139 (+1 alias)** | `register_all()` 1 shape; `--preset` deprecated; xem `docs/architecture-review-2026-10-05.md` |
+| **Tổng** | **138 unique + alias = 139 (matrix); + `web_search` gated → 140 live** | `register_all()` 1 shape; `--preset` deprecated; xem `docs/architecture-review-2026-10-05.md` |
 
 > Cột **Nơi chạy** trong mọi bảng tool bên dưới: `remote` = thực thi trên MCP-server
 > (Python/FastMCP, qua `tools/call`); `local` = tools của harness OpenTrading (xem
@@ -447,5 +448,5 @@ Prompts không fetch data — chúng chỉ dẫn agent gọi tools theo thứ t�
 | P15 | BCTC-detail revive + forensic rewrite + full-135 live | 3485e6a |
 | Docs | Full-135 + fix stale counts + 6 workflows live | 1d9f498 |
 | P18 | Hủy preset → single surface 139 + annotations + paginate + 7 correctness fixes + arch 10-05 | working-tree 2026-10-05 |
-| P21 | Xóa preset-gating harness + descriptors coerce/vd/phủ định (vs_indicator_data, quant_risk, dnse_latest_trade, valuation, analyst, quote_history, trading_info) + 7 skills source-guard | working-tree 2026-10-06 |
 | P19/P20 | Tách compute→3 + quant→2 files; `@guarded` vnstock/intel; vocab `source` chuẩn (`ALLOWED_SOURCES`); verify 139 + assert; mount `/sse`; `as_of` tz-aware; crypto caps; world_prediction_odds retry; local harness +3 (spawn_subagent/web_fetch/web_search) | working-tree 2026-10-06 |
+| P21 | Xóa preset-gating harness + descriptors coerce/vd/phủ định (vs_indicator_data, quant_risk, dnse_latest_trade, valuation, analyst, quote_history, trading_info) + 7 skills source-guard | working-tree 2026-10-06 |

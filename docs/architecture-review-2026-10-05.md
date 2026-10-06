@@ -7,14 +7,14 @@
 
 | Hạng mục | Trước | Sau nâng cấp | Verify |
 |---|---|---|---|
-| Tool surface | 138, chia 6 preset (`market 66/scan 47/...`) | **139 full duy nhất** (140 khi có websearch key; +1 alias `vn_crypto_ohlv`) | `register_all()` + `list_tools()` live |
+| Tool surface | 138, chia 6 preset (`market 66/scan 47/...`) | **139 matrix (138 unique + alias `vn_crypto_ohlv`)**; +1 gated `web_search` → 140 entries live | `register_all()` + `list_tools()` live (140) |
 | CLI | `serve --preset X` bắt buộc | `serve` thuần; `--preset` còn như deprecated alias (warn) | `cli.py`, `Dockerfile`, `configs/*`, `docker-compose` đã gỡ |
-| `tools/list` shape | 6 hình dạng theo flag | 1 hình dạng ổn định | chuẩn MCP, hết drift với `OpenTrading/presets.ts` |
+| `tools/list` shape | 6 hình dạng theo flag | 1 hình dạng ổn định | chuẩn MCP, single surface cả 2 phía (`OpenTrading/presets.ts` + gating đã xóa 06-10) |
 | Envelope | `{data, provenance, warnings, availability}` | + optional `page{total,offset,limit,next}` + `error` | `schemas.py`, `test_server_boot` pass |
 | Annotations | 1 `READ_WRITE` chung + `alert_check: READ_ONLY` sai | `READ_ONLY/CREATE/DELETE/STATE`, `alert_check: STATE`, deletes destructive | `shared.py`, `scan.py`, `watchlist.py` |
 | Log | `obs.log_tool_call` → stdout (vỡ stdio) | → stderr | `obs.py:56`, `test_obs/middleware` pass |
 | Timeout contract | `TIMEOUT_MATRIX` 11 entries (stale) | Xóa; per-tool `run_blocking(secs=)` + client `toolTimeoutMs` | `server.py` |
-| Correctness | movers hardcode 6 mã, `source_status.vnstock=ok` hardcode, brief hardcode vietstock-unavailable, valuation docstring DCF, ratios không fallback, `ohlv` typo, PG trùng tên | Tất cả đã fix (chi tiết §5) | 284 passed (`pytest tests/contract --ignore=test_verify_matrix`) |
+| Correctness | movers hardcode 6 mã, `source_status.vnstock=ok` hardcode, brief hardcode vietstock-unavailable, valuation docstring DCF, ratios không fallback, `ohlv` typo, PG trùng tên | Tất cả đã fix (chi tiết §5) | 285 passed (`pytest tests/contract --ignore=test_verify_matrix`; test_verify_matrix fail chỉ do sandbox chặn `api.vnstock.vn` — Render pass) |
 | Lint/type | ruff sạch; mypy 4 lỗi pre-existing | ruff sạch; mypy còn đúng 4 pre-existing (pandas-stubs, markdownify) | `ruff check`, `mypy --strict` |
 
 ## 1. End-to-end: từ client connect tới answer
@@ -29,7 +29,7 @@
 ```
 - Process: client spawn `uvx opentrading-mcp serve` → nói JSON-RPC qua stdin/stdout, log qua stderr.
 - Quy tắc sống còn: **không in gì ra stdout** ngoài protocol (`obs.py` đã fix; `market.py:_log_stderr` mẫu đúng). 3 dòng stderr cuối hiện trong OpenTrading `/mcp` khi fail.
-- Timeouts phía client: opencode `timeout: 30000` trong `configs/opencode.jsonc` (phải nâng ≥120s vì tool upstream chậm — kết luận từ live run trong `docs/skills-design-for-harness.md §0.1`); Codex `startup_timeout_sec: 20, tool_timeout_sec: 60` (`configs/codex.toml`).
+- Timeouts phía client: opencode `timeout: 120000` trong `configs/opencode.jsonc` (đã nâng từ 30s vì tool upstream chậm — kết luận từ live run trong `docs/skills-design-for-harness.md §0.1`); Codex `startup_timeout_sec: 20, tool_timeout_sec: 60` (`configs/codex.toml`).
 
 **B. Streamable HTTP remote (team/Render):**
 ```
@@ -45,8 +45,8 @@ Headers bắt buộc: Content-Type: application/json,
 
 **C. Handshake MCP chuẩn:**
 `initialize` → server trả `instructions` (`SERVER_INSTRUCTIONS` mới <40 từ) + capabilities →
-`tools/list` (139 entries, 1 shape) → `resources/list` (4 URIs) → `prompts/list` (6 workflows).
-`notifications/tools/list_changed` được OpenTrading `manager.ts:225` lắng nghe để sync lại (khớp chuẩn Claude `list_changed`).
+`tools/list` (140 entries live: 139 matrix + `web_search` gated, 1 shape) → `resources/list` (4 URIs) → `prompts/list` (6 workflows).
+`notifications/tools/list_changed` được OpenTrading `manager.ts:210` lắng nghe để sync lại (khớp chuẩn Claude `list_changed`).
 
 ### 1.2 Một tools/call đi qua 7 tầng
 
@@ -72,7 +72,7 @@ Ví dụ thật `brief_build(scope=vn)` (WF1 morning_briefing):
 |---|---|---|---|
 | Transport | `server.py`, `cli.py` | stdio + StreamableHTTP stateless + `/sse`; `register_all()` | Xóa preset, `TIMEOUT_MATRIX={}`, instructions gọn |
 | Middleware | `middleware.py` | RateLimiter → Auth/quota → Observability (1 dòng log/tool, không log args/result) | Không đổi, đã đúng |
-| Tools THIN | `tools/*.py` (18 files) | validate → `run_blocking` → provider → envelope | Annotations CREATE/DELETE/STATE, paginate `limit/offset`, movers/status/brief/valuation/ratios/ohlcv fix |
+| Tools THIN | `tools/*.py` (21 modules + `shared.py` + `quant_shared.py`) | validate → `run_blocking` → provider → envelope | Tách `compute→3`, `quant→2`; annotations CREATE/DELETE/STATE; descriptors 10-06 (coerce + ví dụ + phủ định) |
 | Providers | `providers/*.py` (15) | I/O thật + breaker + `cache_key(tool,fp)` | Key bỏ `{preset}` |
 | Tính toán local | `technicals.py`, `screener.py` | RSI/MACD/BB/patterns, filters, backtest | Không đổi |
 | Envelope | `schemas.py` | `{data, provenance{source,as_of,TZ}, warnings, availability}` + `page/error` optional | Thêm `paginate_list()` |
@@ -139,51 +139,56 @@ Skill/harness **không được** fill số bịa (quy tắc vàng `skills-desig
 - P2: tách `compute.py`→3 file, `quant.py`→2 file + `quant_shared.py` (giữ 100% behavior, 139 tools); mount `/sse` thật (docs hết nói dối); instructions `page{total,offset,limit,next}`; timeout opencode configs 30s→120s; `as_of` tz-aware `Asia/Ho_Chi_Minh`; `ALLOWED_SOURCES` + alias (`v`→vietstock...); ruff sạch, mypy còn đúng 4 lỗi pre-existing.
 - Cố ý KHÔNG làm: gộp cặp trùng (vỡ clients), xóa preset-compat shims (giữ tương thích), đổi hardcoded Trading_Agents session path (team flow).
 
+### Đợt 06-10 (P19/P20/P21, branch MCP-server)
+- P19/P20: tách `compute.py`→`compute_financial/intel/infra.py`, `quant.py`→`quant_backtest/stats.py` + `quant_shared.py`; `@guarded` 15 fn vnstock + 9 fn intel; `ALLOWED_SOURCES` vocab; mount `/sse` thật; crypto caps 10/5; eval live 43 câu (§8).
+- P21: xóa preset-gating harness (switch_preset/presets.ts/filters/UI/tests); descriptors coerce + ví dụ + phủ định; 7 skills source-guard; headless `/cmd` parity; verify round2 (§8.3).
+
 ### Chia tools MCP-server vs harness (theo opencode: local = tương tác/tính toán/session, remote = data/services)
 - Harness-local mới: `spawn_subagent` (child runAgent, allowlist readOnly mặc định, cấm đệ quy, maxSteps ≤15), `web_fetch` (2MB cap, timeout 120s), `web_search` (Exa→Parallel→DuckDuckGo fallback).
 - Giữ remote: toàn bộ 139 data tools + `runs_list/run_get/doctor` server (phục vụ clients khác; harness đã có `session_list/session_get/doctor_local` tương đương và được ưu tiên).
 - Trùng lắp có chủ ý: `web_search/web_fetch` tồn tại cả 2 nơi — harness dùng bản local (không cần key), remote giữ cho CI/clients khác.
 
-## 5. Harness skills — 26 skills (OpenTrading, nhánh MCP-server @3c139d6)
+## 5. Harness skills — 26 skills (OpenTrading, nhánh MCP-server @695d2bb)
 
 > Nguồn sự thật: `OpenTrading/skills/<slug>/SKILL.md`; bản gộp duyệt: MCP-server `SKILLS.md`.
 > Cấu trúc chuẩn skill-creator: description pushy + When to Use / Workflow checklist / Template / Examples.
 > Cơ chế runtime: system prompt chỉ list tên (`renderCatalog`), body fetch qua `load_skill` khi trigger khớp;
 > `requires_tools` gate theo tool hiện có; `tool_budget` mirror trong body.
 
-| # | Skill | requires_tools | Budget | Ver | Routing eval 06-10 |
+| # | Skill | requires_tools | Budget | Ver | Routing eval 06-10 (r1 → r2 sau fix) |
 |---|---|---|---|---|---|
-| 1 | bat-on-quoc-gia | geo_intel | 6 | 1.1.0 | ✓ load đúng; nhưng chỉ gọi web (không gọi geo_intel) → FAIL tool-choice |
+| 1 | bat-on-quoc-gia | geo_intel | 6 | 1.1.1 | r1: load đúng nhưng chỉ gọi web → FAIL; guard 1.1.1 (chưa rerun) |
 | 2 | co-ban-chuyen-sau | financial_detail | 9 | 1.1.0 | ✓ + fallback mirror trung thực khi Vietstock-detail chặn |
 | 3 | danh-gia-tinh-hinh-chinh-tri-toan-cau | — | 8 | 1.1.0 | ✓ |
 | 4 | danh-gia-tinh-hinh-xung-dot | event_stats | 9 | 1.1.0 | ✓ (+kéo phan-tich-vang-ty-gia hợp lý) |
 | 5 | danh-gia-truoc-bctc | company_events | 10 | 1.1.0 | ✓ (+co-ban sub); trừ load trùng 2 lần |
-| 6 | danh-gia-vi-mo-quoc-te | fred_series | 10 | 1.1.0 | ✓ load nhưng KHÔNG gọi fred_series (đi web trực tiếp) → FAIL |
-| 7 | danh-gia-vi-mo-viet-nam | vs_indicator_data | 12 | 1.2.0 | ✓; vs_indicator_data fail validation 3 lần mới qua (schema friction) |
-| 8 | devil-advocate | — | — | 1.2.0 | ✓; spawn_subagent ×3 timeout |
-| 9 | dinh-gia-chuyen-sau | valuation_run | 7 | 1.1.0 | ✓; nhưng gọi 4 tools không tồn tại → PARTIAL |
+| 6 | danh-gia-vi-mo-quoc-te | fred_series | 10 | 1.1.1 | r1: không gọi fred_series (đi web) → FAIL; guard 1.1.1 (chưa rerun) |
+| 7 | danh-gia-vi-mo-viet-nam | vs_indicator_data | 12 | 1.2.0 | r1: validation ×3; r2: 0 validation-fail (coerce server) → ✓ |
+| 8 | devil-advocate | — | — | 1.2.0 | ✓; spawn_subagent ×3 timeout (vấn đề #4) |
+| 9 | dinh-gia-chuyen-sau | valuation_run | 7 | 1.1.0 | r1: 4 tools bịa → PARTIAL; r2: 0 hallucination → ✓ |
 | 10 | du-doan-fed | world_prediction_odds | 8 | 1.1.0 | ✓ |
 | 11 | du-doan-polymarket | world_prediction_odds | 6 | 1.1.0 | ✓ (odds ×4 + polymarket_event đúng bài) |
-| 12 | explain-term | — | — | 1.2.0 | ✓ hoàn hảo (0 tool, 92s) |
-| 13 | kiem-chien-luoc-backtest | quant_backtest | 12 | 1.2.1 | ✓; nhưng spawn fail + gọi vn_crypto_ohlcv sai nguồn cho HPG |
+| 12 | explain-term | — | — | 1.2.0 | ✓ hoàn hảo (0 tool, 92s; r2 same) |
+| 13 | kiem-chien-luoc-backtest | quant_backtest | 12 | 1.2.2 | r1: spawn fail + sai nguồn; r2: backtest_strategies ×6 đúng → ✓ |
 | 14 | kiem-tra-nguon-du-lieu | doctor (manual) | 12 | 1.1.0 | manual nên không load là đúng; model tự doctor_local + source-check → PASS direct-use |
 | 15 | ky-thuat-chuyen-sau | signals_technical | 8 | 1.2.0 | ✓ tốt nhất (3 tools, có verdict phân tích thật) |
-| 16 | nhip-dap-crypto | crypto_spot | 6 | 1.2.0 | ✓ load nhưng gọi vn_crypto_ohlcv (VND) 6 lần, không gọi crypto_spot/derivs → FAIL |
-| 17 | phan-tich-chuyen-sau-1-ma | stock_overview | 8 | 1.2.1 | ✓ + 2 sub-skills; nhưng 12 tools (>budget 8), không evidence_bundle, không chart_render (Step 2b mới miss) |
+| 16 | nhip-dap-crypto | crypto_spot | 6 | 1.2.1 | r1: crypto VND ×6 → FAIL; r2: crypto_spot/derivs trước → ✓ |
+| 17 | phan-tich-chuyen-sau-1-ma | stock_overview | 8 | 1.2.2 | ✓ + 2 sub-skills; nhưng 12 tools (>budget 8), miss chart Step 2b |
 | 18 | phan-tich-sentiment | sentiment_score | 6 | 1.1.0 | ✓ |
-| 19 | phan-tich-vang-ty-gia | vn_retail_gold | 10 | 1.2.0 | ✓; trừ preset-confusion |
+| 19 | phan-tich-vang-ty-gia | vn_retail_gold | 10 | 1.2.0 | ✓; r1 preset-confusion (đã xóa preset — hết nguyên nhân) |
 | 20 | so-sanh-cung-nganh | compare_equities | 8 | 1.2.0 | ✓ (+co-ban); 12 tools lặp dư (mỗi loại ×3) |
-| 21 | tim-co-hoi-bao-cao-ctck | analyst_consensus | 8 | 1.2.0 | ✓; trừ preset-confusion |
-| 22 | tim-kiem-tin-tuc | news_symbol | 10 | 1.2.0 | ✓ load; nhưng 2 runs đều KHÔNG gọi news_symbol (đi web trực tiếp) → FAIL |
+| 21 | tim-co-hoi-bao-cao-ctck | analyst_consensus | 8 | 1.2.0 | ✓; r1 preset-confusion (đã xóa preset) |
+| 22 | tim-kiem-tin-tuc | news_symbol | 10 | 1.2.1 | r1: không gọi news_symbol → FAIL; guard 1.2.1 (chưa rerun) |
 | 23 | tin-tuc-nong-quoc-te | news_market | 8 | 1.1.0 | ✓ tool mix hợp lý |
 | 24 | tin-tuc-nong-viet-nam | news_market | 9 | 1.1.0 | ✓ + note heuristic trung thực |
-| 25 | ve-bieu-do-ky-thuat | chart_render (local) | 8 | 1.2.0 | ✓ + chart_render/compare đúng; thỉnh thoảng thử sai nguồn trước |
+| 25 | ve-bieu-do-ky-thuat | chart_render (local) | 8 | 1.2.1 | ✓; r1 detour sai nguồn; r2: đúng nguồn ngay → ✓ |
 | 26 | vn-market-basics | — | — | 1.2.0 | ✓ hoàn hảo (0 tool, 87s) |
 
-Routing tổng: 24/26 load đúng ngay lần đầu (S19 miss sang skill tin-tức, S14 manual-by-design).
-Vấn đề lặp lại: **chọn sai nguồn dữ liệu** (vn_crypto_ohlcv cho cổ phiếu; web trực tiếp thay vì fred/news/sentiment/geo tools).
+Routing tổng r1: 24/26 load đúng ngay (S19 miss sang skill tin-tức, S14 manual-by-design).
+Round2 sau fix: 11/12 đạt (S07/S09/S13/S16/S24/W1 + F08/F09/F11/S12/W4); W5 cải thiện (0 preset/hallucination) nhưng vẫn miss `quant_risk`.
+Vấn đề còn mở: **timeout 300s** (câu phức tạp không ra verdict — đợt 2), `spawn_subagent` (60s + allowlist), `quant_risk` leg trong W5.
 
-## 6. Harness tools — 17 local (chạy trong tiến trình OpenTrading, không qua MCP)
+## 6. Harness tools — 16 local (chạy trong tiến trình OpenTrading, không qua MCP)
 
 | Tool | Vai | Ranh giới với remote | Eval fallback 06-10 |
 |---|---|---|---|
@@ -195,27 +200,27 @@ Vấn đề lặp lại: **chọn sai nguồn dữ liệu** (vn_crypto_ohlcv cho
 | doctor_local | sức khỏe harness | phân biệt doctor server | ✓ F05 (local trước, server sau) |
 | watchlist_local_* (5) | watchlist cá nhân | thay watchlist_* remote (share team) | ✓ F06 (không dùng remote) |
 | web_fetch | đọc URL (browser→readability) | khác remote (server-side, PDF) | ✓ F02/F03 |
-| web_search | tìm web (Parallel→DDG) | remote chỉ có web_search gated-key | ✓ F02; nhưng bị lạm dụng thay tools chuyên (S06/S21/S26) |
+| web_search | tìm web (Exa→Parallel→DuckDuckGo) | remote chỉ có web_search gated-key | ✓ F02; nhưng bị lạm dụng thay tools chuyên (S06/S21/S26) |
 | spawn_subagent | worker opencode con | không remote tương đương | ✕ timeout 60s ×7 (F10/S08/S10/W6); allowlist từ chối tên tool MCP (W6) |
 
-Tổng registry live: **157 tools** (140 remote gồm alias + 16 local + switch_preset), verify qua `mcp.start()` headless.
-[06-10 đợt 1: còn **156** (xóa switch_preset).]
+Tổng registry live: **156 tools** (140 remote gồm alias + 16 local), verify qua `mcp.start()` headless
+[06-10 sau khi xóa `switch_preset`; trước đó 157].
 
 ## 7. Ma trận phủ tools ↔ skills (trả lời: tools có được phủ hết trong skills không?)
 
-> Phương pháp: static (requires_tools + tên tool trong body skill) ∪ observed (71 tools được gọi trong 43 runs live)
-> ∪ prompts (29 tools trong 6 prompt texts). Chi tiết: `docs/eval-2026-10-06/` (questions/report/runs).
+> Phương pháp: static (requires_tools + tên tool trong body skill) ∪ observed (89 tools được gọi trong 55 runs live: 43 round1 + 12 round2)
+> ∪ prompts (29 tools trong 6 prompt texts). Chi tiết: `docs/eval-2026-10-06/` (questions/report/runs/round2).
 
-- **KHÔNG — 114/154 phủ (74%), 40 tools mồ côi (26%)**, không skill nào nhắc tên, live không gọi, prompts không dùng:
+- **KHÔNG — 118/153 phủ (77%), 35 tools mồ côi (23%)** [06-10: trước fix là 114/154 (74%), 40 mồ côi; sau round2 + xóa switch_preset: signals_scan/market_snapshot/ipo_calendar_vn/... đã được gọi], không skill nào nhắc tên, live không gọi, prompts không dùng:
   - `alert_*` (6) + `watchlist_*` remote (7): mồ côi từ rev.3 (xóa `theo-doi-va-bao-thuc`) — GAP cần skill mới hoặc xóa tools.
   - `runs_list/run_get` (2): bị `session_*` thay thế ở harness nhưng tools còn cho clients khác — giữ có chủ ý, ghi rõ.
   - `session_get`, `watchlist_local_delete/remove`: direct-use by design (không cần skill), F04/F06 chứng minh model tự dùng đúng.
-  - Data tools mồ côi thật: `signals_scan`, `market_snapshot`, `exchange_calendar`, `quant_factors`, `vn_listing`, `vn_forex/futures_ohlcv`, `vn_global_index`, `vs_currency/market_info/market_price/selftrading`, `yf_oracle_markets`, `yf_world_indices`, `dnse_*` (6: market_status/foreign_flow/indices/vn30f1m_live/working_dates/ws_snapshot), `oracle_meta`, `signals_screener_columns`, alias `vn_crypto_ohlv` (phủ qua ohlcv).
+  - Data tools mồ côi thật: `quant_factors`, `vn_listing`, `vn_forex_ohlcv`, `vn_global_index`, `vs_currency/market_info/market_price/selftrading`, `yf_oracle_markets`, `yf_world_indices`, `dnse_*` (4: market_status/indices/working_dates/ws_snapshot), `exchange_calendar`, `oracle_meta`, `signals_screener_columns`, alias `vn_crypto_ohlv` (phủ qua ohlcv).
 - Khuyến nghị: (a) skill theo-dõi/cảnh-báo mới HOẶC xóa `alert_*` + `watchlist_*` remote; (b) điểm tên các data tools mồ côi vào skills liên quan (vd `signals_scan`→ky-thuat, `quant_factors`→backtest, `dnse_market_status`→ky-thuat/vang); (c) giữ direct-use cho session/watchlist-local/web (đã chứng minh ăn khớp).
 
 ## 8. Kết quả eval live 06-10-2026 (43 câu: 26 skills + 6 WF + 11 fallback)
 
-### 8.1 Verdict tổng: PASS 24 / PARTIAL 11 / FAIL 8
+### 8.1 Verdict tổng: r1 PASS 24 / PARTIAL 11 / FAIL 8; r2 (sau fix): 11/12 đạt, W5 cải thiện
 
 ### 8.2 Vấn đề hệ thống (xếp theo độ nặng)
 

@@ -56,10 +56,10 @@
 | `description` | ✔ | front-load keywords user hay nói; có "Dùng khi…/Không dùng khi…" + tên skill loại trừ (opencode chỉ thấy field này để routing) |
 | `when_to_use` | ✔ (harness) | câu hỏi mẫu + loại trừ chi tiết, mirror vào body `Khi nào dùng` |
 | `activation` | ✔ | `auto` (model nạp khi khớp) / `manual` (chỉ /skill <tên>, ví dụ kiem-tra-nguon-du-lieu) |
-| `requires_tools` | khuyến khích | skill chỉ hiện trong catalog khi MỌI tool này có mặt (gate theo preset) |
+| `requires_tools` | khuyến khích | skill chỉ hiện trong catalog khi MỌI tool này có mặt (gate theo tool hiện có; single surface, không preset từ 06-10) |
 | `tool_budget` | với skill thiết kế | số lần gọi tool tối đa mỗi run; harness chặn cứng 20/lượt; mirror vào `Chống tràn lan` |
 | `triggers.keywords` | khuyến khích | pre-routing: khớp keyword → gợi ý skill ở reminder |
-| `version` | ✔ | semver (rewrite skill-creator 06-10 bump minor → 1.1.0/1.2.0) |
+| `version` | ✔ | semver (skill-creator 06-10 bump minor → 1.1.0/1.2.0; eval-fix đợt 1 bump → 1.1.1/1.2.1/1.2.2) |
 
 ## Bảng tổng quan
 
