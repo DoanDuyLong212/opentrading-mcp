@@ -40,7 +40,7 @@ def test_quote_history_reads_the_time_column(monkeypatch):
             return frame
 
     monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Quote=Quote))
-    rows = vn.quote_history.__wrapped__("FPT", 3) if hasattr(vn.quote_history, "__wrapped__") else vn.quote_history("FPT", 3)
+    rows = vn.quote_history("FPT", 3)
     assert [r["t"] for r in rows] == ["2026-10-02", "2026-10-05", "2026-10-06"]
     assert rows[-1]["c"] == 60.2
     # Quant tools now align on real dates instead of a business-day walkback.
