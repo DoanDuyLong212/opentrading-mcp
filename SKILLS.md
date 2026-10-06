@@ -78,7 +78,7 @@
 | 2 | `co-ban-chuyen-sau` | auto | 9 | 1.1.1 | financial_detail |
 | 3 | `danh-gia-tinh-hinh-chinh-tri-toan-cau` | auto | 8 | 1.1.0 | — |
 | 4 | `danh-gia-tinh-hinh-xung-dot` | auto | 9 | 1.1.1 | event_stats |
-| 5 | `danh-gia-truoc-bctc` | auto | 10 | 1.1.1 | company_events |
+| 5 | `danh-gia-truoc-bctc` | auto | 10 | 1.1.2 | company_events |
 | 6 | `danh-gia-vi-mo-quoc-te` | auto | 10 | 1.1.1 | fred_series |
 | 7 | `danh-gia-vi-mo-viet-nam` | auto | 12 | 1.2.1 | vs_indicator_data |
 | 8 | `devil-advocate` | auto | — | 1.2.0 | — |
@@ -426,7 +426,7 @@ requires_tools: [mcp__opentrading__company_events]
 tool_budget: 10
 triggers:
   keywords: [trước bctc, sắp ra báo cáo, pre earnings, công bố lợi nhuận, setup bctc]
-version: 1.1.1
+version: 1.1.2
 ```
 
 
@@ -461,7 +461,7 @@ Ngày công bố BCTC tại VN thường KHÔNG công khai chính xác (công ty
 
 **Step 2: Reuse trend + thao túng (không gọi tool gốc).**
 
-LOAD `co-ban-chuyen-sau` aspect=baokao (trend) và aspect=chataluong (M-Score/Piotroski). Lý do reuse thay vì gọi trực tiếp `financial_detail`/`stock_forensic`: tránh gọi chồng chéo cùng nguồn số trong 1 run. Ghi rõ aspect reuse ở từng leg.
+LOAD `co-ban-chuyen-sau` (gọi `load_skill` CHỈ với tên skill — không có file phụ `aspect=...`, aspect là các section trong body; load_skill file lạ sẽ fail). Sau khi load: dùng leg "Chất lượng tăng trưởng" (trend) + leg "M-Score + F-score" (thao túng) từ body skill đó. Lý do reuse thay vì gọi trực tiếp `financial_detail`/`stock_forensic`: tránh gọi chồng chéo cùng nguồn số trong 1 run. Ghi rõ reuse ở từng leg.
 
 **Step 3: Kỳ vọng + positioning (gọi trực tiếp).**
 

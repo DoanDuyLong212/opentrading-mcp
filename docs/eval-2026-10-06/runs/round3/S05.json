@@ -1,0 +1,290 @@
+{
+ "id": "S05",
+ "q": "FPT sắp ra BCTC, đánh giá setup trước giờ G",
+ "ms": 300001,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "danh-gia-truoc-bctc"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/danh-gia-truoc-bctc\n\n# Grading Pre-Earnings Setup\n\nChấm grade cho setup trước BCTC. Không forecast KQKD — không bao giờ đưa số DT/LN dự báo. BCTC đã ra rồi thì dừng ngay, chuyển sang `co-ban-chuyen-sau`, không cố chấm grade.\n\n## When to Use\n\n- Dùng khi: BCTC chưa ra và user hỏi setup trước BCTC (`FPT sắp ra báo cáo`, `đánh giá setup HPG trước BCTC`, `pre-earnings`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Phân tích mã thường (không gắn BC"
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 20:12:31 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T20:12:31+07:00"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__company_events",
+   "input": {
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_symbol",
+   "input": {
+    "symbol": "FPT",
+    "limit": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "co-ban-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/co-ban-chuyen-sau\n\n# Analyzing Single-Stock Fundamentals\n\nPhân tích THUẦN cơ bản 1 mã theo aspect: hỏi khía cạnh nào thì chỉ chạy leg đó rồi dừng — đừng quét hết BCTC vì \"cho chắc\".\n\n## When to Use\n\n- Dùng khi: user hỏi BCTC, chất lượng lợi nhuận, M-Score/thao túng, F-score, kế hoạch kinh doanh, cổ đông lớn, insider, cổ tức của 1 mã.\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Hỏi kỹ thuật (RSI, MACD, breakout, hỗ trợ/kháng cự) → `ky-thuat-ch"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__planned_targets",
+   "input": {
+    "symbol": "FPT",
+    "years": 3
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__analyst_consensus",
+   "input": {
+    "symbol": "FPT",
+    "limit": 15
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__sentiment_score",
+   "input": {
+    "symbol": "FPT",
+    "limit": 20
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__insider_trading",
+   "input": {
+    "symbol": "FPT",
+    "limit": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__money_flow",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__block_trades",
+   "input": {
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 190,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"posts\": [\n      {\n        \"id\": 42129201,\n        \"user\": \"Phạm Phương Linh\",\n        \"text\": \"SSI Research dự báo, KDH có thể bị loại khỏi VNDiamond trong kỳ rà soát quý IV/2026, trong khi không có cổ phiếu mới được bổ sung vào danh mục.\",\n        \"symbols\": [\n          \"ACB\",\n          \"BMP\",\n          \"FPT\",\n          \"GMD\",\n          \"KDH\",\n          \"MSB\",\n          \"PNJ\",\n          \"REE\",\n          \"SSI\"\n        ],\n        \"likes\": 1,\n        \"replie"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 447,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"posts\": 20,\n    \"score_heuristic\": -0.08\n  },\n  \"provenance\": {\n    \"source\": \"fireant\",\n    \"as_of\": \"2026-10-06T20:13:13.020845+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"groq unavailable, heuristic fallback\"\n  ],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 490,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"unit\": \"VNDbn\",\n    \"years\": [\n      2024,\n      2025,\n      2026\n    ],\n    \"rows\": [\n      {\n        \"name\": \"Doanh thu kế hoạch\",\n        \"planned_target_id\": 5,\n        \"plan\": {\n          \"2024\": 61850.0,\n          \"2025\": 75400.0,\n          \"2026\": 58580.0\n        }\n      },\n      {\n        \"name\": \"Lợi nhuận trước thuế kế hoạch\",\n        \"planned_target_id\": 8,\n        \"plan\": {\n          \"2024\": 10875.0,\n          \"2025\": 13395.0,\n          \"2026\":"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 513,
+   "out": "{\n  \"data\": {\n    \"tool\": \"company_events\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T20:13:13.103399+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"vietstock login rejected: Tài khoản này được đăng nhập bằng Google!\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 748,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"report_type\": \"equity\",\n    \"reports\": []\n  },\n  \"provenance\": {\n    \"source\": \"vietstock-scrape\",\n    \"as_of\": \"2026-10-06T20:13:13.341152+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 873,
+   "out": "{\n  \"data\": {\n    \"tool\": \"money_flow\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T20:13:13.465195+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"vietstock login rejected: Tài khoản này được đăng nhập bằng Google!\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 887,
+   "out": "{\n  \"data\": {\n    \"tool\": \"block_trades\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T20:13:13.479315+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"vietstock login rejected: Tài khoản này được đăng nhập bằng Google!\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 4379,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"deals\": []\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T20:13:16.970741+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "co-ban-chuyen-sau",
+    "file": "baokao"
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 0,
+   "out": "Không có file \"baokao\" trong skill co-ban-chuyen-sau."
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "co-ban-chuyen-sau",
+    "file": "chataluong"
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 0,
+   "out": "Không có file \"chataluong\" trong skill co-ban-chuyen-sau."
+  },
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "dinh-gia-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/dinh-gia-chuyen-sau\n\n# Valuing Single-Stock Fair Value\n\nTrả về đúng 6 mục: giá vs vùng fair → PER/PB vs lịch sử → vì sao rẻ/đắt → UPSIDE/DOWNSIDE % → neo target CTCK → kết luận 1 câu. EPS âm (công ty lỗ) thì per_pb vô nghĩa — nói thẳng không đủ cơ sở định giá thay vì bịa fair value.\n\n## When to Use\n\n- Dùng khi: user hỏi định giá 1 mã (`FPT đắt chưa`, `VCB fair value`, `định giá theo PER`, `upside còn bao nhiêu`).\n- Khi KHÔNG dùng (dùng skill khác "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__scenario_simulate",
+   "input": {
+    "symbol": "FPT",
+    "scenario": "BCTC shock -5%",
+    "shock_pct": -5
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 627,
+   "out": "{\n  \"data\": {\n    \"scenario\": \"BCTC shock -5%\",\n    \"symbol\": \"FPT\",\n    \"last_close\": 60.4,\n    \"shock_pct\": -5.0,\n    \"shocked_price\": 57.38,\n    \"pnl_per_1000_shares\": -3020.0,\n    \"assumptions\": [\n      \"linear shock, no liquidity slippage\"\n    ]\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T20:13:56.326672+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_auth_status",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__financial_detail",
+   "input": {
+    "symbol": "FPT",
+    "statement": "KQKD",
+    "periods_n": 4
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__stock_forensic",
+   "input": {
+    "symbol": "FPT",
+    "periods_n": 4
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__valuation_run",
+   "input": {
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_overview_trading",
+   "input": {
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "FPT",
+    "days": 365,
+    "summary": true
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Đã hết ngân sách tool của lượt này (20 lần gọi). Hãy tổng kết câu trả lời bằng dữ liệu đã có, nói rõ phần nào chưa kiểm tra được."
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 5,
+   "out": "{\n  \"data\": {\n    \"authenticated\": false,\n    \"reason\": \"no jwt configured\"\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T20:14:57.255198+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 424,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_overview_trading\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T20:14:57.672347+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"vietstock login rejected: Tài khoản này được đăng nhập bằng Google!\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 426,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"statement\": \"KQKD\",\n    \"unit\": \"VNDbn\",\n    \"periods\": [\n      \"Q3/2025\",\n      \"Q4/2025\",\n      \"Q1/2026\",\n      \"Q2/2026\"\n    ],\n    \"rows\": [\n      {\n        \"norm_id\": 2206,\n        \"name\": \"1. Doanh thu bán hàng và cung cấp dịch vụ \",\n        \"values\": [\n          17226.0,\n          20259.0,\n          12486.0,\n          13810.0\n        ]\n      },\n      {\n        \"norm_id\": 2218,\n        \"name\": \"2. Các khoản giảm trừ doanh thu\",\n        \"values\": [\n "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 479,
+   "out": "{\n  \"data\": {\n    \"tool\": \"valuation_run\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T20:14:57.729590+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"vietstock login rejected: Tài khoản này được đăng nhập bằng Google!\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1435,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"dsri\": 0.9772,\n    \"gmi\": 1.0961,\n    \"aqi\": 1.0107,\n    \"sgi\": 1.1049,\n    \"sgai\": 0.9951,\n    \"lvgi\": 1.1257,\n    \"tata\": 0.0349,\n    \"m_score\": -2.0589,\n    \"m_partial\": null,\n    \"f_score\": \"2/6\",\n    \"flags\": []\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T20:14:58.684540+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  }
+ ],
+ "text": "\n\n"
+}

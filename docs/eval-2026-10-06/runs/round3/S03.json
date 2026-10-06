@@ -1,0 +1,134 @@
+{
+ "id": "S03",
+ "q": "Địa chính trị tuần này có gì đáng lo cho thị trường chứng khoán",
+ "ms": 300010,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "danh-gia-tinh-hinh-chinh-tri-toan-cau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/danh-gia-tinh-hinh-chinh-tri-toan-cau\n\n# Mapping Global Political Risk\n\nSkill tổ chức cross-ref (không có home tool riêng — ghép odds + tin từ nhiều nguồn). Mỗi mục verdict bắt buộc có event URL + tin URL, thiếu một trong hai thì ghi rõ.\n\n## When to Use\n\n- Dùng khi: user hỏi bản đồ rủi ro chính trị toàn cầu, bầu cử, chính sách, căng thẳng quốc tế (nhiều sự kiện, cần ghép odds + tin).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  - Xung đột vũ tra"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_prediction_odds",
+   "input": {
+    "tag": "politics",
+    "limit": 20
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__geo_intel",
+   "input": {
+    "limit": 20,
+    "days": 7
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__yf_market_pins",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1631,
+   "out": "{\n  \"data\": {\n    \"world\": [\n      {\n        \"ticker\": \"^GSPC\",\n        \"last\": 7773.9502,\n        \"spark\": [\n          7670.8398,\n          7651.54,\n          7666.4502,\n          7722.7202,\n          7773.9502\n        ]\n      },\n      {\n        \"ticker\": \"^IXIC\",\n        \"last\": 27477.3105,\n        \"spark\": [\n          26797.5391,\n          26861.0605,\n          26871.5996,\n          27190.8594,\n          27477.3105\n        ]\n      },\n      {\n        \"ticker\": \"^DJI\",\n        \"last\": 51267.898"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 5887,
+   "out": "{\n  \"data\": {\n    \"source\": \"https://r.jina.ai/https://gamma-api.polymarket.com\",\n    \"events\": [\n      {\n        \"title\": \"Brazil Presidential Election\",\n        \"slug\": \"brazil-presidential-election\",\n        \"tags\": [\n          \"Politics\",\n          \"Macro Election 2\",\n          \"Main Election\",\n          \"Brazil\",\n          \"Global Elections\",\n          \"World Elections\",\n          \"World\"\n        ],\n        \"volume24h\": 2302169.525934,\n        \"liquidity\": 2093256.14876,\n        \"end\": \"202"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 15238,
+   "out": "{\n  \"data\": {\n    \"query\": \"geopolitical conflict sanctions\",\n    \"count\": 4,\n    \"by_day\": {\n      \"20260818T0\": 1,\n      \"20260814T1\": 1,\n      \"20260723T1\": 1,\n      \"20260720T2\": 1\n    },\n    \"top_sources\": [\n      [\n        \"tribune.com.pk\",\n        1\n      ],\n      [\n        \"naslovi.net\",\n        1\n      ],\n      [\n        \"www.moneycontrol.com\",\n        1\n      ],\n      [\n        \"www.vedomosti.ru\",\n        1\n      ]\n    ],\n    \"date_range\": [\n      \"20260720T2\",\n      \"20260818T0\"\n    ]"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__polymarket_event",
+   "input": {
+    "slug": "us-iran-ceasefire-continues-throughptptpt"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__polymarket_event",
+   "input": {
+    "slug": "us-announces-end-of-iranian-blockade-byptptpt-20260713152715080"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 651,
+   "out": "{\n  \"data\": {\n    \"slug\": \"us-iran-ceasefire-continues-throughptptpt\",\n    \"title\": \"US-Iran ceasefire continues through...?\",\n    \"description\": \"This market will resolve to “No” if the United States takes a qualifying military action against Iran by the specified date, 11:59 PM Iran Standard Time. Otherwise this market will resolve to “Yes.”\\n\\nA qualifying military action refers to an air strike or a surface-to-surface missile strike, initiated by the United States, that directly impacts Iran"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_market",
+   "input": {
+    "sources": "gdelt",
+    "limit": 12
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 828,
+   "out": "{\n  \"data\": {\n    \"slug\": \"us-announces-end-of-iranian-blockade-byptptpt-20260713152715080\",\n    \"title\": \"US announces end of Iranian blockade by...?\",\n    \"description\": \"On July 13, 2026, Trump announced the United States would reinstate its naval blockade of Iran, targeting Iranian ships and customers.\\n\\nThis market will resolve to “Yes” if the United States government, or an authorized representative of the United States government, publicly and officially announces the end, termination, l"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 45048,
+   "out": "{\n  \"data\": {\n    \"tool\": \"news_market\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T20:05:11.228416+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"g timed out after 45.0s\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__event_stats",
+   "input": {
+    "query": "Iran US ceasefire Hormuz",
+    "limit": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "web_search",
+   "input": {
+    "query": "Iran US ceasefire Hormuz oil October 2026",
+    "numResults": 8
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_market_index",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 542,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_market_index\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T20:05:54.593485+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"vietstock login rejected: Tài khoản này được đăng nhập bằng Google!\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 963,
+   "out": "Nguồn tìm kiếm: duckduckgo (không key — nên đặt EXA_API_KEY để ổn định)\n1. US-Iran Strait of Hormuz Oil Prices: 2026 Crisis\n   https://discoveryalert.com/us-iran-strait-hormuz-oil-prices-2026-ceasefire-market/\n   The 2026 US-Iran conflict over the Strait of Hormuz, culminating in a ceasefire memorandum of understanding, produced one of the most instructive geopolitical commodity market cycles in recent memory.\n2. US and Iran Discuss Phased Deal to Reopen Hormuz and End US Blockade ...\n   https:/"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n\n\n<｜DSML｜ calls>\n"
+}

@@ -239,3 +239,13 @@ Chi tiết: `docs/eval-2026-10-06/round2.md` (transcripts `runs/round2/`).
 Kết quả: `switch_preset` 8/43→**0/12**, hallucination 7→**0**, validation-fail→**0**;
 F09 (FAIL trắng) nay ra đáp án đầy đủ; S07/S09/S13/S16/W1/W4 đạt; W5 cải thiện nhưng
 vẫn miss `quant_risk`. Timeouts 300s còn (sang đợt 2, vấn đề #1). Registry còn **156 tools**.
+
+### 8.4 Round 3 — verify feedback review (06-10 tối)
+
+Chi tiết: `docs/eval-2026-10-06/round3.md` (transcripts `runs/round3/`).
+**P22 đã verify live local (Render lúc chạy vẫn bản cũ):** `geo_intel` lọc chính trị +
+aggregate + military mode (adsb.lol live: 138 máy bay, by_country US 43/Japan 19/UK 16,
+nearest-zone gaza 82km, signal-loss diff); `event_stats` aggregate tách vai;
+`valuation_run` btype→method + warning btype lạ. Round3: T-questions ky-thuat 6/6 đạt
+(verdict thật 1344–4007 ch); S03/S04/S09 0 fails; S05 bỏ Step 1 BCTC ✓ + fix thêm
+skill 1.1.2 (load_skill chỉ với tên, không aspect-file); S18 còn spawn timeout (đợt 2 #4).

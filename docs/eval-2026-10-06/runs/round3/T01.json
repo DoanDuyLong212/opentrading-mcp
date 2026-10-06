@@ -1,0 +1,61 @@
+{
+ "id": "T01",
+ "q": "Phân tích kỹ thuật VCB khung ngày",
+ "ms": 205515,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ky-thuat-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ky-thuat-chuyen-sau\n\n# Reading Single-Stock Technicals\n\nMặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill \"1 tool trụ cột\" mẫu mực, đừng gọi thêm tool cho đủ số.\n\n## When to Use\n\n- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  "
+  },
+  {
+   "t": "start",
+   "name": "current_time",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thứ ba, 06/10/2026 20:12:30 (giờ Việt Nam, UTC+7)\nISO: 2026-10-06T20:12:30+07:00"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "VCB",
+    "interval": "1D"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "VCB",
+    "interval": "1W"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 886,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1D\",\n    \"rsi14\": 40.59,\n    \"stoch_k\": 26.0,\n    \"stoch_d\": 9.48,\n    \"cci20\": -145.06,\n    \"adx14\": 14.26,\n    \"macd\": {\n      \"line\": -0.4189,\n      \"signal\": -0.2344,\n      \"hist\": -0.1845\n    },\n    \"momentum10\": -1.6,\n    \"ao\": -1.25,\n    \"ema10\": 57.76,\n    \"ema20\": 58.17,\n    \"ema50\": 58.61,\n    \"sma10\": 57.79,\n    \"sma20\": 58.45,\n    \"sma50\": 58.43,\n    \"sma150\": 59.46,\n    \"sma200\": 60.66,\n    \"vwma\": 58.7,\n    \"hull9\": 56.94,\n    \"bo"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1103,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1W\",\n    \"rsi14\": 44.14,\n    \"stoch_k\": 50.11,\n    \"stoch_d\": 49.77,\n    \"cci20\": 0.0,\n    \"adx14\": 11.48,\n    \"macd\": {\n      \"line\": -0.7216,\n      \"signal\": -0.5757,\n      \"hist\": -0.1459\n    },\n    \"momentum10\": -2.0,\n    \"ao\": 0.0,\n    \"ema10\": 58.4,\n    \"ema20\": 59.01,\n    \"ema50\": 59.79,\n    \"sma10\": 58.68,\n    \"sma20\": 59.28,\n    \"sma50\": null,\n    \"sma150\": null,\n    \"sma200\": null,\n    \"vwma\": 59.3,\n    \"hull9\": 57.43,\n    \"boll_upper"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n# VCB — Phân tích kỹ thuật khung ngày (1D)\n*Dữ liệu tính từ nến đóng cửa, as_of 06/10/2026 20:13 · giá quy đổi: 57.3 = 57.300đ*\n\n**Chốt trước:** Khung ngày đang **đi ngang–giảm nhẹ trong vùng tích lũy**, chưa có xu hướng (ADX 14.3). Giá nằm dưới toàn bộ cụm MA trung–dài hạn, momentum yếu nhưng đã vào vùng quá bán ngắn hạn với 2 mẫu nến đảo chiều (hammer, engulfing_bull) → thiên về **CHỜ**, chưa đủ xác nhận để mua, cũng chưa gãy hỗ trợ để bán.\n\n---\n\n## 1. Trend — MA stack + ADX\n- Cấu trúc MA xếp **giảm dần**: EMA10 57.760đ < EMA20 58.170đ < EMA50 58.610đ; SMA150 59.460đ, SMA200 60.660đ [computed-local · 06/10 20:13].\n- Giá 57.300đ nằm **dưới tất cả** đường MA ngày → cấu trúc vẫn nghiêng bearish.\n- **ADX14 = 14.3** → trend rất yếu, thị trường đi ngang; các tín hiệu breakout/trend-following kém tin cậy ở vùng này.\n\n## 2. Momentum\n| Chỉ báo | Giá trị | Đọc |\n|---|---|---|\n| RSI14 | 40.6 | Yếu, **chưa** quá bán (mốc 30) |\n| Stoch K/D | 26.0 / 9.5 | Vùng thấp, K vừa cắt lên D → hồi ngắn hạn |\n| CCI20 | −145.1 | Quá bán |\n| MACD | −0.419 / −0.234, hist −0.185 | Âm, dưới đường tín hiệu → bearish |\n| AO / Mom10 | −1.25 / −1.6 | Suy yếu |\n\n*Nguồn: computed-local · 06/10 20:13.*\n\n→ Momentum ngắn hạn có dấu hiệu \"bắt đáy kỹ thuật\" (Stoch/CCI quá bán + 2 mẫu nến đảo chiều: **hammer, engulfing_bull**), nhưng xung lực trung hạn vẫn âm (MACD/AO).\n\n## 3. Hỗ trợ – Kháng cự (khung ngày)\n- **Hỗ trợ:** 56.000đ (support) — trùng biên dưới Bollinger 56.720đ, dưới đó là đáy swing 52.600đ.\n- **Kháng cự:** 61.000đ (resistance) — trùng đỉnh swing gần nhất (LH 61.0); giữa đường có Kijun 58.700đ và EMA20 58.170đ.\n- ATR14 = 0.90 (≈900đ/ngày) → biến động ngày hẹp.\n\n## 4. Cấu trúc sóng (HH/HL hay LH/LL)\n- Swings gần: HL 57.200 → **HH 61.400** → HL 57.900 → **LH 61.000** → `swing_trend = mixed` [computed-local · 06/10 20:13]. Đỉnh sau (61.0) thấp hơn đỉnh trước (61.4) → chưa xác nhận higher-high.\n- **Fibonacci (chiều lên, 52.600 → 61.400):** giá 57.300đ đang ở giữa mức 0.5 (57.000đ) và 0.618 (58.040đ) — vùng \"cân bằng\", không phải vùng chiết khấu sâu.\n- **Elliott:** `impulse-developing`, mới có sóng 1–4; **confidence THẤP**, không có mức invalidation rõ → chỉ tham khảo.\n- **Wyckoff:** pha `accumulation`, confidence **medium**, bằng chứng \"spring – phá giả rồi hồi phục\" → ủng hộ kịch bản tích lũy.\n- **Ichimoku:** giá 57.300đ kẹt **trong mây** (Senkou B 57.150đ ↔ Senkou A 58.120đ), dưới Tenkan 57.550đ và Kijun 58.700đ; Chikou 60.300đ > giá → tín hiệu tổng **neutral**.\n\n## 5. Kết luận khung ngày\nCấu trúc **mixed, nghiêng lower-high** (đỉnh sau thấp hơn đỉnh trước) kèm giá dưới cụm MA dài hạn; nhưng nằm trong mây Ichimoku + pha tích lũy Wyckoff + oversold ngắn hạn → **chưa gãy xu hướng, chưa có higher-high xác nhận**.\n\n## 6. Tổng hợp đa khung & trigger\n- **Khung tuần (1W):** `swing_trend = lower-low`, Fib chiều xuống 78.15→52.6, giá gần mức 0.786 (58.070đ); Ichimoku **bearish**; Wyckoff ranging; RSI 44.1, ADX 11.5 [computed-local · 06/10 20:13]. → Tuần vẫn bearish/nghiêng giảm.\n- **Đồng thuận hay phân kỳ:** Ngày (neutral/tích lũy) **phân kỳ nhẹ** với Tuần (bearish). Tức là hồi kỹ thuật khung ngày đang chống lại xu hướng giảm khung tuần.\n- **Trigger:**\n  - *Kích hoạt mua (cần xác nhận):* đóng nến ngày **> 58.700đ (Kijun)** và vượt 59.000đ kèm KL tăng → hướng tới 61.000đ.\n  - *Cảnh báo xấu:* mất **56.000đ** (đóng cửa dưới) → mở đường về 52.600đ.\n  - *Hiện tại:* giá kẹt 56.7–58.0k, ADX thấp → **CHỜ**, ưu tiên quản trị rủi ro hơn là hành động.\n\n## 7. Chốt 1 câu\nVCB khung ngày là **sideway tích lũy yếu, giá 57.300đ dưới mọi MA dài hạn, momentum trung hạn âm nhưng oversold ngắn hạn có mẫu nến đảo chiều** — cần đóng > 58.700đ (Kijun) mới xác nhận hồi, mất 56.000đ là kích hoạt bear case.\n\n*Lưu ý: `rs_vs_bench` khung ngày −0.92 và khung tuần −20.97 cho thấy VCB đang yếu hơn VNINDEX; `pos_52w` khung ngày 0.18 (gần đáy 52 tuần). Tín hiệu \"recommend: Sell\" là thang phân loại kỹ thuật của nguồn, không phải khuyến nghị giao dịch — bạn tự quyết định.*"
+}

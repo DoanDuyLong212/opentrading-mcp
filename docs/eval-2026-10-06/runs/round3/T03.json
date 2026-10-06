@@ -1,0 +1,321 @@
+{
+ "id": "T03",
+ "q": "FPT đang higher-high hay lower-low",
+ "ms": 300003,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ky-thuat-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ky-thuat-chuyen-sau\n\n# Reading Single-Stock Technicals\n\nMặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill \"1 tool trụ cột\" mẫu mực, đừng gọi thêm tool cho đủ số.\n\n## When to Use\n\n- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "FPT",
+    "days": 200,
+    "columns": [
+     "date",
+     "close"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 820,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"candles\": [\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "FPT",
+    "indicators": [
+     "rsi14",
+     "macd",
+     "sma20",
+     "sma50",
+     "sma150",
+     "swings",
+     "swing_trend",
+     "support",
+     "resistance",
+     "pos_52w",
+     "recommend"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 834,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"interval\": \"1D\",\n    \"rsi14\": 30.51,\n    \"macd\": {\n      \"line\": -0.8666,\n      \"signal\": -0.2449,\n      \"hist\": -0.6217\n    },\n    \"sma20\": 64.87,\n    \"sma50\": 63.98,\n    \"sma150\": 65.8,\n    \"swings\": [\n      {\n        \"i\": 131,\n        \"price\": 63.73,\n        \"side\": \"LL\"\n      },\n      {\n        \"i\": 139,\n        \"price\": 67.27,\n        \"side\": \"LH\"\n      },\n      {\n        \"i\": 155,\n        \"price\": 55.91,\n        \"side\": \"LL\"\n      },\n      {\n        "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "FPT",
+    "interval": "1W",
+    "indicators": [
+     "rsi14",
+     "macd",
+     "sma20",
+     "sma50",
+     "sma150",
+     "swings",
+     "swing_trend",
+     "support",
+     "resistance",
+     "pos_52w",
+     "ichimoku",
+     "recommend"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "FPT",
+    "days": 120,
+    "summary": true
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 210,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"count\": 109,\n    \"last\": 60.4,\n    \"high\": 70.64,\n    \"low\": 55.91\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T20:06:20.765333+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 703,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"interval\": \"1W\",\n    \"rsi14\": 38.47,\n    \"macd\": {\n      \"line\": -2.5505,\n      \"signal\": -3.0554,\n      \"hist\": 0.5049\n    },\n    \"sma20\": 64.08,\n    \"sma50\": null,\n    \"sma150\": null,\n    \"ichimoku\": {\n      \"tenkan\": 64.06,\n      \"kijun\": 63.66,\n      \"senkou_a\": 63.86,\n      \"senkou_b\": null,\n      \"chikou\": 69.68,\n      \"signal\": \"neutral\"\n    },\n    \"swings\": [\n      {\n        \"i\": 354,\n        \"price\": 100.11,\n        \"side\": \"HH\"\n      },\n      {\n "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "days": 40,
+    "symbol": "FPT"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 32861,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"FPT\",\n    \"candles\": [\n      {\n        \"t\": \"13\",\n        \"o\": 64.64,\n        \"h\": 65.18,\n        \"l\": 63.91,\n        \"c\": 64.36,\n        \"v\": 4319872.0\n      },\n      {\n        \"t\": \"14\",\n        \"o\": 64.46,\n        \"h\": 65.46,\n        \"l\": 64.27,\n        \"c\": 65.27,\n        \"v\": 5271564.0\n      },\n      {\n        \"t\": \"15\",\n        \"o\": 65.09,\n        \"h\": 66.46,\n        \"l\": 64.55,\n        \"c\": 64.73,\n        \"v\": 6962033.0\n      },\n      {\n        \"t\": \"16\",\n    "
+  },
+  {
+   "t": "start",
+   "name": "chart_render",
+   "input": {
+    "kind": "candlestick",
+    "symbol": "FPT 1D (30 phiên gần nhất, kVND)",
+    "bars": [
+     {
+      "o": 63.55,
+      "h": 65.46,
+      "l": 63.18,
+      "c": 65.46
+     },
+     {
+      "o": 65.91,
+      "h": 66.09,
+      "l": 64.91,
+      "c": 64.91
+     },
+     {
+      "o": 64.91,
+      "h": 65.46,
+      "l": 64.27,
+      "c": 64.27
+     },
+     {
+      "o": 64.27,
+      "h": 66.27,
+      "l": 64.27,
+      "c": 66
+     },
+     {
+      "o": 66,
+      "h": 66.09,
+      "l": 65.64,
+      "c": 65.64
+     },
+     {
+      "o": 65.64,
+      "h": 67.27,
+      "l": 65.64,
+      "c": 66.55
+     },
+     {
+      "o": 66.36,
+      "h": 66.36,
+      "l": 65.46,
+      "c": 65.64
+     },
+     {
+      "o": 65.91,
+      "h": 66.36,
+      "l": 65.82,
+      "c": 66.18
+     },
+     {
+      "o": 66.36,
+      "h": 67.09,
+      "l": 65.64,
+      "c": 65.82
+     },
+     {
+      "o": 65.82,
+      "h": 65.91,
+      "l": 65.46,
+      "c": 65.64
+     },
+     {
+      "o": 65.73,
+      "h": 66.36,
+      "l": 65.55,
+      "c": 65.82
+     },
+     {
+      "o": 65.73,
+      "h": 68,
+      "l": 65.64,
+      "c": 67.73
+     },
+     {
+      "o": 67.64,
+      "h": 67.64,
+      "l": 66.09,
+      "c": 66.09
+     },
+     {
+      "o": 66.18,
+      "h": 66.91,
+      "l": 65.46,
+      "c": 65.82
+     },
+     {
+      "o": 66.09,
+      "h": 66.73,
+      "l": 65.91,
+      "c": 66.09
+     },
+     {
+      "o": 66.18,
+      "h": 67.09,
+      "l": 65,
+      "c": 67.09
+     },
+     {
+      "o": 66.64,
+      "h": 67.55,
+      "l": 66,
+      "c": 67.55
+     },
+     {
+      "o": 67.73,
+      "h": 68,
+      "l": 65.18,
+      "c": 65.18
+     },
+     {
+      "o": 66.5,
+      "h": 66.8,
+      "l": 65,
+      "c": 66.4
+     },
+     {
+      "o": 66.6,
+      "h": 67,
+      "l": 66.2,
+      "c": 66.6
+     },
+     {
+      "o": 66.6,
+      "h": 67,
+      "l": 66.1,
+      "c": 66.1
+     },
+     {
+      "o": 66,
+      "h": 66.2,
+      "l": 65.1,
+      "c": 65.3
+     },
+     {
+      "o": 65.5,
+      "h": 65.9,
+      "l": 64.6,
+      "c": 64.7
+     },
+     {
+      "o": 64.7,
+      "h": 64.8,
+      "l": 63,
+      "c": 63.7
+     },
+     {
+      "o": 63.7,
+      "h": 64.1,
+      "l": 63.1,
+      "c": 63.2
+     },
+     {
+      "o": 63.4,
+      "h": 64,
+      "l": 63,
+      "c": 63
+     },
+     {
+      "o": 63,
+      "h": 63.1,
+      "l": 62.6,
+      "c": 62.7
+     },
+     {
+      "o": 62.7,
+      "h": 63.2,
+      "l": 62.1,
+      "c": 62.1
+     },
+     {
+      "o": 62.2,
+      "h": 62.8,
+      "l": 61.9,
+      "c": 61.9
+     },
+     {
+      "o": 62,
+      "h": 62.2,
+      "l": 60,
+      "c": 60.4
+     }
+    ],
+    "width": 80,
+    "height": 18
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 4,
+   "out": "FPT 1D (30 phiên gần nhất, kVND) · nến (30 bars):\n     68┤                      \u001b[32m│\u001b[0m           \u001b[31m│\u001b[0m                                     \n       │                      \u001b[32m█\u001b[0m \u001b[31m█\u001b[0m       \u001b[32m█\u001b[0m \u001b[31m█\u001b[0m                                     \n       │          \u001b[32m│\u001b[0m     \u001b[31m│\u001b[0m     \u001b[32m█\u001b[0m \u001b[31m█\u001b[0m \u001b[31m│\u001b[0m   \u001b[32m█\u001b[0m \u001b[32m█\u001b[0m \u001b[31m█\u001b[0m   \u001b[32m│\u001b[0m \u001b[31m│\u001b[0m                               \n       │          \u001b[32m█\u001b[0m \u001b[31m█\u001b[0m \u001b[32m│\u001b[0m \u001b[31m█\u001b[0m  "
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n## Chốt trước: khung tuần là **lower-low**; khung ngày **đã mất chuỗi higher-high** và đang lower-low ngắn hạn\n\nGiá đóng cửa gần nhất **60.400đ** [vnstock · 06/10 20:07].\n\n**Đọc cấu trúc (đỉnh/đáy swing)**\n\n| Khung | Chuỗi swing gần nhất | Nhãn tổng |\n|---|---|---|\n| 1D | LL 63.73 → LH 67.27 → LL 55.91 → LH 66.64 → HL 61.82 → HH 67.27 → HH 68.00 → **LH 68.00** | mixed (nhưng 13 phiên cuối thuần giảm) |\n| 1W | HH 100.11 → HL 77.21 → LH 94.34 → HL 81.60 → HH 97.48 → LL 62.77 → LH 70.64 → **LL 55.91** | **lower-low** |\n\n[computed-local · 06/10 20:06]\n\n**Khung ngày (1D) — chưa gãy xu hướng dài nhưng đã hết higher-high**\n- Trend: giá 60.400đ nằm **dưới cả** SMA20 64.87, SMA50 63.98, SMA150 65.80 → stack xếp chồng giảm. (ADX không có trong lần lấy này, không nêu số.)\n- Momentum: RSI14 30.5 (sát quá bán), MACD −0.867 / signal −0.245 / hist −0.622 (âm và đang mở rộng) [computed-local · 06/10 20:05].\n- Hỗ trợ/kháng cự: 60.0 / 68.0. Vị thế trong biên 52 tuần: 0.108 (sát đáy).\n- Đọc nến: xác lập **đỉnh đôi quanh 67–68** (2 nến high 68.00, một trong đó volume 15,5 triệu cp), rồi **11 phiên giảm gần như liên tục** xuống 60.400đ; nến hôm nay thủng xuống 60.0 với 8,2 triệu cp [vnstock · 06/10 20:07].\n- Kết luận 1D: **lower-low**. Chuỗi HH chỉ tồn tại tới đỉnh 68.00 rồi bị phủ định; hiện là lower-high + lower-low ngắn hạn, đang nằm ngay trên hỗ trợ 60.0.\n\n**Khung tuần (1W) — lower-low rõ**\n- Trend: giá dưới SMA20 tuần 64.08; SMA50/SMA150 tuần **null** (thiếu lịch sử, tôi không suy diễn).\n- Momentum: RSI14 38.5"
+}

@@ -1,0 +1,64 @@
+{
+ "id": "T02",
+ "q": "HPG có breakout không",
+ "ms": 193849,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ky-thuat-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ky-thuat-chuyen-sau\n\n# Reading Single-Stock Technicals\n\nMặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill \"1 tool trụ cột\" mẫu mực, đừng gọi thêm tool cho đủ số.\n\n## When to Use\n\n- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "HPG",
+    "interval": "1D"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "HPG",
+    "days": 60
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2349,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"candles\": [\n      {\n        \"t\": \"7\",\n        \"o\": 23.2,\n        \"h\": 23.25,\n        \"l\": 22.95,\n        \"c\": 22.95,\n        \"v\": 11906800.0\n      },\n      {\n        \"t\": \"8\",\n        \"o\": 22.95,\n        \"h\": 22.95,\n        \"l\": 22.35,\n        \"c\": 22.4,\n        \"v\": 32309000.0\n      },\n      {\n        \"t\": \"9\",\n        \"o\": 22.3,\n        \"h\": 22.5,\n        \"l\": 22.0,\n        \"c\": 22.5,\n        \"v\": 22481900.0\n      },\n      {\n        \"t\": \"10\",\n        \"o"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2751,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"interval\": \"1D\",\n    \"rsi14\": 42.41,\n    \"stoch_k\": 45.0,\n    \"stoch_d\": 37.5,\n    \"cci20\": -60.22,\n    \"adx14\": 28.97,\n    \"macd\": {\n      \"line\": -0.3683,\n      \"signal\": -0.3373,\n      \"hist\": -0.031\n    },\n    \"momentum10\": -0.65,\n    \"ao\": -1.0,\n    \"ema10\": 20.49,\n    \"ema20\": 20.78,\n    \"ema50\": 21.37,\n    \"sma10\": 20.43,\n    \"sma20\": 20.88,\n    \"sma50\": 21.36,\n    \"sma150\": 23.0,\n    \"sma200\": 23.28,\n    \"vwma\": 20.85,\n    \"hull9\": 20.26,\n    \"boll"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "interval": "1W",
+    "symbol": "HPG"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 775,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"interval\": \"1W\",\n    \"rsi14\": 35.81,\n    \"stoch_k\": 22.5,\n    \"stoch_d\": 16.05,\n    \"cci20\": 0.0,\n    \"adx14\": 23.69,\n    \"macd\": {\n      \"line\": -0.8169,\n      \"signal\": -0.6647,\n      \"hist\": -0.1522\n    },\n    \"momentum10\": -1.2,\n    \"ao\": 0.0,\n    \"ema10\": 21.2,\n    \"ema20\": 21.9,\n    \"ema50\": 22.59,\n    \"sma10\": 21.28,\n    \"sma20\": 22.07,\n    \"sma50\": null,\n    \"sma150\": null,\n    \"sma200\": null,\n    \"vwma\": 22.02,\n    \"hull9\": 20.23,\n    \"boll_upper\""
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n**Không — HPG chưa breakout.** Giá 20.500đ vẫn nằm dưới đỉnh 20 phiên (~22.200đ) và dưới toàn bộ nhóm MA trung-dài hạn; cấu trúc hiện tại là **lower-low**, không phải phá vỡ. Có một tín hiệu tích cực nhưng chỉ ở khung tuần, chưa xác nhận.\n\n**Khung 1D** [computed-local · 06/10 20:02]\n- Trend: giá 20.500đ < EMA20 20.780 < EMA50 21.370 < SMA200 23.280 → xếp chồng giảm; ADX 28.97 (trend có lực, nghiêng xuống).\n- Momentum: RSI 42.41 (yếu), MACD −0.368 / signal −0.337 (hist −0.031), CCI −60.22, AO −1.0, Stoch 45.0/37.5 → chưa có dòng tiền bứt tốc.\n- Hỗ trợ/kháng cự: 19.600đ / 22.200đ.\n- Cấu trúc: chuỗi LH–LL (24.5 → 23.2 → 20.1), swing_trend = **lower-low**; Fib giảm 19.6–23.25, giá 20.5 kẹt giữa mức 0.618 (20.99) và 0.786 (20.38). Elliott \"impulse-developing\" giảm, confidence thấp; Wyckoff **markdown**, confidence thấp.\n- Kết luận 1D: lower-low, đi ngang vùng đáy – chưa phá đỉnh.\n\n**Khung 1W** [computed-local · 06/10 20:03]\n- Trend: giá < EMA10 21.200 < EMA20 21.900 < EMA50 22.590; ADX 23.69.\n- Momentum: RSI 35.81, MACD −0.817 / −0.665 (hist −0.152), Stoch 22.5/16.05 → vẫn trong vùng quá bán, chưa đảo.\n- Hỗ trợ/kháng cự: 19.600đ / 24.500đ.\n- Cấu trúc: swing_trend lower-low, nhưng Wyckoff báo **accumulation, confidence CAO** với bằng chứng \"volume cạn dần trong range\" + \"spring: phá đáy giả rồi hồi lại\" (nến tuần thủng 19.6 rồi rút chân).\n- Kết luận 1W: lower-low nhưng có dấu hiệu tích lũy/spring.\n\n**Tổng hợp**\n- Hai khung chưa đồng thuận: 1D thuần giảm (markdown), 1W xuất hiện tích lũy. Đây là mầm tạo đáy, **không phải breakout**.\n- Điều kiện để gọi là breakout: đóng cửa **vượt 22.200đ** kèm khối lượng tăng, mục tiêu kế tiếp vùng 22.600–23.000đ (Fib 0.618 khung tuần / MA50). Xác nhận mạnh hơn nếu vượt luôn 24.500đ.\n- Điều kiện phủ định: thủng **19.600đ** → phá đáy, kịch bản tích lũy vô hiệu, quay lại xu hướng giảm.\n- Bối cảnh tương đối yếu: HPG kém VNINDEX −6.4% (1D) và −26.3% (1W), pos_52w chỉ 0.13 ở khung ngày — đang ở vùng đáy 52 tuần.\n\nTóm 1 câu: **HPG đang test đáy/tích lũy chứ chưa breakout; chỉ xác nhận khi vượt 22.200đ bằng volume, còn thủng 19.600đ là mất cấu trúc.**\n\nĐây là đọc kỹ thuật, không phải khuyến nghị mua/bán — bạn tự quyết định."
+}

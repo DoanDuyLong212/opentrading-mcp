@@ -1,0 +1,64 @@
+{
+ "id": "T09",
+ "q": "ADX VCB bao nhiêu, trend mạnh không",
+ "ms": 155011,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ky-thuat-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ky-thuat-chuyen-sau\n\n# Reading Single-Stock Technicals\n\nMặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill \"1 tool trụ cột\" mẫu mực, đừng gọi thêm tool cho đủ số.\n\n## When to Use\n\n- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "VCB",
+    "interval": "1D"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 3928,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1D\",\n    \"rsi14\": 40.59,\n    \"stoch_k\": 26.0,\n    \"stoch_d\": 9.48,\n    \"cci20\": -145.06,\n    \"adx14\": 14.26,\n    \"macd\": {\n      \"line\": -0.4189,\n      \"signal\": -0.2344,\n      \"hist\": -0.1845\n    },\n    \"momentum10\": -1.6,\n    \"ao\": -1.25,\n    \"ema10\": 57.76,\n    \"ema20\": 58.17,\n    \"ema50\": 58.61,\n    \"sma10\": 57.79,\n    \"sma20\": 58.45,\n    \"sma50\": 58.43,\n    \"sma150\": 59.46,\n    \"sma200\": 60.66,\n    \"vwma\": 58.7,\n    \"hull9\": 56.94,\n    \"bo"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "interval": "1W",
+    "symbol": "VCB",
+    "indicators": [
+     "rsi14",
+     "macd",
+     "sma20",
+     "sma50",
+     "sma150",
+     "sma200",
+     "adx14",
+     "support",
+     "resistance",
+     "swings",
+     "swing_trend",
+     "pos_52w"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1362,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1W\",\n    \"rsi14\": 44.14,\n    \"adx14\": 11.48,\n    \"macd\": {\n      \"line\": -0.7216,\n      \"signal\": -0.5757,\n      \"hist\": -0.1459\n    },\n    \"sma20\": 59.28,\n    \"sma50\": null,\n    \"sma150\": null,\n    \"sma200\": null,\n    \"swings\": [\n      {\n        \"i\": 339,\n        \"price\": 51.2,\n        \"side\": \"LL\"\n      },\n      {\n        \"i\": 348,\n        \"price\": 54.74,\n        \"side\": \"HL\"\n      },\n      {\n        \"i\": 359,\n        \"price\": 69.51,\n        "
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n**Chốt: ADX VCB đang thấp ở cả 2 khung → KHÔNG có trend mạnh, thị trường mã này đang đi ngang/tích luỹ.**\n\n**ADX (đo sức mạnh xu hướng, chuẩn đọc nhanh: <20 = không trend, 20–25 = mới hình thành, >25 = trend mạnh)**\n- Khung ngày (1D): ADX14 = **14,26** — dưới 20, trend yếu/không xu hướng [computed-local · 06/10 20:02]\n- Khung tuần (1W): ADX14 = **11,48** — còn yếu hơn [computed-local · 06/10 20:03]\n\n**Đọc kèm để thấy ADX nói đúng bối cảnh**\n\nKhung ngày (1D) — giá 57.300đ:\n- EMA10 57,76 < EMA20 58,17 < EMA50 58,61 → xếp chồng giảm, giá nằm dưới các EMA ngắn\n- RSI 40,6 · MACD −0,42/−0,23 (histogram âm) · CCI −145 · Stochastic K 26/D 9,5 → momentum yếu, nghiêng bán\n- Cấu trúc swing: mixed (HH 61,4 / HL 57,9 / LH 61,0) → chưa rõ HH hay LL\n- Hỗ trợ 56,0 · Kháng cự 61,0 · pos_52w 0,18 (gần đáy 1 năm)\n\nKhung tuần (1W) — rõ hơn về xu hướng dài:\n- Cấu trúc swing: **lower-low** (chuỗi đỉnh/đáy hạ dần: 78,15 → 65,65 → 52,6 → 61,4) → xu hướng tuần vẫn nghiêng giảm\n- RSI 44,1 · MACD −0,72/−0,58 → dưới 0, chưa có dấu hồi phục\n- Hỗ trợ 52,6 · Kháng cự 63,96\n\n**Kết luận**\n- ADX thấp ở cả 1D lẫn 1W = **không có trend mạnh để bám theo**; đây là pha đi ngang/tích luỹ (Wyckoff gợi ý accumulation, confidence medium — chỉ là heuristic, chưa xác nhận).\n- Xu hướng lớn hơn (khung tuần) đang lower-low nhưng lực yếu dần → dạng \"giảm mệt\", dễ sideway trong biên 56–61 (ngày) hơn là bứt phá rõ.\n\n**Trigger để trend \"thành hình\"**\n- ADX14 ngày vượt ~20–25 kèm giá đóng trên 61,0 (kháng cự ngày) → tín hiệu xu hướng tăng mới có cơ sở.\n- Mất hỗ trợ 56,0 (ngày) → rủi ro mở lại xu hướng giảm về vùng 52,6 (hỗ trợ tuần).\n\nADX là chỉ báo độ mạnh, không phải hướng; nó xác nhận \"đang không có trend\" chứ không dự báo giá đi đâu. Dữ liệu nến tới 06/10, bạn nên đối chiếu phiên thực tế trên bảng giá.\n\nBạn muốn mình soi thêm khung tháng (1M) hay đọc kỹ cấu trúc sóng/Fibonacci không?"
+}

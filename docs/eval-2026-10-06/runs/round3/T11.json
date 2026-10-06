@@ -1,0 +1,84 @@
+{
+ "id": "T11",
+ "q": "VCB RSI bao nhiêu, có oversold không",
+ "ms": 154365,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ky-thuat-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ky-thuat-chuyen-sau\n\n# Reading Single-Stock Technicals\n\nMặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill \"1 tool trụ cột\" mẫu mực, đừng gọi thêm tool cho đủ số.\n\n## When to Use\n\n- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "VCB",
+    "indicators": [
+     "rsi14",
+     "macd",
+     "sma20",
+     "sma50",
+     "support",
+     "resistance",
+     "recommend",
+     "bb",
+     "adx"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "VCB",
+    "days": 60,
+    "summary": true
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 640,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"count\": 60,\n    \"last\": 57.3,\n    \"high\": 61.4,\n    \"low\": 52.6\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T20:05:07.420954+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1146,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1D\",\n    \"rsi14\": 40.59,\n    \"macd\": {\n      \"line\": -0.4189,\n      \"signal\": -0.2344,\n      \"hist\": -0.1845\n    },\n    \"sma20\": 58.45,\n    \"sma50\": 58.43,\n    \"recommend\": \"Sell\",\n    \"support\": 56.0,\n    \"resistance\": 61.0\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T20:05:07.476874+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "VCB",
+    "interval": "1W",
+    "indicators": [
+     "rsi14",
+     "macd",
+     "sma20",
+     "swing_trend",
+     "recommend",
+     "resistance",
+     "support"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 33051,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1W\",\n    \"rsi14\": 44.14,\n    \"macd\": {\n      \"line\": -0.7216,\n      \"signal\": -0.5757,\n      \"hist\": -0.1459\n    },\n    \"sma20\": 59.28,\n    \"swing_trend\": \"lower-low\",\n    \"recommend\": \"Sell\",\n    \"support\": 52.6,\n    \"resistance\": 63.96\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T20:06:17.551344+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  }
+ ],
+ "text": "\n\n\n\n**Không, VCB chưa oversold.** RSI(14) khung ngày 40,59 — dưới trung tính nhưng còn xa ngưỡng quá bán 30 [computed-local · 06/10 20:05].\n\n**RSI đa khung**\n- 1D: RSI 40,59 → vùng yếu, chưa quá bán [computed-local · 06/10 20:05]\n- 1W: RSI 44,14 → trung tính-yếu, chưa quá bán [computed-local · 06/10 20:06]\n\n**Bối cảnh xác nhận (không phải oversold mà là xu hướng yếu)**\n- Giá khớp gần nhất 57.300đ, dưới cả SMA20 (58.450đ) và SMA50 (58.430đ) [computed-local · 06/10 20:05]\n- MACD 1D âm: line −0,419 / signal −0,234 / hist −0,185; 1W cũng âm [computed-local · 06/10]\n- Khung tuần: cấu trúc lower-low, trend chưa đảo [computed-local · 06/10 20:06]\n- Đánh giá tổng hợp: \"Sell\" cả 2 khung [computed-local · 06/10]\n\n**Mốc cần theo dõi**\n- Hỗ trợ 1D 56.000đ; hỗ trợ 1W 52.600đ (đáy 60 phiên gần nhất) [computed-local · 06/10]\n- Kháng cự 1D 61.000đ; 1W 63.960đ [computed-local · 06/10]\n\n**Đọc nhanh:** RSI 40 là \"yếu nhưng chưa kiệt\". Theo kinh nghiệm, oversold thật thường cần RSI <30 (và thường <25 mới gọi là sâu) — VCB còn cách khoảng 10 điểm. Nếu muốn bắt đáy theo RSI, hiện chưa có tín hiệu; vùng đáng chú ý là khi RSI 1D về 30 hoặc giá test hỗ trợ 56.000đ.\n\nLưu ý: dữ liệu phiên đóng cửa, mốc \"as of\" 06/10; nên đối chiếu bảng giá realtime khi vào lệnh. Đây là phân tích kỹ thuật tham khảo, không phải khuyến nghị mua/bán — bạn tự quyết định."
+}

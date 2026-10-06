@@ -1,0 +1,95 @@
+{
+ "id": "T04",
+ "q": "VCB khung tuần sao rồi",
+ "ms": 247831,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ky-thuat-chuyen-sau"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ky-thuat-chuyen-sau\n\n# Reading Single-Stock Technicals\n\nMặc định 2 khung (1D+1W); khung 1M chỉ khi user hỏi dài hạn. Một call `signals_technical` đã đủ 80% verdict — đây là skill \"1 tool trụ cột\" mẫu mực, đừng gọi thêm tool cho đủ số.\n\n## When to Use\n\n- Dùng khi: user hỏi kỹ thuật 1 mã (`VCB kỹ thuật đa khung sao`, `FPT có breakout không`, `đọc băng HPG`, `higher-high hay lower-low`, `sóng Elliott`).\n- Khi KHÔNG dùng (dùng skill khác thay thế):\n  "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "VCB",
+    "interval": "1W",
+    "days": 120
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 658,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"candles\": [\n      {\n        \"t\": \"45\",\n        \"o\": 56.64,\n        \"h\": 57.56,\n        \"l\": 55.98,\n        \"c\": 56.11,\n        \"v\": 7970596.0\n      },\n      {\n        \"t\": \"46\",\n        \"o\": 56.51,\n        \"h\": 59.07,\n        \"l\": 56.11,\n        \"c\": 57.95,\n        \"v\": 10773682.0\n      },\n      {\n        \"t\": \"47\",\n        \"o\": 57.95,\n        \"h\": 58.74,\n        \"l\": 57.1,\n        \"c\": 57.69,\n        \"v\": 7243670.0\n      },\n      {\n        \"t\": \"48\",\n    "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "VCB",
+    "interval": "1W"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1421,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1W\",\n    \"rsi14\": 44.14,\n    \"stoch_k\": 50.11,\n    \"stoch_d\": 49.77,\n    \"cci20\": 0.0,\n    \"adx14\": 11.48,\n    \"macd\": {\n      \"line\": -0.7216,\n      \"signal\": -0.5757,\n      \"hist\": -0.1459\n    },\n    \"momentum10\": -2.0,\n    \"ao\": 0.0,\n    \"ema10\": 58.4,\n    \"ema20\": 59.01,\n    \"ema50\": 59.79,\n    \"sma10\": 58.68,\n    \"sma20\": 59.28,\n    \"sma50\": null,\n    \"sma150\": null,\n    \"sma200\": null,\n    \"vwma\": 59.3,\n    \"hull9\": 57.43,\n    \"boll_upper"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__signals_technical",
+   "input": {
+    "symbol": "VCB",
+    "interval": "1D"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1388,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"interval\": \"1D\",\n    \"rsi14\": 40.59,\n    \"stoch_k\": 26.0,\n    \"stoch_d\": 9.48,\n    \"cci20\": -145.06,\n    \"adx14\": 14.26,\n    \"macd\": {\n      \"line\": -0.4189,\n      \"signal\": -0.2344,\n      \"hist\": -0.1845\n    },\n    \"momentum10\": -1.6,\n    \"ao\": -1.25,\n    \"ema10\": 57.76,\n    \"ema20\": 58.17,\n    \"ema50\": 58.61,\n    \"sma10\": 57.79,\n    \"sma20\": 58.45,\n    \"sma50\": 58.43,\n    \"sma150\": 59.46,\n    \"sma200\": 60.66,\n    \"vwma\": 58.7,\n    \"hull9\": 56.94,\n    \"bo"
+  },
+  {
+   "t": "start",
+   "name": "chart_render",
+   "input": {
+    "kind": "line",
+    "symbol": "VCB — 12 tuần gần nhất (kVND)",
+    "series": [
+     54.1,
+     59.3,
+     59.7,
+     58.5,
+     59.1,
+     60.1,
+     58.9,
+     58.2,
+     59.9,
+     58,
+     57.1,
+     57.3
+    ],
+    "width": 56,
+    "height": 12
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2,
+   "out": "VCB — 12 tuần gần nhất (kVND) · line (12 điểm):\n     60┤        \u001b[32m⣀\u001b[0m           \u001b[32m⡠⠊⠢⡀\u001b[0m          \u001b[32m⡠⡀\u001b[0m            \n       │    \u001b[32m⢠⠔⠒⠉\u001b[0m \u001b[32m⠑⢄\u001b[0m       \u001b[32m⡠⠊\u001b[0m   \u001b[32m⠈⠢⡀\u001b[0m       \u001b[32m⡔⠁⠑⡄\u001b[0m           \n       │    \u001b[32m⡎\u001b[0m     \u001b[32m⠈⠢⡀\u001b[0m \u001b[32m⢀⡠⠔⠊\u001b[0m       \u001b[32m⠈⠢⢄\u001b[0m   \u001b[32m⢠⠊\u001b[0m   \u001b[32m⠘⢄\u001b[0m          \n       │   \u001b[32m⢰⠁\u001b[0m       \u001b[32m⠈⠊⠁\u001b[0m             \u001b[32m⠑⠢⡰⠁\u001b[0m     \u001b[32m⠈⢢\u001b[0m         \n     58┤   \u001b[32m⡜\u001b[0m                                   \u001b[32m⠑"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n\n\n<｜DSML｜ calls>\n**VCB khung tuần: vẫn là xu hướng giảm kiểu hạ đỉnh – hạ đáy, hiện đi ngang cạn volume trong biên ~56–64. Chưa có xác nhận đảo chiều.**\n\nGiá cuối 57.300đ [vnstock · 06/10 20:10]. Lưu ý: nến tuần hiện tại mới chạy 2 phiên (T2–T3) nên volume tuần chỉ 6,9 triệu cp và các chỉ báo tuần **chưa chốt**.\n\n**1. Trend**\n- Giá 57,30 dưới cả EMA10 58,40 / EMA20 59,01 / EMA50 59,79 → stack MA xếp trên giá, nghiêng giảm [computed-local · 06/10 20:10]\n- ADX(14) tuần chỉ 11,48 → gần như không có xu hướng, đúng kiểu sideway [computed-local · 06/10 20:10]\n\n**2. Momentum**\n- RSI14 44,14 (dưới 50, chưa quá bán)\n- MACD tuần −0,72 / signal −0,58 / hist −0,15 → âm và nằm dưới đường 0\n- Stoch 50,1/49,8 (trung tính), momentum10 −2,0\n- CCI20 và AO trả 0,0 ở khung tuần → giá trị bất thường, mình không dùng\n\n**3. Hỗ trợ / kháng cự tuần**\n- Hỗ trợ 52,60 · kháng cự 63,96 [computed-local]\n- Bollinger 55,57–62,99; giá đang ở nửa dưới dải\n- Ichimoku tuần: tenkan 58,50 / kijun 59,23, senkou_a 58,87 → giá dưới cả 3, tín hiệu **bearish**\n\n**4. Cấu trúc sóng (heuristic, confidence thấp)**\n- Đỉnh: 78,15 → 65,65 → 61,40 (LH liên tiếp); đáy mới 52,60 (LL) → swing_trend = **lower-low**\n- Fib thoái lui từ đỉnh 78,15: 0,618 = 62,36 · 0,786 = 58,07 · 1,0 = 52,60. Giá 57,30 đã nằm **dưới mức 0,786**, tức phá sâu nhưng chưa về đáy 52,60\n- Elliott engine gắn nhãn \"impulse-developing\" nhưng sóng 4 (78,15→52,60, −32,7%) chồng lấn vùng đỉnh sóng 1 (69,51) → đếm sóng này **không hợp lệ như impulse tăng**; thực chất là nhịp điều chỉnh giảm chưa xác nhận đáy\n- Wyckoff: **ranging**, medium — \"volume cạn dần trong biên\" → dấu hiệu tích lũy/đi ngang, không phải bán tháo\n\n**5. Kết luận khung tuần**\nLower-high + lower-low; xu hướng tuần vẫn giảm, chỉ đang tạm dừng trong biên 52,60–63,96.\n\n**6. So với khung ngày (để nhìn đồng thuận)**\n| Chỉ tiêu | Tuần | Ngày |\n|---|---|---|\n| RSI14 | 44,1 | 40,6 |\n| MACD hist | −0,15 | −0,18 |\n| ADX | 11,5 | 14,3 |\n| Hỗ trợ / KC | 52,6 / 64,0 | 56,0 / 61,0 |\n| Ichimoku | bearish | neutral |\n| Wyckoff | ranging | accumulation (spring) |\n\n[computed-local · 06/10 20:10]\n\nHai khung đồng thuận ở chỗ: giá dưới mọi MA, MACD âm, RS kém VNINDEX (tuần −20,97% so benchmark). Khác biệt: khung ngày đã xuất hiện hammer + engulfing_bull và pha tích lũy có spring → khả năng hồi kỹ thuật ngắn, nhưng tuần chưa xác nhận.\n\n**7. Chốt một câu + mốc theo dõi**\nVCB tuần đang tích lũy yếu trong biên, chưa có tín hiệu đảo chiều.\n- Tích cực hơn nếu tuần đóng trên **61,0–62,4** (kháng cự ngày 61,0 / fib 0,618 tuần 62,36)\n- Xấu đi nếu mất **56,0** (hỗ trợ ngày) rồi **52,6** (đáy tuần) — khi đó cấu trúc lower-low tiếp diễn\n\n**Rủi ro cần nói rõ (bear case):** rating kỹ thuật tuần ra **Sell**; VCB underperform VNINDEX rõ rệt; lượng lớn nến tuần giảm kèm volume cao trước đó (giai đoạn 78,15 → 52,60) cho thấy phân phối chưa chắc đã kết thúc. Một cảnh báo về dữ liệu: pos_52w hai khung lệch nhau (tuần 0,52 vs ngày 0,18) do cửa sổ giá khác nhau — đừng dùng riêng con số này để định vị đáy/đỉnh.\n\nĐây là phân tích kỹ thuật, không phải khuyến nghị mua/bán; bạn tự quyết định."
+}
