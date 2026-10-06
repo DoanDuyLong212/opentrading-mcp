@@ -1,12 +1,12 @@
 import asyncio
 
 from opentrading_mcp.cli import add_health_routes
-from opentrading_mcp.server import create_server, register_preset
+from opentrading_mcp.server import create_server, register_all
 
 
 def test_all_preset_lists_and_health_routes():
-    server = create_server("all")
-    tools = register_preset(server, "all")
+    server = create_server()
+    tools = register_all(server)
     names = sorted(t["name"] for t in tools)
     assert "quant_backtest" in names
     assert "brief_build" in names

@@ -5,9 +5,11 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
 
+@guarded("vnstock")
 def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[dict[str, Any]]:
     """Daily/weekly/monthly candles; interval 1D|1W|1M (P15, probe-verified)."""
     try:
@@ -57,6 +59,7 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
         raise ProviderBadData(f"malformed vnstock frame for {symbol}") from exc
 
 
+@guarded("vnstock")
 def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
@@ -76,6 +79,7 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     return out
 
 
+@guarded("vnstock")
 def equity_trades(
     symbol: str,
     limit: int = 20,
@@ -102,6 +106,7 @@ def equity_trades(
     return rows[: max(limit, 1)]
 
 
+@guarded("vnstock")
 def listing_symbols(limit: int | None = None) -> list[dict[str, str]]:
     try:
         from vnstock import Listing
@@ -154,6 +159,7 @@ def _clean(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return clean
 
 
+@guarded("vnstock")
 def index_ohlcv(
     symbol: str = "VNINDEX", count: int = 100, interval: str = "1D"
 ) -> list[dict[str, Any]]:
@@ -171,6 +177,7 @@ def index_ohlcv(
     return rows
 
 
+@guarded("vnstock")
 def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[dict[str, Any]]:
     try:
         from vnstock import Market
@@ -188,6 +195,7 @@ def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[di
     return rows
 
 
+@guarded("vnstock")
 def futures_ohlcv(
     symbol: str = "VN30F1M", count: int = 100, interval: str = "1D"
 ) -> list[dict[str, Any]]:
@@ -205,6 +213,7 @@ def futures_ohlcv(
     return rows
 
 
+@guarded("vnstock")
 def forex_ohlcv(pair: str = "USDVND", count: int = 30) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
@@ -217,6 +226,7 @@ def forex_ohlcv(pair: str = "USDVND", count: int = 30) -> list[dict[str, Any]]:
     return _records(frame)
 
 
+@guarded("vnstock")
 def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
@@ -229,6 +239,7 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
     return _records(frame)
 
 
+@guarded("vnstock")
 def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
@@ -322,6 +333,7 @@ def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
     return None
 
 
+@guarded("vnstock")
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     """Per-symbol PE/ROE/market-cap via vnstock Fundamental ratio.
 
@@ -370,6 +382,7 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
 _EXCHANGE_KEYS = ("exchange", "san", "floor", "exchangecode", "exchange_code")
 
 
+@guarded("vnstock")
 def reference_equity(
     exchange: str = "HOSE", by: str = "exchange", key: str | None = None
 ) -> list[dict[str, Any]]:
@@ -413,6 +426,7 @@ def reference_equity(
     return [{**r, "exchange": str(r.get("exchange") or exchange.upper()).upper()} for r in rows]
 
 
+@guarded("vnstock")
 def company_info(symbol: str, detail: bool = False) -> dict[str, Any]:
     try:
         from vnstock import Company
@@ -438,6 +452,7 @@ def company_info(symbol: str, detail: bool = False) -> dict[str, Any]:
     return data
 
 
+@guarded("vnstock")
 def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
     try:
         from vnstock import Company
@@ -459,6 +474,7 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
     return rows[: max(limit, 1)]
 
 
+@guarded("vnstock")
 def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
     """Corporate actions (cash dividends, share issues) via vnstock Company.
 

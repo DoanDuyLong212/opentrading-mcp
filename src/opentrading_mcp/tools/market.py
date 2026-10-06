@@ -1,4 +1,4 @@
-"""Market preset core: snapshot + status + candles + lookup + movers + breadth.
+"""Market core: snapshot + status + candles + lookup + movers + breadth.
 
 Wires dnse/vnstock providers with graceful degradation: missing creds or
 offline upstream returns availability=unavailable instead of crashing,
@@ -257,7 +257,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         as_of: requested timestamp label, recorded as requested_as_of
         (data is always latest).
         """
-        key = cache_key("market", "market_snapshot", ",".join(symbols or []))
+        key = cache_key("market_snapshot", ",".join(symbols or []))
         hit = cache_get(key)
         if hit is not None:
             import json
@@ -285,11 +285,22 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("debug", "source_status check")
         else:
             _log_stderr("source_status check (no MCP context)")
+        try:
+            await run_blocking(
+                functools.partial(vn_p.quote_history, "VCB", 1),
+                "source_status_probe",
+                timeout_secs=5.0,
+            )
+            vnstock_state = "ok"
+        except (ProviderUnavailable, ProviderBadData):
+            vnstock_state = "unavailable"
+        except Exception:
+            vnstock_state = "unavailable"
         return make_envelope(
             {
                 "upstreams": {
                     "vietstock": vs_p.auth_status(),
-                    "vnstock": "ok",
+                    "vnstock": vnstock_state,
                     "dnse_ws": "worker"
                     if cache_get("mcp:market:dnse_ws_snapshot:VNINDEX")
                     else "cold",
@@ -350,16 +361,20 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def symbol_lookup(query: str, limit: int = 10) -> dict[str, Any]:
+    async def symbol_lookup(
+        query: str, limit: int = 10, offset: int = 0
+    ) -> dict[str, Any]:
         """Resolve company name to symbol, venue and sector. Use before any symbol-scoped call.
 
-        limit: max hits returned (matched by symbol or company name,
+        limit/offset: paginate hits (matched by symbol or company name,
         case- and accent-insensitive).
         """
         try:
             rows = await run_blocking(vn_p.listing_symbols, "symbol_lookup")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("symbol_lookup", str(exc))
+        from opentrading_mcp.schemas import paginate_list
+
         query_norm = _norm_text(query)
         hits = [
             r
@@ -370,7 +385,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 or query_norm in _norm_text(str(r.get("name", "")))
             )
         ]
-        return make_envelope({"hits": hits[: max(int(limit), 1)]}, source="vnstock")
+        items, page = paginate_list(hits, limit, offset)
+        return make_envelope({"hits": items}, source="vnstock", page=page)
 
     # ---- symbol_resolve: multi-asset resolver (local tables + VN listing) ----
     @server.tool(annotations=READ_ONLY)
@@ -583,18 +599,56 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def market_movers(top_n: int = 10) -> dict[str, Any]:
         """Top gainers, losers and volume leaders. Use for session pulse checks.
 
-        top_n: rows per list.
+        top_n: rows per list. Universe: VN30 + HNX30 refs khi có, fallback 6 bluechips.
         """
         try:
+            try:
+                universe = [str(r.get("symbol")) for r in await run_blocking(
+                    functools.partial(vn_p.reference_equity, "HOSE"),
+                    "market_movers",
+                    timeout_secs=30.0,
+                ) if isinstance(r, dict) and r.get("symbol")][:60]
+            except (ProviderUnavailable, ProviderBadData):
+                universe = []
+            if not universe:
+                universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
             quotes = await run_blocking(
-                functools.partial(
-                    vn_p.equity_quote_batch, ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
-                ),
+                functools.partial(vn_p.equity_quote_batch, universe),
                 "market_movers",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("market_movers", str(exc))
-        return make_envelope({"movers": quotes[: max(top_n, 1)]}, source="vnstock")
+        rows = [q for q in quotes if isinstance(q, dict)]
+
+        def _chg(r: dict[str, Any]) -> float:
+            for k in ("pct_change", "change", "Change", "CHANGE"):
+                try:
+                    v = r.get(k)
+                    if v is not None:
+                        return float(v)
+                except (TypeError, ValueError):
+                    continue
+            return 0.0
+
+        def _vol(r: dict[str, Any]) -> float:
+            for k in ("volume", "Volume", "VOLUME", "vol"):
+                try:
+                    v = r.get(k)
+                    if v is not None:
+                        return float(v)
+                except (TypeError, ValueError):
+                    continue
+            return 0.0
+
+        keep = max(int(top_n), 1)
+        gainers = sorted(rows, key=_chg, reverse=True)[:keep]
+        losers = sorted(rows, key=_chg)[:keep]
+        volume = sorted(rows, key=_vol, reverse=True)[:keep]
+        return make_envelope(
+            {"gainers": gainers, "losers": losers, "volume_leaders": volume,
+             "universe": len(rows)},
+            source="vnstock",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def breadth_scan(exchange: str | None = None) -> dict[str, Any]:
@@ -640,15 +694,17 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 rows = venue_rows
             else:
                 warnings.append(f"no venue info in board rows; exchange {exchange!r} ignored")
-        adv = sum(
-            1
-            for r in rows
-            if isinstance(r, dict) and float(pick_value(r, ("change", "Change", "CHANGE")) or 0) > 0
-        )
+        def _bchg(row: dict[str, Any]) -> float:
+            try:
+                return float(pick_value(row, ("change", "Change", "CHANGE")) or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        adv = sum(1 for r in rows if isinstance(r, dict) and _bchg(r) > 0)
         dec = sum(
             1
             for r in rows
-            if isinstance(r, dict) and float(pick_value(r, ("change", "Change", "CHANGE")) or 0) < 0
+            if isinstance(r, dict) and _bchg(r) < 0
         )
         return make_envelope(
             {"advancers": adv, "decliners": dec, "rows": len(rows)},

@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from opentrading_mcp.server import PRESETS, create_server, register_preset
+from opentrading_mcp.server import create_server, register_all
 
 
 def default_port() -> int:
@@ -21,7 +21,11 @@ def default_port() -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="opentrading-mcp")
     parser.add_argument("serve", nargs="?", default="serve")
-    parser.add_argument("--preset", default="market", choices=list(PRESETS))
+    parser.add_argument(
+        "--preset",
+        default="all",
+        help="deprecated alias (giữ tương thích): server luôn expose full tools",
+    )
     parser.add_argument(
         "--http", action="store_true", help="serve Streamable HTTP instead of stdio"
     )
@@ -98,9 +102,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.serve == "verify":
-        return run_verify(args.target, args.preset, args.url)
-    server = create_server(args.preset)
-    register_preset(server, args.preset)
+        return run_verify(args.target, args.url)
+    if getattr(args, "preset", "all") != "all":
+        import warnings
+
+        warnings.warn(
+            "--preset deprecated: full tools only", DeprecationWarning, stacklevel=2
+        )
+    server = create_server()
+    register_all(server)
     add_health_routes(server)
     if args.http:
         import os
@@ -118,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         app = server.streamable_http_app()
+        app.mount("/sse", server.sse_app())
         app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
         app.add_middleware(AuthMiddleware)
         app.add_middleware(McpObservabilityMiddleware)
@@ -127,33 +138,28 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def run_verify(target: str, preset: str, url: str) -> int:
+def run_verify(target: str, url: str) -> int:
     import asyncio
 
-    from opentrading_mcp.server import PRESETS
-    from opentrading_mcp.verify_matrix import run_preset_remote, run_preset_stdio
+    from opentrading_mcp.verify_matrix import run_remote_all, run_stdio_all
 
     async def collect() -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
-        presets = list(PRESETS) if preset == "all" else [preset]
         if target in ("local", "both"):
-            for item in presets:
-                rows.extend(await run_preset_stdio(item))
+            rows.extend(await run_stdio_all())
         if target in ("remote", "both"):
-            rows.extend(await run_preset_remote(url, "market"))
+            rows.extend(await run_remote_all(url))
         return rows
 
     rows = asyncio.run(collect())
     failures = 0
-    print(
-        f"{'preset':<7} {'tool':<24} {'transport':<9} {'ok':<4} {'secs':>6}  {'avail':<11}  detail"
-    )
+    print(f"{'tool':<24} {'transport':<9} {'ok':<4} {'secs':>6}  {'avail':<11}  detail")
     for row in rows:
         mark = "PASS" if row["ok"] else "FAIL"
         if not row["ok"]:
             failures += 1
         print(
-            f"{row['preset']:<7} {row['tool']:<24} {row['transport']:<9} "
+            f"{row['tool']:<24} {row['transport']:<9} "
             f"{mark:<4} {row['seconds']:>6}  {row['availability']:<11}  {row['detail'][:90]}"
         )
     print(f"\n{len(rows) - failures}/{len(rows)} passed")

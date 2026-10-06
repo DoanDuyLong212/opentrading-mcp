@@ -851,7 +851,11 @@ def _parse_pipe_rows(raw: Any, group_default: str = "") -> list[dict[str, Any]]:
 
 @guarded("vietstock")
 def macro_report_data(
-    term_type_id: int, category_id: int, sub_term_type_id: str = "", from_date: str = "2022-01-01"
+    term_type_id: int,
+    category_id: int,
+    sub_term_type_id: str = "",
+    from_date: str = "2022-01-01",
+    to_date: str | None = None,
 ) -> dict[str, Any]:
     """Macro series via browser-session replay (Standard pack works — P14).
 
@@ -863,8 +867,9 @@ def macro_report_data(
     from opentrading_mcp.cache import cache_key
     from opentrading_mcp.providers.store import cache_get, cache_set
 
+    to_date = to_date or datetime.date.today().isoformat()
     cache_key_str = cache_key(
-        "market", "vs_macro", f"{term_type_id}|{category_id}|{sub_term_type_id}|{from_date}"
+        "vs_macro", f"{term_type_id}|{category_id}|{sub_term_type_id}|{from_date}|{to_date}"
     )
     hit = cache_get(cache_key_str)
     if hit is not None:
@@ -878,7 +883,7 @@ def macro_report_data(
         "termTypeID": str(term_type_id),
         "subTermTypeID": sub_term_type_id or "",
         "fromDate": from_date,
-        "toDate": datetime.date.today().isoformat(),
+        "toDate": to_date,
         "type": "CATEGORY",
         "listID[]": str(category_id),
         "__RequestVerificationToken": token,

@@ -28,7 +28,8 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vs_financial_terms() -> dict[str, Any]:
         """Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries."""
         try:
-            return make_envelope({"terms": await _call("t", vs_p.financial_terms)}, source="v")
+            terms = await _call("t", vs_p.financial_terms)
+            return make_envelope({"terms": terms}, source="vietstock")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financial_terms", str(exc))
 
@@ -41,7 +42,9 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             data = await _call("n", vs_p.financial_norms, btype)
             rows = data if isinstance(data, list) else data.get("data", [])
-            return make_envelope({"btype": btype, "count": len(rows), "norms": rows}, source="v")
+            return make_envelope(
+                {"btype": btype, "count": len(rows), "norms": rows}, source="vietstock"
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financial_norms", str(exc))
 

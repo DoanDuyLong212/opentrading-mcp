@@ -1,8 +1,7 @@
-"""Compute/signal/intel tools: local math + direct intel APIs, no 8010."""
+"""Compute financial tools: forensic, valuation, statements, ratios, peers."""
 
 from __future__ import annotations
 
-import asyncio
 import functools
 import json
 import os
@@ -10,10 +9,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from opentrading_mcp.providers import intel as intel_p
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers import vnstock as vn_p
-from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
@@ -107,7 +104,7 @@ def _fd_first(detail: dict[str, Any], *needles: str) -> list[float]:
     return []
 
 
-def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
+def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def stock_forensic(
         symbol: str,
@@ -298,10 +295,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def valuation_run(symbol: str, btype: int = 1, method: str = "auto") -> dict[str, Any]:
-        """PER/PB ensemble with DCF-lite. Use for fair-value ranges.
+        """PER/PB ensemble. Use for fair-value ranges.
 
         btype: 1 general, 2 securities, 3 bank, 5 insurance. method: 'auto'
-        (default, picks by btype) or force 'dcf'/'per'/'pb'/'ev'/'ensemble'.
+        (default, picks per_pb or pb_bank_broker by btype) or force 'per'/'pb'/'ensemble'.
+        DCF/EV are NOT implemented.
         """
         try:
             overview = await _call("v", vs_p.overview_trading, symbol, secs=45.0)
@@ -326,136 +324,11 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
                 out["method"] = method
             elif btype in (2, 3):
                 out["method"] = "pb_bank_broker"
+            else:
+                out["method"] = "per_pb"
         except (TypeError, ValueError):
             pass
         return make_envelope(out, source="computed-local")
-
-    @server.tool(annotations=READ_ONLY)
-    async def fred_series(series_id: str, limit: int = 60, spark: bool = False) -> dict[str, Any]:
-        """FRED observations. Use for US macro context.
-
-        series_id like 'DGS10'; spark adds a value-only sparkline list.
-        """
-        try:
-            data = await _call("f", intel_p.fred_series, series_id, limit)
-            if spark and isinstance(data, dict):
-                points = data.get("points", [])
-                data["spark"] = [p.get("v") for p in points if isinstance(p, dict)]
-            return make_envelope(data, source="fred")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("fred_series", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def world_macro_country(iso3: str, indicator: str, limit: int = 60) -> dict[str, Any]:
-        """WorldBank series per country. Use for global GDP/CPI/debt context.
-
-        iso3: 3-letter country code (VNM/USA); indicator like 'NY.GDP.MKTP.KD.ZG'.
-        limit caps returned points.
-        """
-        try:
-            data = await _call("w", intel_p.worldbank_country, iso3, indicator)
-            if isinstance(data, dict) and isinstance(data.get("points"), list):
-                data["points"] = data["points"][: max(int(limit), 1)]
-            return make_envelope(data, source="worldbank")
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("world_macro_country", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def world_fear_greed(limit: int = 7) -> dict[str, Any]:
-        """Crypto fear/greed index. Use for risk-appetite reads.
-
-        limit: number of recent daily readings returned.
-        """
-        try:
-            data = await _call("f", intel_p.fear_greed)
-            if isinstance(data, dict) and isinstance(data.get("series"), list):
-                data["series"] = data["series"][: max(int(limit), 1)]
-            return make_envelope(data, source="alternative.me")
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("world_fear_greed", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def sentiment_score(symbol: str, limit: int = 20) -> dict[str, Any]:
-        """Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk.
-
-        limit: max posts scored; without Groq key falls back to likes heuristic.
-        """
-        try:
-            posts = await _call("s", intel_p.fireant_posts, symbol, max(int(limit), 1), secs=45.0)
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("sentiment_score", str(exc))
-        if not posts:
-            return make_envelope(
-                {"symbol": symbol.upper(), "score": None}, source="fireant", availability="empty"
-            )
-        try:
-            verdict = await _call(
-                "g",
-                intel_p.groq_chat,
-                'Score crowd sentiment -1..1 as JSON {"score": x}.',
-                str([p.get("text", "")[:200] for p in posts[:10]]),
-                secs=45.0,
-            )
-            return make_envelope(
-                {"symbol": symbol.upper(), "posts": len(posts), "llm": verdict[:500]},
-                source="fireant+groq",
-            )
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
-            likes = sum(int(p.get("likes", 0) or 0) for p in posts)
-            score = max(-1.0, min(1.0, (likes / max(len(posts), 1) - 5) / 20))
-            return make_envelope(
-                {"symbol": symbol.upper(), "posts": len(posts), "score_heuristic": round(score, 2)},
-                source="fireant",
-                warnings=["groq unavailable, heuristic fallback"],
-            )
-
-    @server.tool(annotations=READ_ONLY)
-    async def insider_trading(symbol: str, limit: int = 10) -> dict[str, Any]:
-        """Insider deals via vnstock Company. Use for informed-flow reads.
-
-        limit: max deals returned.
-        """
-        try:
-            rows = await _call("i", vn_p.insider_trading, symbol, limit)
-            return make_envelope({"symbol": symbol.upper(), "deals": rows}, source="vnstock")
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("insider_trading", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def stock_overview(symbol: str) -> dict[str, Any]:
-        """Trading info plus company profile. Use for quick dossiers."""
-        try:
-            trading = await _call(
-                "t", vs_p._post, "/company/tradinginfo", {"code": symbol.upper(), "s": 0}
-            )
-            company = await _call("c", vs_p.company_info, symbol)
-            return make_envelope({"trading": trading, "company": company}, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("stock_overview", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def company_events(symbol: str, types: str | None = None) -> dict[str, Any]:
-        """Classified disclosures and corporate actions. Use for event calendars.
-
-        types: comma-separated kinds to keep, matched against kind/type
-        fields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw
-        unfiltered feed; company_events classifies it per symbol.
-        """
-        try:
-            docs = await _call("e", vs_p.documents, symbol)
-            if types is not None and isinstance(docs, list):
-                wanted = {t.strip().lower() for t in types.split(",") if t.strip()}
-                docs = [
-                    d
-                    for d in docs
-                    if isinstance(d, dict)
-                    and wanted.intersection(
-                        {str(d.get("kind", "")).lower(), str(d.get("type", "")).lower()}
-                    )
-                ]
-            return make_envelope({"symbol": symbol.upper(), "events": docs}, source="vietstock")
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-            return _na("company_events", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def financial_statements(
@@ -505,9 +378,21 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         set: keep only ratio keys containing this substring ('all' keeps all).
         period: statement period ('year'); peers: extra symbols merged as list.
+        Falls back to vnstock fundamentals when Vietstock overview is empty.
         """
         try:
             overview = await _call("r", vs_p.overview_trading, symbol)
+            if not overview:
+                try:
+                    fb = await _call("r", vn_p.equity_fundamentals, symbol, secs=45.0)
+                    out_fb: dict[str, Any] = {
+                        "symbol": symbol.upper(),
+                        "period": period,
+                        "ratios": fb,
+                    }
+                    return make_envelope(out_fb, source="vnstock")
+                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
+                    pass
             ratios = overview if isinstance(overview, dict) else {"overview": overview}
             if set != "all":
                 ratios = {k: v for k, v in ratios.items() if set.lower() in str(k).lower()}
@@ -553,215 +438,47 @@ def register_compute_tools(server: FastMCP) -> list[dict[str, Any]]:
         return make_envelope({"rows": rows}, source="vietstock")
 
     @server.tool(annotations=READ_ONLY)
-    async def signals_scan(
-        universe: list[str] | None = None,
-        exchange: str | None = None,
-        max_symbols: int = 10,
-        ctx: AnyContext | None = None,
-    ) -> dict[str, Any]:
-        """Donchian-20d breakout scan. Use to hunt momentum across the market.
-
-        Default universe: 10 bluechips. exchange='HOSE' scans the exchange
-        list capped at max_symbols (P14: up to 300, semaphore 5, progress +
-        truncated honest). Scanning hundreds takes minutes — cache the call.
-        """
-        capped = max(min(int(max_symbols), 300), 1)
-        if universe:
-            names = [u.strip().upper() for u in universe if u.strip()][:capped]
-        elif exchange:
-            rows = await _call("r", vn_p.reference_equity, exchange)
-            pool = [str(r.get("symbol")) for r in rows if isinstance(r, dict) and r.get("symbol")]
-            names = pool[:capped]
-        else:
-            names = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN", "MWG", "FPT", "CTG", "BID"][:capped]
-        hits: list[dict[str, Any]] = []
-        scanned = 0
-        total = len(names)
-        for name in names:
-            try:
-                candles = await _call("s", vn_p.quote_history, name, 30, secs=60.0)
-                closes = [c["c"] for c in candles if c["c"]]
-                scanned += 1
-                if len(closes) >= 20 and closes[-1] >= max(closes[-20:]):
-                    hits.append({"symbol": name, "close": closes[-1], "signal": "breakout_20d"})
-            except (ProviderUnavailable, ProviderBadData):
-                continue
-            if ctx is not None and total > 20:
-                await ctx.report_progress(scanned, total, name)
-        data: dict[str, Any] = {"hits": hits, "scanned": scanned, "requested": total}
-        if total > capped:
-            data["truncated"] = True
-        return make_envelope(data, source="computed-local")
-
-    @server.tool(annotations=READ_ONLY)
-    async def pattern_match(symbol: str, lookback: int = 60, limit: int = 5) -> dict[str, Any]:
-        """Self-similarity of return windows by correlation. Use for analogies.
-
-        lookback: daily closes fetched (window is last 20 bars). limit: top-N
-        matches by correlation (best_* fields describe rank 1).
-        """
+    async def stock_overview(symbol: str) -> dict[str, Any]:
+        """Trading info plus company profile. Use for quick dossiers."""
         try:
-            candles = await _call("p", vn_p.quote_history, symbol, lookback + 20, secs=60.0)
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("pattern_match", str(exc))
-        closes = [c["c"] for c in candles if c["c"]]
-        if len(closes) < lookback + 10:
-            return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
-        rets = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
-        cur = rets[-20:]
-        scored: list[tuple[float, int]] = []
-
-        def _mean(xs: list[float]) -> float:
-            return sum(xs) / len(xs)
-
-        for i in range(len(rets) - 40):
-            window = rets[i : i + 20]
-            num = sum(
-                (a - _mean(cur)) * (b - _mean(window)) for a, b in zip(cur, window, strict=True)
+            trading = await _call(
+                "t", vs_p._post, "/company/tradinginfo", {"code": symbol.upper(), "s": 0}
             )
-            den = (
-                sum((a - _mean(cur)) ** 2 for a in cur)
-                * sum((b - _mean(window)) ** 2 for b in window)
-            ) ** 0.5 or 1e-9
-            scored.append((num / den, i))
-        scored.sort(key=lambda item: item[0], reverse=True)
-        top = scored[: max(int(limit), 1)]
-        matches = [{"corr": round(corr, 3), "offset_bars": i} for corr, i in top]
-        best_corr, best_i = top[0] if top else (-2.0, -1)
-        return make_envelope(
-            {
-                "symbol": symbol.upper(),
-                "best_corr": round(best_corr, 3),
-                "offset_bars": best_i,
-                "matches": matches,
-            },
-            source="computed-local",
-        )
+            company = await _call("c", vs_p.company_info, symbol)
+            return make_envelope({"trading": trading, "company": company}, source="vietstock")
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            return _na("stock_overview", str(exc))
 
     @server.tool(annotations=READ_ONLY)
-    async def snapshot_history(kind: str, days: int = 90) -> dict[str, Any]:
-        """Daily-snapshot history saved by the worker. Use for data that vanishes.
+    async def company_events(symbol: str, types: str | None = None) -> dict[str, Any]:
+        """Classified disclosures and corporate actions. Use for event calendars.
 
-        kind: market_board, breadth_3ex, flows_charts (NN/prop 30d rolling),
-        heatmap_gics, gold_btmc, sbv_rates, nso_releases, analyst_titles,
-        macro_curated, vn30_quotes, futures_basis, documents_feed, events_feed.
-        days: history depth (newest first).
-        """
-        from opentrading_mcp import snapshots
-
-        rows = await run_blocking(
-            functools.partial(snapshots.load, kind, days), "snapshot_history", timeout_secs=15.0
-        )
-        if not rows:
-            return make_envelope(
-                {"kind": kind, "rows": []},
-                source="postgres",
-                availability="empty",
-            )
-        return make_envelope({"kind": kind, "count": len(rows), "rows": rows}, source="postgres")
-
-    @server.tool(annotations=READ_ONLY)
-    async def event_stats(query: str = "stock market", limit: int = 20) -> dict[str, Any]:
-        """GDELT event counts for a query. Use for base-rate checks.
-
-        limit: max articles fetched from GDELT.
+        types: comma-separated kinds to keep, matched against kind/type
+        fields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw
+        unfiltered feed; company_events classifies it per symbol.
         """
         try:
-            data = await _call("e", intel_p.gdelt_events, query, max(int(limit), 1))
-            return make_envelope(data, source="gdelt")
-        except ProviderUnavailable:
-            await asyncio.sleep(10)
-            try:
-                return make_envelope(await _call("e", intel_p.gdelt_events, query), source="gdelt")
-            except (ProviderUnavailable, ProviderBadData) as exc:
-                return _na("event_stats", str(exc))
-        except ProviderBadData as exc:
-            return _na("event_stats", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def compare_assets(assets: list[str], timeframe: str = "1d") -> dict[str, Any]:
-        """Cross-asset last prices via yfinance. Use for allocation reads.
-
-        assets: yfinance tickers (max 10). timeframe: '1d' (2d/1d),
-        '1wk' (3mo/1wk), '1mo' (1y/1d) download window.
-        """
-        windows = {"1d": ("2d", "1d"), "1wk": ("3mo", "1wk"), "1mo": ("1y", "1d")}
-        period, interval = windows.get(timeframe, ("2d", "1d"))
-        try:
-            return make_envelope(
-                await _call("c", yf_p.batch_last, assets[:10], period, interval, secs=60.0),
-                source="yfinance",
-            )
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("compare_assets", str(exc))
-
-    @server.tool(annotations=READ_ONLY)
-    async def runs_list(id: str | None = None) -> dict[str, Any]:
-        """Local run registry. Use to resume analysis sessions.
-
-        id: filter by run id substring; use run_get for one full run.
-        """
-        try:
-            rows = await run_blocking(_read_runs, "runs_list", timeout_secs=10.0)
-        except (ProviderUnavailable, ValueError) as exc:
-            return _na("runs_list", f"unparseable registry: {exc}")
-        if rows is None:
-            return make_envelope({"runs": []}, source="local", availability="empty")
-        if id is not None:
-            rows = [r for r in rows if id in str(r.get("run_id", ""))]
-        return make_envelope({"runs": rows[-50:]}, source="local")
-
-    @server.tool(annotations=READ_ONLY)
-    async def run_get(run_id: str) -> dict[str, Any]:
-        """Local run registry fetch. Use to inspect past outputs.
-
-        run_id: exact id from runs_list output.
-        """
-        try:
-            rows = await run_blocking(_read_runs, "run_get", timeout_secs=10.0)
-        except (ProviderUnavailable, ValueError) as exc:
-            return _na("run_get", f"registry unreadable: {exc}")
-        for row in rows or []:
-            if str(row.get("run_id")) == run_id:
-                return make_envelope({"run": row}, source="local")
-        return make_envelope({"run_id": run_id}, source="local", availability="empty")
-
-    @server.tool(annotations=READ_ONLY)
-    async def doctor() -> dict[str, Any]:
-        """Local self-check: env keys present, package versions. Use before handoff."""
-        import mcp as mcp_pkg
-
-        checks = {
-            "mcp_sdk": getattr(mcp_pkg, "__version__", "1.x"),
-            "vietstock_jwt": bool(os.environ.get("VIETSTOCK_COOKIE_LOGIN", "").strip()),
-            "dnse_keys": bool(os.environ.get("DNSE_API_KEY", "").strip()),
-            "redis": bool(os.environ.get("REDIS_URL", "").strip()),
-            "database": bool(os.environ.get("DATABASE_URL", "").strip()),
-            "fred": bool(os.environ.get("FRED_API_KEY", "").strip()),
-            "groq": bool(os.environ.get("GROQ_API_KEY", "").strip()),
-            "fireant": bool(os.environ.get("FIREANT_TOKEN", "").strip()),
-        }
-        return make_envelope(checks, source="local")
+            docs = await _call("e", vs_p.documents, symbol)
+            if types is not None and isinstance(docs, list):
+                wanted = {t.strip().lower() for t in types.split(",") if t.strip()}
+                docs = [
+                    d
+                    for d in docs
+                    if isinstance(d, dict)
+                    and wanted.intersection(
+                        {str(d.get("kind", "")).lower(), str(d.get("type", "")).lower()}
+                    )
+                ]
+            return make_envelope({"symbol": symbol.upper(), "events": docs}, source="vietstock")
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+            return _na("company_events", str(exc))
 
     return [
         {"name": "stock_forensic"},
         {"name": "valuation_run"},
-        {"name": "fred_series"},
-        {"name": "world_macro_country"},
-        {"name": "world_fear_greed"},
-        {"name": "sentiment_score"},
-        {"name": "insider_trading"},
-        {"name": "stock_overview"},
-        {"name": "company_events"},
         {"name": "financial_statements"},
         {"name": "financial_ratios"},
         {"name": "peer_compare"},
-        {"name": "signals_scan"},
-        {"name": "pattern_match"},
-        {"name": "event_stats"},
-        {"name": "snapshot_history"},
-        {"name": "compare_assets"},
-        {"name": "runs_list"},
-        {"name": "run_get"},
-        {"name": "doctor"},
+        {"name": "stock_overview"},
+        {"name": "company_events"},
     ]

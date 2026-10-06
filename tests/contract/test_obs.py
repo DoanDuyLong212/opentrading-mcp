@@ -116,7 +116,7 @@ def test_log_line_has_no_args_or_data(capsys):
     from opentrading_mcp import obs
 
     obs.log_tool_call("vs_financial_values", duration_ms=10.0, ok=True, error_code="")
-    line = capsys.readouterr().out.strip().splitlines()[-1]
+    line = capsys.readouterr().err.strip().splitlines()[-1]
     entry = json.loads(line)
     assert entry["event"] == "tool_call"
     assert entry["tool"] == "vs_financial_values"

@@ -4,9 +4,9 @@
     "servers": {
       "opentrading": {
         "type": "local",
-        "command": ["uvx", "opentrading-mcp", "serve", "--preset", "market"],
+        "command": ["uvx", "opentrading-mcp", "serve"],
         "environment": {},
-        "timeout": 30000
+        "timeout": 120000
       }
     }
   }

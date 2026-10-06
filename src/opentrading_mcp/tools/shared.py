@@ -9,8 +9,27 @@ from typing import Any
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True)
-READ_WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+READ_ONLY = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+READ_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+# Phân loại write để client (OpenTrading RwLock, Claude permission, Cursor review)
+# quyết định chạy song song vs hỏi duyệt:
+READ_WRITE_CREATE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+READ_WRITE_DELETE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False
+)
+READ_WRITE_STATE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+# Tools gọi mạng ngoài (web/yfinance/Binance/GDELT/Polymarket/FRED): open-world.
+READ_ONLY_OPEN = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True
+)
 
 AnyContext = Context[Any, Any, Any]
 

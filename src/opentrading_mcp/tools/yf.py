@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import READ_ONLY_OPEN, AnyContext, run_blocking
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -20,7 +20,7 @@ def _na(tool: str, reason: str) -> dict[str, Any]:
 
 
 def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_global_indices(
         tickers: list[str] | None = None,
         period: str = "2d",
@@ -44,7 +44,7 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_global_indices", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_commodities(
         tickers: list[str] | None = None, period: str = "2d", interval: str = "1d"
     ) -> dict[str, Any]:
@@ -63,7 +63,7 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_commodities", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_yield_curve() -> dict[str, Any]:
         """US 2Y/10Y and inversion flag. Use for rates and regime context."""
         try:

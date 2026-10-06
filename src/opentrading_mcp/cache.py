@@ -14,6 +14,11 @@ TTL_SECONDS: dict[str, int] = {
 }
 
 
-def cache_key(preset: str, tool: str, fingerprint: str) -> str:
+def cache_key(tool: str, fingerprint: str, preset: str = "all") -> str:
+    """Key mcp:{tool}:{fp}. Param preset giữ để tương thích call-site cũ (bỏ qua)."""
     safe = "".join(c if c.isalnum() or c in "_-:" else "_" for c in fingerprint)[:128]
-    return f"mcp:{preset}:{tool}:{safe}"
+    return f"mcp:{tool}:{safe}"
+
+
+def legacy_cache_key(preset: str, tool: str, fingerprint: str) -> str:
+    return cache_key(tool, fingerprint, preset)

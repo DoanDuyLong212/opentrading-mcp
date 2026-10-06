@@ -63,8 +63,19 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             raw_bars = raw if isinstance(raw, list) else []
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_vn30f1m_live", str(exc))
+        def _num(value: Any) -> float | None:
+            return value if isinstance(value, (int, float)) else None
+
+        def _max(a: Any, b: Any) -> Any:
+            return b if _num(a) is None else (a if _num(b) is None else max(a, b))
+
+        def _min(a: Any, b: Any) -> Any:
+            return b if _num(a) is None else (a if _num(b) is None else min(a, b))
+
         agg: dict[int, dict[str, Any]] = {}
         for bar in raw_bars:
+            if not isinstance(bar, dict):
+                continue
             try:
                 bucket = (int(bar["t"]) // 900) * 900
             except (KeyError, TypeError, ValueError):
@@ -80,8 +91,8 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "v": 0,
                 },
             )
-            slot["h"] = max(slot["h"], bar.get("h", slot["h"]))
-            slot["l"] = min(slot["l"], bar.get("l", slot["l"]))
+            slot["h"] = _max(slot["h"], bar.get("h", slot["h"]))
+            slot["l"] = _min(slot["l"], bar.get("l", slot["l"]))
             slot["c"] = bar.get("c", slot["c"])
             slot["v"] = (slot["v"] or 0) + (bar.get("v") or 0)
         ordered = sorted(agg.values(), key=lambda b: b["t"])

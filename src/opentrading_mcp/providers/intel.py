@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
@@ -30,6 +31,7 @@ def _get_json(url: str, params: dict[str, Any] | None = None, timeout: int = 20)
         raise ProviderBadData(f"bad json: {url}") from exc
 
 
+@guarded("fred")
 def fred_series(series_id: str, limit: int = 60) -> dict[str, Any]:
     key = os.environ.get("FRED_API_KEY", "").strip()
     if not key:
@@ -49,6 +51,7 @@ def fred_series(series_id: str, limit: int = 60) -> dict[str, Any]:
     return {"series": series_id, "points": points}
 
 
+@guarded("worldbank")
 def worldbank_country(iso3: str, indicator: str) -> dict[str, Any]:
     body = _get_json(
         f"https://api.worldbank.org/v2/country/{iso3}/indicator/{indicator}",
@@ -59,6 +62,7 @@ def worldbank_country(iso3: str, indicator: str) -> dict[str, Any]:
     return {"country": iso3.upper(), "indicator": indicator, "points": points}
 
 
+@guarded("fireant")
 def fireant_posts(symbol: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
     token = os.environ.get("FIREANT_TOKEN", "").strip()
     if not token:
@@ -121,6 +125,7 @@ def _fireant_post_row(post: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@guarded("fireant")
 def fireant_thread(post_id: int | str, limit: int = 20) -> dict[str, Any]:
     """One post + its replies (rumor threads live in replies)."""
     token = os.environ.get("FIREANT_TOKEN", "").strip()
@@ -158,6 +163,7 @@ def fireant_thread(post_id: int | str, limit: int = 20) -> dict[str, Any]:
     }
 
 
+@guarded("groq")
 def groq_chat(system_msg: str, user_msg: str, max_tokens: int = 300) -> str:
     key = os.environ.get("GROQ_API_KEY", "").strip()
     if not key:
@@ -253,6 +259,7 @@ def _event_rows(events: list[Any], limit: int) -> list[dict[str, Any]]:
     return rows
 
 
+@guarded("polymarket")
 def prediction_odds(
     query: str | None = None, tag: str | None = None, limit: int = 20
 ) -> dict[str, Any]:
@@ -311,6 +318,7 @@ def prediction_odds(
     raise ProviderUnavailable("polymarket unreachable via jina and direct")
 
 
+@guarded("polymarket")
 def polymarket_event(slug: str) -> dict[str, Any]:
     """One Polymarket event detail by slug (all markets + prices) — P14."""
     import datetime
@@ -372,6 +380,7 @@ def polymarket_event(slug: str) -> dict[str, Any]:
     raise ProviderUnavailable(f"polymarket event {slug!r} unreachable")
 
 
+@guarded("alternative")
 def fear_greed() -> dict[str, Any]:
     body = _get_json("https://api.alternative.me/fng/?limit=7")
     data = body.get("data", []) if isinstance(body, dict) else []
@@ -386,6 +395,7 @@ def fear_greed() -> dict[str, Any]:
 _GDELT_CACHE_TTL = 600
 
 
+@guarded("gdelt")
 def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str, Any]:
     """GDELT article list with Redis cache + one 20s backoff retry (P15).
 
@@ -395,7 +405,7 @@ def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str
     from opentrading_mcp.cache import cache_key
     from opentrading_mcp.providers.store import cache_get, cache_set
 
-    key = cache_key("gdelt", "events", f"{query}|{max_records}")
+    key = cache_key("gdelt_events", f"{query}|{max_records}")
     hit = cache_get(key)
     if hit is not None:
         import json

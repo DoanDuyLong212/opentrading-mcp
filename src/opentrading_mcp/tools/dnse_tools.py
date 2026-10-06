@@ -110,7 +110,7 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
                     source="dnse-rest",
                 )
             return make_envelope({"trades": _project(rows, columns)}, source="dnse-rest")
-        except (ProviderAuthMissing, ProviderUnavailable) as exc:
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_latest_trade", str(exc))
 
     @server.tool(annotations=READ_ONLY)
@@ -118,7 +118,7 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Net foreign flow from WS cache. Use as primary smart-money read."""
         try:
             return make_envelope(dnse_p.ws_snapshot(["VNINDEX"]), source="dnse-ws")
-        except ProviderUnavailable as exc:
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_foreign_flow", str(exc))
 
     @server.tool(annotations=READ_ONLY)
@@ -132,7 +132,7 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
                 dnse_p.ws_snapshot(symbols or ["VN30F1M", "VNINDEX", "VN30"]),
                 source="dnse-ws",
             )
-        except ProviderUnavailable as exc:
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_ws_snapshot", str(exc))
 
     return [

@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import json
 
-from opentrading_mcp.server import create_server, register_preset
+from opentrading_mcp.server import create_server, register_all
 
 
-def _server_with_tools(preset: str = "market"):
-    server = create_server(preset)
-    register_preset(server, preset)
+def _server_with_tools(preset: str = "all"):
+    server = create_server()
+    register_all(server)
     return server
 
 
 async def test_register_prompts_exposes_four():
     from opentrading_mcp.prompts import register_prompts
 
-    server = create_server("market")
+    server = create_server()
     names = register_prompts(server)
     assert sorted(names) == [
         "ai_detect",
@@ -33,7 +33,7 @@ async def test_register_prompts_exposes_four():
 async def test_prompt_renders_tool_plan():
     from opentrading_mcp.prompts import register_prompts
 
-    server = create_server("market")
+    server = create_server()
     register_prompts(server)
     out = await server.get_prompt("ticker_analysis", {"symbol": "VCB"})
     text = out.messages[0].content.text
@@ -62,8 +62,8 @@ async def test_tool_catalog_resource_matches_registered_tools():
 
     server = _server_with_tools()
     catalog = json.loads(build_tool_catalog(server))
-    assert catalog["preset"] == "market"
-    assert catalog["count"] == len(catalog["tools"]) > 50
+    assert catalog["preset"] == "all"
+    assert catalog["count"] == len(catalog["tools"]) > 100
     by_name = {t["name"]: t for t in catalog["tools"]}
     assert "market_snapshot" in by_name
     assert by_name["market_snapshot"]["description"].startswith("Snapshot of VN market")

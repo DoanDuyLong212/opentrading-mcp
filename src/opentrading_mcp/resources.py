@@ -75,15 +75,14 @@ _GICS = {
 
 
 def build_tool_catalog(server: Any) -> str:
-    """JSON catalog of tools registered on this server instance."""
-    preset = getattr(server, "_opentrading_preset", "unknown")
+    """JSON catalog of tools registered on this server instance (single surface)."""
     tools: list[dict[str, str]] = []
     manager = getattr(server, "_tool_manager", None)
     registry = getattr(manager, "_tools", {}) if manager is not None else {}
     for name in sorted(registry):
         desc = (registry[name].description or "").strip().split("\n")[0]
         tools.append({"name": name, "description": desc})
-    return json.dumps({"preset": preset, "count": len(tools), "tools": tools})
+    return json.dumps({"preset": "all", "count": len(tools), "tools": tools})
 
 
 def build_term_types() -> str:

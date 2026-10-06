@@ -10,11 +10,11 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers import binance as bn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import READ_ONLY_OPEN, AnyContext, run_blocking
 
 
 def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def crypto_spot(symbols: list[str], ctx: AnyContext | None = None) -> dict[str, Any]:
         """Binance spot 24h tickers. Use for crypto price and volume reads.
 
@@ -22,9 +22,13 @@ def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         if ctx is not None:
             await ctx.log("info", f"crypto_spot {symbols}")
+        capped = symbols[:10]
+        warnings = (
+            [f"capped 10 symbols, {len(symbols) - 10} dropped"] if len(symbols) > 10 else []
+        )
         try:
             tickers = await run_blocking(
-                functools.partial(bn_p.spot_board, symbols),
+                functools.partial(bn_p.spot_board, capped),
                 "crypto_spot",
                 timeout_secs=30.0,
             )
@@ -35,9 +39,11 @@ def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope({"tickers": tickers}, source="binance-spot")
+        return make_envelope(
+            {"tickers": tickers}, source="binance-spot", warnings=warnings or None
+        )
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def crypto_derivs(symbols: list[str], ctx: AnyContext | None = None) -> dict[str, Any]:
         """Binance futures funding, OI and long/short ratios. Use for leverage reads.
 
@@ -46,9 +52,13 @@ def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         if ctx is not None:
             await ctx.log("info", f"crypto_derivs {symbols}")
+        capped = symbols[:5]
+        warnings = (
+            [f"capped 5 symbols, {len(symbols) - 5} dropped"] if len(symbols) > 5 else []
+        )
         try:
             derivs = await run_blocking(
-                functools.partial(bn_p.derivs_board, symbols),
+                functools.partial(bn_p.derivs_board, capped),
                 "crypto_derivs",
                 timeout_secs=60.0,
             )
@@ -59,7 +69,9 @@ def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope({"derivs": derivs}, source="binance-futures")
+        return make_envelope(
+            {"derivs": derivs}, source="binance-futures", warnings=warnings or None
+        )
 
     return [
         {"name": "crypto_spot"},

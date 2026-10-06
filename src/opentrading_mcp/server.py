@@ -1,14 +1,9 @@
-"""FastMCP server factory with the 5 locked gaps.
+"""FastMCP server factory — single full tool surface (no presets).
 
-Gap mapping (opencode / Claude / Cursor):
-1. instructions -> FastMCP(instructions=...) read at initialize.
-2. roots -> server never assumes roots; tools work with or without ListRoots.
-3. cancel/progress -> tools accept Context and use ctx.report_progress + ctx.log;
-   long tools check cancellation via request_context.
-4. logging -> never print() to stdout; ctx.log routes to MCP logging channel,
-   local fallback goes to stderr.
-5. timeouts -> TIMEOUT_MATRIX is the contract; clients configure their side
-   (opencode per-server ms, Codex tool_timeout_sec).
+Lịch sử: server từng chia --preset market/scan/... (custom, không phải chuẩn MCP).
+Từ bản này server luôn expose full tools/list; client lọc phía mình
+(OpenTrading activeTools, opencode glob, Cursor toggle, Claude tool search).
+Giữ CLI --preset như deprecated alias để tương thích.
 """
 
 from __future__ import annotations
@@ -21,77 +16,54 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 SERVER_INSTRUCTIONS = (
     "OpenTrading market-data MCP. Timezone Asia/Ho_Chi_Minh tz-aware. "
-    "Tool names snake_case prefixed by source (vs_|vn_|yf_|dnse_|world_|signals_|"
-    "quant_|brief_|intel_). "
-    "Params: btype auto 1 CTCP/2 CK/3 Bank/5 BH, tids [1,2,3,4,5,9,12], "
-    "termTypeID 1-8, interval (1D/1h/4h) vs resolution (1m/15m), "
-    "source_order VCI->KBS, pageSize 4 financeinfo / 60 document / 10000 DNSE ohlc. "
-    "TTL: snapshot 5s, market 60s, world 60-300s, overview 15m, "
-    "financeinfo 6h, docs 24h, categories 7d, odds 45m."
+    "Single full tools/list; clients filter (OpenTrading activeTools, opencode glob, "
+    "Cursor toggle, Claude tool search). "
+    "Envelope {data, provenance{source,as_of,timezone}, warnings[], availability}. "
+    "Detail maps: termTypeID/tids/btype in opentrading://reference/term-types. "
+    "Long lists support limit/offset+columns/summary; results may include "
+    "page{total,offset,limit,next}."
 )
 
-TIMEOUT_MATRIX: dict[str, int] = {
-    "tools_list": 30,
-    "market_snapshot": 15,
-    "breadth_scan": 15,
-    "vs_financial_values": 60,
-    "yf_mega_flows": 60,
-    "dnse_ohlc_history": 60,
-    "quant_backtest": 120,
-    "quant_factors": 120,
-    "stock_screener": 60,
-    "signals_screener_columns": 30,
-    "watchlist_get": 30,
-    "alert_check": 30,
-}
+# Xóa TIMEOUT_MATRIX stale (11 entries/138 tools). Per-tool timeout qua
+# run_blocking(secs=) + client toolTimeoutMs. Giữ tên để tương thích import cũ.
+TIMEOUT_MATRIX: dict[str, int] = {}
 
-PRESETS = ("market", "scan", "quant", "brief", "intel", "all")
+# Full module surface — thứ tự ổn định để tools/list ổn định (cache-friendly).
+ALL_MODULES: tuple[str, ...] = (
+    "market",
+    "vn",
+    "vs",
+    "vs_bctc",
+    "vn_ext",
+    "yf",
+    "yf_world",
+    "dnse_tools",
+    "dnse_ext",
+    "crypto",
+    "scan",
+    "compute_financial",
+    "compute_intel",
+    "compute_infra",
+    "corp",
+    "watchlist",
+    "quant_backtest",
+    "quant_stats",
+    "brief",
+    "intel",
+    "web",
+)
 
+# Deprecated compat: PRESETS/PRESET_MODULES/PRESET_CAPS giữ để import cũ không vỡ.
+PRESETS = ("all", "market", "scan", "quant", "brief", "intel")
 PRESET_MODULES: dict[str, tuple[str, ...]] = {
-    "market": (
-        "market",
-        "web",
-        "vn",
-        "vs",
-        "vs_bctc",
-        "vn_ext",
-        "yf",
-        "yf_world",
-        "dnse_tools",
-        "dnse_ext",
-        "crypto",
-    ),
-    "scan": ("scan", "compute", "watchlist", "corp"),
-    "quant": ("quant",),
-    "brief": ("brief",),
-    "intel": ("intel", "web"),
-    "all": (
-        "market",
-        "vn",
-        "vs",
-        "vs_bctc",
-        "vn_ext",
-        "yf",
-        "yf_world",
-        "dnse_tools",
-        "dnse_ext",
-        "crypto",
-        "scan",
-        "compute",
-        "corp",
-        "watchlist",
-        "quant",
-        "brief",
-        "intel",
-        "web",
-    ),
+    "market": ALL_MODULES,
+    "scan": ALL_MODULES,
+    "quant": ALL_MODULES,
+    "brief": ALL_MODULES,
+    "intel": ALL_MODULES,
+    "all": ALL_MODULES,
 }
-
-# Market-data agent scope per spec needs the full vs/vn/dnse/yf set in one
-# preset; every other preset stays lean to keep tools/list fast.
-# scan raised 50->60 for the corp research module (P6).
-# market raised 70->75 for the crypto module (P6).
-PRESET_CAPS = {"market": 75, "scan": 60, "quant": 50, "brief": 50, "intel": 50}
+PRESET_CAPS: dict[str, int] = {}
 
 _REGISTER_BY_MODULE = {
     "market": "register_market_tools",
@@ -105,10 +77,13 @@ _REGISTER_BY_MODULE = {
     "dnse_ext": "register_dnse_ext_tools",
     "crypto": "register_crypto_tools",
     "scan": "register_scan_tools",
-    "compute": "register_compute_tools",
+    "compute_financial": "register_compute_financial_tools",
+    "compute_intel": "register_compute_intel_tools",
+    "compute_infra": "register_compute_infra_tools",
     "corp": "register_corp_tools",
     "watchlist": "register_watchlist_tools",
-    "quant": "register_quant_tools",
+    "quant_backtest": "register_quant_backtest_tools",
+    "quant_stats": "register_quant_stats_tools",
     "brief": "register_brief_tools",
     "intel": "register_intel_tools",
     "web": "register_web_tools",
@@ -123,7 +98,7 @@ def transport_security() -> TransportSecuritySettings | None:
     return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts)
 
 
-def create_server(preset: str = "market") -> FastMCP:
+def create_server(preset: str = "all") -> FastMCP:
     if preset not in PRESETS:
         raise ValueError(f"unknown preset {preset!r}, expected one of {PRESETS}")
     return FastMCP(
@@ -137,24 +112,28 @@ def create_server(preset: str = "market") -> FastMCP:
     )
 
 
-def register_preset(server: FastMCP, preset: str = "market") -> list[dict[str, Any]]:
-    """Register every tool module for a preset; returns tool descriptors."""
+def register_all(server: FastMCP) -> list[dict[str, Any]]:
+    """Register full tool surface; returns tool descriptors (single shape)."""
     import importlib
 
     from opentrading_mcp.prompts import register_prompts
     from opentrading_mcp.resources import register_resources
 
     collected: list[dict[str, Any]] = []
-    for module in PRESET_MODULES[preset]:
+    for module in ALL_MODULES:
         func_name = _REGISTER_BY_MODULE[module]
         mod = importlib.import_module(f"opentrading_mcp.tools.{module}")
         collected.extend(getattr(mod, func_name)(server))
     register_prompts(server)
     register_resources(server)
-    server._opentrading_preset = preset  # type: ignore[attr-defined]  # read by resources
     names = [t["name"] for t in collected]
     if len(names) != len(set(names)):
-        raise ValueError(f"duplicate tool names in preset {preset!r}")
-    if preset != "all" and len(collected) > PRESET_CAPS.get(preset, 50):
-        raise ValueError(f"preset {preset!r} has {len(collected)} tools over cap")
+        raise ValueError("duplicate tool names in full surface")
     return collected
+
+
+def register_preset(server: FastMCP, preset: str = "all") -> list[dict[str, Any]]:
+    """Deprecated alias: mọi preset đều trả full surface (tương thích CLI cũ)."""
+    if preset not in PRESETS:
+        raise ValueError(f"unknown preset {preset!r}, expected one of {PRESETS}")
+    return register_all(server)

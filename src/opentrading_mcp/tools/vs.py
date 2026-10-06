@@ -123,6 +123,7 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
                 category_id,
                 sub_term_type_id or "",
                 from_date,
+                to_date,
             )
             rows = out.get("rows", []) if isinstance(out, dict) else []
             availability = "available" if rows else "empty"

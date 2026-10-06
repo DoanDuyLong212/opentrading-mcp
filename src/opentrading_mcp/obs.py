@@ -53,7 +53,7 @@ def log_tool_call(tool: str, duration_ms: float, ok: bool, error_code: str = "")
         "ok": ok,
         "error_code": error_code or None,
     }
-    print(json.dumps(entry), file=sys.stdout, flush=True)
+    print(json.dumps(entry), file=sys.stderr, flush=True)
 
 
 def _escape(value: str) -> str:

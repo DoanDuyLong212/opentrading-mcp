@@ -2,7 +2,7 @@
   "mcpServers": {
     "opentrading": {
       "command": "uvx",
-      "args": ["opentrading-mcp", "serve", "--preset", "market"],
+      "args": ["opentrading-mcp", "serve"],
       "env": {}
     },
     "opentrading-remote": {

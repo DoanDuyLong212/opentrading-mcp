@@ -1,4 +1,4 @@
-"""Scan preset: screener, breadth, rotation, alerts, flows, insider, technical."""
+"""Scan: screener, breadth, rotation, alerts, flows, insider, technical."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import READ_ONLY, READ_WRITE_STATE, AnyContext, run_blocking
 
 ALERT_STATE_KEY = "mcp:scan:alert_state"
 # Cross state must outlive a single scan cycle, otherwise cross_up/cross_down
@@ -153,6 +153,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
             kept = await asyncio.gather(*(_tech_ok(e) for e in shortlisted))
             candidates = [e for e, ok in zip(shortlisted, kept, strict=True) if ok]
+        partial = bool(warnings) or (bool(enrich_n) and enriched < enrich_n)
         return make_envelope(
             {
                 "universe": len(rows),
@@ -161,6 +162,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             },
             source="vnstock",
             warnings=warnings,
+            availability="partial" if partial else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -328,7 +330,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_WRITE_STATE)
     async def alert_check(rules: list[dict[str, Any]]) -> dict[str, Any]:
         """Evaluate price/RSI rules against live quotes. Use for live watch.
 

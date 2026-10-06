@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import READ_ONLY_OPEN, run_blocking
 from opentrading_mcp.tools.yf import _na
 
 
@@ -19,7 +19,7 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 90.0) -> Any:
 
 
 def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_world_indices(tickers: list[str] | None = None) -> dict[str, Any]:
         """24 world benchmarks. Use for global breadth.
 
@@ -32,7 +32,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_world_indices", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_oracle_markets(groups: list[str] | None = None) -> dict[str, Any]:
         """40 markets in 6 groups with 30d stats. Use for cross-asset state.
 
@@ -45,7 +45,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_oracle_markets", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_regime_assets() -> dict[str, Any]:
         """7 regime drivers with 2y history. Use for RISK-ON/OFF calls."""
         try:
@@ -55,7 +55,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_regime_assets", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_mega_flows(top_n: int = 15) -> dict[str, Any]:
         """Mega-cap leader flows. Use to follow global smart money.
 
@@ -68,7 +68,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_mega_flows", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_alloc_history(asset: str = "GC", timeframe: str = "1d") -> dict[str, Any]:
         """Long allocation history per asset. Use for regime backtests.
 
@@ -83,7 +83,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_alloc_history", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_market_pins() -> dict[str, Any]:
         """5-day pins for world majors plus VN watchlist. Use for brief headers."""
         try:

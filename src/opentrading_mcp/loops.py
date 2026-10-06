@@ -34,12 +34,12 @@ async def yf_loop(interval_seconds: int = 60) -> None:
     while True:
         try:
             cache_set(
-                cache_key("market", "yf_global_indices", "loop"),
+                cache_key("yf_global_indices", "loop"),
                 {"indices": yf_p.batch_last(yf_p.GLOBAL_9)},
                 TTL_SECONDS["world"],
             )
             cache_set(
-                cache_key("market", "yf_commodities", "loop"),
+                cache_key("yf_commodities", "loop"),
                 {"items": yf_p.batch_last(yf_p.COMMO_13)},
                 TTL_SECONDS["world"],
             )

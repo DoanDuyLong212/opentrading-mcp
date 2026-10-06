@@ -20,7 +20,13 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, READ_WRITE, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    READ_WRITE_CREATE,
+    READ_WRITE_DELETE,
+    AnyContext,
+    run_blocking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -445,7 +451,7 @@ async def _toggle(server: FastMCP, rule_id: int, active: bool) -> dict[str, Any]
 
 
 def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_CREATE)
     async def watchlist_create(name: str, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Create a named watchlist. Use to start tracking a symbol group."""
         if ctx is not None:
@@ -464,6 +470,14 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
                 from psycopg.rows import dict_row
 
                 with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("SELECT id FROM watchlists WHERE name = %s", (name,))
+                    if cur.fetchone() is not None:
+                        return make_envelope(
+                            {"tool": "watchlist_create"},
+                            source="postgres",
+                            warnings=[f"watchlist '{name}' already exists"],
+                            availability="empty",
+                        )
                     cur.execute(
                         "INSERT INTO watchlists (name) VALUES (%s) RETURNING id, name", (name,)
                     )
@@ -513,7 +527,7 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             {"tool": "watchlist_get", "list_id": list_id}, source="local", availability="empty"
         )
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_CREATE)
     async def watchlist_add(
         list_id: int, symbols: list[str], ctx: AnyContext | None = None
     ) -> dict[str, Any]:
@@ -534,7 +548,7 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             source="postgres" if _pg_configured() else "file",
         )
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_DELETE)
     async def watchlist_remove(
         list_id: int, symbols: list[str], ctx: AnyContext | None = None
     ) -> dict[str, Any]:
@@ -556,7 +570,7 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             {"list_id": list_id, "symbols": out}, source="postgres" if _pg_configured() else "file"
         )
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_DELETE)
     async def watchlist_delete(list_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Delete a watchlist and its items (cascade). Use to clean up."""
         if ctx is not None:
@@ -573,7 +587,7 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             source="postgres" if _pg_configured() else "file",
         )
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_CREATE)
     async def watchlist_update(
         list_id: int, name: str, ctx: AnyContext | None = None
     ) -> dict[str, Any]:
@@ -597,7 +611,7 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         return make_envelope(updated, source="postgres" if _pg_configured() else "file")
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_CREATE)
     async def alert_create(
         symbol: str,
         op: str = ">",
@@ -671,7 +685,7 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             availability="empty" if not rules else None,
         )
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_DELETE)
     async def alert_delete(rule_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Delete a stored alert rule by id. Use to clean up alerts."""
         if ctx is not None:
@@ -685,12 +699,12 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             {"deleted": rule_id}, source="postgres" if _pg_configured() else "file"
         )
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_CREATE)
     async def alert_pause(rule_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Pause a stored alert rule (active=false). Use to silence alerts."""
         return await _toggle(server, rule_id, False)
 
-    @server.tool(annotations=READ_WRITE)
+    @server.tool(annotations=READ_WRITE_CREATE)
     async def alert_resume(rule_id: int, ctx: AnyContext | None = None) -> dict[str, Any]:
         """Resume a paused alert rule (active=true). Use to re-enable alerts."""
         return await _toggle(server, rule_id, True)

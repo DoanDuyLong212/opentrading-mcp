@@ -36,7 +36,7 @@ def _candles(closes: list[float], start: str = "2025-01-02") -> list[dict[str, A
 
 
 def test_run_strategy_buy_hold_profit():
-    from opentrading_mcp.tools import quant as qmod
+    from opentrading_mcp.tools import quant_shared as qmod
 
     closes = [100.0 + i for i in range(40)]
     res = qmod._run_strategy(closes, "buy_hold", 5, 20, 0.0)
@@ -45,7 +45,7 @@ def test_run_strategy_buy_hold_profit():
 
 
 def test_run_strategy_sma_cross_trades_twice():
-    from opentrading_mcp.tools import quant as qmod
+    from opentrading_mcp.tools import quant_shared as qmod
 
     closes = [100.0] * 20 + [110.0] * 20 + [90.0] * 20 + [110.0] * 20
     res = qmod._run_strategy(closes, "sma_cross", 5, 20, 0.0)
@@ -53,7 +53,7 @@ def test_run_strategy_sma_cross_trades_twice():
 
 
 async def test_correlation_identical_series_is_one(monkeypatch):
-    import opentrading_mcp.tools.quant as qmod
+    import opentrading_mcp.tools.quant_stats as qmod
 
     series = _candles([100.0 + (i % 7) for i in range(60)])
 
@@ -70,7 +70,7 @@ async def test_correlation_identical_series_is_one(monkeypatch):
 async def test_seasonality_buckets_twelve_months(monkeypatch):
     import datetime
 
-    import opentrading_mcp.tools.quant as qmod
+    import opentrading_mcp.tools.quant_stats as qmod
 
     closes = [100.0 + i * 0.1 for i in range(260)]
     day = datetime.date(2025, 1, 2)
@@ -99,7 +99,7 @@ async def test_backtest_strategies_unknown_is_unavailable():
 
 
 async def test_portfolio_optimize_equal_weights_sum_one(monkeypatch):
-    import opentrading_mcp.tools.quant as qmod
+    import opentrading_mcp.tools.quant_stats as qmod
 
     series = _candles([100.0 + (i % 5) for i in range(80)])
 
@@ -116,7 +116,7 @@ async def test_portfolio_optimize_equal_weights_sum_one(monkeypatch):
 
 
 async def test_param_sweep_caps_combos(monkeypatch):
-    import opentrading_mcp.tools.quant as qmod
+    import opentrading_mcp.tools.quant_backtest as qmod
 
     series = _candles([100.0 + (i % 9) for i in range(120)])
 

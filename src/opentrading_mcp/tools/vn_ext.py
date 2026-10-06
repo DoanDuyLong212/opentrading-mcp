@@ -137,8 +137,8 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_forex_ohlcv", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
-    async def vn_crypto_ohlv(
+    @server.tool(annotations=READ_ONLY, name="vn_crypto_ohlcv")
+    async def vn_crypto_ohlcv(
         symbol: str = "BTCUSDT",
         count: int = 30,
         summary: bool = False,
@@ -156,7 +156,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
                 {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vn_crypto_ohlv", str(exc))
+            return _na("vn_crypto_ohlcv", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def vn_global_index(
@@ -238,11 +238,14 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_trades", str(exc))
 
+    server.tool(name="vn_crypto_ohlv", annotations=READ_ONLY)(vn_crypto_ohlcv)
+
     return [
         {"name": "vn_index_ohlcv"},
         {"name": "vn_equity_ohlcv"},
         {"name": "vn_futures_ohlcv"},
         {"name": "vn_forex_ohlcv"},
+        {"name": "vn_crypto_ohlcv"},
         {"name": "vn_crypto_ohlv"},
         {"name": "vn_global_index"},
         {"name": "vn_reference"},

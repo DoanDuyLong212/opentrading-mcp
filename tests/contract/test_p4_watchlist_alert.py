@@ -306,12 +306,11 @@ async def test_alert_check_inactive_rules_are_skipped(file_store: Path):
 
 
 async def test_preset_scan_includes_watchlist_and_cap(file_store: Path):
-    from opentrading_mcp.server import create_server, register_preset
+    from opentrading_mcp.server import create_server, register_all
 
-    server = create_server("scan")
-    tools = register_preset(server, "scan")
+    server = create_server()
+    tools = register_all(server)
     names = [t["name"] for t in tools]
-    assert len(tools) <= 50
     for expected in (
         "watchlist_create", "watchlist_list", "watchlist_get", "watchlist_add",
         "watchlist_remove", "watchlist_delete", "watchlist_update",

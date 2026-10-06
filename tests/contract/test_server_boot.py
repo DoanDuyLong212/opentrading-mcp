@@ -1,11 +1,11 @@
-from opentrading_mcp.server import PRESETS, SERVER_INSTRUCTIONS, TIMEOUT_MATRIX, create_server
+from opentrading_mcp.server import SERVER_INSTRUCTIONS, create_server, register_all
 
 
-def test_server_boot_market_preset():
-    server = create_server("market")
+def test_server_boot_full_surface():
+    server = create_server()
     assert server.name == "opentrading"
     assert "Asia/Ho_Chi_Minh" in SERVER_INSTRUCTIONS
-    assert TIMEOUT_MATRIX["tools_list"] == 30
-    assert TIMEOUT_MATRIX["market_snapshot"] == 15
-    assert TIMEOUT_MATRIX["quant_backtest"] == 120
-    assert "market" in PRESETS
+    # full surface, single shape
+    tools = register_all(server)
+    names = [t["name"] for t in tools]
+    assert len(names) == len(set(names)) > 100

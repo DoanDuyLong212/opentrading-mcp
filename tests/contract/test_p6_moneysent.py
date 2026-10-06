@@ -55,9 +55,13 @@ async def test_sentiment_score_end_to_end(monkeypatch):
             return [{"text": "VCB quá ngon, múc mạnh", "likes": 10}]
         return '{"score": 0.8}'
 
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     server = create_server("scan")
     register_preset(server, "scan")
     tool = server._tool_manager.get_tool("sentiment_score")

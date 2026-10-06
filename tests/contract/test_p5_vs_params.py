@@ -90,8 +90,10 @@ async def test_vs_indicator_data_accepts_range_params(monkeypatch):
 
     seen: dict[str, Any] = {}
 
-    def fake_macro(tt: int, cat: int, sub: str = "", frm: str = "2022-01-01") -> Any:
-        seen.update(tt=tt, cat=cat, sub=sub, frm=frm)
+    def fake_macro(
+        tt: int, cat: int, sub: str = "", frm: str = "2022-01-01", to: str | None = None
+    ) -> Any:
+        seen.update(tt=tt, cat=cat, sub=sub, frm=frm, to=to)
         return {"rows": [{"name": "GDP", "value": 1.0}]}
 
     monkeypatch.setattr(vs_p, "macro_report_data", fake_macro)
@@ -103,6 +105,6 @@ async def test_vs_indicator_data_accepts_range_params(monkeypatch):
         from_date="2020-01-01",
     )
     _check_envelope(env, "vs_indicator_data")
-    assert seen == {"tt": 3, "cat": 73, "sub": "M1", "frm": "2020-01-01"}
+    assert seen == {"tt": 3, "cat": 73, "sub": "M1", "frm": "2020-01-01", "to": None}
     assert env["data"]["rows"][0]["name"] == "GDP"
     assert seen["cat"] == 73

@@ -1,4 +1,4 @@
-"""Brief preset: morning briefs, news, calendars wired to real sources."""
+"""Brief: morning briefs, news, calendars wired to real sources."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def brief_build(
         scope: str = "vn", date: str | None = None, calendars: bool = False
     ) -> dict[str, Any]:
-        """Compose morning brief from news, odds and calendars. Use at session start.
+        """Compose morning brief from news, sentiment pins and calendars. Use at session start.
 
         scope: 'vn' or 'world'. date: ISO date the brief is for (recorded as-is).
         calendars: also attach IPO/macro/SBV sections (sbv_rates, macro_events_vn,
@@ -64,8 +64,9 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             cats = await _call("c", vs_p.indicator_categories)
             sections["macro_series_available"] = len(cats) if isinstance(cats, list) else 0
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
+        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             sections["macro_series_available"] = 0
+            warnings_live = [f"vietstock categories: {exc}"]
         if calendars:
             for key, fn in (
                 ("sbv", pub_p.sbv_rates),
@@ -80,7 +81,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             "scope": scope,
             "sections": sections,
             "sources": [
-                "vietstock-dc (currently unavailable)",
+                "vietstock",
                 "gdelt",
                 "alternative.me",
                 "vs_categories",
@@ -88,7 +89,12 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         }
         if date is not None:
             data["date"] = date
-        return make_envelope(data, source="composer")
+        live_warnings: list[str] = locals().get("warnings_live", [])
+        vs_state = vs_p.auth_status()
+        vs_ok = vs_state.get("authenticated", False) if isinstance(vs_state, dict) else False
+        if not vs_ok:
+            live_warnings.append(f"vietstock: {vs_state}")
+        return make_envelope(data, source="composer", warnings=live_warnings or None)
 
     @server.tool(annotations=READ_ONLY)
     async def news_market(limit: int = 10, sources: str | None = None) -> dict[str, Any]:
@@ -216,8 +222,9 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def corporate_calendar(symbol: str | None = None, limit: int = 20) -> dict[str, Any]:
         """Disclosures feed as corporate actions. Use for dividend/meeting scans.
 
-        symbol: omit for VN overview; limit: max disclosures. Raw feed;
-        company_events classifies the same disclosures into kinds.
+        symbol: omit for VN overview (defaults to VCB as sample feed); limit:
+        max disclosures. Raw feed; company_events classifies the same
+        disclosures into kinds; event_calendar_vn is the calendar view.
         """
         try:
             docs = await _call("d", vs_p.documents, symbol or "VCB", 60)

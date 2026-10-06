@@ -1,8 +1,7 @@
-"""Intel preset: odds, geo, regime, compare, redteam, evidence bundle."""
+"""Intel: odds, geo, regime, compare, redteam, evidence bundle."""
 
 from __future__ import annotations
 
-import asyncio
 import functools
 from typing import Any
 
@@ -16,7 +15,7 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import READ_ONLY, READ_ONLY_OPEN, run_blocking
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -30,7 +29,7 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 45.0) -> Any:
 
 
 def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def world_prediction_odds(
         query: str | None = None,
         limit: int = 20,
@@ -52,7 +51,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("world_prediction_odds", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def polymarket_event(
         slug: str,
     ) -> dict[str, Any]:
@@ -67,7 +66,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("polymarket_event", str(exc))
 
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def geo_intel(
         topic: str | None = None, limit: int = 20, days: int | None = None
     ) -> dict[str, Any]:
@@ -95,15 +94,13 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                 {"query": data.get("query"), "articles": articles[: max(int(limit), 1)]},
                 source="gdelt",
             )
-        except ProviderUnavailable:
-            await asyncio.sleep(10)
-            try:
-                data = await _call(
-                    "g", intel_p.gdelt_events, topic or "geopolitical conflict", secs=60.0
-                )
-                return make_envelope(data, source="gdelt")
-            except (ProviderUnavailable, ProviderBadData) as exc:
-                return _na("geo_intel", str(exc))
+        except ProviderUnavailable as exc:
+            return make_envelope(
+                {"tool": "geo_intel"},
+                source="unavailable",
+                warnings=[f"{exc} (retry-after-gdelt)"],
+                availability="unavailable",
+            )
         except ProviderBadData as exc:
             return _na("geo_intel", str(exc))
 
@@ -124,7 +121,14 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
             signals.append("gold outperforming equities (defensive)")
         if isinstance(btc, (int, float)) and btc < 0:
             signals.append("crypto negative (risk-off lean)")
-        regime = "risk-on" if (spx or 0) > 10 and not signals else "neutral/mixed"
+        risk_on = isinstance(spx, (int, float)) and spx > 10
+        risk_off = any("risk-off" in s or "defensive" in s for s in signals)
+        if risk_on and not risk_off:
+            regime = "risk-on"
+        elif risk_off:
+            regime = "risk-off"
+        else:
+            regime = "neutral/mixed"
         return make_envelope(
             {"regime": regime, "signals": signals, "drivers": drivers},
             source="computed-yfinance",
@@ -140,6 +144,9 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
+        warnings = (
+            [f"capped 4 symbols, {len(symbols) - 4} dropped"] if len(symbols) > 4 else []
+        )
         for symbol in symbols[:4]:
             try:
                 overview = await _call("o", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
@@ -162,7 +169,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                 rows.append(row)
             except (ProviderUnavailable, ProviderBadData) as exc:
                 rows.append({"symbol": symbol.upper(), "error": str(exc)})
-        return make_envelope({"rows": rows}, source="vnstock")
+        return make_envelope({"rows": rows}, source="vnstock", warnings=warnings or None)
 
     @server.tool(annotations=READ_ONLY)
     async def evidence_bundle(

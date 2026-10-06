@@ -12,8 +12,8 @@ Shareable MCP-server for Vietnamese market research. Team internal first, public
 ```bash
 pip install -e ".[dev]"
 PYTHONPATH=src python -m pytest tests/ -v
-opentrading-mcp serve --preset market        # stdio for opencode/claude/cursor
-opentrading-mcp serve --preset market --http --port 8102  # LAN share
+opentrading-mcp serve                          # stdio for opencode/claude/cursor (full 139 tools)
+opentrading-mcp serve --http --port 8102            # LAN share
 ```
 
 ## Team LAN / Render
@@ -109,8 +109,8 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
 | Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` |
-| Tools | 138 (`all`, 139 khi có websearch key), presets `market` 66 / `scan` 47 / `quant` 10 / `brief` 8 / `intel` 8 |
-| Preset remote | `all` — Render chạy `serve --preset all` (xem `Dockerfile` CMD). Nếu `tools/list` chỉ trả 66 tools = đang chạy preset `market` cũ, cần redeploy bản mới |
+| Tools | 139 (140 khi có websearch key), single full surface, client tự lọc |
+| Deploy | Render chạy `serve --http` full surface (xem `Dockerfile` CMD) |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
 | Quy tắc dùng | Rate-limit 120 req/phút/IP; quota 1000 calls/ngày/user (team token bypass quota) |
 | Timezone | `Asia/Ho_Chi_Minh` tz-aware — parse theo giờ VN |
@@ -118,8 +118,8 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 ### Cách 2 — stdio local (dev, không cần token)
 
 ```bash
-uvx opentrading-mcp serve --preset market   # 65 tools thị trường
-uvx opentrading-mcp serve --preset all      # 138 tools full
+uvx opentrading-mcp serve                     # 139 tools full
+uvx opentrading-mcp serve --preset all        # deprecated alias, vẫn chạy
 ```
 
 File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,

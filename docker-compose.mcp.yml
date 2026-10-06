@@ -38,7 +38,7 @@ services:
     build: .
     container_name: mcp-web
     restart: unless-stopped
-    command: ["opentrading-mcp", "serve", "--preset", "market", "--http", "--port", "8102"]
+    command: ["opentrading-mcp", "serve", "--http", "--port", "8102"]
     ports:
       - "${MCP_PORT:-8102}:8102"
     environment:

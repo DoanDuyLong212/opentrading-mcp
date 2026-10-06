@@ -1,1 +1,1 @@
-"""Tool presets (each <50 tools so tools/list passes 30s cold-start)."""
+"""Tool modules — single full surface (no presets)."""

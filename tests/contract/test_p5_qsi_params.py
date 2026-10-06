@@ -29,7 +29,7 @@ async def test_quant_backtest_strategy_params(monkeypatch):
     async def fake_rb(fn: Any, tool: str, timeout_secs: float = 90.0):
         return candles
 
-    import opentrading_mcp.tools.quant as quant_mod
+    import opentrading_mcp.tools.quant_backtest as quant_mod
 
     monkeypatch.setattr(quant_mod, "run_blocking", fake_rb)
     fn = _tool_fn("quant_backtest", "quant")
@@ -63,7 +63,7 @@ async def test_quant_factors_lookback(monkeypatch):
     async def fake_rb(fn: Any, tool: str, timeout_secs: float = 60.0):
         return candles
 
-    import opentrading_mcp.tools.quant as quant_mod
+    import opentrading_mcp.tools.quant_stats as quant_mod
 
     monkeypatch.setattr(quant_mod, "run_blocking", fake_rb)
     fn = _tool_fn("quant_factors", "quant")

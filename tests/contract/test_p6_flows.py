@@ -155,7 +155,7 @@ async def test_indicator_data_defaults_2022_and_macro_path(monkeypatch):
     tool = server._tool_manager.get_tool("vs_indicator_data")
     assert tool is not None
     await tool.fn(category_id=73)
-    assert seen["args"] == (3, 73, "", "2022-01-01")
+    assert seen["args"] == (3, 73, "", "2022-01-01", None)
 
 
 async def test_xnk_detail_defaults_current_year(monkeypatch):

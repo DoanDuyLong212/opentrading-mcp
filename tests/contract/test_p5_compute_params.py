@@ -73,9 +73,13 @@ async def test_stock_forensic_detail_includes_series(monkeypatch):
             return cd_detail
         return lc_detail
 
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("stock_forensic")
     env = await fn(symbol="VCB", detail=True)
     _check_envelope(env, "stock_forensic")
@@ -103,9 +107,13 @@ async def test_valuation_run_explicit_method(monkeypatch):
             return {"EPS": 5.0, "BVPS": 20.0}
         return [{"close_price": 100.0}]
 
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("valuation_run")
     env = await fn(symbol="VCB", method="dcf")
     _check_envelope(env, "valuation_run")
@@ -190,9 +198,13 @@ async def test_company_events_types_filters_docs(monkeypatch):
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
         return docs
 
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("company_events")
     env = await fn(symbol="VCB", types="bctc")
     _check_envelope(env, "company_events")
@@ -209,9 +221,13 @@ async def test_financial_statements_statement_and_periods(monkeypatch):
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
         return {"pages": pages}
 
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("financial_statements")
     env = await fn(symbol="VCB", statement="kqkd", periods_n=2)
     _check_envelope(env, "financial_statements")
@@ -223,9 +239,13 @@ async def test_financial_ratios_peers_merged(monkeypatch):
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
         return {"EPS": 1.0}
 
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("financial_ratios")
     env = await fn(symbol="VCB", peers=["HPG", "SSI"])
     _check_envelope(env, "financial_ratios")
@@ -238,9 +258,13 @@ async def test_peer_compare_metrics_filters_keys(monkeypatch):
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
         return {"EPS": 1.0, "BVPS": 2.0, "PE": 3.0}
 
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("peer_compare")
     env = await fn(symbol="VCB", peers=["HPG"], metrics=["pe", "eps"])
     _check_envelope(env, "peer_compare")
@@ -249,14 +273,18 @@ async def test_peer_compare_metrics_filters_keys(monkeypatch):
 
 
 async def test_pattern_match_limit_top_n(monkeypatch):
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_financial as comp_fin
+    import opentrading_mcp.tools.compute_infra as comp_infra
+    import opentrading_mcp.tools.compute_intel as comp_intel
 
     candles = [{"c": float(100 + i)} for i in range(120)]
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
         return candles
 
-    monkeypatch.setattr(comp_mod, "_call", fake_call)
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(comp_intel, "_call", fake_call)
+    monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("pattern_match")
     env = await fn(symbol="VCB", lookback=60, limit=3)
     _check_envelope(env, "pattern_match")
@@ -298,10 +326,10 @@ async def test_compare_assets_timeframe_recorded(monkeypatch):
 
 
 async def test_runs_list_id_filters(monkeypatch):
-    import opentrading_mcp.tools.compute as comp_mod
+    import opentrading_mcp.tools.compute_infra as comp_infra
 
     rows = [{"run_id": "a1"}, {"run_id": "b2"}]
-    monkeypatch.setattr(comp_mod, "_read_runs", lambda: rows)
+    monkeypatch.setattr(comp_infra, "_read_runs", lambda: rows)
     fn = _tool_fn("runs_list")
     env = await fn(id="b")
     _check_envelope(env, "runs_list")

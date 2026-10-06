@@ -84,7 +84,7 @@ def test_observability_logs_tool_call_without_body(capsys):
     assert client.post("/mcp", json=body).status_code == 200
     assert client.get("/healthz").status_code == 200
 
-    lines = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
+    lines = [json.loads(line) for line in capsys.readouterr().err.strip().splitlines()]
     assert len(lines) == 1
     assert lines[0]["tool"] == "market_snapshot"
     assert lines[0]["ok"] is True

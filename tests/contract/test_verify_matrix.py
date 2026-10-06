@@ -1,20 +1,17 @@
-"""Full-matrix contract test: every tool, every preset, over real stdio."""
+"""Full-matrix contract test: every tool, single surface, over real stdio."""
 
-from opentrading_mcp.server import PRESETS
-from opentrading_mcp.verify_matrix import calls_for_preset, run_preset_stdio
+from opentrading_mcp.verify_matrix import all_calls, run_stdio_all
 
 
-async def test_full_matrix_all_presets_stdio():
-    failures: list[str] = []
-    total = 0
-    expected = sum(len(calls_for_preset(preset)) for preset in PRESETS)
-    assert expected > 0
-    for preset in PRESETS:
-        rows = await run_preset_stdio(preset)
-        assert rows, f"preset {preset} returned no rows"
-        for row in rows:
-            total += 1
-            if not row["ok"]:
-                failures.append(f"{row['preset']}/{row['tool']}: {row['detail']}")
-    assert total == expected, f"expected {expected} tool calls, got {total}"
+async def test_full_matrix_stdio():
+    from opentrading_mcp.server import create_server, register_all
+
+    server = create_server()
+    tools = register_all(server)
+    calls = all_calls()
+    assert len(calls) == len(tools) == 139, f"matrix {len(calls)} vs tools {len(tools)}"
+    rows = await run_stdio_all()
+    assert rows, "matrix returned no rows"
+    assert len(rows) == len(calls)
+    failures = [f"{row['tool']}: {row['detail']}" for row in rows if not row["ok"]]
     assert not failures, "contract failures:\n" + "\n".join(failures)

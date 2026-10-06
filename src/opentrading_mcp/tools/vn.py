@@ -141,7 +141,18 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 ),
                 "vn_fundamentals",
             )
-            return make_envelope({"symbol": symbol.upper(), "ratios": str(data)}, source="vnstock")
+            to_records = getattr(data, "to_dict", None)
+            if callable(to_records):
+                try:
+                    ratios = to_records(orient="records")
+                except Exception:
+                    try:
+                        ratios = to_records()
+                    except Exception:
+                        ratios = str(data)
+            else:
+                ratios = data
+            return make_envelope({"symbol": symbol.upper(), "ratios": ratios}, source="vnstock")
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_fundamentals", str(exc))
         except Exception as exc:

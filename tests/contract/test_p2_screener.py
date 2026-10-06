@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from opentrading_mcp.server import create_server, register_preset
+from opentrading_mcp.server import create_server, register_all, register_preset
 
 
 def _scan_tool_fn(name: str):
@@ -136,10 +136,9 @@ def test_reference_equity_filters_by_exchange_field(monkeypatch):
     assert "HOSEMBER" not in symbols
 
 
-def test_scan_preset_cap():
-    server = create_server("scan")
-    tools = register_preset(server, "scan")
-    assert len(tools) <= 50, f"scan preset has {len(tools)} tools over cap"
+def test_full_surface_contains_scan_tools():
+    server = create_server()
+    tools = register_all(server)
     names = [t["name"] for t in tools]
     assert "stock_screener" in names
     assert "signals_screener_columns" in names

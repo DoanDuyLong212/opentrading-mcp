@@ -10,7 +10,7 @@
         "url": "https://opentrading-mcp-web.onrender.com/mcp",
         "headers": { "Authorization": "Bearer <TEAM_TOKEN>" },
         "oauth": false,
-        "timeout": 30000
+        "timeout": 120000
       }
     }
   }

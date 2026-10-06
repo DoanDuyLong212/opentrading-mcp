@@ -175,10 +175,11 @@ async def test_macro_events_vn_lists_releases(monkeypatch):
     assert env["data"]["releases"][0]["next"] == "06/10/2026"
 
 
-async def test_scan_preset_counts_under_cap():
-    server = create_server("scan")
-    tools = register_preset(server, "scan")
-    assert len(tools) <= 60
+async def test_full_surface_contains_corp_tools():
+    from opentrading_mcp.server import register_all
+
+    server = create_server()
+    tools = register_all(server)
     names = {t["name"] for t in tools}
     assert {
         "event_calendar_vn",

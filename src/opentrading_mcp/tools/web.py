@@ -1,4 +1,4 @@
-"""Web preset: generic fetch + delegated search (mirror opencode webfetch/websearch)."""
+"""Web: generic fetch + delegated search (mirror opencode webfetch/websearch)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import READ_ONLY_OPEN, run_blocking
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -29,7 +29,7 @@ async def _call(tool: str, fn: Any, *args: Any, secs: float = 45.0) -> Any:
 
 
 def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
-    @server.tool(annotations=READ_ONLY)
+    @server.tool(annotations=READ_ONLY_OPEN)
     async def web_fetch(
         url: str, format: str = "markdown", timeout_seconds: int = 30
     ) -> dict[str, Any]:
@@ -57,7 +57,7 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
     if search_p.web_search_available():
         # Mirror opencode registry gating: websearch is hidden when no provider key exists.
 
-        @server.tool(annotations=READ_ONLY)
+        @server.tool(annotations=READ_ONLY_OPEN)
         async def web_search(
             query: str,
             num_results: int = 8,
@@ -82,7 +82,12 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
                     context_max_chars,
                     secs=60.0,
                 )
-                return make_envelope(data, source=data.get("provider", "web"))
+                provider = data.get("provider", "web") if isinstance(data, dict) else "web"
+                return make_envelope(
+                    data,
+                    source="web-search",
+                    warnings=[f"provider={provider}"] if provider != "web" else None,
+                )
             except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
                 return _na("web_search", str(exc))
 
