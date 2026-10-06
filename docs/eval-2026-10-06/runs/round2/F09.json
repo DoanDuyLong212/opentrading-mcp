@@ -1,0 +1,50 @@
+{
+ "id": "F09",
+ "q": "Nạp skill phan-tich-sentiment rồi phân tích VCB",
+ "ms": 138185,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "phan-tich-sentiment"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/phan-tich-sentiment\n\n# Measuring Single-Stock Crowd Sentiment\n\nĐo *đám đông*, không đo *doanh nghiệp* — crowd có thể sai, sentiment không bao giờ là leg duy nhất của quyết định. Chỉ 1 symbol/run; limit 20 đủ 90% mẫu, không nới limit.\n\n## When to Use\n\n- Dùng khi: hỏi dư luận/crowd/FOMO/comment về 1 mã cụ thể trên Fireant.\n- Khi KHÔNG dùng (dùng skill khác thay thế): tin chính thống/rumor → `tim-kiem-tin-tuc`; fear/greed chung → `danh-gia-vi-mo-quoc"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_symbol",
+   "input": {
+    "symbol": "VCB",
+    "limit": 20
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__sentiment_score",
+   "input": {
+    "symbol": "VCB",
+    "limit": 20
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 616,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"posts\": [\n      {\n        \"id\": 42108438,\n        \"user\": \"Nguyễn Long Giang\",\n        \"text\": \"VN-Index hồi phục nhưng dòng tiền chưa lan tỏa, khối ngoại tiếp tục bán ròng. Các công ty chứng khoán cho rằng thị trường cần thêm tín hiệu xác nhận xu hướng.\",\n        \"symbols\": [\n          \"VCB\",\n          \"VN30\",\n          \"VNINDEX\"\n        ],\n        \"likes\": 3,\n        \"replies\": 6,\n        \"date\": \"2026-10-06T08:12:00+07:00\"\n      },\n      {\n        \"id\":"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 824,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"posts\": 20,\n    \"score_heuristic\": -0.16\n  },\n  \"provenance\": {\n    \"source\": \"fireant\",\n    \"as_of\": \"2026-10-06T15:20:05.092510+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"groq unavailable, heuristic fallback\"\n  ],\n  \"availability\": \"available\"\n}"
+  }
+ ],
+ "text": "I'll load the sentiment analysis skill first, then dig into VCB.\n\n## VCB — phố nói gì (đo đám đông, không đo doanh nghiệp)\n\n**Điểm sentiment: −0,16 — trung tính** `[fireant · 06/10 15:20]`, 20 posts.\n⚠️ Nhãn nguồn: **heuristic** (Groq không khả dụng → fallback heuristic; thang điểm không chuẩn hoá chéo được với mode Groq, nên chỉ đọc như tín hiệu thô).\n\n**Điểm đáng chú ý: mẫu bị \"loãng\".** Gần như không có post nào bàn riêng về VCB — mã xuất hiện chủ yếu như một *tag phụ* trong tin ngân hàng/vĩ mô (lãi suất, tỷ giá, khối ngoại). Đây là \"ít bàn luận thực chất\", không phải crowd đang có luận điểm rõ về cổ phiếu.\n\n**Trích comment tiêu biểu** (provenance Fireant, `[fireant · 02–06/10]`):\n- Lãi suất huy động: *\"Lãi suất Vietcombank hiện dao động từ 0,1–6%/năm. Gửi 600 triệu kỳ hạn 24 tháng nhận ~72 triệu\"* — trung tính, tin dịch vụ, không phải luận điểm đầu tư (post 42089362, 6 replies).\n- Big4 neo lãi suất: *\"Lãi suất tiết kiệm cao nhất tại Agribank, Vietcombank, BIDV, VietinBank hiện ở mức 6%/năm\"* (post 42104546).\n- Áp lực chi phí vốn: *\"Chi phí huy động vốn của các nhà băng vẫn đang gia tăng và gây áp lực đáng kể đến lãi suất cho vay thời gian tới\"* — sắc thái hơi tiêu cực cho biên NIM ngành, không riêng VCB (post 42082971).\n- Bối cảnh chung: *\"VN-Index giảm hơn 47 điểm trong tuần qua, nhiều cổ phiếu rơi vào vùng quá bán… có thể tìm đáy ngắn hạn\"* (post 42088759).\n\n**FOMO / hoảng loạn: không có.** Với −0,16 (giữa −0,3 và +0,3 = trung tính), không thấy dấu hiệu đua lệnh hay bán tháo riêng VCB. Tần suất và likes các post đều thấp (1–4 likes, 0–6 replies) → mã không nằm trong tâm điểm bàn tán phiên 06/10.\n\n**Bối cảnh thị trường cùng ngày** (nếu hữu ích): VN-Index hồi phục nhưng dòng tiền chưa lan toả, khối ngoại tiếp tục bán ròng `[fireant · 06/10 08:12]` — đây là bối cảnh chung, không phải tín hiệu riêng của VCB.\n\n---\n⚠️ **Cảnh báo vòng lặp bắt buộc:** Đám đông có thể sai — sentiment ở đây chỉ là **một leg**, và với VCB nó gần như không mang thông tin (mẫu loãng, mode heuristic). **Không được dùng điểm này làm căn cứ quyết định mua/bán.** Muốn có luận điểm thực chất cần đọc cơ bản (BCTC, NIM, chất lượng tài sản) và kỹ thuật.\n\nBạn muốn mình đào sâu phần nào — đọc chất lượng cơ bản VCB, định giá (đắt/rẻ), hay kỹ thuật đa khung?"
+}

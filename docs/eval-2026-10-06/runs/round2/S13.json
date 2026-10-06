@@ -1,0 +1,160 @@
+{
+ "id": "S13",
+ "q": "Backtest chiến lược mua khi RSI dưới 30 trên HPG",
+ "ms": 300005,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "kiem-chien-luoc-backtest"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/kiem-chien-luoc-backtest\n\n# Backtesting Trading Strategies Honestly\n\nPipeline chuẩn mỗi run: baseline → chiến lược → sweep → seasonality/event → kết luận. Best bắt buộc kèm worst (chống overfit); thiếu worst hoặc thiếu caveat engine thì chưa đạt. Engine numpy-only, cost mặc định, T+2 VN chưa model — mọi kết luận đều kèm caveat này.\n\n## When to Use\n\n- Dùng khi: kiểm chứng điều kiện kỹ thuật (SMA/momentum/RSI), thời gian (tháng/quý), sau sự kiện (Tế"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "HPG",
+    "days": 365,
+    "summary": true
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_index_ohlcv",
+   "input": {
+    "symbol": "VNINDEX",
+    "count": 250,
+    "summary": true
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__backtest_strategies",
+   "input": {
+    "symbol": "HPG",
+    "strategy": "rsi_meanrev",
+    "rsi_low": 30,
+    "rsi_high": 70
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__backtest_strategies",
+   "input": {
+    "symbol": "HPG",
+    "strategy": "buy_hold"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1406,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VNINDEX\",\n    \"count\": 250,\n    \"last\": 1759.08,\n    \"high\": 1933.11,\n    \"low\": 1578.42\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T15:26:43.614199+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1408,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"count\": 284,\n    \"last\": 20.5,\n    \"high\": 27.54,\n    \"low\": 19.6\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T15:26:43.423277+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2017,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"strategy\": \"buy_hold\",\n    \"fast\": 10,\n    \"slow\": 30,\n    \"cost_bps\": 10.0,\n    \"trades\": 1,\n    \"net_return\": -0.1875,\n    \"max_drawdown\": 0.2599,\n    \"win_rate\": 0.0,\n    \"bars\": 284\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T15:26:44.127135+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2019,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"strategy\": \"rsi_meanrev\",\n    \"fast\": 10,\n    \"slow\": 30,\n    \"cost_bps\": 10.0,\n    \"trades\": 1,\n    \"net_return\": -0.0784,\n    \"max_drawdown\": 0.1109,\n    \"win_rate\": 0.0,\n    \"bars\": 284,\n    \"rsi_low\": 30.0,\n    \"rsi_high\": 70.0\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T15:26:44.124480+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__backtest_strategies",
+   "input": {
+    "symbol": "HPG",
+    "strategy": "rsi_meanrev",
+    "rsi_low": 20,
+    "rsi_high": 80
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__backtest_strategies",
+   "input": {
+    "symbol": "HPG",
+    "strategy": "rsi_meanrev",
+    "rsi_low": 25,
+    "rsi_high": 70
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1077,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"strategy\": \"rsi_meanrev\",\n    \"fast\": 10,\n    \"slow\": 30,\n    \"cost_bps\": 10.0,\n    \"trades\": 1,\n    \"net_return\": -0.0068,\n    \"max_drawdown\": 0.1109,\n    \"win_rate\": 0.0,\n    \"bars\": 284,\n    \"rsi_low\": 20.0,\n    \"rsi_high\": 80.0\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T15:28:05.925876+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__backtest_strategies",
+   "input": {
+    "symbol": "HPG",
+    "strategy": "rsi_meanrev",
+    "rsi_low": 35,
+    "rsi_high": 70
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 757,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"strategy\": \"rsi_meanrev\",\n    \"fast\": 10,\n    \"slow\": 30,\n    \"cost_bps\": 10.0,\n    \"trades\": 1,\n    \"net_return\": -0.0068,\n    \"max_drawdown\": 0.1109,\n    \"win_rate\": 0.0,\n    \"bars\": 284,\n    \"rsi_low\": 25.0,\n    \"rsi_high\": 70.0\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T15:28:06.415977+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1334,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"strategy\": \"rsi_meanrev\",\n    \"fast\": 10,\n    \"slow\": 30,\n    \"cost_bps\": 10.0,\n    \"trades\": 1,\n    \"net_return\": -0.1204,\n    \"max_drawdown\": 0.2362,\n    \"win_rate\": 0.0,\n    \"bars\": 284,\n    \"rsi_low\": 35.0,\n    \"rsi_high\": 70.0\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T15:28:07.527955+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__backtest_strategies",
+   "input": {
+    "symbol": "HPG",
+    "strategy": "rsi_meanrev",
+    "rsi_low": 40,
+    "rsi_high": 60
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 479,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"strategy\": \"rsi_meanrev\",\n    \"fast\": 10,\n    \"slow\": 30,\n    \"cost_bps\": 10.0,\n    \"trades\": 3,\n    \"net_return\": 0.0082,\n    \"max_drawdown\": 0.1766,\n    \"win_rate\": 0.6667,\n    \"bars\": 284,\n    \"rsi_low\": 40.0,\n    \"rsi_high\": 60.0\n  },\n  \"provenance\": {\n    \"source\": \"computed-local\",\n    \"as_of\": \"2026-10-06T15:28:08.125440+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__seasonality",
+   "input": {
+    "symbol": "HPG",
+    "window": 21
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 430,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"window\": 21,\n    \"months\": {\n      \"1\": {\n        \"n\": 22,\n        \"mean_pct\": -0.82,\n        \"median_pct\": -1.29,\n        \"hit_rate\": 0.23,\n        \"best_pct\": 5.16,\n        \"worst_pct\": -4.92\n      },\n      \"2\": {\n        \"n\": 20,\n        \"mean_pct\": 1.35,\n        \"median_pct\": 0.95,\n        \"hit_rate\": 0.65,\n        \"best_pct\": 9.02,\n        \"worst_pct\": -3.46\n      },\n      \"3\": {\n        \"n\": 22,\n        \"mean_pct\": 1.15,\n        \"median_pct\": 0.77,\n "
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n"
+}

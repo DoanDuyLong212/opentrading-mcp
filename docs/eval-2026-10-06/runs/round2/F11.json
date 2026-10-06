@@ -1,0 +1,50 @@
+{
+ "id": "F11",
+ "q": "Depth orderbook VN30F1M hiện tại thế nào",
+ "ms": 266974,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "mcp__opentrading__dnse_orderbook",
+   "input": {
+    "symbol": "VN30F1M",
+    "depth": 10
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_trades",
+   "input": {
+    "symbol": "VN30F1M",
+    "limit": 20
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 951,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VN30F1M\",\n    \"trades\": [\n      {\n        \"time\": \"2026-10-06T14:45:01\",\n        \"price\": 1903.5,\n        \"volume\": 5966,\n        \"match_type\": \"\",\n        \"id\": \"2026-10-06_144501_19035_5966\"\n      },\n      {\n        \"time\": \"2026-10-06T14:29:59\",\n        \"price\": 1903.3,\n        \"volume\": 1,\n        \"match_type\": \"buy\",\n        \"id\": \"2026-10-06_142959_19033_1\"\n      },\n      {\n        \"time\": \"2026-10-06T14:29:59\",\n        \"price\": 1902.2,\n        \"volume\": 5,\n   "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__dnse_vn30f1m_live",
+   "input": {
+    "bars": 20
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 20190,
+   "out": "{\n  \"data\": {\n    \"tool\": \"dnse_vn30f1m_live\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:30:48.508828+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"dnse timeout: /price/ohlc\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 40243,
+   "out": "{\n  \"data\": {\n    \"tool\": \"dnse_orderbook\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:31:03.783941+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"no orderbook for VN30F1M\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n## Kết luận: hiện không có dữ liệu độ sâu (orderbook) cho VN30F1M\n\nNguồn không trả về sổ lệnh cho hợp đồng tương lai này — `dnse_orderbook` báo thẳng \"no orderbook for VN30F1M\" [dnse · 06/10 15:31], và feed nến 15m qua DNSE cũng timeout [dnse · 06/10 15:30]. Hợp đồng phái sinh thường không đẩy được book lên nguồn này; phiên cũng đã đóng cửa nên kể cả có cũng chỉ là trạng thái cuối phiên.\n\n**Thay thế: đọc từ sổ khớp lệnh (tape)** — đây là thứ duy nhất có dữ liệu:\n\n- Giá khớp cuối: **1.903,5** lúc 14:45:01, khối lượng 5.966 (nhiều khả năng là lệnh ATC) [vnstock · 06/10 15:30]\n- Trước đó các lệnh lẻ dồn quanh vùng **1.901,9 – 1.903,3**, khối lượng mỗi lệnh chủ yếu 1–18\n- Sắc thái hai chiều lẫn lộn trong vài giây cuối: cả lệnh `buy` ở 1.903,2–1.903,3 lẫn lệnh `sell` ở 1.901,9–1.902,5 — không nghiêng rõ về một phía\n\n**Rủi ro khi đọc tape thay book:**\n- Tape chỉ cho thấy lệnh *đã khớp*, không cho biết lực chờ mua/bán phía trước — không suy ra được hỗ trợ/kháng cự từ chênh lệch cung-cầu.\n- Khối lượng ATC 5.966 đơn lẻ có thể làm sai lệch cảm nhận về thanh khoản thực.\n- Muốn xem độ sâu thật của VN30F1M, cần bảng giá phái sinh trực tiếp từ công ty chứng khoán (như DNSE/SSI qua app), nguồn này không cấp cho mình.\n\nNếu bạn muốn, mình có thể lấy thêm **basis VN30F1M vs VN30 spot** hoặc **diễn biến nến 1D vài phiên gần nhất** để bù cho phần thiếu book."
+}

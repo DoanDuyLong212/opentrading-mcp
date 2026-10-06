@@ -1,0 +1,22 @@
+{
+ "id": "S12",
+ "q": "Giải thích cổ tức là gì",
+ "ms": 85767,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "explain-term"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/explain-term\n\n# Explaining Securities Terms Simply\n\nTrả lời đúng 5 bước, gọn nhẹ, không lan sang phân tích mã hay khuyến nghị. Mọi số minh họa là số tròn giả định — bắt buộc ghi rõ \"ví dụ giả định\", không bao giờ để user tưởng là số thật.\n\n## When to Use\n\n- Dùng khi: user hỏi một thuật ngữ, chỉ số hoặc khái niệm là gì (P/E, EPS, ROE, margin, ATO/ATC, room ngoại, T+2...).\n- Khi KHÔNG dùng (dùng skill khác thay thế): phản biện luận điểm mua/giữ (dùn"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n**Cổ tức** là phần lợi nhuận sau thuế mà doanh nghiệp chia lại cho cổ đông, thay vì giữ toàn bộ để tái đầu tư.\n\n**Cách tính (bằng chữ):**\n- Cổ tức tiền mặt mỗi cổ phần = tổng tiền chia ÷ số cổ phiếu đang lưu hành\n- Số tiền bạn nhận = cổ tức/cổ phần × số cổ phiếu bạn nắm\n\n**Ví dụ giả định:**\nCông ty có 100 triệu cổ phiếu, chia 300 tỷ đồng cổ tức. Mỗi cổ phần được 3.000đ. Bạn giữ 1.000 cổ phiếu → nhận 3.000.000đ. (Số liệu chỉ để minh họa, không phải số thật của mã nào.)\n\n**Có 2 hình thức chính:**\n- **Tiền mặt:** nhận tiền, thường bị trừ 5% thuế TNCN.\n- **Cổ phiếu (chia thưởng/phát hành thêm):** nhận thêm cổ phiếu, không mất thuế ngay, nhưng số lượng tăng nên giá điều chỉnh giảm tương ứng — không tự nhiên giàu lên.\n\n**Cách dùng ở VN + bẫy hay gặp:**\n- Ngày **GDKHQ (giao dịch không hưởng quyền):** mua trước ngày này mới được nhận cổ tức; mua từ ngày đó trở đi thì không.\n- Bẫy phổ biến: **\"tỷ suất cổ tức\" cao bất thường** có thể do giá cổ phiếu đã giảm mạnh, hoặc công ty chia một lần từ lợi nhuận đột biến, không bền. Ngoài ra giá cổ phiếu **điều chỉnh giảm đúng bằng phần cổ tức** trong ngày GDKHQ, nên đừng tưởng cổ tức là \"tiền miễn phí\".\n\nBạn muốn mình giải thích thêm cách đọc *lịch chia cổ tức* của một mã cụ thể, hay so sánh cổ tức tiền mặt vs cổ phiếu dưới góc nhìn dòng tiền?"
+}

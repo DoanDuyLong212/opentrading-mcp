@@ -1,0 +1,247 @@
+{
+ "id": "F08",
+ "q": "Vẽ đường giá VCB vs HPG 3 tháng gần nhất",
+ "ms": 181702,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "ve-bieu-do-ky-thuat"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/ve-bieu-do-ky-thuat\n\n# Drawing Charts Inside the TUI\n\nSkill thuần hiển thị: số liệu lấy từ tool dữ liệu mỗi lần gọi, không có số live cố định — không bịa số minh họa thành số thật. Dùng lại dữ liệu đã có trong context, không fetch lại.\n\n## When to Use\n\n- Dùng khi: user nói vẽ, chart, nến, candlestick, đường giá, sparkline, so sánh 2–5 mã, bar ngành/top tăng giảm, gauge fear/greed, heatmap tương quan, donut tỷ trọng, histogram phân phối, depth orde"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "VCB",
+    "days": 65,
+    "interval": "1D",
+    "columns": [
+     "time",
+     "close"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "symbol": "HPG",
+    "days": 65,
+    "interval": "1D",
+    "columns": [
+     "time",
+     "close"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 1322,
+   "out": "Streamable HTTP error: Error POSTing to endpoint: "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 3749,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"candles\": [\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {},\n      {}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "days": 65,
+    "interval": "1D",
+    "symbol": "VCB"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 546,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VCB\",\n    \"candles\": [\n      {\n        \"t\": \"5\",\n        \"o\": 61.78,\n        \"h\": 61.88,\n        \"l\": 61.49,\n        \"c\": 61.49,\n        \"v\": 2608426.0\n      },\n      {\n        \"t\": \"6\",\n        \"o\": 61.49,\n        \"h\": 61.98,\n        \"l\": 60.2,\n        \"c\": 60.69,\n        \"v\": 4185902.0\n      },\n      {\n        \"t\": \"7\",\n        \"o\": 60.69,\n        \"h\": 60.99,\n        \"l\": 60.39,\n        \"c\": 60.79,\n        \"v\": 2555289.0\n      },\n      {\n        \"t\": \"8\",\n        \""
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_quote_history",
+   "input": {
+    "days": 65,
+    "interval": "1D",
+    "symbol": "HPG"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 822,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"HPG\",\n    \"candles\": [\n      {\n        \"t\": \"5\",\n        \"o\": 23.4,\n        \"h\": 23.5,\n        \"l\": 23.25,\n        \"c\": 23.25,\n        \"v\": 15935100.0\n      },\n      {\n        \"t\": \"6\",\n        \"o\": 23.4,\n        \"h\": 23.6,\n        \"l\": 23.0,\n        \"c\": 23.1,\n        \"v\": 21299300.0\n      },\n      {\n        \"t\": \"7\",\n        \"o\": 23.2,\n        \"h\": 23.25,\n        \"l\": 23.0,\n        \"c\": 23.1,\n        \"v\": 13839600.0\n      },\n      {\n        \"t\": \"8\",\n        \"o\": 2"
+  },
+  {
+   "t": "start",
+   "name": "chart_compare",
+   "input": {
+    "title": "VCB vs HPG — 65 phiên (~3 tháng)",
+    "series": [
+     {
+      "label": "VCB",
+      "values": [
+       61.49,
+       60.69,
+       60.79,
+       61.09,
+       60.59,
+       60,
+       58.41,
+       58.71,
+       58.71,
+       58.91,
+       58.01,
+       56.23,
+       56.23,
+       54.05,
+       54,
+       54.1,
+       54,
+       54.1,
+       54.6,
+       56.5,
+       59.3,
+       60.8,
+       60,
+       59.3,
+       59,
+       59.7,
+       60.3,
+       59.8,
+       59.7,
+       59.5,
+       58.5,
+       58.2,
+       58,
+       57.4,
+       57.8,
+       59.1,
+       59.2,
+       59.4,
+       60.3,
+       60.1,
+       60.1,
+       58.7,
+       58.9,
+       58,
+       58.1,
+       58.7,
+       59,
+       58.2,
+       58.5,
+       60,
+       59.3,
+       59.6,
+       59.9,
+       58.9,
+       58.9,
+       58.5,
+       58.1,
+       58,
+       58.3,
+       58,
+       58,
+       57.6,
+       57.1,
+       57,
+       57.3
+      ]
+     },
+     {
+      "label": "HPG",
+      "values": [
+       23.25,
+       23.1,
+       23.1,
+       23.2,
+       23.2,
+       22.95,
+       22.4,
+       22.5,
+       22.4,
+       22.2,
+       21.85,
+       20.6,
+       20.8,
+       20.7,
+       20.8,
+       20.8,
+       20.35,
+       21,
+       21.65,
+       21.8,
+       21.7,
+       22.55,
+       22.15,
+       22,
+       21.85,
+       22,
+       22.1,
+       22.05,
+       22.1,
+       21.7,
+       21.25,
+       21.2,
+       21,
+       21.2,
+       21.15,
+       21.7,
+       22.25,
+       21.8,
+       22.05,
+       22.2,
+       22.1,
+       21.6,
+       21.7,
+       21.55,
+       21.85,
+       22.05,
+       21.85,
+       21.3,
+       20.9,
+       21.2,
+       20.95,
+       21.2,
+       21.55,
+       21.1,
+       21.15,
+       21.05,
+       20.8,
+       20.65,
+       20.2,
+       20.3,
+       20.15,
+       20.05,
+       20.05,
+       20.5,
+       20.5
+      ]
+     }
+    ],
+    "width": 64,
+    "height": 16
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 8,
+   "out": "VCB vs HPG — 65 phiên (~3 tháng) · so sánh % thay đổi từ điểm đầu (2 chuỗi):\n      0┤\u001b[36m⠱⣀⠔⠲⡀\u001b[0m                                                   \n       │\u001b[32m⠈⠖⠉⢆\u001b[0m\u001b[36m⢱\u001b[0m             \u001b[32m⣆\u001b[0m                                     \n       │   \u001b[32m⠈\u001b[0m\u001b[36m⢸\u001b[0m            \u001b[32m⢀⠟⡄\u001b[0m  \u001b[32m⡴⡀\u001b[0m        \u001b[32m⢀⠖⢤\u001b[0m       \u001b[32m⢀\u001b[0m             \n       │    \u001b[32m⢸\u001b[0m\u001b[36m⡇⡀\u001b[0m          \u001b[32m⢸\u001b[0m\u001b[36m⡄\u001b[0m\u001b[32m⠱⡀⢸\u001b[0m \u001b[32m⠑⠲⡀\u001b[0m      \u001b[32m⡸\u001b[0m \u001b[32m⠈⡆\u001b[0m      \u001b[32m⡜⢆⠔⢣\u001b[0m   "
+  }
+ ],
+ "text": "\n\n\n\n<｜DSML｜ calls>\nĐây là so sánh đường giá VCB vs HPG 65 phiên gần nhất (~3 tháng), chuẩn hoá % từ điểm đầu để hai mã khác thang giá vẫn đặt cạnh nhau được:\n\n```\nVCB vs HPG — 65 phiên (~3 tháng)\n 0┤  ⠱⣀⠔⠲⡀                                        \n  │⠈⠖⠉⢆⢱             ⣆                           \n  │   ⠈⢸            ⢀⠟⡄  ⡴⡀        ⢀⠖⢤       ⢀      \n  │    ⢸⡇⡀          ⢸⡄⠱⡀⢸ ⠑⠲⡀      ⡸  ⠈⡆      ⡜⢆⠔⢣   \n  │    ⠘⠋⠈⢆⡀        ⢸⣷ ⠱⡇   ⢱    ⢠⠒⠁  ⢇⢀   ⡀ ⡇⠈ ⠘⣄⡀  \n-5┤     ⡧⠒⠈⡆        ⢀⠏⢆  ⢀⡀⢀⠈⢆   ⡎⣇ ⢠⢆⠘⠉⡆⢠⠊⠱⡸     ⠱⡀  \n  │        ⢱        ⢸ ⠈⢢⡰⠁⠈⢹  ⠑⡄⢰⢠⠻⣠⠃⠘⡄ ⠱⡰⢣ ⠁      ⠑⠢⠚⠤⢄\n  │        ⢸⡄      ⡔⢼   ⠁   ⡇  ⠱⠃⢸ ⠃  ⢣⢀⢀⠇ ⢇           ⠈⢆ ⢀\n  │        ⠸⡀     ⡸⢸        ⢣    ⡜    ⠈⠁⠙  ⢸   ⢀⡆       ⠈⠒⠁\n  │         ⡇⣀    ⡇⢸        ⠘⣄  ⢀⠇          ⡇  ⡸⢸       \n  │         ⡇⢸   ⢰⠁⡎          ⢣⡜⠙           ⢇⡜⣄⠇ ⠧⢆     \n-10┤         ⢇ ⡇  ⢸ ⡇           ⠁            ⠸⠁⠘   ⠈⢆      \n  │         ⢸⠎⠲⠉⢇⡸⢸                                ⠈⢆     \n  │         ⠈ ⢸  ⠸⡇⠃                                 ⠘⡄   ⢠⠤\n  │            ⠉  ⠃                                   ⢣⢄  ⡸\n  │                                                  ⠈⠈⠢⣀⡇\n   ─ VCB  ─ HPG\n```\n\n**Nhận định:**\n- Cả hai đều mất giá trong 3 tháng: VCB 61.490đ → 57.300đ (**-5,2%**), HPG 23.250đ → 20.500đ (**-11,8%**) [vnstock · 06/10]. VCB giữ giá tốt hơn rõ rệt.\n- Nhịp đi chung một pha: cùng tạo đáy sâu nhất ở khoảng phiên thứ 12–17 (VCB về ~54.000đ, HPG về ~20.400đ), rồi cùng hồi, rồi cùng trượt lại.\n- VCB hồi mạnh về ~60.300đ (2 lần) rồi lùi về 57.300đ — đang ở giữa vùng 54.000–61.400đ. HPG có lower-high (đỉnh hồi 22.550đ sau đó 21.550đ), hiện 20.500đ, chỉ hơn đáy 20.050đ chút — yếu hơn về cấu trúc.\n- Lưu ý: đây là giá đóng cửa lịch sử, không hàm ý xu hướng tới. Dữ liệu tới 06/10/2026; phiên hôm nay các sàn đã đóng cửa."
+}

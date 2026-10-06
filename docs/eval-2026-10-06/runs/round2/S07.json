@@ -1,0 +1,238 @@
+{
+ "id": "S07",
+ "q": "Đánh giá vĩ mô Việt Nam: CPI, GDP, lãi suất, tỷ giá",
+ "ms": 300002,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "danh-gia-vi-mo-viet-nam"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 0,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/danh-gia-vi-mo-viet-nam\n\n# Reading Vietnam Macro\n\nMở đầu bắt buộc bằng pre-flight 2 calls (source_status + vs_auth_status) vì macro VN phụ thuộc JWT và HAR-session dễ chết. Cặp category/termType phải đúng tuyệt đối (sai là rows rỗng): GDP 73/tt3, CPI 15/tt7/sub2, XK 38/tt2.\n\n## When to Use\n\n- Dùng khi: user hỏi số liệu VN (GDP/CPI/XK/NK), lãi suất SBV, tỷ giá USDVND bối cảnh vĩ mô, lịch công bố NSO, báo cáo vĩ mô CTCK, câu chuyện dẫn dắt thị trườn"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__source_status",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_auth_status",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 850,
+   "out": "{\n  \"data\": {\n    \"authenticated\": true,\n    \"jwt_expires_at\": 1793446501\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T15:15:01.321463+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1765,
+   "out": "{\n  \"data\": {\n    \"upstreams\": {\n      \"vietstock\": {\n        \"authenticated\": true,\n        \"jwt_expires_at\": 1793446501\n      },\n      \"vnstock\": \"ok\",\n      \"dnse_ws\": \"worker\"\n    },\n    \"stateless\": true,\n    \"ttl\": {\n      \"snapshot\": 5,\n      \"market\": 60,\n      \"world\": 300,\n      \"overview\": 900,\n      \"financeinfo\": 21600,\n      \"documents\": 86400,\n      \"categories\": 604800,\n      \"odds\": 2700\n    }\n  },\n  \"provenance\": {\n    \"source\": \"local\",\n    \"as_of\": \"2026-10-06T15:15:02.132682"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_categories",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1200,
+   "out": "{\n  \"data\": {\n    \"categories\": [\n      {\n        \"CategoryID\": 7,\n        \"ParentID\": 0,\n        \"CategoryName\": \"1. Tài khoản quốc gia (GDP)\",\n        \"Level\": 1,\n        \"DisplayOrder\": 1,\n        \"HasData\": false,\n        \"ListTermType\": \"[]\",\n        \"IsDefaultOpen\": true,\n        \"IsDefaultSelected\": false,\n        \"DefaultTermTypeIDSelected\": 0,\n        \"JsonDefaultTimeFrame\": \"{\\\"Type\\\":\\\"5Y\\\",\\\"FromDate\\\":null,\\\"ToDate\\\":null}\",\n        \"JsonDefaultChart\": null,\n        \"CatDataTypeID\":"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 73,
+    "term_type_id": 3
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 218,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_indicator_data\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:16:05.034714+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 15,
+    "term_type_id": 7,
+    "sub_term_type_id": 2
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 167,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_indicator_data\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:16:05.433510+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_indicator_data",
+   "input": {
+    "category_id": 38,
+    "term_type_id": 2
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 238,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_indicator_data\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:16:05.849310+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_xnk_detail",
+   "input": {
+    "direction": "xk"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 234,
+   "out": "{\n  \"data\": {\n    \"tool\": \"vs_xnk_detail\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:16:06.046528+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"VIETSTOCK_COOKIE_HEADER/HAR not configured\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__snapshot_history",
+   "input": {
+    "kind": "macro_curated",
+    "days": 30
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__sbv_rates",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_retail_fx",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__yf_yield_curve",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__news_market",
+   "input": {
+    "limit": 12
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__macro_events_vn",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1078,
+   "out": "{\n  \"data\": {\n    \"tool\": \"yf_yield_curve\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:16:31.025420+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"yfinance yield fetch failed\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__analyst_consensus",
+   "input": {
+    "report_type": "macro",
+    "limit": 30
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1583,
+   "out": "{\n  \"data\": {\n    \"posts\": [\n      {\n        \"id\": 42129347,\n        \"user\": \"Nhật Vy\",\n        \"text\": \"USD tiếp tục đà tăng mạnh nhờ lợi suất trái phiếu kho bạc Mỹ tăng cao, vàng giữ giá quanh 4.141,81 USD/oz hay chỉ số Nikkei tăng điểm... là một số diễn biến tài chính tiền tệ quốc tế đáng chú ý trong sáng 6/10.\",\n        \"symbols\": [],\n        \"likes\": 0,\n        \"replies\": 0,\n        \"date\": \"2026-10-06T15:15:00+07:00\"\n      },\n      {\n        \"id\": 42129327,\n        \"user\": \"Nguyễn Thị Phươ"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2892,
+   "out": "{\n  \"data\": {\n    \"policy\": [\n      {\n        \"name\": \"Lãi suất tái chiết khấu\",\n        \"value\": \"3,000%\"\n      },\n      {\n        \"name\": \"Lãi suất tái cấp vốn\",\n        \"value\": \"4,500%\"\n      }\n    ],\n    \"interbank\": [],\n    \"as_of\": \"01/10/2026\"\n  },\n  \"provenance\": {\n    \"source\": \"web\",\n    \"as_of\": \"2026-10-06T15:16:32.623384+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 11612,
+   "out": "{\n  \"data\": {\n    \"kind\": \"macro_curated\",\n    \"count\": 3,\n    \"rows\": [\n      {\n        \"date\": \"2026-10-05\",\n        \"kind\": \"macro_curated\",\n        \"payload\": {\n          \"fx55_t1\": {\n            \"rows\": [\n              {\n                \"name\": \"Tỷ giá trung tâm (từ 04/01/2016)\",\n                \"unit\": \"USD/VNĐ\",\n                \"year\": \"2026\",\n                \"group\": \"\",\n                \"value\": 25202.0,\n                \"period\": \"06/07/2026\",\n                \"timeorder\": 20260706\n      "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 11424,
+   "out": "{\n  \"data\": {\n    \"releases\": [\n      {\n        \"indicator\": \"CPI\",\n        \"title\": \"Chỉ số giá tiêu dùng, chỉ số giá vàng và chỉ số giá đô la Mỹ tháng Chín, quý III và 9 tháng năm 2026\",\n        \"url\": null,\n        \"reference\": \"9/2026\",\n        \"published\": \"03/10/2026\",\n        \"next\": null\n      },\n      {\n        \"indicator\": \"CPI\",\n        \"title\": \"Thông cáo báo chí về tình hình giá tháng Chín, quý III và 9 tháng năm 2026\",\n        \"url\": null,\n        \"reference\": \"9/2026\",\n        \"pu"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 10829,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"\",\n    \"report_type\": \"macro\",\n    \"reports\": [\n      {\n        \"title\": \"Báo cáo phân tích Báo cáo phân tích vĩ mô mới nhất\",\n        \"source\": null,\n        \"date\": null,\n        \"url\": \"https://finance.vietstock.vn/vi-mo/bao-cao-phan-tich\",\n        \"symbol\": null,\n        \"rating\": null,\n        \"target\": null,\n        \"macro_topic\": \"VI MO\",\n        \"entry_kind\": \"section\"\n      },\n      {\n        \"title\": \"Vĩ mô - Chiến lược thị trường Báo cáo phân tích vĩ mô và"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 14006,
+   "out": "{\n  \"data\": {\n    \"rows\": [\n      {\n        \"currency_code\": \"AUD\",\n        \"currency_name\": \"AUSTRALIAN DOLLAR\",\n        \"buy_cash\": \"17,647.94\",\n        \"buy_transfer\": \"17,826.20\",\n        \"sell\": \"18,397.41\",\n        \"date\": \"2026-10-06\"\n      },\n      {\n        \"currency_code\": \"CAD\",\n        \"currency_name\": \"CANADIAN DOLLAR\",\n        \"buy_cash\": \"17,763.83\",\n        \"buy_transfer\": \"17,943.26\",\n        \"sell\": \"18,518.22\",\n        \"date\": \"2026-10-06\"\n      },\n      {\n        \"currency_co"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__economic_calendar",
+   "input": {
+    "scope": "vn",
+    "limit": 25
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 528,
+   "out": "{\n  \"data\": {\n    \"scope\": \"vn\",\n    \"series\": [\n      {\n        \"category_id\": 7,\n        \"name\": \"1. Tài khoản quốc gia (GDP)\",\n        \"has_data\": false\n      },\n      {\n        \"category_id\": 73,\n        \"name\": \"GDP danh nghĩa\",\n        \"has_data\": true\n      },\n      {\n        \"category_id\": 74,\n        \"name\": \"Cơ cấu GDP danh nghĩa\",\n        \"has_data\": true\n      },\n      {\n        \"category_id\": 75,\n        \"name\": \"GDP thực\",\n        \"has_data\": true\n      },\n      {\n        \"category"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__web_search",
+   "input": {
+    "query": "CPI tháng 9/2026 Việt Nam lạm phát 9 tháng NSO",
+    "numResults": 6
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2314,
+   "out": "{\n  \"data\": {\n    \"output\": \"{\\n  \\\"search_id\\\": \\\"search_251cfe3efcede57ddb7d0163274df2c0\\\",\\n  \\\"results\\\": [\\n    {\\n      \\\"url\\\": \\\"https://www.vietnam.vn/9-thang-nam-2026-cpi-tang-4-52-lam-phat-co-ban-tang-4-26\\\",\\n      \\\"title\\\": \\\"9 tháng năm 2026, CPI tăng 4,52%, lạm phát cơ bản tăng 4,26%\\\",\\n      \\\"publish_date\\\": null,\\n      \\\"excerpts\\\": [\\n        \\\"Bình quân 9 tháng năm 2026, CPI tăng 4,52% so với cùng kỳ năm trước, lạm phát cơ bản tăng 4,26% CPI tháng 9/2026 tăng 0,62% so với "
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__web_search",
+   "input": {
+    "query": "GDP quý III/2026 Việt Nam tăng trưởng 9 tháng",
+    "numResults": 6
+   }
+  },
+  {
+   "t": "end",
+   "ok": false,
+   "ms": 549,
+   "out": "Streamable HTTP error: Error POSTing to endpoint: Internal Server Error"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n\n\n<｜DSML｜ calls>\n\n\nMacro data qua Vietstock đang bị chặn session (HAR/cookie chưa cấu hình), nên tôi lấy bù từ snapshot đã lưu + nguồn công bố. Lấy thêm số CPI/GDP chính thức:\n\nCPI đã có. Tìm GDP (lần trước lỗi) và lấy tỷ giá thị trường:\n\n"
+}

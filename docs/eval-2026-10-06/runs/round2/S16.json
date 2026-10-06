@@ -1,0 +1,140 @@
+{
+ "id": "S16",
+ "q": "Thị trường crypto hôm nay sao, funding thế nào",
+ "ms": 174568,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "load_skill",
+   "input": {
+    "name": "nhip-dap-crypto"
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1,
+   "out": "Thư mục skill: /home/doanlong/OpenTrading/skills/nhip-dap-crypto\n\n# Reading Crypto Pulse in Plain Language\n\nViết cho người ít chuyên crypto: mọi thuật ngữ bắt buộc giải thích 1 dòng kèm theo số. Trả lời đúng 3 câu. Crypto chạy 24/7 nên số \"hôm nay\" khác phiên chứng khoán VN — đừng so lệch phiên.\n\n## When to Use\n\n- Dùng khi: user hỏi BTC/ETH/SOL sao rồi, crypto lên hay xuống, funding/OI nói gì, giá crypto quy ra VND, crypto có liên thông gì tới chứng khoán VN.\n- Khi KHÔNG dùng (dùng skill khác th"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__crypto_spot",
+   "input": {
+    "symbols": [
+     "BTCUSDT",
+     "ETHUSDT",
+     "SOLUSDT"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__crypto_derivs",
+   "input": {
+    "symbols": [
+     "BTCUSDT",
+     "ETHUSDT"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__world_fear_greed",
+   "input": {
+    "limit": 7
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2130,
+   "out": "{\n  \"data\": {\n    \"tool\": \"crypto_spot\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:15:02.308528+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"binance GET failed: Client error '418 I'm a teapot' for url 'https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22%2C%22ETHUSDT%22%2C%22SOLUSDT%22%5D'\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2083,
+   "out": "{\n  \"data\": {\n    \"derivs\": [\n      {\n        \"symbol\": \"BTCUSDT\",\n        \"error\": \"binance GET failed: Client error '418 I'm a teapot' for url 'https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT'\\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418\"\n      },\n      {\n        \"symbol\": \"ETHUSDT\",\n        \"error\": \"binance GET failed: Client error '418 I'm a teapot' for url 'https://fapi.binance.com/fapi/v1/premiumIndex?symbol=ETHUSDT'\\nFor more info"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2273,
+   "out": "{\n  \"data\": {\n    \"series\": [\n      {\n        \"t\": \"1791244800\",\n        \"v\": \"73\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791158400\",\n        \"v\": \"70\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1791072000\",\n        \"v\": \"65\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790985600\",\n        \"v\": \"67\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"1790899200\",\n        \"v\": \"72\",\n        \"label\": \"Greed\"\n      },\n      {\n        \"t\": \"17908128"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "BTCUSDT",
+    "count": 2,
+    "columns": [
+     "time",
+     "close"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 990,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"BTCUSDT\",\n    \"bars\": [\n      {\n        \"time\": \"2026-10-05T00:00:00\",\n        \"close\": 2247536657.04\n      },\n      {\n        \"time\": \"2026-10-06T00:00:00\",\n        \"close\": 2229507804.46\n      }\n    ]\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T15:15:05.029422+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__compare_assets",
+   "input": {
+    "assets": [
+     "BTC-USD",
+     "ETH-USD",
+     "SOL-USD"
+    ],
+    "timeframe": "1d"
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "ETHUSDT",
+    "count": 2,
+    "columns": [
+     "time",
+     "close"
+    ]
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_crypto_ohlcv",
+   "input": {
+    "symbol": "SOLUSDT",
+    "count": 2,
+    "columns": [
+     "time",
+     "close"
+    ]
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 3480,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"ETHUSDT\",\n    \"bars\": [\n      {\n        \"time\": \"2026-10-05T00:00:00\",\n        \"close\": 70859245.0\n      },\n      {\n        \"time\": \"2026-10-06T00:00:00\",\n        \"close\": 70456994.53\n      }\n    ]\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T15:15:47.019481+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 3014,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"SOLUSDT\",\n    \"bars\": [\n      {\n        \"time\": \"2026-10-05T00:00:00\",\n        \"close\": 3158406.79\n      },\n      {\n        \"time\": \"2026-10-06T00:00:00\",\n        \"close\": 3138189.94\n      }\n    ]\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T15:15:47.224511+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 6441,
+   "out": "{\n  \"data\": [\n    {\n      \"ticker\": \"BTC-USD\",\n      \"price\": 85754.609375,\n      \"prev\": 85786.59375\n    },\n    {\n      \"ticker\": \"ETH-USD\",\n      \"price\": 2710.510009765625,\n      \"prev\": 2711.031494140625\n    },\n    {\n      \"ticker\": \"SOL-USD\",\n      \"price\": 120.37000274658203,\n      \"prev\": 120.75068664550781\n    }\n  ],\n  \"provenance\": {\n    \"source\": \"yfinance\",\n    \"as_of\": \"2026-10-06T15:15:49.323087+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"ava"
+  }
+ ],
+ "text": "\n\n<｜DSML｜ calls>\nBinance bị chặn vùng. Thử nguồn thay thế:\n\nCrypto chạy 24/7 nên số \"hôm nay\" không khớp phiên chứng khoán VN. Binance bị chặn vùng từ worker nên phần funding/OI không lấy được — mình dùng nguồn thay thế cho giá.\n\n**Dữ liệu nhanh**\n- BTC 85.754,6 USD (-0,04% so 24h trước) · ETH 2.710,5 USD (-0,02%) · SOL 120,4 USD (-0,31%) [yfinance · 06/10 15:15]\n- Funding rate & OI: không lấy được do giới hạn vùng (Binance trả lỗi chặn) [binance-futures · 06/10 15:15]\n- Fear/Greed 73 - mức \"Greed\" (tham lam), hôm qua 70 [alternative.me · 06/10]\n- Quy VND: BTC 2.229.507.804đ (-0,80% trong ngày), ETH 70.456.995đ (-0,56%), SOL 3.138.190đ (-0,64%) [vnstock · 06/10]\n\n**Verdict 3 câu**\n\n1. **Xu hướng: đi ngang.** BTC gần như đứng giá -0,04%, ETH -0,02%, SOL -0,31% trong 24h — không có cú bứt phá hay sập nào, thị trường đang lình xình [yfinance · 06/10 15:15].\n\n2. **Đòn bẩy: chưa đọc được** — funding rate (phí phe mua trả cho phe bán, dương = đám đông cược giá lên) và OI (tổng tiền đang cược) đều không lấy được do Binance chặn vùng, nên không kết luận nóng/nguội; chỉ có fear/greed 73 ở vùng \"Greed\" cho thấy tâm lý vẫn nghiêng về phe mua, mà tâm lý tham lam cao thường là lúc dễ chỉnh [alternative.me · 06/10].\n\n3. **Liên thông VN: gần như độc lập** — giá crypto quy VND giảm nhẹ (BTC ~2,23 tỷ đồng, -0,8%) trong khi HOSE/HNX/UPCoM đã đóng cửa, nên hôm nay không có tín hiệu dẫn dắt rõ giữa crypto và chứng khoán VN [vnstock · 06/10].\n\nMuốn mình thử lấy lại funding/OI bằng nguồn khác, hay drill xác suất sự kiện crypto trên Polymarket không?"
+}

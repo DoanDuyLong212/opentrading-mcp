@@ -217,8 +217,6 @@ Tổng registry live: **157 tools** (140 remote gồm alias + 16 local + switch_
 
 ### 8.1 Verdict tổng: PASS 24 / PARTIAL 11 / FAIL 8
 
-Chi tiết từng câu (hỏi → đáp toàn văn → tools → fails): `docs/eval-2026-10-06/report.md`; transcripts: `runs/<ID>.json`.
-
 ### 8.2 Vấn đề hệ thống (xếp theo độ nặng)
 
 1. **Timeout 35/43 runs (300s abort trước verdict).** Mỗi tool call qua Render + upstream VN ~10–30s, model reasoning chậm (deepseek-v4.1-flash), maxSteps 10 → câu phức tạp không bao giờ xong verdict. Đây là nút thắt lớn nhất: eval đo được routing/tool-fit nhưng hiếm khi đo được chất lượng verdict cuối.
@@ -229,3 +227,10 @@ Chi tiết từng câu (hỏi → đáp toàn văn → tools → fails): `docs/e
 6. **Chọn sai nguồn — ĐÃ THÊM GUARD 06-10 đợt 1:** 7 skills (phan-tich 1.2.2, backtest 1.2.2, ve-bieu-do/nhip-dap/tim-kiem-tin-tuc 1.2.1, vi-mo-quoc-te/bat-on 1.1.1) có matrix nguồn + CẤM web trước tool chuyên. Verify: rerun S13/S16/S24/W5.
 7. **Prompt workflows — ĐÃ PARITY HEADLESS 06-10 đợt 1:** `chat.ts` tự resolve `/cmd` → `prompts/get` như TUI (W1–W4 PASS tool-fit khi resolved; W5/W6 FAIL do preset/hallucination — xem #2/#3).
 8. **Trung thực là điểm sáng** (giữ nguyên) + **đã thêm rule style 06-10**: không tuyên bố nhớ phiên trước trừ khi session/memory trả về (fix ca confabulation W6).
+
+### 8.3 Verify đợt 1 — round2 (12 câu, chiều 06-10)
+
+Chi tiết: `docs/eval-2026-10-06/round2.md` (transcripts `runs/round2/`).
+Kết quả: `switch_preset` 8/43→**0/12**, hallucination 7→**0**, validation-fail→**0**;
+F09 (FAIL trắng) nay ra đáp án đầy đủ; S07/S09/S13/S16/W1/W4 đạt; W5 cải thiện nhưng
+vẫn miss `quant_risk`. Timeouts 300s còn (sang đợt 2, vấn đề #1). Registry còn **156 tools**.

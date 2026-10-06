@@ -1,0 +1,121 @@
+{
+ "id": "W4",
+ "q": "Read sector rotation.\n1. Call sector_performance for the heatmap.\n2. Call money_flow for where foreign desks sit.\n3. Call futures_basis for derivatives positioning.\n4. Call ipo_calendar_vn for upcoming supply pressure.\n5. Call compare_equities on the top-2 leaders per hot sector.\nName the rotation (e.g. bank->steel) with supporting numbers.",
+ "ms": 300003,
+ "error": null,
+ "calls": [
+  {
+   "t": "start",
+   "name": "mcp__opentrading__sector_performance",
+   "input": {
+    "level": 1,
+    "top_n": 50
+   }
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__money_flow",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__futures_basis",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__ipo_calendar_vn",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1171,
+   "out": "{\n  \"data\": {\n    \"primary\": \"dnse-ws\",\n    \"snapshot\": {\n      \"VNINDEX\": {\n        \"index\": {\n          \"indexName\": \"VNINDEX\",\n          \"value\": 1759.08,\n          \"change\": 5.879999999999882,\n          \"pct\": 0.34\n        },\n        \"foreign\": {}\n      }\n    }\n  },\n  \"provenance\": {\n    \"source\": \"dnse-ws\",\n    \"as_of\": \"2026-10-06T15:22:21.815600+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 2016,
+   "out": "{\n  \"data\": {\n    \"level\": 1,\n    \"rows\": [\n      {\n        \"IndustryCode\": 10,\n        \"ParentCode\": 0,\n        \"Level\": 1,\n        \"DisplayOrder\": 0,\n        \"IndustryName\": \"Năng lượng\",\n        \"StockFullName\": null,\n        \"ImageURL\": \"/content/images/sector/energy.svg\",\n        \"TradingDate\": \"/Date(1791219600000)/\",\n        \"BasicPrice\": 351.14,\n        \"CeilingPrice\": 1000000.0,\n        \"FloorPrice\": 0.0,\n        \"ClosePrice\": 358.12,\n        \"CloseIndex\": 0,\n        \"Change\": 6.98,\n  "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 4163,
+   "out": "{\n  \"data\": {\n    \"auctions\": [],\n    \"announcements\": [\n      {\n        \"posted\": \"23/09/2026 16:29\",\n        \"title\": \"Không tổ chức bán đấu giá theo lô cổ phần của Tổng công ty Thủy sản Việt Nam - CTCP do Tổng công ty Đầu tư và Kinh doanh vốn nhà nước sở hữu\"\n      },\n      {\n        \"posted\": \"16/09/2026 11:20\",\n        \"title\": \"Thông báo kết quả đấu giá bán cổ phần của Công ty Cổ phần Cảng Hải Phòng do Ngân hàng TMCP Công thương Việt Nam sở hữu\"\n      },\n      {\n        \"posted\": \"11/09/20"
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 21043,
+   "out": "{\n  \"data\": {\n    \"tool\": \"futures_basis\"\n  },\n  \"provenance\": {\n    \"source\": \"unavailable\",\n    \"as_of\": \"2026-10-06T15:22:42.041824+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [\n    \"dnse timeout: /price/VN30F1M/trades/latest\"\n  ],\n  \"availability\": \"unavailable\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_industry_heatmap",
+   "input": {}
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__dnse_foreign_flow",
+   "input": {}
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 274,
+   "out": "{\n  \"data\": {\n    \"VNINDEX\": {\n      \"index\": {\n        \"indexName\": \"VNINDEX\",\n        \"value\": 1759.08,\n        \"change\": 5.879999999999882,\n        \"pct\": 0.34\n      },\n      \"foreign\": {}\n    }\n  },\n  \"provenance\": {\n    \"source\": \"dnse-ws\",\n    \"as_of\": \"2026-10-06T15:23:51.033223+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vs_nn_flow",
+   "input": {
+    "days": 10
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 290,
+   "out": "{\n  \"data\": {\n    \"flow\": [\n      [\n        \"/Date(1791273600000)/\"\n      ],\n      [\n        {\n          \"TradingDate\": \"/Date(1790096400000)/\",\n          \"BuyVol\": 41579400,\n          \"BuyVal\": 1468.757173,\n          \"SellVol\": 76358800,\n          \"SellVal\": 2525.483141,\n          \"TradingMonthYear\": null,\n          \"Quarter\": null,\n          \"Year\": 0\n        },\n        {\n          \"TradingDate\": \"/Date(1790182800000)/\",\n          \"BuyVol\": 42972200,\n          \"BuyVal\": 1414.870469,\n          "
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1359,
+   "out": "{\n  \"data\": {\n    \"heatmap\": [\n      {\n        \"IndustryCode\": 10,\n        \"ParentCode\": 0,\n        \"Level\": 1,\n        \"DisplayOrder\": 0,\n        \"IndustryName\": \"Năng lượng\",\n        \"StockFullName\": null,\n        \"ImageURL\": \"/content/images/sector/energy.svg\",\n        \"TradingDate\": \"/Date(1791219600000)/\",\n        \"BasicPrice\": 351.14,\n        \"CeilingPrice\": 1000000.0,\n        \"FloorPrice\": 0.0,\n        \"ClosePrice\": 358.12,\n        \"CloseIndex\": 0,\n        \"Change\": 6.98,\n        \"PerCha"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_futures_ohlcv",
+   "input": {
+    "symbol": "VN30F1M",
+    "count": 3,
+    "summary": true
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 1445,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VN30F1M\",\n    \"count\": 3,\n    \"last\": 1903.5,\n    \"high\": 1906.1,\n    \"low\": 1874.8\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T15:23:55.404959+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  },
+  {
+   "t": "start",
+   "name": "mcp__opentrading__vn_index_ohlcv",
+   "input": {
+    "symbol": "VN30",
+    "count": 3,
+    "summary": true
+   }
+  },
+  {
+   "t": "end",
+   "ok": true,
+   "ms": 780,
+   "out": "{\n  \"data\": {\n    \"symbol\": \"VN30\",\n    \"count\": 3,\n    \"last\": 1898.82,\n    \"high\": 1902.04,\n    \"low\": 1871.33\n  },\n  \"provenance\": {\n    \"source\": \"vnstock\",\n    \"as_of\": \"2026-10-06T15:23:56.922563+07:00\",\n    \"timezone\": \"Asia/Ho_Chi_Minh\"\n  },\n  \"warnings\": [],\n  \"availability\": \"available\"\n}"
+  }
+ ],
+ "text": "I'll pull the sector and flow data in parallel first.\n\nSector data came back partially truncated and futures/flow legs were thin. Filling the gaps:\n\n"
+}
