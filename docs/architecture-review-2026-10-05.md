@@ -283,3 +283,24 @@ in the user's language"). Version bump minor (1.2.0/1.3.0).
 Verify: routing TV→English **6/6 câu** (T01 verdict thật 3897 ch + chart_render pipeline;
 S07/S16 đúng skill + đúng nguồn; F01/S09/F10 đúng workflow); 238 tests pass · tsc clean.
 Nguồn sự thật: `OpenTrading/skills/<slug>/SKILL.md`; bản gộp: `SKILLS.md` (26/26 IN SYNC).
+
+### 8.6 Render full-matrix verify (06-10 tối, 139 tools qua StreamableHTTP)
+
+Chi tiết: `docs/eval-2026-10-06/render-full-matrix.json`. Kết quả: **137/139 OK**
+(110 available · 22 unavailable · 2 partial · 2 empty — unavailable đều trung thực,
+không tool nào crash/sai envelope).
+- **Xác minh báo cáo lỗi ngoài**: Vietstock cookie env thiếu (5 tools) ✅; DNSE timeout +
+  circuit open + WS worker chưa publish (10 tools) ✅; Binance 418 (crypto_spot) ✅;
+  yfinance fail (yf_yield_curve) ✅; GDELT throttle (event_stats 45s) ✅; vn_retail_gold
+  60s ✅. **Bác bỏ**: `param_sweep` CÓ nhận months/quarters; `snapshot_history` kind là
+  REQUIRED đúng; `world_macro_country` points đầy đủ (GDP VNM 8.02%); `crypto_derivs`
+  available (418 chập chờn); `geo_intel(vietnam)` GDELT throttle chứ không phải count:0.
+- **Fix P23 từ verify**: sub-batch `equity_quote_batch` 10/chunk + partial
+  (full-VN30 single batch treo từ Render); `quant_backtest.equity_curve`;
+  `vn_msn_fx_gold.series`; `geo_intel` filter-all → unfiltered top-5 + warning;
+  `yf_yield_curve` FRED DGS10/DGS2 fallback; `crypto_spot` vision fallback;
+  `valuation_run` EPS fallback từ vnstock PE; `vn_retail_gold` fallback 30s.
+- **Cần admin (không fix được bằng code)**: (1) set `VIETSTOCK_COOKIE_HEADER`/HAR trên
+  Render (mở 5 tools Vietstock-detail); (2) kiểm tra DNSE keys/network từ Render
+  (REST timeout + circuit open — 10 tools DNSE chết); (3) GDELT throttle IP Render
+  (không có mirror công khai).
