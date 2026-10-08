@@ -300,6 +300,11 @@ không tool nào crash/sai envelope).
   `vn_msn_fx_gold.series`; `geo_intel` filter-all → unfiltered top-5 + warning;
   `yf_yield_curve` FRED DGS10/DGS2 fallback; `crypto_spot` vision fallback;
   `valuation_run` EPS fallback từ vnstock PE; `vn_retail_gold` fallback 30s.
+- **502 root cause (P23)**: nested `ThreadPoolExecutor` với `shutdown(wait=True)` defeat
+  `run_blocking` timeout — vnstock thread treo giữ tool treo vô hạn → zombie threads tích tụ →
+  OOM → 502. Fix: `shutdown(wait=False, cancel_futures=True)` + regression test (hang 50s
+  vẫn trả trong ~45s). Kèm: `crypto_spot` CoinGecko USD fallback (cả api+vision đều 418
+  từ Render).
 - **Cần admin (không fix được bằng code)**: (1) set `VIETSTOCK_COOKIE_HEADER`/HAR trên
   Render (mở 5 tools Vietstock-detail); (2) kiểm tra DNSE keys/network từ Render
   (REST timeout + circuit open — 10 tools DNSE chết); (3) GDELT throttle IP Render

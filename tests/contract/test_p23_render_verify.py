@@ -43,7 +43,7 @@ def test_equity_quote_batch_subbatches_partial(monkeypatch):
             if "HANG" in self._syms:
                 import time
 
-                time.sleep(60)
+                time.sleep(50)
             if "BAD" in self._syms:
                 raise RuntimeError("boom")
             return pd.DataFrame([{"symbol": s, "close": 10.0} for s in self._syms])
@@ -64,6 +64,40 @@ def test_equity_quote_batch_subbatches_partial(monkeypatch):
     quotes, missing = vn_p.split_batch(rows)
     assert "BAD" in missing, missing
     assert len(quotes) == 11, len(quotes)
+
+
+def test_equity_quote_batch_hang_returns_promptly():
+    """502 regression: a hung vnstock thread must not block past chunk timeouts
+    (shutdown(wait=False) — zombie threads must not defeat run_blocking's cap)."""
+    import sys
+    import time
+    import types
+
+    import opentrading_mcp.providers.vnstock as vn_p
+
+    class HangMarket:
+        def equity(self, syms: list[str]):
+            calls.append(list(syms))
+            return self
+
+        def quote(self):
+            time.sleep(50)
+
+    calls: list[list[str]] = []
+    fake_vnstock = types.ModuleType("vnstock")
+    fake_vnstock.Market = HangMarket
+    import unittest.mock as mock
+
+    with mock.patch.dict(sys.modules, {"vnstock": fake_vnstock}):
+        t0 = time.monotonic()
+        try:
+            vn_p.equity_quote_batch(["A", "B"])
+            raised = None
+        except Exception as exc:
+            raised = exc
+        dt = time.monotonic() - t0
+    assert raised is not None and "failed for 2 symbols" in str(raised)
+    assert dt < 50.0, f"hung chunk blocked {dt:.1f}s (must return ~45s)"
 
 
 def test_quant_backtest_has_equity_curve(monkeypatch):
@@ -129,6 +163,23 @@ def test_yf_yield_curve_fred_fallback(monkeypatch):
     _check_envelope(env, "yf_yield_curve")
     assert env["data"]["us10y"] == 0.0429
     assert env["provenance"]["source"] == "fred"
+
+
+def test_crypto_spot_coingecko_last_resort(monkeypatch):
+    """Both Binance endpoints 418 → CoinGecko USD fallback (no high/low)."""
+    from opentrading_mcp.providers import binance as bn_p
+    from opentrading_mcp.providers.errors import ProviderUnavailable
+
+    def fake_get(url: str, params: Any) -> Any:
+        if "coingecko" in url:
+            return {"bitcoin": {"usd": 82000.0, "usd_24h_change": -1.0,
+                                "usd_24h_vol": 100.0}}
+        raise ProviderUnavailable("binance GET failed: 418")
+
+    monkeypatch.setattr(bn_p, "_get_json", fake_get)
+    rows = bn_p.spot_board(["BTCUSDT"])
+    assert rows[0]["last"] == 82000.0
+    assert rows[0]["high"] is None  # coingecko has no high/low
 
 
 def test_crypto_spot_vision_fallback(monkeypatch):

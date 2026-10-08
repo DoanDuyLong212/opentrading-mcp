@@ -18,6 +18,16 @@ SPOT_MIRRORS = [
     "https://api.binance.com",
     "https://data-api.binance.vision",  # public market-data only, no Cloudflare wall
 ]
+
+# CoinGecko ids for common quote pairs (last-resort spot fallback, USD only)
+_COINGECKO_IDS = {
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "BNB": "binancecoin",
+    "XRP": "ripple", "DOGE": "dogecoin", "ADA": "cardano", "AVAX": "avalanche-2",
+    "LINK": "chainlink", "TON": "the-toncoin", "TRX": "tron", "DOT": "polkadot",
+    "MATIC": "matic-network", "LTC": "litecoin", "BCH": "bitcoin-cash",
+    "NEAR": "near", "UNI": "uniswap", "ATOM": "cosmos", "ETC": "ethereum-classic",
+    "FIL": "filecoin", "APT": "aptos", "ARB": "arbitrum", "OP": "optimism",
+}
 FAPI_BASE = "https://fapi.binance.com"
 _REQ_TIMEOUT = 10.0
 
@@ -50,11 +60,44 @@ def _num(val: Any) -> float | None:
         return None
 
 
+def _coingecko_fallback(syms: list[str], last_exc: Exception | None) -> list[dict[str, Any]]:
+    """Last-resort spot prices via CoinGecko (USD only, no high/low)."""
+    ids: dict[str, str] = {}
+    for s in syms:
+        base = re.sub(r"(USDT|USDC|BUSD|USD)$", "", s)
+        cid = _COINGECKO_IDS.get(base, base.lower())
+        ids[cid] = s
+    if not ids:
+        raise ProviderUnavailable(f"no coingecko mapping: {last_exc}")
+    try:
+        data = _get_json(
+            "https://api.coingecko.com/api/v3/simple/price",
+            {"ids": ",".join(ids), "vs_currencies": "usd",
+             "include_24hr_change": "true", "include_24hr_vol": "true"},
+        )
+    except Exception as exc:
+        raise ProviderUnavailable(f"binance + coingecko unreachable: {exc}") from exc
+    if not isinstance(data, dict) or not data:
+        raise ProviderUnavailable(f"binance + coingecko empty: {last_exc}")
+    out = [
+        {"symbol": sym, "lastPrice": v.get("usd"),
+         "priceChangePercent": v.get("usd_24h_change"),
+         "highPrice": None, "lowPrice": None,
+         "volume": v.get("usd_24h_vol"), "quoteVolume": None}
+        for cid, sym in ids.items()
+        if isinstance((v := data.get(cid)), dict) and v.get("usd") is not None
+    ]
+    if not out:
+        raise ProviderUnavailable(f"binance + coingecko empty: {last_exc}")
+    return out
+
+
 @guarded("binance")
 def spot_board(symbols: list[str]) -> list[dict[str, Any]]:
     """24h tickers for up to 10 normalized symbols.
 
-    Falls back to data-api.binance.vision when api.binance.com 418s (datacenter IPs).
+    Falls back to data-api.binance.vision when api.binance.com 418s
+    (datacenter IPs), then CoinGecko (USD only, no high/low).
     """
     syms = [_norm(s) for s in symbols if str(s).strip()][:10]
     if not syms:
@@ -70,7 +113,7 @@ def spot_board(symbols: list[str]) -> list[dict[str, Any]]:
             last_exc = exc
             continue
     else:
-        raise ProviderUnavailable(f"binance spot unreachable (api + vision): {last_exc}")
+        data = _coingecko_fallback(syms, last_exc)
     rows = data if isinstance(data, list) else [data]
     out: list[dict[str, Any]] = []
     for row in rows:

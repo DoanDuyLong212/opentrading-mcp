@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from typing import Any
 
@@ -67,8 +68,6 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    from concurrent.futures import ThreadPoolExecutor
-
     syms = [str(s).upper() for s in symbols or []]
     if not syms:
         return []
@@ -87,13 +86,19 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     missing: list[str] = []
     chunks = [syms[i : i + 10] for i in range(0, len(syms), 10)]
-    with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as pool:
+    # NOTE: shutdown(wait=False) — a hung vnstock thread must NEVER block
+    # this function past the per-chunk timeout, or run_blocking's cap is
+    # defeated and the server process accumulates zombie threads (OOM → 502).
+    pool = ThreadPoolExecutor(max_workers=min(3, len(chunks)))
+    try:
         futs = {pool.submit(_one, c): c for c in chunks}
         for fut, chunk in futs.items():
             try:
                 out.extend(fut.result(timeout=45.0))
             except Exception:
                 missing.extend(chunk)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     if missing and not out:
         raise ProviderUnavailable(f"vnstock batch quote failed for {len(missing)} symbols")
     if missing:
