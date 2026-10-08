@@ -632,7 +632,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         rows = [q for q in quotes if isinstance(q, dict)]
 
         def _chg(r: dict[str, Any]) -> float:
-            for k in ("pct_change", "change", "Change", "CHANGE"):
+            for k in ("percent_change", "pct_change", "price_change", "change", "Change", "CHANGE"):
                 try:
                     v = r.get(k)
                     if v is not None:
@@ -642,7 +642,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             return 0.0
 
         def _vol(r: dict[str, Any]) -> float:
-            for k in ("volume", "Volume", "VOLUME", "vol"):
+            for k in ("volume_accumulated", "volume", "Volume", "VOLUME", "vol"):
                 try:
                     v = r.get(k)
                     if v is not None:

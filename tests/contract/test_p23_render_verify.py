@@ -325,3 +325,32 @@ def test_market_movers_vn30_default_no_ref_call(monkeypatch):
     assert env["data"]["universe"] == 30, env["data"]
     assert len(env["data"]["gainers"]) == 2
     assert len(seen) == 1 and len(seen[0]) == 30
+
+
+def test_market_movers_sorts_by_percent_change():
+    """Render verify: quote dicts use percent_change/volume_accumulated keys."""
+    import asyncio
+
+    server = create_server()
+    register_all(server)
+    fn = server._tool_manager.get_tool("market_movers").fn
+
+    import unittest.mock as mock
+
+    import opentrading_mcp.providers.vnstock as vn_p
+
+    def fake_batch(symbols):
+        return [{"symbol": s, "percent_change": float(i), "volume_accumulated": 100 - i}
+                for i, s in enumerate(symbols[:5])]
+
+    async def go():
+        with mock.patch.object(vn_p, "equity_quote_batch", fake_batch):
+            return await fn(top_n=2)
+
+    env = asyncio.new_event_loop().run_until_complete(go())
+    assert env["availability"] == "available", env
+    gainers = [g["symbol"] for g in env["data"]["gainers"]]
+    # fake assigns percent_change=idx (ACB=0…); desc sort → highest idx first
+    assert gainers[0] == "CTG" and gainers[1] == "BVH", gainers
+    assert env["data"]["universe"] == 5  # = quotes count (fake returns 5 rows)
+
