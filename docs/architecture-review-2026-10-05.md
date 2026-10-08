@@ -305,7 +305,20 @@ không tool nào crash/sai envelope).
   OOM → 502. Fix: `shutdown(wait=False, cancel_futures=True)` + regression test (hang 50s
   vẫn trả trong ~45s). Kèm: `crypto_spot` CoinGecko USD fallback (cả api+vision đều 418
   từ Render).
+- **Render full-matrix (P23+P23b): 137/139 OK** (110 available · 22 unavailable ·
+  2 partial · 2 empty — unavailable đều trung thực, không crash/sai envelope).
+  Xác minh báo cáo lỗi ngoài: Vietstock cookie env (5 tools) ✅; DNSE timeout/circuit/
+  WS-worker (10 tools) ✅; Binance 418 ✅ (fapi chập chờn — crypto_derivs đôi khi pass);
+  yfinance fail → **FRED fallback live** (us10y=0.0529) ✅; GDELT throttle ✅;
+  vn_retail_gold 60s ✅. **Bác bỏ**: `param_sweep` CÓ nhận months/quarters;
+  `snapshot_history` kind REQUIRED đúng; `world_macro_country` points đầy (GDP VNM 8.02%);
+  `geo_intel(vietnam)` GDELT throttle chứ không phải count:0.
+  `market_snapshot`/`market_movers` full-batch treo → sub-batch 10/chunk live (n=10: 27.8s);
+  Render starter crash-loop dưới tải vnstock nặng (502 xen kẽ) — cần admin xem plan/worker.
+  `crypto_spot`: cả api+vision đều 418 từ Render, CoinGecko cũng 429 (IP share) — giữ
+  fallback cho local stdio; trên Render dùng `vn_crypto_ohlcv` thay thế.
 - **Cần admin (không fix được bằng code)**: (1) set `VIETSTOCK_COOKIE_HEADER`/HAR trên
   Render (mở 5 tools Vietstock-detail); (2) kiểm tra DNSE keys/network từ Render
   (REST timeout + circuit open — 10 tools DNSE chết); (3) GDELT throttle IP Render
-  (không có mirror công khai).
+  (không có mirror công khai); (4) Render starter crash-loop (502) dưới tải —
+  xem nâng plan hoặc tách worker nặng.
