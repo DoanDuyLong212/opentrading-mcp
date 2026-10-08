@@ -269,7 +269,7 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
         def cash_flow(self, period: str = "quarter") -> Any:
             return pd.DataFrame([
                 {"item": "Test flow", "item_en": "x", "item_id": 1,
-                 "2026-Q1": 1.0, "2026-Q2": 2.0},
+                 "2026-Q1": 1_000_000_000.0, "2026-Q2": 2_000_000_000.0},
             ])
 
     fake_vnstock = types.ModuleType("vnstock")
@@ -278,3 +278,4 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
     out = vn_p.cashflow("FPT")
     assert out["periods"] == ["2026-Q1", "2026-Q2"], out["periods"]
     assert out["rows"] == [{"name": "Test flow", "values": [1.0, 2.0]}]
+    assert out["rows"][0]["values"] == [1.0, 2.0]  # raw VND → VNDbn

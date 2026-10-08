@@ -415,7 +415,8 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
                 for c in period_cols:
                     try:
                         v = row[c]
-                        vals.append(None if pd.isna(v) else float(v))
+                        # vnstock returns raw VND — normalize to VND billions
+                        vals.append(None if pd.isna(v) else round(float(v) / 1e9, 1))
                     except (TypeError, ValueError):
                         vals.append(None)
                 rows.append({"name": str(row[label_col]), "values": vals})
