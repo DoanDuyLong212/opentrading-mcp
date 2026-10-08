@@ -317,7 +317,20 @@ không tool nào crash/sai envelope).
   Render starter crash-loop dưới tải vnstock nặng (502 xen kẽ) — cần admin xem plan/worker.
   `crypto_spot`: cả api+vision đều 418 từ Render, CoinGecko cũng 429 (IP share) — giữ
   fallback cho local stdio; trên Render dùng `vn_crypto_ohlcv` thay thế.
-- **Cần admin (không fix được bằng code)**: (1) set `VIETSTOCK_COOKIE_HEADER`/HAR trên
+- **Vietstock: KHÔNG cần admin nữa (P24)**. `.har` mới nhất (01-10) JWT đã hết hạn
+  nhưng session cookies còn sống; quan trọng hơn — verify live 08-10: JWT login session
+  phục vụ detail endpoints BÌNH THƯỜNG (docstring cũ "Package_Permission/HTML" đã sai).
+  Fix: `_detail_session_post` + `_browser_post` shared fallback sang JWT session khi không
+  HAR. Live Render: financial_detail 25 rows · planned_targets · stock_forensic ·
+  vs_indicator_data 1995 rows · vs_xnk_detail 504 rows — chỉ cần `VIETSTOCK_COOKIE_LOGIN`
+  (còn hạn đến Nov 2026) hoặc EMAIL/PASSWORD đã có trên Render.
+- **Impact GDELT throttle + binance/yfinance (từ matrix)**: GDELT — news_market/news_symbol
+  nhanh (0.4-0.6s, cache 600s); event_stats/geo_intel throttle chập chờn → skills degrade
+  trung thực + retry + web fallback. Kết luận: MEDIUM, đã mitigate. Binance — spot chết
+  hẳn trên Render (418 api+vision, 429 coingecko do IP share); derivs chập chờn. Kết luận:
+  HIGH ngắn hạn cho crypto USD (chờ vnstock mở lại để dùng vn_crypto_ohlcv, hoặc proxy).
+  yfinance — tất cả yf_* available (2-23s), yield_curve đã có FRED fallback live. Kết luận: LOW.
+- **Cần admin (không fix được bằng code)**: (1) ~~set `VIETSTOCK_COOKIE_HEADER`/HAR~~ ✅ xong bằng code —
   Render (mở 5 tools Vietstock-detail); (2) kiểm tra DNSE keys/network từ Render
   (REST timeout + circuit open — 10 tools DNSE chết); (3) GDELT throttle IP Render
   (không có mirror công khai); (4) Render starter crash-loop (502) dưới tải —
