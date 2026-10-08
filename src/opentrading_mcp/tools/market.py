@@ -631,33 +631,48 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _unavailable("market_movers", str(exc))
         rows = [q for q in quotes if isinstance(q, dict)]
 
-        def _chg(r: dict[str, Any]) -> float:
-            for k in ("percent_change", "pct_change", "price_change", "change", "Change", "CHANGE"):
+        def _num(r: dict[str, Any], keys: tuple[str, ...]) -> float:
+            import math
+
+            for k in keys:
                 try:
                     v = r.get(k)
                     if v is not None:
-                        return float(v)
+                        f = float(v)
+                        if not math.isnan(f) and not math.isinf(f):
+                            return f
                 except (TypeError, ValueError):
                     continue
             return 0.0
 
+        _CHG_KEYS = ("percent_change", "pct_change", "price_change", "change", "Change", "CHANGE")
+
+        def _chg(r: dict[str, Any]) -> float:
+            return _num(r, _CHG_KEYS)
+
         def _vol(r: dict[str, Any]) -> float:
-            for k in ("volume_accumulated", "volume", "Volume", "VOLUME", "vol"):
-                try:
-                    v = r.get(k)
-                    if v is not None:
-                        return float(v)
-                except (TypeError, ValueError):
-                    continue
-            return 0.0
+            return _num(r, ("volume_accumulated", "volume", "Volume", "VOLUME", "vol"))
 
         keep = max(int(top_n), 1)
         rows, missing = vn_p.split_batch(rows)
         gainers = sorted(rows, key=_chg, reverse=True)[:keep]
         losers = sorted(rows, key=_chg)[:keep]
         volume = sorted(rows, key=_vol, reverse=True)[:keep]
+        import math
+
+        def _clean(r: dict[str, Any]) -> dict[str, Any]:
+            out2 = {}
+            for k, v in r.items():
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    out2[k] = None
+                else:
+                    out2[k] = v
+            return out2
+
         return make_envelope(
-            {"gainers": gainers, "losers": losers, "volume_leaders": volume,
+            {"gainers": [_clean(g) for g in gainers],
+             "losers": [_clean(g) for g in losers],
+             "volume_leaders": [_clean(g) for g in volume],
              "universe": len(rows), **({"missing": missing} if missing else {})},
             source="vnstock",
             warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
