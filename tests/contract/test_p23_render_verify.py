@@ -298,3 +298,30 @@ def test_vnstock_api_key_helpers(monkeypatch):
     q = vn_p.quota_info()
     assert isinstance(q, dict) and "tier" in q
     vn_p._API_KEY_DONE = False
+
+
+def test_market_movers_vn30_default_no_ref_call(monkeypatch):
+    """Render verify: default universe is static VN30 (no HOSE ref call that hangs)."""
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    seen: list[list[str]] = []
+
+    def fake_batch(symbols: list[str]) -> list[dict]:
+        seen.append(list(symbols))
+        return [{"symbol": s, "pct_change": 1.0, "volume": 100} for s in symbols]
+
+    def boom_ref(*a: Any, **k: Any) -> Any:
+        raise AssertionError("reference_equity must not be called for default vn30")
+
+    monkeypatch.setattr(vn_p, "equity_quote_batch", fake_batch)
+    monkeypatch.setattr(vn_p, "reference_equity", boom_ref)
+    import asyncio
+
+    server = create_server()
+    register_all(server)
+    fn = server._tool_manager.get_tool("market_movers").fn
+    env = asyncio.new_event_loop().run_until_complete(fn(top_n=2))
+    assert env["availability"] == "available", env
+    assert env["data"]["universe"] == 30, env["data"]
+    assert len(env["data"]["gainers"]) == 2
+    assert len(seen) == 1 and len(seen[0]) == 30

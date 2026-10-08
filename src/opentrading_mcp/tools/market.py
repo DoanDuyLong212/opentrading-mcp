@@ -603,24 +603,28 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
 
     @server.tool(annotations=READ_ONLY)
-    async def market_movers(top_n: int = 10) -> dict[str, Any]:
+    async def market_movers(top_n: int = 10, universe: str = "vn30") -> dict[str, Any]:
         """Top gainers, losers and volume leaders. Use for session pulse checks.
 
-        top_n: rows per list. Universe: VN30 + HNX30 refs khi có, fallback 6 bluechips.
+        top_n: rows per list. universe: 'vn30' (default, 30 liquid bluechips —
+        fast and stable) or 'hose' (full HOSE ref ≤60, slow; illiquid symbols
+        may hang vnstock and trip the batch timeout → partial with missing).
         """
         try:
-            try:
-                universe = [str(r.get("symbol")) for r in await run_blocking(
-                    functools.partial(vn_p.reference_equity, "HOSE"),
-                    "market_movers",
-                    timeout_secs=30.0,
-                ) if isinstance(r, dict) and r.get("symbol")][:60]
-            except (ProviderUnavailable, ProviderBadData):
-                universe = []
-            if not universe:
-                universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
+            syms: list[str] = []
+            if universe.strip().lower() == "hose":
+                try:
+                    syms = [str(r.get("symbol")) for r in await run_blocking(
+                        functools.partial(vn_p.reference_equity, "HOSE"),
+                        "market_movers",
+                        timeout_secs=30.0,
+                    ) if isinstance(r, dict) and r.get("symbol")][:60]
+                except (ProviderUnavailable, ProviderBadData):
+                    syms = []
+            if not syms:
+                syms = list(vn_p.VN30)
             quotes = await run_blocking(
-                functools.partial(vn_p.equity_quote_batch, universe),
+                functools.partial(vn_p.equity_quote_batch, syms),
                 "market_movers",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
