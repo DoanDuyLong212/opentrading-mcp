@@ -873,6 +873,53 @@ def _parse_pipe_rows(raw: Any, group_default: str = "") -> list[dict[str, Any]]:
 
 
 @guarded("vietstock")
+def _browser_post(path: str, payload: dict[str, Any]) -> Any:
+    """POST via HAR browser-session, else the JWT login session.
+
+    Shared by macro_report_data (Standard pack works with either — verified
+    2026-10-08: JWT session serves real values, HAR seed optional).
+    Returns parsed JSON body (raises on HTML/permission).
+    """
+    try:
+        client = har_client()
+        token = _env("VIETSTOCK_PAGE_TOKEN") or _har_seed()[1]
+        response = client.post(
+            f"{BASE}{path}",
+            data={**{k: str(v) for k, v in payload.items()},
+                  "__RequestVerificationToken": token},
+        )
+        raw = response.content.decode("utf-8-sig")
+        if raw.startswith("<!DOCTYPE") or "<html" in raw[:60].lower():
+            raise ProviderAuthMissing(f"vietstock {path} session rejected")
+        return json.loads(raw)
+    except ProviderAuthMissing:
+        pass  # fall through to JWT login session
+    client = _session_client()
+    token = _form_token(client)
+    try:
+        response = client.post(
+            f"{BASE}{path}",
+            data={**{k: str(v) for k, v in payload.items()},
+                  "__RequestVerificationToken": token},
+            headers={
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "Referer": f"{BASE}/",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            timeout=30,
+        )
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock {path} unreachable: {exc}") from exc
+    raw = response.content.decode("utf-8-sig")
+    if raw.startswith("<!DOCTYPE") or "<html" in raw[:60].lower():
+        raise ProviderAuthMissing(f"vietstock {path} session rejected")
+    try:
+        return json.loads(raw)
+    except ValueError as exc:
+        raise ProviderBadData(f"vietstock {path} non-JSON: {response.status_code}") from exc
+
+
 def macro_report_data(
     term_type_id: int,
     category_id: int,
@@ -898,10 +945,6 @@ def macro_report_data(
     if hit is not None:
         cached: dict[str, Any] = json.loads(hit) if isinstance(hit, str) else hit
         return cached
-    client = har_client()
-    token = _env("VIETSTOCK_PAGE_TOKEN")
-    if not token:
-        _, token = _har_seed()
     payload = {
         "termTypeID": str(term_type_id),
         "subTermTypeID": sub_term_type_id or "",
@@ -909,16 +952,11 @@ def macro_report_data(
         "toDate": to_date,
         "type": "CATEGORY",
         "listID[]": str(category_id),
-        "__RequestVerificationToken": token,
     }
     try:
-        response = client.post(f"{BASE}/Macro/GetReportDataByIDs", data=payload)
+        body = _browser_post("/Macro/GetReportDataByIDs", payload)
     except httpx.HTTPError as exc:
         raise ProviderUnavailable(f"vietstock macro unreachable: {exc}") from exc
-    try:
-        body = json.loads(response.content.decode("utf-8-sig"))
-    except ValueError as exc:
-        raise ProviderBadData(f"vietstock macro non-JSON: {response.status_code}") from exc
     error = body.get("errorModel") if isinstance(body, dict) else None
     if isinstance(error, dict) and error.get("ErrorCode"):
         raise ProviderAuthMissing(
