@@ -252,7 +252,27 @@ nearest-zone gaza 82km, signal-loss diff); `event_stats` aggregate tách vai;
 (verdict thật 1344–4007 ch); S03/S04/S09 0 fails; S05 bỏ Step 1 BCTC ✓ + fix thêm
 skill 1.1.2 (load_skill chỉ với tên, không aspect-file); S18 còn spawn timeout (đợt 2 #4).
 
-### 8.5 Merge upstream harness (06-10, PR pending)
+### 8.5 Render full re-verify (08-10) — toàn bộ tools qua StreamableHTTP
+
+Matrix mới: `docs/eval-2026-10-06/render-full-matrix.json` — **137/139 + web_search OK**.
+5 tools Vietstock-detail đã MỞ lại nhờ JWT fallback (financial_detail 25 rows,
+planned_targets, stock_forensic, vs_indicator_data 1995 rows, vs_xnk_detail 504 rows).
+LCTT Vietstock BCTC live (35 rows). FRED fallback live (us10y=0.0529).
+
+**Tình trạng nguồn dữ liệu (live Render 08-10):**
+| Nguồn | Trạng thái | Chi tiết |
+|---|---|---|
+| Vietstock | ✅ SỐNG | JWT session phục vụ detail+BCTC+macro; không cần HAR |
+| vnstock | ⚠️ CHẬM/BỊ CHẶN | ~30s/call từ Render; movers/snapshot full-universe crash starter plan (≤10 mã OK); chờ mở lại |
+| DNSE | ❌ ngoài giờ | REST timeout + circuit open + WS worker chưa publish (không đuổi theo yêu cầu) |
+| GDELT | ⚠️ throttle chập chờn | news_* nhanh (cache); event_stats/geo_intel đôi khi 45s timeout → retry + honest fallback |
+| Binance | ❌ chặn 418 | spot chết (api+vision); derivs chập chờn; CoinGecko 429 do IP share |
+| yfinance | ✅ hầu hết sống | chậm 2-23s; yield_curve đã có FRED fallback |
+| FRED/WorldBank | ✅ SỐNG | macro đầy đủ (GDP VNM 8.02%) |
+| Fireant | ✅ SỐNG | sentiment/thread nhanh |
+| BTMC | ❌ chặn | vnstock fallback, cap 30s |
+
+### 8.6 Merge upstream harness (06-10, PR pending)
 
 Merge `origin/main` (tool-search #19, mcp-instructions #20, prompt-tuning #21, todo #22-24,
 compact #23) vào nhánh `MCP-server` OpenTrading (`baf7a2c` + follow-ups `da10329`).
