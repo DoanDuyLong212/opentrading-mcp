@@ -526,18 +526,41 @@ _DETAIL_FILTER = {
 
 
 def _detail_session_post(path: str, data: dict[str, Any]) -> Any:
-    """POST the /data detail chain via the browser-session when seeded.
+    """POST the /data detail chain via the browser-session when seeded,
+    else the JWT login session.
 
-    The /data finance detail endpoints are gated by browser session state:
-    the plain JWT-login session receives Package_Permission/HTML while the
-    full cookie-jar (HAR/env seed) serves real values (verified 2026-10-01).
-    Falls back to the login session when no seed exists.
+    Verified 2026-10-08: the JWT login session serves real values for detail
+    endpoints (the old "Package_Permission/HTML" claim no longer holds with a
+    valid CookieLogin JWT) — HAR seed is now optional, not required.
     """
     try:
         client = har_client()
         token = _env("VIETSTOCK_PAGE_TOKEN") or _har_seed()[1]
         payload = {**{k: str(v) for k, v in data.items()}, "__RequestVerificationToken": token}
         response = client.post(f"{BASE}{path}", data=payload)
+        raw = response.content.decode("utf-8-sig")
+        if raw.startswith("<!DOCTYPE") or "<html" in raw[:60].lower():
+            raise ProviderAuthMissing(f"vietstock {path} session rejected")
+        return json.loads(raw)
+    except ProviderAuthMissing:
+        pass  # fall through to the JWT login session below
+    except httpx.HTTPError as exc:
+        raise ProviderUnavailable(f"vietstock {path} unreachable: {exc}") from exc
+    try:
+        client = _session_client()
+        token = _form_token(client)
+        payload = {**{k: str(v) for k, v in data.items()}, "__RequestVerificationToken": token}
+        response = client.post(
+            f"{BASE}{path}",
+            data=payload,
+            headers={
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "Referer": f"{BASE}/",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            timeout=30,
+        )
         raw = response.content.decode("utf-8-sig")
         if raw.startswith("<!DOCTYPE") or "<html" in raw[:60].lower():
             raise ProviderAuthMissing(f"vietstock {path} session rejected")
