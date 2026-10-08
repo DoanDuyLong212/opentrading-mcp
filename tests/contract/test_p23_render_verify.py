@@ -221,3 +221,33 @@ def test_valuation_run_eps_fallback(monkeypatch):
     assert env["data"]["method"] == "pb_bank_broker"
     assert env["data"]["per"] == 15.0
     assert any("vnstock PE" in w for w in (env["warnings"] or []))
+
+
+def test_financial_detail_lctt_vnstock_fallback(monkeypatch):
+    """Vietstock LCTT norms empty upstream → vnstock cashflow fallback (not unavailable)."""
+    from opentrading_mcp.providers import vietstock as vs_p
+    from opentrading_mcp.providers import vnstock as vn_p
+    from opentrading_mcp.providers.errors import ProviderBadData
+    from opentrading_mcp.tools import corp as corp_mod
+
+    def boom_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -> dict:
+        raise ProviderBadData(f"vietstock no norms for {symbol} {statement}")
+
+    def fake_cf(symbol: str, period: str = "quarter") -> dict:
+        return {"symbol": symbol, "period": period, "unit": "VNDbn",
+                "periods": ["Q1/2026", "Q2/2026"],
+                "rows": [{"name": "Test flow", "values": [1.0, 2.0]}]}
+
+    monkeypatch.setattr(vs_p, "financial_detail", boom_detail)
+    monkeypatch.setattr(vn_p, "cashflow", fake_cf)
+    monkeypatch.setattr(corp_mod, "vs_p", vs_p)
+    import asyncio
+
+    server = create_server()
+    register_all(server)
+    fn = server._tool_manager.get_tool("financial_detail").fn
+    env = asyncio.new_event_loop().run_until_complete(fn(symbol="FPT", statement="LCTT"))
+    assert env["availability"] == "available", env
+    assert env["provenance"]["source"] == "vnstock"
+    assert any("LCTT empty upstream" in w for w in env["warnings"])
+    assert env["data"]["rows"][0]["name"] == "Test flow"

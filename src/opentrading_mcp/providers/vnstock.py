@@ -371,6 +371,53 @@ def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
 
 
 @guarded("vnstock")
+def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
+    """Cash-flow statement via vnstock Finance (fallback when Vietstock LCTT
+    norms are empty upstream). Best-effort parse, VND billions.
+
+    Returns {symbol, period, periods, rows: [{name, values}]}.
+    """
+    try:
+        from vnstock import Finance
+    except ImportError as exc:
+        raise ProviderUnavailable("vnstock not installed") from exc
+    frame = None
+    for source in ("VCI", "KBS"):
+        try:
+            candidate = Finance(symbol=symbol.upper(), source=source).cash_flow(period=period)
+            if candidate is not None and len(candidate) > 0:
+                frame = candidate
+                break
+        except Exception:
+            continue
+    if frame is None or len(frame) == 0:
+        raise ProviderUnavailable(f"no cashflow for {symbol}")
+    try:
+        import pandas as pd
+
+        rows: list[dict[str, Any]] = []
+        periods: list[str] = []
+        if isinstance(frame, pd.DataFrame):
+            cols = list(frame.columns)
+            # first column is the line-item label, rest are periods
+            label_col = cols[0]
+            periods = [str(c) for c in cols[1:]]
+            for _, row in frame.iterrows():
+                vals = []
+                for c in cols[1:]:
+                    try:
+                        v = row[c]
+                        vals.append(None if pd.isna(v) else float(v))
+                    except (TypeError, ValueError):
+                        vals.append(None)
+                rows.append({"name": str(row[label_col]), "values": vals})
+        return {"symbol": symbol.upper(), "period": period, "unit": "VNDbn",
+                "periods": periods, "rows": rows}
+    except Exception as exc:
+        raise ProviderBadData(f"malformed vnstock cashflow for {symbol}: {exc}") from exc
+
+
+@guarded("vnstock")
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     """Per-symbol PE/ROE/market-cap via vnstock Fundamental ratio.
 

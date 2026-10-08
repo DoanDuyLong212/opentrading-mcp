@@ -479,7 +479,8 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """FULL detailed statements, every line item per period. Use for deep BCTC reads.
 
-        statement: KQKD (income), CDKT (balance), LCTT (cashflow), TM (notes),
+        statement: KQKD (income), CDKT (balance), LCTT (cashflow via vnstock
+        fallback — Vietstock LCTT norms empty upstream), TM (notes),
         BCTT. periods_n: recent permitted periods (unit VND billions; only
         IsShowData_Permission=True periods). Real values on the Standard pack
         via browser-session replay (HAR/env seed) — rows {norm_id, name,
@@ -493,7 +494,36 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "financial_detail",
                 timeout_secs=90.0,
             )
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+        except ProviderBadData as exc:
+            # Vietstock LCTT norms are empty upstream for all symbols —
+            # fall back to vnstock cashflow instead of failing
+            if statement.strip().upper() == "LCTT" and "no norms" in str(exc):
+                try:
+                    from opentrading_mcp.providers import vnstock as vn_p
+
+                    fb = await run_blocking(
+                        functools.partial(vn_p.cashflow, symbol, "quarter"),
+                        "financial_detail_lctt_fb",
+                        timeout_secs=60.0,
+                    )
+                    return make_envelope(
+                        fb, source="vnstock",
+                        warnings=["Vietstock LCTT empty upstream — vnstock fallback"],
+                    )
+                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as fbe:
+                    return make_envelope(
+                        {"tool": "financial_detail"},
+                        source="unavailable",
+                        warnings=[str(exc), str(fbe)],
+                        availability="unavailable",
+                    )
+            return make_envelope(
+                {"tool": "financial_detail"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        except (ProviderAuthMissing, ProviderUnavailable) as exc:
             return make_envelope(
                 {"tool": "financial_detail"},
                 source="unavailable",
