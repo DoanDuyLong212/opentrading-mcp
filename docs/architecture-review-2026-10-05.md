@@ -275,10 +275,12 @@ LCTT Vietstock BCTC live (35 rows). FRED fallback live (us10y=0.0529).
 ### 8.6 vnstock API key → 60 req/min (06-10)
 
 `VNSTOCK_API_KEY` (Trading_Agents .env) qua `vnai` authenticator = community tier
-60 req/min (anonymous bị throttle mạnh — nguyên nhân movers/snapshot chậm/treo từ Render).
-Server tự `ensure_api_key()` once/process (try/except, không bao giờ vỡ); `source_status`
-thêm `vnstock_quota` (tier/limit/remaining) để verify live. Admin set giá trị
-`VNSTOCK_API_KEY` trong Dashboard (render.yaml đã khai `sync:false`).
+60 req/min (guest chỉ 20/min — nguyên nhân movers/snapshot chậm/treo từ Render).
+Verify key: tier `free`, per_minute 60 ✅. Server tự `ensure_api_key()` once/process
+(try/except, không bao giờ vỡ); `source_status` thêm `vnstock_quota`
+(tier/per_minute) để verify live. Key đã set vào `.env` local (gitignored);
+**admin set giá trị `VNSTOCK_API_KEY` trong Dashboard** (render.yaml đã khai `sync:false`)
+rồi redeploy — xong báo tôi verify tier + tốc độ movers/snapshot.
 
 ### 8.7 Merge upstream harness (06-10, PR pending)
 

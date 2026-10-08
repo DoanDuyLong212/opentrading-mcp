@@ -47,12 +47,14 @@ def quota_info() -> dict[str, Any]:
         key = os.environ.get("VNSTOCK_API_KEY", "").strip()
         if not key:
             return {"tier": "anonymous"}
-        from vnai import get_quota_status
+        from vnai.beam.auth import authenticator
 
-        q = get_quota_status(key)
-        if isinstance(q, dict):
-            return {k: q.get(k) for k in ("tier", "limit", "remaining", "reset") if k in q}
-        return {"tier": "keyed", "quota": str(q)[:120]}
+        info = authenticator.get_tier_info()
+        if isinstance(info, dict):
+            lim = info.get("limits", {})
+            return {"tier": info.get("tier"),
+                    "per_minute": (lim.get("per_minute") if isinstance(lim, dict) else None)}
+        return {"tier": "keyed"}
     except Exception as exc:
         return {"tier": "unknown", "note": str(exc)[:100]}
 
