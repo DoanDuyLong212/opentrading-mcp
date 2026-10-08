@@ -307,6 +307,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "upstreams": {
                     "vietstock": vs_p.auth_status(),
                     "vnstock": vnstock_state,
+                    "vnstock_quota": vn_p.quota_info(),
                     "dnse_ws": "worker"
                     if cache_get("mcp:market:dnse_ws_snapshot:VNINDEX")
                     else "cold",

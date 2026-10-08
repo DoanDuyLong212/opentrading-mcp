@@ -272,7 +272,15 @@ LCTT Vietstock BCTC live (35 rows). FRED fallback live (us10y=0.0529).
 | Fireant | ✅ SỐNG | sentiment/thread nhanh |
 | BTMC | ❌ chặn | vnstock fallback, cap 30s |
 
-### 8.6 Merge upstream harness (06-10, PR pending)
+### 8.6 vnstock API key → 60 req/min (06-10)
+
+`VNSTOCK_API_KEY` (Trading_Agents .env) qua `vnai` authenticator = community tier
+60 req/min (anonymous bị throttle mạnh — nguyên nhân movers/snapshot chậm/treo từ Render).
+Server tự `ensure_api_key()` once/process (try/except, không bao giờ vỡ); `source_status`
+thêm `vnstock_quota` (tier/limit/remaining) để verify live. Admin set giá trị
+`VNSTOCK_API_KEY` trong Dashboard (render.yaml đã khai `sync:false`).
+
+### 8.7 Merge upstream harness (06-10, PR pending)
 
 Merge `origin/main` (tool-search #19, mcp-instructions #20, prompt-tuning #21, todo #22-24,
 compact #23) vào nhánh `MCP-server` OpenTrading (`baf7a2c` + follow-ups `da10329`).

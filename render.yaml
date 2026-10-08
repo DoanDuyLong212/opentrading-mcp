@@ -25,6 +25,8 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: VNSTOCK_API_KEY
+        sync: false
 
   - type: worker
     name: opentrading-mcp-worker

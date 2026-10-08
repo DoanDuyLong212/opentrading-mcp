@@ -9,6 +9,53 @@ from typing import Any
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
+_API_KEY_DONE = False
+
+
+def ensure_api_key() -> str:
+    """Register VNSTOCK_API_KEY once per process (60 req/min community tier).
+
+    The vnai authenticator reads VNSTOCK_API_KEY env directly; this also runs
+    the one-time device registration so the backend associates this egress IP.
+    Never raises — anonymous throttling remains as fallback.
+    Returns "keyed" / "anonymous" / "" (vnstock missing).
+    """
+    global _API_KEY_DONE
+    import os
+
+    if _API_KEY_DONE:
+        return "keyed" if os.environ.get("VNSTOCK_API_KEY", "").strip() else "anonymous"
+    _API_KEY_DONE = True
+    key = os.environ.get("VNSTOCK_API_KEY", "").strip()
+    if not key:
+        return "anonymous"
+    try:
+        from vnstock import change_api_key
+
+        change_api_key(key)
+    except Exception:
+        pass
+    return "keyed"
+
+
+def quota_info() -> dict[str, Any]:
+    """Best-effort vnstock tier/quota for source_status (never raises)."""
+    try:
+        ensure_api_key()
+        import os
+
+        key = os.environ.get("VNSTOCK_API_KEY", "").strip()
+        if not key:
+            return {"tier": "anonymous"}
+        from vnai import get_quota_status
+
+        q = get_quota_status(key)
+        if isinstance(q, dict):
+            return {k: q.get(k) for k in ("tier", "limit", "remaining", "reset") if k in q}
+        return {"tier": "keyed", "quota": str(q)[:120]}
+    except Exception as exc:
+        return {"tier": "unknown", "note": str(exc)[:100]}
+
 
 @guarded("vnstock")
 def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[dict[str, Any]]:

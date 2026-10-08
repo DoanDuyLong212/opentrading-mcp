@@ -279,3 +279,22 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
     assert out["periods"] == ["2026-Q1", "2026-Q2"], out["periods"]
     assert out["rows"] == [{"name": "Test flow", "values": [1.0, 2.0]}]
     assert out["rows"][0]["values"] == [1.0, 2.0]  # raw VND → VNDbn
+
+
+def test_vnstock_api_key_helpers(monkeypatch):
+    """VNSTOCK_API_KEY from Trading_Agents .env → 60 req/min tier; never raises."""
+    import opentrading_mcp.providers.vnstock as vn_p
+
+    monkeypatch.delenv("VNSTOCK_API_KEY", raising=False)
+    vn_p._API_KEY_DONE = False
+    assert vn_p.ensure_api_key() == "anonymous"
+    assert vn_p.quota_info()["tier"] == "anonymous"
+
+    # with key: registration attempted (network may fail in sandbox — swallowed),
+    # return contract holds and quota_info never raises
+    monkeypatch.setenv("VNSTOCK_API_KEY", "vnstock_testkey123")
+    vn_p._API_KEY_DONE = False
+    assert vn_p.ensure_api_key() == "keyed"
+    q = vn_p.quota_info()
+    assert isinstance(q, dict) and "tier" in q
+    vn_p._API_KEY_DONE = False
