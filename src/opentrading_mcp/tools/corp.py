@@ -496,8 +496,17 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         except ProviderBadData as exc:
             # Vietstock LCTT norms are empty upstream for all symbols —
-            # fall back to vnstock cashflow instead of failing
+            # route: Vietstock BCTC values first (same source), vnstock fallback
             if statement.strip().upper() == "LCTT" and "no norms" in str(exc):
+                try:
+                    data = await run_blocking(
+                        functools.partial(vs_p.financial_lctt, symbol, 2),
+                        "financial_detail_lctt_vs",
+                        timeout_secs=90.0,
+                    )
+                    return make_envelope(data, source="vietstock")
+                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
+                    pass
                 try:
                     from opentrading_mcp.providers import vnstock as vn_p
 

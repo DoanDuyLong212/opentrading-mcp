@@ -580,6 +580,88 @@ def _batch_objects(key: str, objs: list[dict[str, Any]]) -> dict[str, str]:
     return out
 
 
+def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
+    """Cash-flow statement via /FinancialStatement BCTC endpoints (Vietstock HAS LCTT).
+
+    The /data detail-norms endpoint returns {} for LCTT, but BCTC_GetChiTieuForTable
+    carries the full LCTT-GT section — load values via BCTC_LoadReportData_Async.
+    Returns {symbol, unit VNDbn, periods, rows: [{norm_id, name, values}]}.
+    """
+    norms = financial_norms(1)
+    nl = norms if isinstance(norms, list) else norms.get("data", [])
+    if not isinstance(nl, list):
+        raise ProviderBadData("vietstock norms malformed")
+    start = next(
+        (i for i, n in enumerate(nl)
+         if isinstance(n, dict) and "lưu chuyển tiền tệ" in str(n.get("Name", "")).lower()
+         and "gián tiếp" in str(n.get("Name", "")).lower()),
+        None,
+    )
+    if start is None:
+        raise ProviderBadData("vietstock has no LCTT section")
+    ids: list[str] = []
+    names: dict[str, str] = {}
+    for n in nl[start + 1:]:
+        if not isinstance(n, dict):
+            continue
+        nm = str(n.get("Name", "")).strip()
+        nid = n.get("ReportNormID")
+        # next top-level section ends the LCTT block
+        if (nid is None or (isinstance(nid, int) and nid < 0)) and "lưu chuyển" not in nm.lower():
+            break
+        if isinstance(nid, int) and nid > 0:
+            ids.append(str(nid))
+            names[str(nid)] = nm
+    if not ids:
+        raise ProviderBadData("vietstock LCTT norms empty")
+    params = build_list_params(symbol, max(int(years), 1))
+    body = _post_json(
+        "/FinancialStatement/BCTC_LoadReportData_Async",
+        {"ReportNormIds": ",".join(ids), "ListParams": params},
+        timeout=60,
+    )
+    if isinstance(body, dict) and body.get("error"):
+        raise ProviderAuthMissing("vietstock BCTC package limited")
+    rows = body.get("data", body) if isinstance(body, dict) else body
+    if not isinstance(rows, list) or not rows:
+        raise ProviderBadData(f"vietstock no LCTT values for {symbol}")
+    _TERM_LABELS = {2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4", 9: "NAM"}
+    # periods from ACTUAL response terms (endpoint may lack latest quarters)
+    seen_terms: list[tuple] = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        key = (r.get("YearPeriod"), r.get("ReportTermID"))
+        if key not in seen_terms:
+            seen_terms.append(key)
+    seen_terms.sort(key=lambda k: (k[0] or 0, k[1] or 0))
+    periods = [
+        f"{_TERM_LABELS.get(tid, tid)}/{yr}" for yr, tid in seen_terms
+    ]
+    by_norm: dict[tuple, Any] = {}
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        key = (str(r.get("ReportNormId")), r.get("YearPeriod"), r.get("ReportTermID"))
+        by_norm[key] = r.get("Value")
+    series = []
+    for nid in ids:
+        vals = []
+        for yr, tid in seen_terms:
+            v = by_norm.get((nid, yr, tid))
+            try:
+                # raw VND → VND billions (match detail shape)
+                vals.append(round(float(v) / 1e9, 1) if v is not None else None)
+            except (TypeError, ValueError):
+                vals.append(None)
+        if any(v is not None for v in vals):
+            series.append({"norm_id": int(nid), "name": names[nid], "values": vals})
+    if not series:
+        raise ProviderBadData(f"vietstock LCTT all-empty for {symbol}")
+    return {"symbol": symbol.upper(), "unit": "VNDbn", "periods": periods, "rows": series}
+
+
+
 def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -> dict[str, Any]:
     """Full detailed statements via /data/* chain — REAL values on Standard pack (P15).
 
