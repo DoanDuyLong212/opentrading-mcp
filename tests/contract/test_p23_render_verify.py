@@ -251,3 +251,30 @@ def test_financial_detail_lctt_vnstock_fallback(monkeypatch):
     assert env["provenance"]["source"] == "vnstock"
     assert any("LCTT empty upstream" in w for w in env["warnings"])
     assert env["data"]["rows"][0]["name"] == "Test flow"
+
+
+def test_cashflow_parser_skips_metadata_columns(monkeypatch):
+    """vnstock cashflow frames carry item_en/item_id columns — only period cols become values."""
+    import sys
+    import types
+
+    import pandas as pd
+
+    import opentrading_mcp.providers.vnstock as vn_p
+
+    class FakeFinance:
+        def __init__(self, symbol: str = "", source: str = "VCI"):
+            pass
+
+        def cash_flow(self, period: str = "quarter") -> Any:
+            return pd.DataFrame([
+                {"item": "Test flow", "item_en": "x", "item_id": 1,
+                 "2026-Q1": 1.0, "2026-Q2": 2.0},
+            ])
+
+    fake_vnstock = types.ModuleType("vnstock")
+    fake_vnstock.Finance = FakeFinance
+    monkeypatch.setitem(sys.modules, "vnstock", fake_vnstock)
+    out = vn_p.cashflow("FPT")
+    assert out["periods"] == ["2026-Q1", "2026-Q2"], out["periods"]
+    assert out["rows"] == [{"name": "Test flow", "values": [1.0, 2.0]}]

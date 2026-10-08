@@ -399,12 +399,20 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
         periods: list[str] = []
         if isinstance(frame, pd.DataFrame):
             cols = list(frame.columns)
-            # first column is the line-item label, rest are periods
+            import re as _re
+
+            def _is_period(c: Any) -> bool:
+                s = str(c)
+                return bool(_re.search(r"(19|20)\d{2}|Q\s*[1-4]", s))
+
             label_col = cols[0]
-            periods = [str(c) for c in cols[1:]]
+            period_cols = [c for c in cols[1:] if _is_period(c)]
+            if not period_cols:  # fallback: all non-label columns
+                period_cols = list(cols[1:])
+            periods = [str(c) for c in period_cols]
             for _, row in frame.iterrows():
                 vals = []
-                for c in cols[1:]:
+                for c in period_cols:
                     try:
                         v = row[c]
                         vals.append(None if pd.isna(v) else float(v))
