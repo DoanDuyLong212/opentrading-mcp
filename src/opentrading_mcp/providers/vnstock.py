@@ -61,22 +61,54 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
 
 @guarded("vnstock")
 def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
+    """Batch quotes, sub-batched in 10s with per-chunk timeouts (P22: full-VN30
+    single batch hangs from some networks — partial results beat a hang)."""
     try:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    try:
-        frame = Market().equity(symbols).quote()
-    except Exception as exc:
-        raise ProviderUnavailable("vnstock batch quote failed") from exc
+    from concurrent.futures import ThreadPoolExecutor
+
+    syms = [str(s).upper() for s in symbols or []]
+    if not syms:
+        return []
+
+    def _one(chunk: list[str]) -> list[dict[str, Any]]:
+        try:
+            frame = Market().equity(chunk).quote()
+        except Exception as exc:
+            raise ProviderUnavailable(f"vnstock batch quote failed: {exc}") from exc
+        try:
+            records = frame.to_dict(orient="records")
+        except Exception:
+            records = []
+        return [{str(k): record[k] for k in record} for record in records]
+
     out: list[dict[str, Any]] = []
-    try:
-        records = frame.to_dict(orient="records")
-    except Exception:
-        records = []
-    for record in records:
-        out.append({str(k): record[k] for k in record})
+    missing: list[str] = []
+    chunks = [syms[i : i + 10] for i in range(0, len(syms), 10)]
+    with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as pool:
+        futs = {pool.submit(_one, c): c for c in chunks}
+        for fut, chunk in futs.items():
+            try:
+                out.extend(fut.result(timeout=45.0))
+            except Exception:
+                missing.extend(chunk)
+    if missing and not out:
+        raise ProviderUnavailable(f"vnstock batch quote failed for {len(missing)} symbols")
+    if missing:
+        out.append({"_missing": sorted(set(missing))})
     return out
+
+
+def split_batch(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Split equity_quote_batch rows into (real quotes, missing symbols)."""
+    quotes = [r for r in rows if isinstance(r, dict) and "_missing" not in r]
+    missing: list[str] = []
+    for r in rows:
+        if isinstance(r, dict) and isinstance(r.get("_missing"), list):
+            missing.extend(str(s) for s in r["_missing"])
+    return quotes, sorted(set(missing))
 
 
 @guarded("vnstock")
@@ -513,7 +545,8 @@ def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[s
             frame = msn.Quote(symbol_id).history(start=start, end=end, interval="1D")
             rows = frame.to_dict(orient="records")
             out.append(
-                {"symbol": symbol_id, "points": len(rows), "last": rows[-1] if rows else None}
+                {"symbol": symbol_id, "points": len(rows), "last": rows[-1] if rows else None,
+                 "series": rows[-35:] if rows else []}
             )
         except Exception as exc:
             raise ProviderUnavailable(f"vnstock msn failed: {symbol_id}: {exc}") from exc

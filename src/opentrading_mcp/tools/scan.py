@@ -359,6 +359,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 functools.partial(vn_p.equity_quote_batch, list(wanted)),
                 "alert_check",
             )
+            quotes, _batch_missing = vn_p.split_batch(quotes)
         except (ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "alert_check"},
@@ -370,6 +371,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         history: dict[str, list[dict[str, Any]]] = {}
         prev_state: dict[str, Any] = {}
         warnings_list: list[str] = []
+        if _batch_missing:
+            warnings_list.append(f"batch partial: {len(_batch_missing)} symbols missing")
         if needs_history:
             from opentrading_mcp.providers import store as st_p
 

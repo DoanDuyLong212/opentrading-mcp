@@ -131,6 +131,12 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
             agg = geo_p.aggregate(political)
             dropped = len(articles) - len(political)
             warnings = [f"dropped {dropped} non-political articles"] if dropped else []
+            if not political and articles:
+                # filter-all is honest but useless — fall back to unfiltered top
+                # with an explicit warning instead of an empty verdict
+                political = articles
+                agg = geo_p.aggregate(political)
+                warnings = ["no political match — showing unfiltered top articles"]
             return make_envelope(
                 {
                     "query": data.get("query"),

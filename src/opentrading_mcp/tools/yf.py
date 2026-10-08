@@ -8,7 +8,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.providers import yfinance as yf_p
-from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.providers.errors import (
+    ProviderAuthMissing,
+    ProviderBadData,
+    ProviderUnavailable,
+)
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import READ_ONLY_OPEN, AnyContext, run_blocking
 
@@ -65,12 +69,36 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY_OPEN)
     async def yf_yield_curve() -> dict[str, Any]:
-        """US 2Y/10Y and inversion flag. Use for rates and regime context."""
+        """US 2Y/10Y and inversion flag. Use for rates and regime context.
+
+        Falls back to FRED DGS10/DGS2 when yfinance is blocked (datacenter IPs).
+        """
         try:
             data = await run_blocking(yf_p.yield_curve, "yf_yield_curve", timeout_secs=50.0)
             return make_envelope(data, source="yfinance")
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("yf_yield_curve", str(exc))
+        except (ProviderUnavailable, ProviderBadData):
+            pass
+        try:
+            from opentrading_mcp.providers import intel as intel_p
+
+            ten = await run_blocking(
+                functools.partial(intel_p.fred_series, "DGS10", 5),
+                "yf_yield_curve_fred", timeout_secs=30.0,
+            )
+            two = await run_blocking(
+                functools.partial(intel_p.fred_series, "DGS2", 5),
+                "yf_yield_curve_fred", timeout_secs=30.0,
+            )
+            us10y = float((ten.get("points") or [{}])[-1].get("v", 0)) / 100
+            us2y = float((two.get("points") or [{}])[-1].get("v", 0)) / 100
+            return make_envelope(
+                {"us10y": us10y, "us2y": us2y, "inverted": us2y > us10y},
+                source="fred",
+                warnings=["yfinance blocked — FRED DGS10/DGS2 fallback"] if us10y else None,
+            )
+        except (ProviderUnavailable, ProviderBadData, ProviderAuthMissing,
+                TypeError, ValueError, IndexError) as exc:
+            return _na("yf_yield_curve", f"yfinance + FRED both failed: {exc}")
 
     return [
         {"name": "yf_global_indices"},

@@ -271,10 +271,16 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "market_snapshot",
             )
             cache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
+            quotes, missing = vn_p.split_batch(quotes)
             data: dict[str, Any] = {"quotes": quotes}
             if as_of is not None:
                 data["requested_as_of"] = as_of
-            return make_envelope(data, source="vnstock")
+            if missing:
+                data["missing"] = missing
+            return make_envelope(
+                data, source="vnstock",
+                warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("market_snapshot", str(exc))
 
@@ -641,13 +647,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             return 0.0
 
         keep = max(int(top_n), 1)
+        rows, missing = vn_p.split_batch(rows)
         gainers = sorted(rows, key=_chg, reverse=True)[:keep]
         losers = sorted(rows, key=_chg)[:keep]
         volume = sorted(rows, key=_vol, reverse=True)[:keep]
         return make_envelope(
             {"gainers": gainers, "losers": losers, "volume_leaders": volume,
-             "universe": len(rows)},
+             "universe": len(rows), **({"missing": missing} if missing else {})},
             source="vnstock",
+            warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)

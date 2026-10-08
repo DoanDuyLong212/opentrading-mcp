@@ -14,6 +14,10 @@ from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
 SPOT_BASE = "https://api.binance.com"
+SPOT_MIRRORS = [
+    "https://api.binance.com",
+    "https://data-api.binance.vision",  # public market-data only, no Cloudflare wall
+]
 FAPI_BASE = "https://fapi.binance.com"
 _REQ_TIMEOUT = 10.0
 
@@ -48,13 +52,25 @@ def _num(val: Any) -> float | None:
 
 @guarded("binance")
 def spot_board(symbols: list[str]) -> list[dict[str, Any]]:
-    """24h tickers for up to 10 normalized symbols."""
+    """24h tickers for up to 10 normalized symbols.
+
+    Falls back to data-api.binance.vision when api.binance.com 418s (datacenter IPs).
+    """
     syms = [_norm(s) for s in symbols if str(s).strip()][:10]
     if not syms:
         raise ProviderBadData("need at least 1 symbol")
-    data = _get_json(
-        f"{SPOT_BASE}/api/v3/ticker/24hr", {"symbols": json.dumps(syms, separators=(",", ":"))}
-    )
+    last_exc: Exception | None = None
+    for base in SPOT_MIRRORS:
+        try:
+            data = _get_json(
+                f"{base}/api/v3/ticker/24hr", {"symbols": json.dumps(syms, separators=(",", ":"))}
+            )
+            break
+        except Exception as exc:
+            last_exc = exc
+            continue
+    else:
+        raise ProviderUnavailable(f"binance spot unreachable (api + vision): {last_exc}")
     rows = data if isinstance(data, list) else [data]
     out: list[dict[str, Any]] = []
     for row in rows:

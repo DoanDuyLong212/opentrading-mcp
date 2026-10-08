@@ -102,7 +102,13 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                     for q, s in zip(quotes, symbols, strict=False)
                 ]
                 return make_envelope({"count": len(quotes), "symbols": names}, source="vnstock")
-            return make_envelope({"quotes": _project(quotes, columns)}, source="vnstock")
+            quotes, missing = vn_p.split_batch(quotes)
+            return make_envelope(
+                {"quotes": _project(quotes, columns),
+                 **({"missing": missing} if missing else {})},
+                source="vnstock",
+                warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_equity_quote_batch", str(exc))
 
@@ -181,7 +187,8 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vn_retail_gold", "vnstock not installed")
         try:
             frame = await run_blocking(
-                functools.partial(Retail().gold, source=source), "vn_retail_gold"
+                functools.partial(Retail().gold, source=source), "vn_retail_gold",
+                timeout_secs=30.0,
             )
             rows = frame.to_dict(orient="records")
             keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]

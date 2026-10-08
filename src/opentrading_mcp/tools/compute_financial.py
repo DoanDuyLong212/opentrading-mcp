@@ -319,6 +319,16 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         bvps = info.get("BVPS") or info.get("bvps")
         out: dict[str, Any] = {"symbol": symbol.upper(), "price": price, "method": "per_pb"}
         warnings: list[str] = []
+        if not eps and price:
+            # overview lacks EPS — derive from vnstock PE (price/pe), best-effort
+            try:
+                fund = await _call("f", vn_p.equity_fundamentals, symbol.upper(), secs=45.0)
+                pe = (fund or {}).get("pe") if isinstance(fund, dict) else None
+                if pe and float(pe) > 0:
+                    eps = round(price / float(pe), 0)
+                    warnings.append("EPS derived from vnstock PE (overview lacks EPS)")
+            except Exception:
+                pass
         try:
             if price and eps and float(eps) > 0:
                 out["per"] = round(price / float(eps), 2)

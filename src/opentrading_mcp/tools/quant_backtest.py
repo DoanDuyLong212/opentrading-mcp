@@ -58,6 +58,9 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         net = gross - (cost_bps + slippage_bps) / 10000 * 2
         if ctx is not None:
             await ctx.report_progress(2, 2, "done")
+        base = closes[0] or 1.0
+        curve = [round(c / base - 1.0, 4) for c in closes]
+        step = max(1, len(curve) // 100)
         return make_envelope(
             {
                 "symbol": symbol.upper(),
@@ -68,6 +71,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "bars": len(closes),
                 "cost_bps": cost_bps,
                 "slippage_bps": slippage_bps,
+                "equity_curve": curve[::step],
             },
             source="computed-local",
         )
