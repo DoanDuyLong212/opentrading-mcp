@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pw
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Cycle-table tests run against this throwaway database; nothing else uses it.
+      TEST_DATABASE_URL: postgresql://postgres:pw@localhost:5432/postgres
+      VNSTOCK_TELEMETRY: "off"
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --extra dev
+      - run: uv run ruff check src tests
+      # The full live matrix calls real upstreams (and needs their keys): run it by hand.
+      - run: uv run pytest -q -p no:cacheprovider --deselect tests/contract/test_verify_matrix.py::test_full_matrix_stdio

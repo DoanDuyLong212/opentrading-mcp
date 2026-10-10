@@ -204,3 +204,17 @@ def test_unreachable_redis_is_skipped_for_a_while(monkeypatch):
     store.cache_set("k", "v", 60)
     assert store.cache_get("k") == "v"  # memory fallback still works
     assert attempts == 1, "a down Redis must not be retried on every call"
+
+
+def test_a_library_calling_sys_exit_in_a_worker_does_not_stop_the_server(one_slot):
+    """vnai exits the process when vnstock's 60/min quota is hit; that must stay a tool error."""
+
+    def quota_hit() -> None:
+        raise SystemExit("Rate limit exceeded. Process terminated.")
+
+    async def scenario() -> str:
+        with pytest.raises(ProviderUnavailable, match="rate limit"):
+            await one_slot.run_blocking(quota_hit, "vn_quote_history", timeout_secs=5.0)
+        return await one_slot.run_blocking(lambda: "still serving", "next", timeout_secs=5.0)
+
+    assert asyncio.run(scenario()) == "still serving"

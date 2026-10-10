@@ -136,14 +136,57 @@ def to_markdown(html: str) -> str:
     return markdownify(html, heading_style="atx", bullets="-", code_language="fenced")
 
 
+MAX_REDIRECTS = 5
+
+
+def assert_public(url: str) -> None:
+    """Refuse URLs whose host is, or resolves to, a private/loopback/link-local address.
+
+    The server runs on Render next to its database: a page the model reads must not steer
+    it into internal services. Checked on the resolved IPs, for every redirect hop.
+    """
+    import ipaddress
+    import socket
+    from urllib.parse import urlsplit
+
+    host = urlsplit(url).hostname or ""
+    if not host or host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+        raise ProviderBadData("refusing to fetch a local address")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError as exc:
+        raise ProviderUnavailable(f"cannot resolve {host}") from exc
+    for info in infos:
+        ip = ipaddress.ip_address(str(info[4][0]).split("%")[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ProviderBadData(f"refusing to fetch {host}: resolves to a non-public address")
+        if ip.version == 4 and ip in ipaddress.ip_network("100.64.0.0/10"):
+            raise ProviderBadData(f"refusing to fetch {host}: resolves to a non-public address")
+
+
+def _get(url: str, format: str, capped: int) -> httpx.Response:
+    """GET with redirects followed by hand, each hop checked before it is requested."""
+    for _ in range(MAX_REDIRECTS + 1):
+        assert_public(url)
+        response = httpx.get(url, headers=_headers(BROWSER_UA, format), timeout=capped)
+        if response.status_code == 403 and response.headers.get("cf-mitigated") == "challenge":
+            response = httpx.get(url, headers=_headers(HONEST_UA, format), timeout=capped)
+        location = response.headers.get("location")
+        if response.is_redirect and location:
+            url = str(response.url.join(location))
+            if not url.startswith(("http://", "https://")):
+                raise ProviderBadData("redirect to a non-http(s) URL")
+            continue
+        return response
+    raise ProviderBadData(f"too many redirects (> {MAX_REDIRECTS})")
+
+
 def fetch_url(url: str, format: str = "markdown", timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
     if not url.startswith("http://") and not url.startswith("https://"):
         raise ProviderBadData("URL must start with http:// or https://")
     capped = min(timeout, MAX_TIMEOUT)
     try:
-        response = httpx.get(url, headers=_headers(BROWSER_UA, format), timeout=capped)
-        if response.status_code == 403 and response.headers.get("cf-mitigated") == "challenge":
-            response = httpx.get(url, headers=_headers(HONEST_UA, format), timeout=capped)
+        response = _get(url, format, capped)
         response.raise_for_status()
     except httpx.TimeoutException as exc:
         raise ProviderUnavailable(f"fetch timed out: {url}") from exc

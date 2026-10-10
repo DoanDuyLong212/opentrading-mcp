@@ -26,6 +26,13 @@ OPENTRADING_MCP_TRANSPORT=http OPENTRADING_MCP_URL=http://localhost:8102/mcp ...
 See `configs/` for opencode / Claude / Cursor / Codex / Antigravity snippets,
 `render.yaml` for public deploy, `.opencode/skills/render-deploy/SKILL.md` for deploy steps.
 
+## Bảng chu kỳ (cycle_*, vn_asset_*, g_asset_*)
+
+- Các tool đọc lấy số từ Postgres (`DATABASE_URL`). Bảng chưa có dữ liệu thì tool trả `availability: unavailable` và `*_check` báo `needs_refresh: true` (không bao giờ báo "mới" khi bảng trống).
+- Seed/refresh toàn bộ **ngoài request**: `DATABASE_URL=... opentrading-mcp cycle-refresh` (giới hạn bằng `CYCLE_REFRESH_ONLY=cycle|vn|global`). Lệnh tự chờ khi chạm hạn mức 60 request/phút của vnstock. Không tự chạy; chạy thủ công hoặc qua job theo lịch do người vận hành quyết định.
+- Tool ghi (`*_refresh`, `*_finalize`) chạy từng lệnh một, mỗi lần rebuild là một transaction. `MCP_CYCLE_WRITE=0` ẩn các tool ghi khỏi server.
+- `vn_asset_anchors`, `vn_asset_chains`, `g_asset_outlook` là dữ liệu nhập tay (không có lệnh refresh nào ghi).
+
 ## Kết nối tới MCP-server (dành cho team harness) — 3 bước là chạy
 
 ### Bước 0 — Admin cấp token (làm 1 lần duy nhất)

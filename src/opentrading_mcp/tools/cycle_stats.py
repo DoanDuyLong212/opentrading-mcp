@@ -9,16 +9,15 @@ from __future__ import annotations
 
 import functools
 import math
-import os
 import time
 from datetime import date, timedelta
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from opentrading_mcp import dbinit
 from opentrading_mcp.providers.errors import ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
+from opentrading_mcp.tools import cycle_db as db
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     READ_WRITE_STATE,
@@ -67,26 +66,6 @@ TETS = [
 ALL_SYMBOLS = INDICES + sorted({s for v in BASKETS.values() for s in v})
 
 
-def _pg() -> Any:
-    from opentrading_mcp import dbinit as _d
-
-    url = _d.db_url().strip()
-    if not url:
-        return None
-    _d.ensure_tables()
-    try:
-        import psycopg
-
-        return psycopg.connect(url, autocommit=True, connect_timeout=5)
-    except Exception:
-        return None
-
-
-def _na(tool: str, reason: str) -> dict[str, Any]:
-    return make_envelope({"tool": tool}, source="unavailable",
-                         warnings=[reason], availability="unavailable")
-
-
 def _fetch_range(sym: str, start: str, end: str) -> list[dict[str, Any]]:
     try:
         from vnstock.api.quote import Quote
@@ -106,7 +85,7 @@ def _fetch_range(sym: str, start: str, end: str) -> list[dict[str, Any]]:
                 tcol = "time" if "time" in df.columns else df.columns[0]
                 times, recs = _pd.to_datetime(df[tcol]), [r for _, r in df.iterrows()]
             out = []
-            for ts, row in zip(times, recs):
+            for ts, row in zip(times, recs, strict=False):
                 t = str(ts)[:10]
                 if len(t) != 10 or t[4] != "-":
                     raise ValueError(f"bad time {t!r}")
@@ -116,7 +95,7 @@ def _fetch_range(sym: str, start: str, end: str) -> list[dict[str, Any]]:
                             "c": float(row.get("close", 0) or 0),
                             "v": float(row.get("volume", 0) or 0)})
             return sorted(out, key=lambda r: r["t"])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last = exc
             time.sleep(2 * (attempt + 1))
     raise ProviderUnavailable(f"VCI fetch failed for {sym}: {last}")
@@ -177,7 +156,6 @@ def _refresh_one(conn: Any, sym: str, today: str) -> dict[str, Any]:
 
 
 def _jsafe(obj: Any) -> Any:
-    import math
     if isinstance(obj, dict):
         return {k: _jsafe(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
@@ -187,247 +165,158 @@ def _jsafe(obj: Any) -> Any:
     return obj
 
 
+def _filters(base: str, conds: list[tuple[str, Any]], order: str) -> tuple[str, list[Any]]:
+    used = [(c, v) for c, v in conds if v not in (None, "")]
+    sql = base + (" WHERE " + " AND ".join(f"{c}=%s" for c, _ in used) if used else "") + f" ORDER BY {order}"
+    return sql, [v for _, v in used]
+
+
+def _remaining() -> tuple[int, list[str]]:
+    conn = db.connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT symbol FROM cycle_watermark")
+            have = {r[0] for r in cur.fetchall()}
+        return len(have), [s for s in ALL_SYMBOLS if s not in have]
+    finally:
+        conn.close()
+
+
 def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
+    src = "cycle_stats"
+
     @server.tool(annotations=READ_ONLY)
     async def cycle_stats_check(ctx: AnyContext | None = None) -> dict[str, Any]:
         """Staleness of cycle-stats tables. No fetch. Use first when locating market phase."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_stats_check", "DATABASE_URL not configured")
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT key, value FROM cycle_meta")
-                meta = dict(cur.fetchall())
-                cur.execute("SELECT COUNT(*), MIN(last_date), MAX(last_date) FROM cycle_watermark")
-                n, mn, mx = cur.fetchone()
-            as_of = meta.get("as_of", "")
-            try:
-                stale = (date.today() - date.fromisoformat(as_of)).days if as_of else None
-            except ValueError:
-                stale = None
-            return make_envelope({
-                "as_of": as_of or None, "stats_version": meta.get("stats_version"),
-                "members_version": meta.get("members_version", MEMBERS_VERSION),
-                "days_stale": stale,
-                "needs_refresh": bool(stale is not None and stale > 90),
-                "cached_symbols": n,
-                "cache_range": [str(mn) if mn else None, str(mx) if mx else None],
-            }, source="cycle_stats")
-        finally:
-            conn.close()
+        return await db.check_freshness(
+            "cycle_stats_check", src, "cycle_meta", "SELECT COUNT(*) FROM cycle_watermark",
+            {"members_version": MEMBERS_VERSION},
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_seasonality(basket: str | None = None,
                                 month: int | None = None,
                                 ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Month seasonality per basket: mean/hit/relative-vs-VNINDEX. Omit args for full table."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_seasonality", "DATABASE_URL not configured")
-        try:
-            q = "SELECT basket, month, mean_ret, hit_rate, rel_ret, n FROM cycle_month_stats"
-            cond: list[str] = []
-            args: list[Any] = []
-            if basket:
-                cond.append("basket=%s")
-                args.append(basket)
-            if month:
-                cond.append("month=%s")
-                args.append(month)
-            if cond:
-                q += " WHERE " + " AND ".join(cond)
-            q += " ORDER BY basket, month"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"basket": r[0], "month": r[1], "mean_ret": r[2],
-                         "hit_rate": r[3], "rel_ret": r[4], "n": r[5]} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="cycle_stats")
-        finally:
-            conn.close()
+        """Month seasonality per basket from the stored table (mean/hit/relative vs VNINDEX). Omit args for full table.
+
+        Differs from `seasonality` (one symbol, computed live from candles): this is the
+        long-run basket table; quote which one a number came from.
+        """
+        sql, args = _filters("SELECT basket, month, mean_ret, hit_rate, rel_ret, n FROM cycle_month_stats",
+                             [("basket", basket), ("month", month)], "basket, month")
+        return await db.read_rows("cycle_seasonality", src, sql, args,
+                                  ["basket", "month", "mean_ret", "hit_rate", "rel_ret", "n"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_chains(pair: str | None = None,
                            ctx: AnyContext | None = None) -> dict[str, Any]:
         """Relative rotation chains (A strong -> B vs VNINDEX next month). Omit pair for full table."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_chains", "DATABASE_URL not configured")
-        try:
-            q = "SELECT pair, n_up, rel_mean, rel_hit FROM cycle_chains"
-            args: list[Any] = []
-            if pair:
-                q += " WHERE pair=%s"
-                args.append(pair)
-            q += " ORDER BY rel_mean DESC"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"pair": r[0], "n_up": r[1], "rel_mean": r[2], "rel_hit": r[3]}
-                        for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="cycle_stats")
-        finally:
-            conn.close()
+        sql, args = _filters("SELECT pair, n_up, rel_mean, rel_hit FROM cycle_chains",
+                             [("pair", pair)], "rel_mean DESC")
+        return await db.read_rows("cycle_chains", src, sql, args, ["pair", "n_up", "rel_mean", "rel_hit"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_turning(year: int | None = None,
                             ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Index peak/trough dates per year (VNINDEX/VNFIN/VNREAL/...). Omit year for full table."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_turning", "DATABASE_URL not configured")
-        try:
-            q = "SELECT year, idx, peak_date, trough_date FROM cycle_turning"
-            args: list[Any] = []
-            if year:
-                q += " WHERE year=%s"
-                args.append(year)
-            q += " ORDER BY year, idx"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"year": r[0], "idx": r[1], "peak": str(r[2]) if r[2] else None,
-                         "trough": str(r[3]) if r[3] else None} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="cycle_stats")
-        finally:
-            conn.close()
+        """Each calendar year's highest/lowest close date per index (year to date for the current year)."""
+        sql, args = _filters("SELECT year, idx, peak_date, trough_date FROM cycle_turning",
+                             [("year", year)], "year, idx")
+        return await db.read_rows("cycle_turning", src, sql, args, ["year", "idx", "peak", "trough"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_tet(basket: str | None = None,
                         ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Tet (Lunar New Year) effect: pre/post 5-session mean/hit per basket."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_tet", "DATABASE_URL not configured")
-        try:
-            q = ("SELECT basket, pre5_mean, pre5_hit, post5_mean, post5_hit, n"
-                 " FROM cycle_tet")
-            args: list[Any] = []
-            if basket:
-                q += " WHERE basket=%s"
-                args.append(basket)
-            q += " ORDER BY pre5_mean DESC"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"basket": r[0], "pre5_mean": r[1], "pre5_hit": r[2],
-                         "post5_mean": r[3], "post5_hit": r[4], "n": r[5]}
-                        for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="cycle_stats")
-        finally:
-            conn.close()
-
-    @server.tool(annotations=READ_WRITE_STATE)
-    async def cycle_stats_refresh(symbols: list[str],
-                                  ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Incremental refresh a batch (max 15/call, recommend 12).
-
-        Fetch [watermark+1, today] + 10-session overlap via VCI; overlap close
-        deviation >0.5% triggers full re-fetch of that symbol. Own cache only.
-        """
-        from opentrading_mcp.tools.shared import run_blocking as _rb
-
-        syms = [s.upper() for s in (symbols or [])][:MAX_BATCH]
-        if not syms:
-            return _na("cycle_stats_refresh", "empty symbols")
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_stats_refresh", "DATABASE_URL not configured")
-        try:
-            today = date.today().isoformat()
-            updated, full, failed = [], [], []
-            for s in syms:
-                try:
-                    r = await _rb(functools.partial(_refresh_one, conn, s, today),
-                                  TOOL, timeout_secs=30.0)
-                    (full if r.get("mode") == "full_refetch" else updated).append(r)
-                except Exception as exc:  # noqa: BLE001
-                    failed.append({"symbol": s, "error": str(exc)[:150]})
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM cycle_watermark")
-                done = cur.fetchone()[0]
-            remaining = [s for s in ALL_SYMBOLS
-                         if s not in {r["symbol"] for r in updated + full}]
-            # re-check watermark table for true remaining
-            with conn.cursor() as cur:
-                cur.execute("SELECT symbol FROM cycle_watermark")
-                have = {r[0] for r in cur.fetchall()}
-            return make_envelope({
-                "updated": updated, "full_refetched": full, "failed": failed,
-                "progress": f"{done}/{len(ALL_SYMBOLS)}",
-                "remaining": [s for s in ALL_SYMBOLS if s not in have],
-            }, source="cycle_stats")
-        finally:
-            conn.close()
-
-    @server.tool(annotations=READ_WRITE_STATE)
-    async def cycle_stats_finalize(extra_tet: list[str] | None = None,
-                                   ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Recompute derived tables from cache; bump meta. Run after all batches."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_stats_finalize", "DATABASE_URL not configured")
-        try:
-            data = await run_blocking(
-                functools.partial(_finalize_compute, conn, extra_tet or []),
-                TOOL, timeout_secs=120.0)
-            return make_envelope(data, source="cycle_stats")
-        finally:
-            conn.close()
+        """Tet (Lunar New Year) effect per basket: compounded return over the 6 sessions before / 5 after."""
+        sql, args = _filters("SELECT basket, pre5_mean, pre5_hit, post5_mean, post5_hit, n FROM cycle_tet",
+                             [("basket", basket)], "pre5_mean DESC")
+        return await db.read_rows("cycle_tet", src, sql, args,
+                                  ["basket", "pre5_mean", "pre5_hit", "post5_mean", "post5_hit", "n"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_yearly(basket: str | None = None,
                            year: int | None = None,
                            ctx: AnyContext | None = None) -> dict[str, Any]:
         """Yearly return % per basket. Omit args for full table."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_yearly", "DATABASE_URL not configured")
-        try:
-            q = "SELECT basket, year, ret FROM cycle_yearly"
-            cond: list[str] = []
-            args: list[Any] = []
-            if basket:
-                cond.append("basket=%s")
-                args.append(basket)
-            if year:
-                cond.append("year=%s")
-                args.append(year)
-            if cond:
-                q += " WHERE " + " AND ".join(cond)
-            q += " ORDER BY basket, year"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"basket": r[0], "year": r[1], "ret": r[2]} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="cycle_stats")
-        finally:
-            conn.close()
+        sql, args = _filters("SELECT basket, year, ret FROM cycle_yearly",
+                             [("basket", basket), ("year", year)], "basket, year")
+        return await db.read_rows("cycle_yearly", src, sql, args, ["basket", "year", "ret"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_trough_events(ctx: AnyContext | None = None) -> dict[str, Any]:
         """3M forward returns per basket after major troughs (who leads recoveries)."""
-        conn = _pg()
-        if conn is None:
-            return _na("cycle_trough_events", "DATABASE_URL not configured")
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT trough, vnindex_3m, bank, securities, realestate,"
-                            " oilgas, steel, utility, tech FROM cycle_trough_events"
-                            " ORDER BY trough")
-                cols = ["trough", "vnindex_3m", "bank", "securities", "realestate",
-                        "oilgas", "steel", "utility", "tech"]
-                rows = [dict(zip(cols, [str(r[0])] + list(r[1:]))) for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="cycle_stats")
-        finally:
-            conn.close()
+        cols = ["trough", "vnindex_3m", "bank", "securities", "realestate", "oilgas", "steel", "utility", "tech"]
+        return await db.read_rows("cycle_trough_events", src,
+                                  f"SELECT {', '.join(cols)} FROM cycle_trough_events ORDER BY trough", [], cols)
 
-    return [
+    tools = [
         {"name": "cycle_stats_check"},
         {"name": "cycle_seasonality"},
         {"name": "cycle_chains"},
         {"name": "cycle_turning"},
         {"name": "cycle_tet"},
-        {"name": "cycle_stats_refresh"},
-        {"name": "cycle_stats_finalize"},
         {"name": "cycle_yearly"},
         {"name": "cycle_trough_events"},
     ]
+    if not db.writes_enabled():
+        return tools
+
+    @server.tool(annotations=READ_WRITE_STATE)
+    async def cycle_stats_refresh(symbols: list[str],
+                                  ctx: AnyContext | None = None) -> dict[str, Any]:
+        """Incremental refresh a batch (max 15/call, recommend 12) of the tracked symbols.
+
+        Fetch [watermark+1, today] + 10-session overlap via VCI; overlap close
+        deviation >0.5% triggers full re-fetch of that symbol. Each symbol is written in
+        its own transaction. One refresh at a time.
+        """
+        asked = [s.strip().upper() for s in (symbols or []) if s.strip()]
+        unknown = [s for s in asked if s not in ALL_SYMBOLS]
+        syms = [s for s in asked if s in ALL_SYMBOLS][:MAX_BATCH]
+        if not syms:
+            return db.na("cycle_stats_refresh", f"no tracked symbols (unknown: {', '.join(unknown) or 'none'})")
+
+        async def work() -> dict[str, Any]:
+            today = date.today().isoformat()
+            updated: list[dict[str, Any]] = []
+            full: list[dict[str, Any]] = []
+            failed: list[dict[str, Any]] = []
+            for s in syms:
+                try:
+                    r = await run_blocking(functools.partial(db.transactional, _refresh_one, s, today),
+                                           TOOL, timeout_secs=60.0)
+                    (full if r.get("mode") == "full_refetch" else updated).append(r)
+                except Exception as exc:
+                    failed.append({"symbol": s, "error": str(exc)[:150]})
+            try:
+                done, remaining = await db.in_thread(_remaining)
+            except db.DbUnavailable as exc:
+                return db.na("cycle_stats_refresh", str(exc))
+            return make_envelope({
+                "updated": updated, "full_refetched": full, "failed": failed,
+                "unknown_symbols": unknown,
+                "progress": f"{done}/{len(ALL_SYMBOLS)}",
+                "remaining": remaining,
+            }, source="cycle_stats")
+
+        return await db.guarded_write("cycle_stats_refresh", work)
+
+    @server.tool(annotations=READ_WRITE_STATE)
+    async def cycle_stats_finalize(extra_tet: list[str] | None = None,
+                                   ctx: AnyContext | None = None) -> dict[str, Any]:
+        """Recompute derived tables from cache in one transaction; bump meta. Run after all batches."""
+
+        async def work() -> dict[str, Any]:
+            try:
+                data = await run_blocking(
+                    functools.partial(db.transactional, _finalize_compute, extra_tet or []),
+                    TOOL, timeout_secs=180.0)
+            except db.DbUnavailable as exc:
+                return db.na("cycle_stats_finalize", str(exc))
+            return make_envelope(data, source="cycle_stats")
+
+        return await db.guarded_write("cycle_stats_finalize", work)
+
+    return [*tools, {"name": "cycle_stats_refresh"}, {"name": "cycle_stats_finalize"}]
 
 
 def _load_frame(conn: Any) -> Any:
@@ -465,7 +354,6 @@ def _finalize_compute(conn: Any, extra_tet: list[str]) -> dict[str, Any]:
     baskets = {k: basket(v) for k, v in BASKETS.items()}
     bdf = pd.DataFrame(baskets)
     bdf["VNINDEX"] = px["VNINDEX"].pct_change(fill_method=None)
-    out: dict[str, Any] = {}
     mb = (1 + bdf).resample("ME").prod(min_count=1) - 1
     mb = mb[mb["VNINDEX"].notna()]
     mb.index = mb.index.to_period("M")
@@ -507,7 +395,7 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
             df = pd.concat([sig, rel_m[b]], axis=1, keys=["sig", "nxt"]).dropna()
             up = df[df.sig > 0.02]
             if len(up) >= 10:
-                chains.append({"pair": f"{a}RS{h}m->{b}", "n_up": int(len(up)),
+                chains.append({"pair": f"{a}RS{h}m->{b}", "n_up": len(up),
                                "rel_mean": round(float(up["nxt"].mean()) * 100, 2),
                                "rel_hit": round(float((up["nxt"] > 0).mean()) * 100, 1)})
     with conn.cursor() as cur:

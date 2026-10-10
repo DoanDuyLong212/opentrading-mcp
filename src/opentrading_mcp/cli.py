@@ -143,6 +143,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.serve == "verify":
         return run_verify(args.target, args.url)
+    if args.serve == "cycle-refresh":
+        # Seed/refresh the cycle tables against DATABASE_URL (never automatic).
+        from os import environ
+
+        from opentrading_mcp.cycle_refresh import main as cycle_refresh
+
+        return cycle_refresh(only=environ.get("CYCLE_REFRESH_ONLY") or None)
     if getattr(args, "preset", "all") != "all":
         import warnings
 
