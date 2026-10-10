@@ -51,6 +51,8 @@ ALL_MODULES: tuple[str, ...] = (
     "brief",
     "intel",
     "web",
+    "cycle_stats",
+    "asset_cycle",
 )
 
 # Deprecated compat: PRESETS/PRESET_MODULES/PRESET_CAPS giữ để import cũ không vỡ.
@@ -87,6 +89,8 @@ _REGISTER_BY_MODULE = {
     "brief": "register_brief_tools",
     "intel": "register_intel_tools",
     "web": "register_web_tools",
+    "cycle_stats": "register_cycle_stats_tools",
+    "asset_cycle": "register_asset_cycle_tools",
 }
 
 
