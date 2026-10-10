@@ -30,6 +30,7 @@ from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     AnyContext,
+    no_exit,
     pick_value,
     project_rows,
     run_blocking,
@@ -244,6 +245,14 @@ def _project_rows(rows: list[dict[str, Any]], columns: list[str] | None) -> list
     return project_rows(rows, columns)
 
 
+async def _vnstock_quota() -> Any:
+    """Quota info for source_status; a quota hit (vnai sys.exit) is reported, not raised."""
+    try:
+        return await asyncio.to_thread(no_exit, vn_p.quota_info)
+    except ProviderUnavailable as exc:
+        return {"error": str(exc)[:160]}
+
+
 def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def market_snapshot(
@@ -308,7 +317,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "vietstock": vs_p.auth_status(),
                     "vnstock": vnstock_state,
                     # First use imports vnstock (seconds of CPU): never on the event loop.
-                    "vnstock_quota": await asyncio.to_thread(vn_p.quota_info),
+                    "vnstock_quota": await _vnstock_quota(),
                     "dnse_ws": "worker"
                     if await acache_get("mcp:market:dnse_ws_snapshot:VNINDEX")
                     else "cold",
