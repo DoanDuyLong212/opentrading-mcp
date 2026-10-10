@@ -1,3 +1,7 @@
+# NOTE (10/10/2026): the live service opentrading-mcp-web runs on the FREE plan
+# (0.1 CPU, sleeps after 15 min idle), not `starter`; the worker and the database
+# below do not exist on Render (Redis/Postgres are external). Heavy upstream work is
+# capped by MCP_BLOCKING_SLOTS (default 2) so concurrent calls cannot starve /healthz.
 services:
   - type: web
     name: opentrading-mcp-web

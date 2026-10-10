@@ -57,8 +57,17 @@ def add_health_routes(server: FastMCP) -> None:
     from opentrading_mcp.health import health_report
 
     async def healthz(request: Request) -> JSONResponse:
+        # Liveness only: the host (Render: 5s timeout) restarts us when this is slow, so it
+        # must not wait on Redis/Postgres or the shared thread pool. Dependencies are
+        # checked by /readyz, or /healthz?full=1 (and ?deep=1 adds upstream probes).
         deep = request.query_params.get("deep") == "1"
+        if not deep and request.query_params.get("full") != "1":
+            return JSONResponse({"ok": True, "server": "opentrading"})
         code, body = await health_report(deep=deep)
+        return JSONResponse(body, status_code=code)
+
+    async def readyz(request: Request) -> JSONResponse:
+        code, body = await health_report(deep=request.query_params.get("deep") == "1")
         return JSONResponse(body, status_code=code)
 
     async def metrics(_request: Request) -> PlainTextResponse:
@@ -78,8 +87,39 @@ def add_health_routes(server: FastMCP) -> None:
         )
 
     server.custom_route("/healthz", methods=["GET"])(healthz)
+    server.custom_route("/readyz", methods=["GET"])(readyz)
     server.custom_route("/metrics", methods=["GET"])(metrics)
     server.custom_route("/.well-known/mcp.json", methods=["GET"])(server_card)
+
+
+def warm_up() -> None:
+    """Import vnstock (and the matplotlib it drags in) before the first tool needs it.
+
+    The first import takes seconds of CPU on a small host; paid inside the first burst
+    of tool calls, it stalled every request at once. Errors are ignored: tools report
+    a missing or broken vnstock themselves.
+    """
+    import logging
+    import time
+
+    started = time.monotonic()
+    try:
+        import vnstock.common  # noqa: F401  (imports vnstock too)
+    except Exception as exc:  # pragma: no cover - depends on the environment
+        logging.getLogger(__name__).warning("warm-up import failed: %s", exc)
+        return
+    elapsed = time.monotonic() - started
+    logging.getLogger(__name__).warning("warm-up: vnstock ready in %.1fs", elapsed)
+
+
+def start_warm_up() -> None:
+    """Warm up in the background (MCP_WARMUP=0 turns it off), so the port opens at once."""
+    import os
+    import threading
+
+    if os.environ.get("MCP_WARMUP", "1") == "0":
+        return
+    threading.Thread(target=warm_up, name="warm-up", daemon=True).start()
 
 
 def require_public_host_args(args: Any, env: dict[str, str]) -> str | None:
@@ -132,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
         app.add_middleware(AuthMiddleware)
         app.add_middleware(McpObservabilityMiddleware)
+        start_warm_up()
         uvicorn.run(app, host="0.0.0.0", port=args.port)
     else:
         server.run(transport="stdio")

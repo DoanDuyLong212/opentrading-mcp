@@ -376,7 +376,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         if needs_history:
             from opentrading_mcp.providers import store as st_p
 
-            raw_state = st_p.cache_get(ALERT_STATE_KEY)
+            raw_state = await st_p.acache_get(ALERT_STATE_KEY)
             if isinstance(raw_state, (str, bytes)):
                 try:
                     prev_state = json.loads(raw_state)
@@ -473,7 +473,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     }
                 )
         if needs_history and prev_state:
-            st_p.cache_set(ALERT_STATE_KEY, prev_state, ttl_seconds=ALERT_STATE_TTL)
+            await st_p.acache_set(ALERT_STATE_KEY, prev_state, ttl_seconds=ALERT_STATE_TTL)
         return make_envelope(
             {"rules": len(rules), "evaluated": len(quotes), "triggered": triggered},
             source="computed-local",
