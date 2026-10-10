@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -206,21 +208,46 @@ def equity_trades(
     return rows[: max(limit, 1)]
 
 
-@guarded("vnstock")
+# The symbol list changes a few times a year; symbol_lookup used to fetch all ~1,600
+# rows on every call. Cached per process; the lock makes concurrent cold calls share
+# one fetch instead of each running it.
+_LISTING_TTL = 6 * 3600.0
+_listing: tuple[float, list[dict[str, str]]] | None = None
+_listing_lock = threading.Lock()
+# After a failed fetch, callers queued on the lock fail fast for a few seconds instead
+# of each repeating the fetch in turn.
+_listing_failed_until = 0.0
+
+
 def listing_symbols(limit: int | None = None) -> list[dict[str, str]]:
+    global _listing, _listing_failed_until
+    with _listing_lock:
+        if _listing is None or time.monotonic() - _listing[0] > _LISTING_TTL:
+            if time.monotonic() < _listing_failed_until:
+                raise ProviderUnavailable("vnstock listing failed (retry shortly)")
+            try:
+                _listing = (time.monotonic(), _fetch_listing())
+            except Exception:
+                _listing_failed_until = time.monotonic() + 10.0
+                raise
+        rows = _listing[1]
+    if limit is not None:
+        rows = rows[: max(int(limit), 1)]
+    return list(rows)
+
+
+@guarded("vnstock")
+def _fetch_listing() -> list[dict[str, str]]:
     try:
         from vnstock import Listing
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
         frame = Listing().all_symbols()
-        rows = [
+        return [
             {"symbol": str(r.get("symbol", "")), "name": str(r.get("organ_name", ""))}
             for r in frame.to_dict(orient="records")
         ]
-        if limit is not None:
-            rows = rows[: max(int(limit), 1)]
-        return rows
     except Exception as exc:
         raise ProviderUnavailable("vnstock listing failed") from exc
 

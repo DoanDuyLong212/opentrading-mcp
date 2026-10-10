@@ -25,7 +25,7 @@ from opentrading_mcp.providers.errors import (
     ProviderBadData,
     ProviderUnavailable,
 )
-from opentrading_mcp.providers.store import cache_get, cache_set
+from opentrading_mcp.providers.store import acache_get, acache_set
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
@@ -258,7 +258,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         (data is always latest).
         """
         key = cache_key("market_snapshot", ",".join(symbols or []))
-        hit = cache_get(key)
+        hit = await acache_get(key)
         if hit is not None:
             import json
 
@@ -270,7 +270,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 functools.partial(vn_p.equity_quote_batch, symbols or vn_p.VN30),
                 "market_snapshot",
             )
-            cache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
+            await acache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
             quotes, missing = vn_p.split_batch(quotes)
             data: dict[str, Any] = {"quotes": quotes}
             if as_of is not None:
@@ -307,9 +307,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "upstreams": {
                     "vietstock": vs_p.auth_status(),
                     "vnstock": vnstock_state,
-                    "vnstock_quota": vn_p.quota_info(),
+                    # First use imports vnstock (seconds of CPU): never on the event loop.
+                    "vnstock_quota": await asyncio.to_thread(vn_p.quota_info),
                     "dnse_ws": "worker"
-                    if cache_get("mcp:market:dnse_ws_snapshot:VNINDEX")
+                    if await acache_get("mcp:market:dnse_ws_snapshot:VNINDEX")
                     else "cold",
                 },
                 "stateless": True,

@@ -108,7 +108,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | MCP endpoint | `https://opentrading-mcp-web.onrender.com/mcp` |
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
-| Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` |
+| Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` (liveness) · `/readyz` (Redis/Postgres/worker; `?deep=1` thêm upstream) |
 | Tools | 139 (140 khi có websearch key), single full surface, client tự lọc |
 | Deploy | Render chạy `serve --http` full surface (xem `Dockerfile` CMD) |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
@@ -133,7 +133,7 @@ File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
 | 429 + `Retry-After` | Vượt rate-limit hoặc hết quota ngày | Chờ theo header, giảm tần suất |
 | `availability: "unavailable"` + warnings | Upstream chết/thiếu worker (vd WS trio cần worker local) | Đọc `warnings`, dùng tool fallback được gợi ý |
 | `availability: "empty"` | Query hợp lệ nhưng không có rows (vd IPO rỗng) | Đúng bản chất, không phải lỗi |
-| Cold start 20–40s | Render free-tier sleep | Gọi `/healthz` trước để warm-up |
+| Cold start 20–40s | Render free-tier sleep | `/healthz` chỉ đánh thức instance (liveness, không I/O); vnstock được import nền ngay khi process khởi động. Kiểm tra Redis/Postgres: `/readyz` |
 | Timezone | Mọi timestamp `Asia/Ho_Chi_Minh` tz-aware | Parse theo VN, không UTC |
 | Chi tiết đầy đủ | Kiến trúc, bảo mật, DB, clients | `docs/architecture-review-2026-09-30.md` |
 | Bảng 138 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
