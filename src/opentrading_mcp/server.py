@@ -126,6 +126,9 @@ def register_all(server: FastMCP) -> list[dict[str, Any]]:
         collected.extend(getattr(mod, func_name)(server))
     register_prompts(server)
     register_resources(server)
+    from opentrading_mcp.hints import apply_search_hints
+
+    apply_search_hints(server)
     names = [t["name"] for t in collected]
     if len(names) != len(set(names)):
         raise ValueError("duplicate tool names in full surface")

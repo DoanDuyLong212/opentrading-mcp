@@ -32,7 +32,7 @@ async def test_ai_detect_with_symbol():
     text = out.messages[0].content.text
     assert "VCB" in text
     for token in ("signals_technical", "signals_scan", "STRONG", "REJECT",
-                  "no ML probability", "rs_vs_bench", "pos_52w"):
+                  "không có xác suất ML", "rs_vs_bench", "pos_52w"):
         assert token in text, token
 
 
@@ -58,7 +58,7 @@ async def test_pre_earnings_is_reliability_graded():
     server, _ = _prompts()
     out = await server.get_prompt("pre_earnings", {"symbol": "VCB"})
     text = out.messages[0].content.text
-    for token in ("grade", "stock_forensic", "unknowns", "analyst_consensus"):
+    for token in ("grade", "stock_forensic", "điều chưa biết", "analyst_consensus"):
         assert token in text, token
     assert "surprise threshold" not in text
 
