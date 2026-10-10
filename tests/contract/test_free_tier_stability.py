@@ -218,3 +218,17 @@ def test_a_library_calling_sys_exit_in_a_worker_does_not_stop_the_server(one_slo
         return await one_slot.run_blocking(lambda: "still serving", "next", timeout_secs=5.0)
 
     assert asyncio.run(scenario()) == "still serving"
+
+
+def test_source_status_survives_a_quota_exit_in_quota_info(monkeypatch):
+    """quota_info runs in a thread outside run_blocking; vnai's sys.exit must not escape it."""
+    import opentrading_mcp.providers.vnstock as vn_p
+
+    def exits() -> dict:
+        raise SystemExit("Rate limit exceeded. Process terminated.")
+
+    monkeypatch.setattr(vn_p, "quota_info", exits)
+    monkeypatch.setattr(vn_p, "quote_history", lambda *a, **k: [])
+    fn = _server()._tool_manager.get_tool("source_status").fn
+    out = asyncio.run(fn())
+    assert "rate limit" in out["data"]["upstreams"]["vnstock_quota"]["error"]

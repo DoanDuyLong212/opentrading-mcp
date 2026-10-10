@@ -112,7 +112,7 @@ _EXECUTOR = ThreadPoolExecutor(max_workers=blocking_slots(), thread_name_prefix=
 RATE_LIMITED = "upstream rate limit reached"
 
 
-def _no_exit[T](fn: Callable[[], T]) -> T:
+def no_exit[T](fn: Callable[[], T]) -> T:
     """vnai (vnstock) calls sys.exit() when its 60 req/min quota is hit. In a worker thread
     the SystemExit travels through the future into the event loop and stops the server
     (a 502 for every client). Turn it into an ordinary provider error."""
@@ -139,7 +139,7 @@ async def run_blocking[T](fn: Callable[[], T], tool: str, timeout_secs: float = 
 
     loop = asyncio.get_running_loop()
     ctx = contextvars.copy_context()
-    future = loop.run_in_executor(_EXECUTOR, functools.partial(ctx.run, _no_exit, fn))
+    future = loop.run_in_executor(_EXECUTOR, functools.partial(ctx.run, no_exit, fn))
     try:
         return await asyncio.wait_for(future, timeout_secs)
     except TimeoutError as exc:
