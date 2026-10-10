@@ -1,9 +1,9 @@
 """Multi-asset cycle tables: VN assets + global assets, PG-backed.
 
-VN scope (9 assets, no physical RE): VNINDEX/GOLD_W/USDVND/RON95/BTC/BRENT
+VN scope (6 price series): VNINDEX/GOLD_W/USDVND/RON95/BTC/BRENT
   monthly + anchors (TPCP/deposit/TPDN/SJC-spread/foreign, provenance-kept)
   + Granger-verified chains.
-Global scope (14 groups): monthly + NBER-phase + corr regimes + outlook snapshot.
+Global scope (17 ETFs): monthly + NBER-phase + corr regimes + outlook snapshot.
 Refresh: yfinance/VCI/petrol-API (no auth); FRED optional (USREC w/ hardcoded
 fallback 2020-03/04). Batch ~12 symbols/call like cycle_stats.
 """
@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import functools
 import json
-import math
 import time
 import urllib.request
 from datetime import date, timedelta
@@ -20,9 +19,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from opentrading_mcp import dbinit
 from opentrading_mcp.providers.errors import ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
+from opentrading_mcp.tools import cycle_db as db
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     READ_WRITE_STATE,
@@ -48,24 +47,6 @@ G_ETFS = ["SPY", "QQQ", "IWM", "EFA", "EEM", "TLT", "IEF", "SHY", "TIP",
 NBER_KNOWN = ["2020-03", "2020-04"]  # fallback when FRED key absent
 
 
-def _pg() -> Any:
-    url = dbinit.db_url().strip()
-    if not url:
-        return None
-    dbinit.ensure_tables()
-    try:
-        import psycopg
-
-        return psycopg.connect(url, autocommit=True, connect_timeout=5)
-    except Exception:
-        return None
-
-
-def _na(tool: str, reason: str) -> dict[str, Any]:
-    return make_envelope({"tool": tool}, source="unavailable",
-                         warnings=[reason], availability="unavailable")
-
-
 def _yf_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
     import yfinance as yf
 
@@ -78,7 +59,7 @@ def _yf_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
                 raise ValueError("empty")
             s = df.iloc[:, 0].dropna() if hasattr(df, "iloc") else df.dropna()
             return [{"t": str(t)[:10], "c": float(v)} for t, v in s.items()]
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last = exc
             time.sleep(2)
     raise ProviderUnavailable(f"yfinance failed for {symbol}: {last}")
@@ -103,8 +84,8 @@ def _vci_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
                 tcol = "time" if "time" in df.columns else df.columns[0]
                 times = _pd.to_datetime(df[tcol])
             return [{"t": str(ts)[:10], "c": float(row.get("close", 0) or 0)}
-                    for ts, (_, row) in zip(times, df.iterrows())]
-        except Exception as exc:  # noqa: BLE001
+                    for ts, (_, row) in zip(times, df.iterrows(), strict=False)]
+        except Exception as exc:
             last = exc
             time.sleep(2 * (attempt + 1))
     raise ProviderUnavailable(f"VCI fetch failed for {symbol}: {last}")
@@ -152,277 +133,162 @@ def _usrec_months() -> list[str]:
     return [d + "-03" for d in ["2020"]] + [d + "-04" for d in ["2020"]]
 
 
+def _filters(base: str, conds: list[tuple[str, Any]], order: str) -> tuple[str, list[Any]]:
+    used = [(c, v) for c, v in conds if v not in (None, "")]
+    where = " WHERE " + " AND ".join(f"{c}=%s" for c, _ in used) if used else ""
+    return base + where + f" ORDER BY {order}", [v for _, v in used]
+
+
 def register_asset_cycle_tools(server: FastMCP) -> list[dict[str, Any]]:
+    src = "asset_cycle"
+
     @server.tool(annotations=READ_ONLY)
     async def vn_asset_check(ctx: AnyContext | None = None) -> dict[str, Any]:
         """Staleness of VN multi-asset tables. No fetch."""
-        conn = _pg()
-        if conn is None:
-            return _na("vn_asset_check", "DATABASE_URL not configured")
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT key, value FROM vn_asset_meta")
-                meta = dict(cur.fetchall())
-            as_of = meta.get("as_of", "")
-            try:
-                stale = (date.today() - date.fromisoformat(as_of)).days if as_of else None
-            except ValueError:
-                stale = None
-            return make_envelope({
-                "as_of": as_of or None, "stats_version": meta.get("stats_version"),
-                "days_stale": stale,
-                "needs_refresh": bool(stale is not None and stale > 90),
-            }, source="asset_cycle")
-        finally:
-            conn.close()
+        return await db.check_freshness("vn_asset_check", src, "vn_asset_meta",
+                                        "SELECT COUNT(*) FROM vn_asset_monthly")
 
     @server.tool(annotations=READ_ONLY)
     async def vn_asset_seasonality(asset: str | None = None,
                                   month: int | None = None,
                                   ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Monthly mean/hit per VN asset class. Omit args for full table."""
-        conn = _pg()
-        if conn is None:
-            return _na("vn_asset_seasonality", "DATABASE_URL not configured")
-        try:
-            q = "SELECT asset, month, mean_ret, hit_rate, n FROM vn_asset_monthly"
-            cond: list[str] = []
-            args: list[Any] = []
-            if asset:
-                cond.append("asset=%s")
-                args.append(asset)
-            if month:
-                cond.append("month=%s")
-                args.append(month)
-            if cond:
-                q += " WHERE " + " AND ".join(cond)
-            q += " ORDER BY asset, month"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"asset": r[0], "month": r[1], "mean_ret": r[2],
-                         "hit_rate": r[3], "n": r[4]} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="asset_cycle")
-        finally:
-            conn.close()
+        """Monthly mean/hit per VN asset (VNINDEX, GOLD_W, USDVND, RON95, BTC, BRENT)."""
+        sql, args = _filters("SELECT asset, month, mean_ret, hit_rate, n FROM vn_asset_monthly",
+                             [("asset", asset), ("month", month)], "asset, month")
+        return await db.read_rows("vn_asset_seasonality", src, sql, args,
+                                  ["asset", "month", "mean_ret", "hit_rate", "n"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def vn_asset_anchors(asset: str | None = None,
                                ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Anchor-grade data (yields/spreads/walls/flows) with provenance. For TPCP/deposit/TPDN/SJC/foreign."""
-        conn = _pg()
-        if conn is None:
-            return _na("vn_asset_anchors", "DATABASE_URL not configured")
-        try:
-            q = "SELECT asset, metric, period, value, unit, source FROM vn_asset_anchors"
-            args: list[Any] = []
-            if asset:
-                q += " WHERE asset=%s"
-                args.append(asset)
-            q += " ORDER BY asset, period"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"asset": r[0], "metric": r[1], "period": r[2],
-                         "value": r[3], "unit": r[4], "source": r[5]}
-                        for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="asset_cycle")
-        finally:
-            conn.close()
+        """Anchor data (yields/spreads/walls/flows) with provenance; curated by hand."""
+        sql, args = _filters(
+            "SELECT asset, metric, period, value, unit, source FROM vn_asset_anchors",
+            [("asset", asset)], "asset, period")
+        return await db.read_rows("vn_asset_anchors", src, sql, args,
+                                  ["asset", "metric", "period", "value", "unit", "source"],
+                                  bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def vn_asset_chains(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Cross-asset lead-lag incl. Granger-verified links (BTC->VNI, Brent->RON95)."""
-        conn = _pg()
-        if conn is None:
-            return _na("vn_asset_chains", "DATABASE_URL not configured")
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT pair, n_up, rel_mean, rel_hit, note FROM vn_asset_chains"
-                            " ORDER BY rel_mean DESC")
-                rows = [{"pair": r[0], "n_up": r[1], "rel_mean": r[2], "rel_hit": r[3],
-                         "note": r[4]} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="asset_cycle")
-        finally:
-            conn.close()
-
-    @server.tool(annotations=READ_WRITE_STATE)
-    async def vn_asset_refresh(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Refresh all 6 VN assets (incremental) + recompute monthly. Own tables only."""
-        conn = _pg()
-        if conn is None:
-            return _na("vn_asset_refresh", "DATABASE_URL not configured")
-        try:
-            today = date.today().isoformat()
-            status = []
-            for asset in VN_ASSETS:
-                try:
-                    rows = await run_blocking(
-                        functools.partial(_refresh_vn_asset, conn, asset, today),
-                        TOOL, timeout_secs=60.0)
-                    status.append(rows)
-                except Exception as exc:  # noqa: BLE001
-                    status.append({"asset": asset, "error": str(exc)[:150]})
-            summ = await run_blocking(
-                functools.partial(_vn_finalize, conn), TOOL, timeout_secs=120.0)
-            summ["assets"] = status
-            return make_envelope(summ, source="asset_cycle")
-        finally:
-            conn.close()
+        """Cross-asset lead-lag links (BTC->VNI, Brent->RON95); curated by hand."""
+        return await db.read_rows(
+            "vn_asset_chains", src,
+            "SELECT pair, n_up, rel_mean, rel_hit, note FROM vn_asset_chains"
+            " ORDER BY rel_mean DESC", [], ["pair", "n_up", "rel_mean", "rel_hit", "note"])
 
     @server.tool(annotations=READ_ONLY)
     async def g_asset_check(ctx: AnyContext | None = None) -> dict[str, Any]:
         """Staleness of global asset tables. No fetch."""
-        conn = _pg()
-        if conn is None:
-            return _na("g_asset_check", "DATABASE_URL not configured")
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT key, value FROM g_asset_meta")
-                meta = dict(cur.fetchall())
-            as_of = meta.get("as_of", "")
-            try:
-                stale = (date.today() - date.fromisoformat(as_of)).days if as_of else None
-            except ValueError:
-                stale = None
-            return make_envelope({
-                "as_of": as_of or None, "stats_version": meta.get("stats_version"),
-                "days_stale": stale,
-                "needs_refresh": bool(stale is not None and stale > 90),
-            }, source="asset_cycle")
-        finally:
-            conn.close()
+        return await db.check_freshness("g_asset_check", src, "g_asset_meta",
+                                        "SELECT COUNT(*) FROM g_asset_monthly")
 
     @server.tool(annotations=READ_ONLY)
     async def g_asset_seasonality(asset: str | None = None,
                                  month: int | None = None,
                                  ctx: AnyContext | None = None) -> dict[str, Any]:
         """Monthly mean/hit per global asset (17 ETFs). Omit args for full table."""
-        conn = _pg()
-        if conn is None:
-            return _na("g_asset_seasonality", "DATABASE_URL not configured")
-        try:
-            q = "SELECT asset, month, mean_ret, hit_rate, n FROM g_asset_monthly"
-            cond: list[str] = []
-            args: list[Any] = []
-            if asset:
-                cond.append("asset=%s")
-                args.append(asset)
-            if month:
-                cond.append("month=%s")
-                args.append(month)
-            if cond:
-                q += " WHERE " + " AND ".join(cond)
-            q += " ORDER BY asset, month"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"asset": r[0], "month": r[1], "mean_ret": r[2],
-                         "hit_rate": r[3], "n": r[4]} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="asset_cycle")
-        finally:
-            conn.close()
+        sql, args = _filters("SELECT asset, month, mean_ret, hit_rate, n FROM g_asset_monthly",
+                             [("asset", asset), ("month", month)], "asset, month")
+        return await db.read_rows("g_asset_seasonality", src, sql, args,
+                                  ["asset", "month", "mean_ret", "hit_rate", "n"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def g_asset_phase(asset: str | None = None,
                             ctx: AnyContext | None = None) -> dict[str, Any]:
-        """NBER-phase returns (Early/Late/Mid/Recession). Small-n warning on Early/Late/Recession."""
-        conn = _pg()
-        if conn is None:
-            return _na("g_asset_phase", "DATABASE_URL not configured")
-        try:
-            q = "SELECT asset, phase, mean_m, ann_ret, n FROM g_asset_phase"
-            args: list[Any] = []
-            if asset:
-                q += " WHERE asset=%s"
-                args.append(asset)
-            q += " ORDER BY asset, phase"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"asset": r[0], "phase": r[1], "mean_m": r[2],
-                         "ann_ret": r[3], "n": r[4]} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="asset_cycle")
-        finally:
-            conn.close()
+        """NBER-phase returns (Early/Late/Mid/Recession); Early/Late/Recession rest on few months."""
+        sql, args = _filters("SELECT asset, phase, mean_m, ann_ret, n FROM g_asset_phase",
+                             [("asset", asset)], "asset, phase")
+        return await db.read_rows("g_asset_phase", src, sql, args,
+                                  ["asset", "phase", "mean_m", "ann_ret", "n"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def g_asset_corr(regime: str | None = None,
                            ctx: AnyContext | None = None) -> dict[str, Any]:
         """Cross-asset monthly correlations. regime: full|pre22|post22."""
-        conn = _pg()
-        if conn is None:
-            return _na("g_asset_corr", "DATABASE_URL not configured")
-        try:
-            q = "SELECT a, b, corr, regime FROM g_asset_corr"
-            args: list[Any] = []
-            if regime:
-                q += " WHERE regime=%s"
-                args.append(regime)
-            q += " ORDER BY regime, a, b"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"a": r[0], "b": r[1], "corr": r[2], "regime": r[3]}
-                        for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="asset_cycle")
-        finally:
-            conn.close()
+        sql, args = _filters("SELECT a, b, corr, regime FROM g_asset_corr",
+                             [("regime", regime)], "regime, a, b")
+        return await db.read_rows("g_asset_corr", src, sql, args, ["a", "b", "corr", "regime"],
+                                  bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def g_asset_outlook(house: str | None = None,
                               ctx: AnyContext | None = None) -> dict[str, Any]:
         """Curated bank/fund allocation calls per quarter (with sources). Manually refreshed."""
-        conn = _pg()
-        if conn is None:
-            return _na("g_asset_outlook", "DATABASE_URL not configured")
-        try:
-            q = "SELECT house, quarter, asset, stance, detail FROM g_asset_outlook"
-            args: list[Any] = []
-            if house:
-                q += " WHERE house=%s"
-                args.append(house)
-            q += " ORDER BY quarter DESC, house, asset"
-            with conn.cursor() as cur:
-                cur.execute(q, args)
-                rows = [{"house": r[0], "quarter": r[1], "asset": r[2],
-                         "stance": r[3], "detail": r[4]} for r in cur.fetchall()]
-            return make_envelope({"rows": rows}, source="asset_cycle")
-        finally:
-            conn.close()
+        sql, args = _filters(
+            "SELECT house, quarter, asset, stance, detail FROM g_asset_outlook",
+            [("house", house)], "quarter DESC, house, asset")
+        return await db.read_rows("g_asset_outlook", src, sql, args,
+                                  ["house", "quarter", "asset", "stance", "detail"], bool(args))
 
-    @server.tool(annotations=READ_WRITE_STATE)
-    async def g_asset_refresh(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Refresh 17 ETFs + USREC (incremental) + recompute monthly/phase/corr. Own tables only."""
-        conn = _pg()
-        if conn is None:
-            return _na("g_asset_refresh", "DATABASE_URL not configured")
-        try:
-            today = date.today().isoformat()
-            status = []
-            for sym in G_ETFS:
-                try:
-                    rows = await run_blocking(
-                        functools.partial(_refresh_g_symbol, conn, sym, today),
-                        TOOL, timeout_secs=60.0)
-                    status.append(rows)
-                except Exception as exc:  # noqa: BLE001
-                    status.append({"symbol": sym, "error": str(exc)[:150]})
-            summ = await run_blocking(
-                functools.partial(_g_finalize, conn), TOOL, timeout_secs=120.0)
-            summ["symbols"] = status
-            return make_envelope(summ, source="asset_cycle")
-        finally:
-            conn.close()
-
-    return [
+    tools = [
         {"name": "vn_asset_check"},
         {"name": "vn_asset_seasonality"},
         {"name": "vn_asset_anchors"},
         {"name": "vn_asset_chains"},
-        {"name": "vn_asset_refresh"},
         {"name": "g_asset_check"},
         {"name": "g_asset_seasonality"},
         {"name": "g_asset_phase"},
         {"name": "g_asset_corr"},
         {"name": "g_asset_outlook"},
-        {"name": "g_asset_refresh"},
     ]
+    if not db.writes_enabled():
+        return tools
+
+    @server.tool(annotations=READ_WRITE_STATE)
+    async def vn_asset_refresh(ctx: AnyContext | None = None) -> dict[str, Any]:
+        """Refresh the 6 VN assets (incremental) + recompute monthly. One refresh at a time."""
+
+        async def work() -> dict[str, Any]:
+            summ = await refresh_vn_assets()
+            return make_envelope(summ, source="asset_cycle")
+
+        return await db.guarded_write("vn_asset_refresh", work)
+
+    @server.tool(annotations=READ_WRITE_STATE)
+    async def g_asset_refresh(ctx: AnyContext | None = None) -> dict[str, Any]:
+        """Refresh 17 ETFs + USREC (incremental) + recompute monthly/phase/corr."""
+
+        async def work() -> dict[str, Any]:
+            summ = await refresh_global_assets()
+            return make_envelope(summ, source="asset_cycle")
+
+        return await db.guarded_write("g_asset_refresh", work)
+
+    return [*tools, {"name": "vn_asset_refresh"}, {"name": "g_asset_refresh"}]
+
+
+async def refresh_vn_assets() -> dict[str, Any]:
+    """Each asset in its own transaction, then the recompute in one (also used by the CLI)."""
+    today = date.today().isoformat()
+    status: list[dict[str, Any]] = []
+    for asset in VN_ASSETS:
+        try:
+            status.append(await run_blocking(
+                functools.partial(db.transactional, _refresh_vn_asset, asset, today),
+                TOOL, timeout_secs=90.0))
+        except Exception as exc:
+            status.append({"asset": asset, "error": str(exc)[:150]})
+    summ = await run_blocking(functools.partial(db.transactional, _vn_finalize), TOOL,
+                              timeout_secs=180.0)
+    summ["assets"] = status
+    return summ
+
+
+async def refresh_global_assets() -> dict[str, Any]:
+    today = date.today().isoformat()
+    status: list[dict[str, Any]] = []
+    for sym in G_ETFS:
+        try:
+            status.append(await run_blocking(
+                functools.partial(db.transactional, _refresh_g_symbol, sym, today),
+                TOOL, timeout_secs=90.0))
+        except Exception as exc:
+            status.append({"symbol": sym, "error": str(exc)[:150]})
+    summ = await run_blocking(functools.partial(db.transactional, _g_finalize), TOOL,
+                              timeout_secs=180.0)
+    summ["symbols"] = status
+    return summ
 
 
 def _refresh_vn_asset(conn: Any, asset: str, today: str) -> dict[str, Any]:

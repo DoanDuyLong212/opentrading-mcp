@@ -54,6 +54,11 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# Long SQL strings and data tables from the cycle research port (PR #7).
+"src/opentrading_mcp/tools/cycle_stats.py" = ["E501"]
+"src/opentrading_mcp/tools/asset_cycle.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
