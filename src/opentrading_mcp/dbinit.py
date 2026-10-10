@@ -19,6 +19,26 @@ TABLES = (
     "mcp_auth_tokens",
     "mcp_tool_usage",
     "daily_snapshots",
+    "cycle_ohlcv",
+    "cycle_month_stats",
+    "cycle_chains",
+    "cycle_turning",
+    "cycle_tet",
+    "cycle_yearly",
+    "cycle_trough_events",
+    "cycle_meta",
+    "cycle_watermark",
+    "vn_asset_ohlcv",
+    "vn_asset_monthly",
+    "vn_asset_anchors",
+    "vn_asset_chains",
+    "vn_asset_meta",
+    "g_ohlcv",
+    "g_asset_monthly",
+    "g_asset_phase",
+    "g_asset_corr",
+    "g_asset_outlook",
+    "g_asset_meta",
 )
 
 _DDL = {
@@ -51,6 +71,117 @@ _DDL = {
         "CREATE TABLE IF NOT EXISTS daily_snapshots ("
         " date DATE NOT NULL, kind TEXT NOT NULL, payload JSONB NOT NULL,"
         " PRIMARY KEY (date, kind))"
+    ),
+    "cycle_ohlcv": (
+        "CREATE TABLE IF NOT EXISTS cycle_ohlcv ("
+        " symbol TEXT NOT NULL, t DATE NOT NULL,"
+        " o DOUBLE PRECISION, h DOUBLE PRECISION, l DOUBLE PRECISION,"
+        " c DOUBLE PRECISION, v DOUBLE PRECISION,"
+        " PRIMARY KEY (symbol, t))"
+    ),
+    "cycle_month_stats": (
+        "CREATE TABLE IF NOT EXISTS cycle_month_stats ("
+        " basket TEXT NOT NULL, month INT NOT NULL,"
+        " mean_ret DOUBLE PRECISION, hit_rate DOUBLE PRECISION,"
+        " rel_ret DOUBLE PRECISION, n INT,"
+        " PRIMARY KEY (basket, month))"
+    ),
+    "cycle_chains": (
+        "CREATE TABLE IF NOT EXISTS cycle_chains ("
+        " pair TEXT PRIMARY KEY, n_up INT,"
+        " rel_mean DOUBLE PRECISION, rel_hit DOUBLE PRECISION)"
+    ),
+    "cycle_turning": (
+        "CREATE TABLE IF NOT EXISTS cycle_turning ("
+        " year INT NOT NULL, idx TEXT NOT NULL,"
+        " peak_date DATE, trough_date DATE,"
+        " PRIMARY KEY (year, idx))"
+    ),
+    "cycle_tet": (
+        "CREATE TABLE IF NOT EXISTS cycle_tet ("
+        " basket TEXT PRIMARY KEY,"
+        " pre5_mean DOUBLE PRECISION, pre5_hit DOUBLE PRECISION,"
+        " post5_mean DOUBLE PRECISION, post5_hit DOUBLE PRECISION, n INT)"
+    ),
+    "cycle_yearly": (
+        "CREATE TABLE IF NOT EXISTS cycle_yearly ("
+        " basket TEXT NOT NULL, year INT NOT NULL, ret DOUBLE PRECISION,"
+        " PRIMARY KEY (basket, year))"
+    ),
+    "cycle_trough_events": (
+        "CREATE TABLE IF NOT EXISTS cycle_trough_events ("
+        " trough DATE PRIMARY KEY, vnindex_3m DOUBLE PRECISION,"
+        " bank DOUBLE PRECISION, securities DOUBLE PRECISION,"
+        " realestate DOUBLE PRECISION, oilgas DOUBLE PRECISION,"
+        " steel DOUBLE PRECISION, utility DOUBLE PRECISION,"
+        " tech DOUBLE PRECISION)"
+    ),
+    "cycle_meta": (
+        "CREATE TABLE IF NOT EXISTS cycle_meta ("
+        " key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+    ),
+    "cycle_watermark": (
+        "CREATE TABLE IF NOT EXISTS cycle_watermark ("
+        " symbol TEXT PRIMARY KEY, last_date DATE, mode TEXT,"
+        " members_version TEXT NOT NULL DEFAULT 'v1')"
+    ),
+    "vn_asset_monthly": (
+        "CREATE TABLE IF NOT EXISTS vn_asset_monthly ("
+        " asset TEXT NOT NULL, month INT NOT NULL,"
+        " mean_ret DOUBLE PRECISION, hit_rate DOUBLE PRECISION, n INT,"
+        " PRIMARY KEY (asset, month))"
+    ),
+    "vn_asset_ohlcv": (
+        "CREATE TABLE IF NOT EXISTS vn_asset_ohlcv ("
+        " asset TEXT NOT NULL, t DATE NOT NULL, c DOUBLE PRECISION,"
+        " PRIMARY KEY (asset, t))"
+    ),
+    "vn_asset_anchors": (
+        "CREATE TABLE IF NOT EXISTS vn_asset_anchors ("
+        " id SERIAL PRIMARY KEY, asset TEXT NOT NULL, metric TEXT NOT NULL,"
+        " period TEXT NOT NULL, value DOUBLE PRECISION, unit TEXT,"
+        " source TEXT NOT NULL)"
+    ),
+    "vn_asset_chains": (
+        "CREATE TABLE IF NOT EXISTS vn_asset_chains ("
+        " pair TEXT PRIMARY KEY, n_up INT,"
+        " rel_mean DOUBLE PRECISION, rel_hit DOUBLE PRECISION, note TEXT)"
+    ),
+    "vn_asset_meta": (
+        "CREATE TABLE IF NOT EXISTS vn_asset_meta ("
+        " key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+    ),
+    "g_asset_monthly": (
+        "CREATE TABLE IF NOT EXISTS g_asset_monthly ("
+        " asset TEXT NOT NULL, month INT NOT NULL,"
+        " mean_ret DOUBLE PRECISION, hit_rate DOUBLE PRECISION, n INT,"
+        " PRIMARY KEY (asset, month))"
+    ),
+    "g_ohlcv": (
+        "CREATE TABLE IF NOT EXISTS g_ohlcv ("
+        " symbol TEXT NOT NULL, t DATE NOT NULL, c DOUBLE PRECISION,"
+        " PRIMARY KEY (symbol, t))"
+    ),
+    "g_asset_phase": (
+        "CREATE TABLE IF NOT EXISTS g_asset_phase ("
+        " asset TEXT NOT NULL, phase TEXT NOT NULL,"
+        " mean_m DOUBLE PRECISION, ann_ret DOUBLE PRECISION, n INT,"
+        " PRIMARY KEY (asset, phase))"
+    ),
+    "g_asset_corr": (
+        "CREATE TABLE IF NOT EXISTS g_asset_corr ("
+        " a TEXT NOT NULL, b TEXT NOT NULL, corr DOUBLE PRECISION,"
+        " regime TEXT NOT NULL DEFAULT 'full',"
+        " PRIMARY KEY (a, b, regime))"
+    ),
+    "g_asset_outlook": (
+        "CREATE TABLE IF NOT EXISTS g_asset_outlook ("
+        " id SERIAL PRIMARY KEY, house TEXT NOT NULL, quarter TEXT NOT NULL,"
+        " asset TEXT NOT NULL, stance TEXT NOT NULL, detail TEXT)"
+    ),
+    "g_asset_meta": (
+        "CREATE TABLE IF NOT EXISTS g_asset_meta ("
+        " key TEXT PRIMARY KEY, value TEXT NOT NULL)"
     ),
 }
 
