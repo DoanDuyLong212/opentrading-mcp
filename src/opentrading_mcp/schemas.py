@@ -7,6 +7,7 @@ strings compatible with OpenTrading errors.py.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -61,6 +62,43 @@ def utc_now_iso() -> str:
     return datetime.now(_TZ).isoformat()
 
 
+_NET_DATE = re.compile(r"^/Date\((-?\d+)(?:[+-]\d{4})?\)/$")
+
+
+def _iso_from_net_date(text: str) -> str | None:
+    """'/Date(1791532464487)/' (ms since epoch, .NET JSON) as Vietnam time ISO 8601.
+
+    Midnight stays a plain date ('2026-07-23'); a time of day keeps it
+    ('2026-10-09T14:54:24+07:00'). Models cannot read the raw form and fell
+    back to provenance.as_of (the fetch time) as the trading date.
+    """
+    match = _NET_DATE.match(text)
+    if not match:
+        return None
+    try:
+        ts = datetime.fromtimestamp(int(match.group(1)) / 1000, tz=_TZ)
+    except (OverflowError, OSError, ValueError):
+        return None
+    if (ts.hour, ts.minute, ts.second) == (0, 0, 0):
+        return ts.date().isoformat()
+    return ts.replace(microsecond=0).isoformat()
+
+
+def normalize_dates(value: Any) -> Any:
+    """Every .NET JSON date string inside `value` as ISO 8601; the rest unchanged."""
+    if isinstance(value, str):
+        if value.startswith("/Date("):
+            return _iso_from_net_date(value) or value
+        return value
+    if isinstance(value, dict):
+        return {k: normalize_dates(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize_dates(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(normalize_dates(v) for v in value)
+    return value
+
+
 def make_envelope(
     data: Any,
     source: str,
@@ -72,7 +110,8 @@ def make_envelope(
     source = _SOURCE_ALIASES.get(source, source)
     has_data = data not in (None, {}, [], ())
     body: dict[str, Any] = {
-        "data": data,
+        # Vietstock (and other ASP.NET upstreams) send dates as /Date(ms)/.
+        "data": normalize_dates(data),
         "provenance": {
             "source": source,
             "as_of": utc_now_iso(),
