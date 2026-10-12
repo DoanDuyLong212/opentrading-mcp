@@ -31,6 +31,18 @@ def _fnum(val: Any) -> float | None:
         return None
 
 
+def _parse_report_date(val: Any) -> Any:
+    """Parse a dd/mm/yyyy report date to a date object; None when unparsable."""
+    import datetime
+
+    if not val or not isinstance(val, str):
+        return None
+    try:
+        return datetime.datetime.strptime(val.strip(), "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
 def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def dividends_splits(
@@ -266,6 +278,8 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbol: str | None = None,
         limit: int = 30,
         report_type: str = "equity",
+        page: int = 1,
+        days: int | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Analyst ratings and price targets parsed from report titles. Use for street views.
@@ -276,9 +290,33 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbol shows upgrades/downgrades by history. report_type: 'equity'
         (ticker reports) or 'macro' (CTCK macro outlooks: GDP/CPI/rates/FX/Fed;
         symbol filter does not apply, macro_topic set per report).
+        page: listing page (1-based, default 1). The public listing has no
+        working pagination (verified: ?page=N is ignored server-side), so only
+        page=1 returns data; page>1 returns an empty list with a warning.
+        days: keep reports from the last N days by parsed dd/mm/yyyy date
+        (default None = no date filter). Rows without a parsed date are kept
+        and marked date_uncertain:true — treat their dates as uncertain.
+        Titles only — no body. To read detail ONLY when the user explicitly
+        asks for it: call web_fetch on the report url (markdown), then locate
+        'Nguồn:' (CTCK name), the text after 'Tải về' (~500-700 chars summary
+        with upside/revenue/profit/EPS/P-E/P-B/dividend), and the
+        'edocs/...pdf' link (give the user the link; PDF text extraction
+        usually fails on Vietstock fonts — use the HTML summary). Max 3
+        detail fetches per query (each page is ~79k chars of nav noise);
+        prefer MUA ratings and newest dates.
         """
         if ctx is not None:
-            await ctx.log("info", f"analyst_consensus {symbol} {report_type}")
+            await ctx.log("info", f"analyst_consensus {symbol} {report_type} p{page} d{days}")
+        try:
+            page_n = max(int(page), 1)
+        except (TypeError, ValueError):
+            page_n = 1
+        days_n: int | None = None
+        if days is not None:
+            try:
+                days_n = max(int(days), 1)
+            except (TypeError, ValueError):
+                days_n = None
         kind = (report_type or "equity").strip().lower()
         if kind not in ("equity", "macro"):
             return make_envelope(
@@ -287,9 +325,29 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[f"unknown report_type {report_type!r} (equity|macro)"],
                 availability="unavailable",
             )
+        warn: list[str] = []
+        if page_n > 1:
+            warn.append(
+                "public listing has no pagination (verified ?page=N is ignored "
+                "server-side and returns page 1); page>1 returns empty until the "
+                "authenticated CompanyReportSearch is wired"
+            )
+            return make_envelope(
+                {
+                    "symbol": (symbol or "").upper(),
+                    "report_type": kind,
+                    "reports": [],
+                    "page": page_n,
+                    "days": days_n,
+                    "cutoff": None,
+                    "has_more": False,
+                },
+                source="vietstock-scrape",
+                warnings=warn,
+            )
         try:
             reports = await run_blocking(
-                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10), kind),
+                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10), kind, page_n),
                 "analyst_consensus",
                 timeout_secs=45.0,
             )
@@ -301,7 +359,34 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         rows = [r for r in reports if isinstance(r, dict) and r.get("title")]
-        warn: list[str] = []
+        cutoff: str | None = None
+        if days_n is not None:
+            import datetime
+            from zoneinfo import ZoneInfo
+
+            try:
+                today = datetime.datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+            except Exception:
+                today = datetime.date.today()
+            cut = today - datetime.timedelta(days=days_n)
+            cutoff = cut.isoformat()
+            kept: list[dict[str, Any]] = []
+            undated = 0
+            for r in rows:
+                d = _parse_report_date(r.get("date"))
+                if d is None:
+                    undated += 1
+                    row = dict(r)
+                    row["date_uncertain"] = True
+                    kept.append(row)
+                elif d >= cut:
+                    kept.append(r)
+            rows = kept
+            if undated:
+                warn.append(
+                    f"{undated} row(s) have no parsed date and are kept with "
+                    "date_uncertain:true — treat their dates as uncertain"
+                )
         if kind == "macro":
             if symbol:
                 warn.append("symbol filter ignored for macro reports (no ticker)")
@@ -318,6 +403,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "symbol": (symbol or "").upper(),
                 "report_type": kind,
                 "reports": rows[: max(int(limit), 1)],
+                "page": page_n,
+                "days": days_n,
+                "cutoff": cutoff,
+                "has_more": False,
             },
             source="vietstock-scrape",
             warnings=warn,

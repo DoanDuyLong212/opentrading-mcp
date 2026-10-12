@@ -286,3 +286,102 @@ async def test_analyst_consensus_macro_mode(monkeypatch):
     env = await fn(report_type="macro")
     assert env["data"]["report_type"] == "macro"
     assert env["data"]["reports"][0]["macro_topic"] == "CPI"
+
+
+async def test_analyst_consensus_page_gt1_empty_with_warning(monkeypatch):
+    async def boom(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        raise AssertionError("provider must not be called for page>1")
+
+    import opentrading_mcp.tools.corp as corp_mod
+
+    monkeypatch.setattr(corp_mod, "run_blocking", boom)
+    fn = _tool_fn("analyst_consensus")
+    env = await fn(page=2)
+    _check_envelope(env, "analyst_consensus")
+    assert env["data"]["reports"] == []
+    assert env["data"]["page"] == 2
+    assert env["data"]["has_more"] is False
+    assert any("pagination" in w for w in env["warnings"])
+
+
+async def test_analyst_consensus_page_clamped(monkeypatch):
+    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        return []
+
+    import opentrading_mcp.tools.corp as corp_mod
+
+    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
+    fn = _tool_fn("analyst_consensus")
+    env = await fn(page=0)
+    assert env["data"]["page"] == 1
+    assert env["data"]["reports"] == []
+
+
+async def test_analyst_consensus_days_filter(monkeypatch):
+    import datetime
+
+    today = datetime.date.today()
+    in_range = today.strftime("%d/%m/%Y")
+    old = (today - datetime.timedelta(days=90)).strftime("%d/%m/%Y")
+
+    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        return [
+            {
+                "title": "AAA: Khuyến nghị MUA với giá mục tiêu 10,000 đồng/cổ phiếu",
+                "source": None,
+                "date": in_range,
+                "url": "https://x/1",
+                "symbol": "AAA",
+                "rating": "MUA",
+                "target": 10000.0,
+            },
+            {
+                "title": "BBB: Khuyến nghị MUA với giá mục tiêu 20,000 đồng/cổ phiếu",
+                "source": None,
+                "date": old,
+                "url": "https://x/2",
+                "symbol": "BBB",
+                "rating": "MUA",
+                "target": 20000.0,
+            },
+            {
+                "title": "CCC: Khuyến nghị MUA với giá mục tiêu 30,000 đồng/cổ phiếu",
+                "source": None,
+                "date": None,
+                "url": "https://x/3",
+                "symbol": "CCC",
+                "rating": "MUA",
+                "target": 30000.0,
+            },
+        ]
+
+    import opentrading_mcp.tools.corp as corp_mod
+
+    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
+    fn = _tool_fn("analyst_consensus")
+    env = await fn(days=60)
+    _check_envelope(env, "analyst_consensus")
+    syms = [r["symbol"] for r in env["data"]["reports"]]
+    assert "AAA" in syms
+    assert "BBB" not in syms
+    assert "CCC" in syms
+    ccc = next(r for r in env["data"]["reports"] if r["symbol"] == "CCC")
+    assert ccc["date_uncertain"] is True
+    assert env["data"]["days"] == 60
+    assert env["data"]["cutoff"] is not None
+    assert any("date_uncertain" in w for w in env["warnings"])
+
+
+def test_analyst_consensus_docstring_has_harness_recipe():
+    from tests.contract.test_p6_corp2 import _tool_fn as _tf
+
+    fn = _tf("analyst_consensus")
+    doc = fn.__doc__ or ""
+    for marker in ("Nguồn:", "Tải về", "edocs", "Max 3"):
+        assert marker in doc, f"docstring missing harness marker {marker!r}"
+
+
+def test_provider_analyst_reports_page_gt1_empty():
+    from opentrading_mcp.providers import vn_public as pub_p
+
+    assert pub_p.analyst_reports(10, "equity", page=2) == []
