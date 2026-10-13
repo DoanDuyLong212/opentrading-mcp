@@ -66,7 +66,10 @@ async def test_tool_catalog_resource_matches_registered_tools():
     assert catalog["count"] == len(catalog["tools"]) > 100
     by_name = {t["name"]: t for t in catalog["tools"]}
     assert "market_snapshot" in by_name
-    assert by_name["market_snapshot"]["description"].startswith("Snapshot of VN market")
+    # Tool descriptions follow the Claude Code standard: purpose line + "Dùng khi".
+    desc = by_name["market_snapshot"]["description"]
+    assert desc.startswith("Toàn cảnh thị trường VN")
+    assert "Dùng khi" in desc
 
 
 async def test_term_types_resource_covers_key_maps():
