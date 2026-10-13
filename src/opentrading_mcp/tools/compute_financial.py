@@ -104,6 +104,21 @@ def _fd_first(detail: dict[str, Any], *needles: str) -> list[float]:
     return []
 
 
+# Beneish (1999) 8-variable model without DEPI (depreciation is not exposed upstream).
+# SGAI enters with a negative weight; -1.78 is the 8-variable cut-off, so with DEPI
+# dropped the threshold is approximate.
+BENEISH_INTERCEPT = -4.84
+BENEISH_COEF = {
+    "dsri": 0.920,
+    "gmi": 0.528,
+    "aqi": 0.404,
+    "sgi": 0.892,
+    "sgai": -0.172,
+    "tata": 4.679,
+    "lvgi": -0.327,
+}
+
+
 def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def stock_forensic(
@@ -115,8 +130,9 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).
 
         Sources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,
-        cash, CFO). M-Score is 7-index (DEPI excluded — not exposed); full
-        formula only when every input exists, else partial with missing list.
+        cash, CFO). M-Score is 7-index (DEPI excluded — not exposed, so the
+        -1.78 cut-off is approximate); full formula only when every input
+        exists, else partial with missing list.
         F-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;
         share-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.
         detail=true adds raw input series.
@@ -225,17 +241,17 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             if v is None
         ]
-        raw_parts = [
-            (0.92, dsri),
-            (0.528, gmi),
-            (0.404, aqi),
-            (0.892, sgi),
-            (0.115, sgai),
-            (4.679, tata),
-            (-0.327, lvgi),
-        ]
-        parts = [c * v for c, v in raw_parts if v is not None]
-        m_score = round(-4.84 + sum(parts), 4) if not missing else None
+        indexes = {
+            "dsri": dsri,
+            "gmi": gmi,
+            "aqi": aqi,
+            "sgi": sgi,
+            "sgai": sgai,
+            "tata": tata,
+            "lvgi": lvgi,
+        }
+        parts = [BENEISH_COEF[k] * v for k, v in indexes.items() if v is not None]
+        m_score = round(BENEISH_INTERCEPT + sum(parts), 4) if not missing else None
         flags: list[str] = []
         if dsri and dsri > 1.2:
             flags.append("receivables growing faster than sales (DSRI>1.2)")

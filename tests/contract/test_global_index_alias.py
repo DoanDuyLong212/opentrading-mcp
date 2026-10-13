@@ -26,6 +26,31 @@ def test_alias_maps_common_spellings():
         assert vn_p._normalize_global_symbol(code) == code
 
 
+def test_alias_ignores_spaces_hyphens_and_dots():
+    assert vn_p._normalize_global_symbol("S&P 500") == "INX"
+    assert vn_p._normalize_global_symbol("Dow Jones") == "USA30"
+    assert vn_p._normalize_global_symbol("Nasdaq Composite") == "COMP"
+    assert vn_p._normalize_global_symbol("CAC 40") == "PX1"
+    assert vn_p._normalize_global_symbol("CAC") == "PX1"
+    assert vn_p._normalize_global_symbol("Nikkei 225") == "N225"
+    assert vn_p._normalize_global_symbol("VN-Index") == "VNI"
+    assert vn_p._normalize_global_symbol("000001.SS") == "000001"
+    assert vn_p._normalize_global_symbol(" ^gdaxi ") == "DAX"
+
+
+def test_aliases_and_listed_codes_exist_in_vnstock():
+    # vnstock's own table is the source of truth; aliases and the error list must match it.
+    from vnstock.explorer.msn.const import _GLOBAL_INDICES
+
+    assert set(vn_p.GLOBAL_INDEX_ALIASES.values()) <= set(_GLOBAL_INDICES)
+    listed = {
+        code
+        for part in vn_p.VALID_GLOBAL_SYMBOLS.split(", ")
+        for code in part.split(" ")[0].split("/")
+    }
+    assert listed <= set(_GLOBAL_INDICES), listed - set(_GLOBAL_INDICES)
+
+
 async def test_global_index_alias_reaches_vnstock(monkeypatch):
     seen: dict[str, Any] = {}
 

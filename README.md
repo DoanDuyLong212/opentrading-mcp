@@ -31,6 +31,7 @@ See `configs/` for opencode / Claude / Cursor / Codex / Antigravity snippets,
 - Các tool đọc lấy số từ Postgres (`DATABASE_URL`). Bảng chưa có dữ liệu thì tool trả `availability: unavailable` và `*_check` báo `needs_refresh: true` (không bao giờ báo "mới" khi bảng trống).
 - Seed/refresh toàn bộ **ngoài request**: `DATABASE_URL=... opentrading-mcp cycle-refresh` (giới hạn bằng `CYCLE_REFRESH_ONLY=cycle|vn|global`). Lệnh tự chờ khi chạm hạn mức 60 request/phút của vnstock. Không tự chạy; chạy thủ công hoặc qua job theo lịch do người vận hành quyết định.
 - Tool ghi (`*_refresh`, `*_finalize`) chạy từng lệnh một, mỗi lần rebuild là một transaction. `MCP_CYCLE_WRITE=0` ẩn các tool ghi khỏi server.
+- `opentrading-mcp verify` bỏ qua 4 tool ghi này (báo `skipped`) để không ghi lại bảng dùng chung trên server thật; chỉ đặt `OPENTRADING_VERIFY_WRITES=1` khi verify với database thử.
 - `vn_asset_anchors`, `vn_asset_chains`, `g_asset_outlook` là dữ liệu nhập tay (không có lệnh refresh nào ghi).
 
 ## Kết nối tới MCP-server (dành cho team harness) — 3 bước là chạy

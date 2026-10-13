@@ -235,18 +235,14 @@ def _parse_consensus_title(title: str) -> dict[str, Any]:
 
 
 @guarded("vn_public")
-def analyst_reports(limit: int = 30, kind: str = "equity", page: int = 1) -> list[dict[str, Any]]:
+def analyst_reports(limit: int = 30, kind: str = "equity") -> list[dict[str, Any]]:
     """Analyst report titles with rating/target parsed (Vietstock listing page).
 
     kind='equity': ticker-prefixed titles only (current behavior).
     kind='macro': titles WITHOUT ticker prefix that match macro keywords
     (GDP/CPI/rates/FX/Fed...); rating/target may be absent, macro_topic set.
-    page: listing page (1-based). The public listing has no working pagination
-    (verified: ?page=N is ignored server-side and returns page 1), so only
-    page=1 returns data; page>1 returns an empty list and callers should warn.
+    Only the latest listing page exists: ?page=N is ignored server-side.
     """
-    if int(page) > 1:
-        return []
     html, tls_off = _fetch(ANALYST_URL)
     soup = _soup(html)
     out: list[dict[str, Any]] = []

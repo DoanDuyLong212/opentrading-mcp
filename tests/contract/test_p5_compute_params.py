@@ -22,7 +22,7 @@ def _check_envelope(env: dict[str, Any], tool: str) -> None:
     assert env["availability"] in {"available", "empty", "stale", "partial", "unavailable"}
 
 
-async def test_stock_forensic_detail_includes_series(monkeypatch):
+def _install_forensic_fakes(monkeypatch) -> None:
     fd_detail = {
         "symbol": "VCB",
         "statement": "KQKD",
@@ -80,6 +80,10 @@ async def test_stock_forensic_detail_includes_series(monkeypatch):
     monkeypatch.setattr(comp_fin, "_call", fake_call)
     monkeypatch.setattr(comp_intel, "_call", fake_call)
     monkeypatch.setattr(comp_infra, "_call", fake_call)
+
+
+async def test_stock_forensic_detail_includes_series(monkeypatch):
+    _install_forensic_fakes(monkeypatch)
     fn = _tool_fn("stock_forensic")
     env = await fn(symbol="VCB", detail=True)
     _check_envelope(env, "stock_forensic")
@@ -88,6 +92,25 @@ async def test_stock_forensic_detail_includes_series(monkeypatch):
     assert env["data"]["dsri"] is not None
     env2 = await fn(symbol="VCB")
     assert "series" not in env2["data"]
+
+
+async def test_stock_forensic_m_score_uses_beneish_weights(monkeypatch):
+    # Beneish (1999) weights without DEPI: SGAI enters negatively (-0.172).
+    _install_forensic_fakes(monkeypatch)
+    env = await _tool_fn("stock_forensic")(symbol="VCB")
+    d = env["data"]
+    weights = {
+        "dsri": 0.920,
+        "gmi": 0.528,
+        "aqi": 0.404,
+        "sgi": 0.892,
+        "sgai": -0.172,
+        "tata": 4.679,
+        "lvgi": -0.327,
+    }
+    assert d["m_partial"] is None
+    expected = -4.84 + sum(w * d[k] for k, w in weights.items())
+    assert abs(d["m_score"] - expected) < 1e-3
 
 
 async def test_valuation_run_method_passthrough():

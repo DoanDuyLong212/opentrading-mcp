@@ -23,6 +23,16 @@ def _na(tool: str, reason: str) -> dict[str, Any]:
     )
 
 
+# Named indicators → (category_id, term_type_id, sub_term_type_id). A wrong pair returns
+# empty rows, so the common series are resolved here instead of by the model.
+MACRO_INDICATORS: dict[str, tuple[int, int, str | None]] = {
+    "GDP": (73, 3, None),  # quarterly
+    "CPI": (15, 7, "2"),  # year on year
+    "XK": (38, 2, None),  # exports, monthly
+}
+MACRO_INDICATOR_ALIASES = {"EXPORT": "XK", "EXPORTS": "XK"}
+
+
 async def _call(tool: str, fn: Any, *args: Any) -> Any:
     return await run_blocking(functools.partial(fn, *args), tool, timeout_secs=45.0)
 
@@ -123,23 +133,45 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_indicator_data(
-        category_id: int,
+        category_id: int | None = None,
         term_type_id: int | str = 3,
         sub_term_type_id: str | int | None = None,
         from_date: str = "2022-01-01",
         to_date: str | None = None,
+        indicator: str | None = None,
     ) -> dict[str, Any]:
         """Macro series (GDP/CPI/FX/trade) via browser-session replay. Use for macro reads.
 
-        term_type_id: 1 daily, 2 monthly, 3 quarterly, 4 yearly, 5 YTD, 6 MoM,
-        7 YoY, 8 QoQ — pairs must match each category's ListTermType metadata
-        (e.g. GDP 73 tt=3, CPI 15 tt=7 sub=2). from_date default 2022-01-01.
-        Uses the full browser cookie jar (HAR/env seed); Standard pack serves it.
+        indicator: 'GDP' (quarterly), 'CPI' (YoY) or 'XK' (exports, monthly) — the
+        server fills the id pair, so prefer it for these. Other series: pass
+        category_id from vs_categories plus term_type_id: 1 daily, 2 monthly,
+        3 quarterly, 4 yearly, 5 YTD, 6 MoM, 7 YoY, 8 QoQ — pairs must match each
+        category's ListTermType metadata or rows come back empty.
+        from_date default 2022-01-01. Uses the full browser cookie jar (HAR/env
+        seed); Standard pack serves it.
         Rows: {name, group, period, year, value, unit, timeorder}.
-        Example: {"category_id": 73, "term_type_id": 3} (GDP quarterly);
-        {"category_id": 15, "term_type_id": 7, "sub_term_type_id": "2"} (CPI YoY).
+        Example: {"indicator": "CPI"}; {"category_id": 76, "term_type_id": 2}.
         Numbers accepted as strings and coerced (e.g. "3" → 3).
         """
+        warnings: list[str] = []
+        if indicator:
+            key = indicator.strip().upper()
+            key = MACRO_INDICATOR_ALIASES.get(key, key)
+            if key not in MACRO_INDICATORS:
+                return _na(
+                    "vs_indicator_data",
+                    f"unknown indicator {indicator!r}; known: {', '.join(MACRO_INDICATORS)}. "
+                    "For other series pass category_id from vs_categories.",
+                )
+            cat, tt, sub_default = MACRO_INDICATORS[key]
+            if category_id is not None and int(category_id) != cat:
+                warnings.append(f"category_id {category_id} ignored: indicator {key} uses {cat}")
+            category_id, term_type_id, sub_term_type_id = cat, tt, sub_default
+        if category_id is None:
+            return _na(
+                "vs_indicator_data",
+                "pass indicator (GDP/CPI/XK) or category_id (see vs_categories)",
+            )
         try:
             ttid = _coerce_id(term_type_id, "term_type_id")
             sub = _coerce_sub(sub_term_type_id)
@@ -154,7 +186,9 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             rows = out.get("rows", []) if isinstance(out, dict) else []
             availability = "available" if rows else "empty"
-            return make_envelope(out, source="vietstock", availability=availability)
+            return make_envelope(
+                out, source="vietstock", availability=availability, warnings=warnings
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_indicator_data", str(exc))
 

@@ -9,12 +9,21 @@ Contract asserts the shared envelope; data availability is NOT asserted
 from __future__ import annotations
 
 import json
+import os
 import sys
 from typing import Any
 
 from opentrading_mcp.verify import VerifyClient
 
 ALLOWED_AVAILABILITY = {"available", "empty", "stale", "partial", "unavailable"}
+
+# Tools that rewrite the shared cycle/asset tables (every user reads them). A verify run
+# against a deployed server would refresh and re-finalize production data, so they are
+# skipped unless OPENTRADING_VERIFY_WRITES=1 (use it only against a throwaway database).
+SHARED_TABLE_WRITES = frozenset(
+    {"cycle_stats_refresh", "cycle_stats_finalize", "vn_asset_refresh", "g_asset_refresh"}
+)
+VERIFY_WRITES_ENV = "OPENTRADING_VERIFY_WRITES"
 
 # (tool, args, timeout_seconds) — single full surface, no presets
 MATRIX: list[tuple[str, dict[str, Any], float]] = [
@@ -231,6 +240,35 @@ def all_calls() -> list[tuple[str, dict[str, Any], float]]:
     return list(MATRIX)
 
 
+def writes_allowed() -> bool:
+    return os.environ.get(VERIFY_WRITES_ENV, "").strip() == "1"
+
+
+def runnable_calls(
+    calls: list[tuple[str, dict[str, Any], float]],
+) -> tuple[list[tuple[str, dict[str, Any], float]], list[str]]:
+    """Split calls into those to run and the shared-table writers skipped by default."""
+    if writes_allowed():
+        return calls, []
+    run = [c for c in calls if c[0] not in SHARED_TABLE_WRITES]
+    skipped = [c[0] for c in calls if c[0] in SHARED_TABLE_WRITES]
+    return run, skipped
+
+
+def _skipped_rows(tools: list[str], transport: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "tool": tool,
+            "transport": transport,
+            "ok": True,
+            "seconds": 0.0,
+            "availability": "skipped",
+            "detail": f"skipped: rewrites shared tables (set {VERIFY_WRITES_ENV}=1 to run)",
+        }
+        for tool in tools
+    ]
+
+
 def calls_for_preset(preset: str = "all") -> list[tuple[str, dict[str, Any], float]]:
     """Deprecated alias giu tuong thich."""
     return all_calls()
@@ -240,7 +278,7 @@ async def run_stdio_all() -> list[dict[str, Any]]:
     """Spawn a local server exactly like an opencode local entry and check it."""
     client = VerifyClient(server_label="opentrading")
     command = [sys.executable, "-m", "opentrading_mcp", "serve"]
-    calls = all_calls()
+    calls, skipped = runnable_calls(all_calls())
     results = await client.run(calls, "stdio", command)
     rows: list[dict[str, Any]] = []
     for (tool, _, _), res in zip(calls, results, strict=True):
@@ -255,7 +293,7 @@ async def run_stdio_all() -> list[dict[str, Any]]:
                 "detail": "; ".join(violations),
             }
         )
-    return rows
+    return rows + _skipped_rows(skipped, "stdio")
 
 
 async def run_preset_stdio(preset: str = "all") -> list[dict[str, Any]]:
@@ -265,7 +303,8 @@ async def run_preset_stdio(preset: str = "all") -> list[dict[str, Any]]:
 async def run_remote_all(url: str) -> list[dict[str, Any]]:
     """Check the deployed server over StreamableHTTP (SSE fallback inside)."""
     client = VerifyClient(server_label="opentrading", timeout=120.0)
-    calls = [(tool, args, max(timeout * 3, 90.0)) for tool, args, timeout in all_calls()]
+    runnable, skipped = runnable_calls(all_calls())
+    calls = [(tool, args, max(timeout * 3, 90.0)) for tool, args, timeout in runnable]
     results = await client.run(calls, "remote", url)
     rows: list[dict[str, Any]] = []
     for (tool, _, _), res in zip(calls, results, strict=True):
@@ -280,7 +319,7 @@ async def run_remote_all(url: str) -> list[dict[str, Any]]:
                 "detail": "; ".join(violations),
             }
         )
-    return rows
+    return rows + _skipped_rows(skipped, "remote")
 
 
 async def run_preset_remote(url: str, preset: str = "all") -> list[dict[str, Any]]:
