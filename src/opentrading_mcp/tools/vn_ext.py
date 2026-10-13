@@ -167,6 +167,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Global index bars. Use as yfinance fallback.
 
+        Symbol spellings are aliased: S&P 500 = INX (SPX/GSPC/SP500 work),
+        Dow Jones = USA30 (DJI/Dow), Nasdaq Composite = COMP (IXIC/NASDAQ),
+        CAC 40 = PX1 (CAC/CAC40), FTSE 100 = UKX (FTSE/FTSE100), plus DAX,
+        N225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX, VNI.
+        Nasdaq-100 (NDX) is NOT in this source — use yf_global_indices.
         summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
         """
         try:
