@@ -59,9 +59,13 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vs_financeinfo(
         symbol: str, period: str = "quarter", ctx: AnyContext | None = None
     ) -> dict[str, Any]:
-        """Free-mirror statements, 12 quarters or years. Use when JWT is absent.
+        """BCTC mirror miễn phí, 12 quý hoặc năm. Dùng khi KHÔNG có JWT Vietstock.
 
-        period: 'quarter' (12 quarters) or 'year' (annual).
+        Dùng khi: đọc BCTC mà chưa đăng nhập Vietstock.
+        Không dùng khi: đã có JWT (dùng financial_detail — đầy đủ từng dòng); chỉ cần đọc nhanh gọn
+            (dùng financial_statements — cùng nguồn mirror, gọn hơn).
+
+        period: 'quarter' (12 quý) hoặc 'year' (năm).
         """
         if ctx is not None:
             await ctx.log("info", f"vs_financeinfo {symbol} {period}")
@@ -96,9 +100,13 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_nn_flow(days: int = 90) -> dict[str, Any]:
-        """Foreign investor buy/sell chart. Use to cross-check DNSE WS flows.
+        """Biểu đồ mua/bán khối ngoại. Dùng khi đối chiếu chéo dòng tiền với DNSE WS.
 
-        days: keep only the most recent N chart points.
+        Dùng khi: kiểm tra lại số liệu money_flow/dnse_foreign_flow bằng nguồn thứ hai.
+        Không dùng khi: cần đọc smart-money chính trong phiên (dùng money_flow trước; tool này là
+            nguồn đối chiếu, days mặc định 90 điểm).
+
+        days: chỉ giữ N điểm biểu đồ gần nhất.
         """
         try:
             data = await _call("vs_nn_flow", vs_p.nn_flow_chart)

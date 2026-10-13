@@ -112,14 +112,19 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         periods_n: int = 4,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Beneish M-Score + Piotroski F-Score from FULL detailed statements (P15).
+        """Điểm gian lận Beneish M-Score + chất lượng lợi nhuận Piotroski F-Score từ BCTC chi tiết
+            đầy đủ. Dùng khi kiểm tra chất lượng lợi nhuận trước khi định giá.
 
-        Sources: KQKD/CDKT/LCTT detail (real per-quarter lines incl. receivables,
-        cash, CFO). M-Score is 7-index (DEPI excluded — not exposed); full
-        formula only when every input exists, else partial with missing list.
-        F-Score: 6 of 9 items on Standard pack (CFO from LCTT is empty upstream;
-        share-count item unavailable); 8 of 9 when BCTC paid unlocks LCTT.
-        detail=true adds raw input series.
+        Dùng khi: "lợi nhuận FPT có ảo không", chấm điểm trước BCTC.
+        Không dùng khi: chỉ cần đọc BCTC (dùng financial_detail); chỉ cần bội số nhanh (dùng
+            vn_fundamentals).
+
+        Nguồn: chi tiết KQKD/CDKT/LCTT (dòng thật theo quý: phải thu,
+        tiền, CFO). M-Score 7 chỉ số (thiếu DEPI — nguồn không có); chỉ đủ
+        công thức khi đủ input, thiếu thì trả partial kèm danh sách thiếu.
+        F-Score: 6/9 mục trên gói Standard (CFO từ LCTT trống phía nguồn;
+        mục số cổ phiếu không có); 8/9 khi BCTC trả phí mở LCTT.
+        detail=true thêm chuỗi input thô.
         """
         sym = symbol.strip().upper()
         try:
@@ -295,14 +300,17 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def valuation_run(symbol: str, btype: int = 1, method: str = "auto") -> dict[str, Any]:
-        """PER/PB ensemble. Use for fair-value ranges.
+        """Ensemble PER/PB. Dùng khi cần vùng giá trị hợp lý của 1 mã.
 
-        btype→method reference (method is ALWAYS set, never null):
-        1 general → per_pb · 2 securities → pb_bank_broker · 3 bank → pb_bank_broker
-        5 insurance → per_pb. Unknown btype → warnings + method auto.
-        method: 'auto' (default, picks by btype above) or force 'per'/'pb'/'ensemble'.
-        DCF/EV are NOT implemented. There is no tool named valuation_band —
-        use this tool's per_pb/pb range output instead.
+        Dùng khi: "FPT đáng giá bao nhiêu", vùng mua an toàn.
+        Không dùng khi: chỉ cần bội số hiện tại (dùng vs_overview_trading — nhẹ hơn); cần đọc BCTC
+            chi tiết (dùng financial_detail). Không có tool nào tên valuation_band — dùng output
+            vùng per_pb/pb của tool này. DCF/EV CHƯA có.
+
+        btype→method (method LUÔN có giá trị, không bao giờ null):
+        1 thường → per_pb · 2 chứng khoán → pb_bank_broker · 3 ngân hàng → pb_bank_broker
+        5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
+        method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
         try:
             overview = await _call("v", vs_p.overview_trading, symbol, secs=45.0)
@@ -352,11 +360,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def financial_statements(
         symbol: str, period: str = "quarter", statement: str = "all", periods_n: int = 15
     ) -> dict[str, Any]:
-        """Mirror statements alias (v3 compat). Use for statement reads.
+        """Alias đọc BCTC (tương thích v3). Dùng khi đọc BCTC nhanh gọn, không cần JWT.
 
-        Wraps vs_financeinfo (no JWT needed). statement: which statement
-        section to return ('all', or a section key like 'KQKD'/'CDKT');
-        periods_n caps returned periods.
+        Dùng khi: "báo cáo KQKD 4 quý gần nhất của FPT", đọc statement nhanh.
+        Không dùng khi: cần từng dòng chi tiết/forensic (dùng financial_detail — nặng hơn); nguồn
+            gốc mirror khi thiếu JWT (dùng vs_financeinfo).
+
+        Bọc vs_financeinfo (không cần JWT). statement: mục BCTC cần đọc
+        ('all', hoặc khóa như 'KQKD'/'CDKT'); periods_n giới hạn số kỳ trả về.
         """
         try:
             data = await _call("f", vs_p.financeinfo, symbol, period, secs=60.0)
@@ -392,11 +403,16 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         period: str = "year",
         peers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Overview plus vnstock ratios merged. Use for ratio screens.
+        """Overview gộp ratios của vnstock. Dùng khi lọc/soi chỉ số tài chính của 1 mã (kèm peers
+            tuỳ chọn).
 
-        set: keep only ratio keys containing this substring ('all' keeps all).
-        period: statement period ('year'); peers: extra symbols merged as list.
-        Falls back to vnstock fundamentals when Vietstock overview is empty.
+        Dùng khi: "ROE các năm của VCB", so chỉ số 1 mã với vài peers.
+        Không dùng khi: so dạng bảng head-to-head nhiều mã (dùng peer_compare — gọn hơn); cần bội số
+            snapshot (dùng vs_overview_trading); cần vùng giá trị (dùng valuation_run).
+
+        set: chỉ giữ key ratios chứa chuỗi này ('all' giữ hết).
+        period: kỳ BCTC ('year'); peers: thêm mã vào danh sách.
+        Rơi về vnstock fundamentals khi overview Vietstock trống.
         """
         try:
             overview = await _call("r", vs_p.overview_trading, symbol)
@@ -433,10 +449,16 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def peer_compare(
         symbol: str, peers: list[str], metrics: list[str] | None = None
     ) -> dict[str, Any]:
-        """Head-to-head overview rows. Use when picking tickers.
+        """So sánh head-to-head các dòng overview giữa các mã. Dùng khi chọn giữa vài ticker cùng
+            ngành.
 
-        peers: up to 5 extra symbols. metrics: keep only matching ratio keys
-        (symbol column always kept).
+        Dùng khi: "so VCB với TCB với MBB", bảng so sánh trực diện.
+        Không dùng khi: sàng cả thị trường theo điều kiện (dùng stock_screener); cần chuỗi thời gian
+            của 1 mã (dùng financial_ratios period).
+
+        peers: tối đa 5 mã khác. metrics: chỉ giữ key ratios khớp
+        (cột symbol luôn giữ).
+        Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
         wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
@@ -457,7 +479,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def stock_overview(symbol: str) -> dict[str, Any]:
-        """Trading info plus company profile. Use for quick dossiers."""
+        """Thông tin giao dịch + hồ sơ công ty gộp một lần. Dùng khi cần dossier nhanh về 1 mã.
+
+        Dùng khi: lần đầu xem 1 mã (giá + công ty làm gì).
+        Không dùng khi: cần cổ đông/lãnh đạo chi tiết (dùng vn_company detail=true); chỉ cần giá
+            (dùng vn_equity_quote_batch).
+
+        Ví dụ: {"symbol": "FPT"}.
+        """
         try:
             trading = await _call(
                 "t", vs_p._post, "/company/tradinginfo", {"code": symbol.upper(), "s": 0}

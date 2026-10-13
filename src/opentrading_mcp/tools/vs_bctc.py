@@ -50,7 +50,14 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_company_info(symbol: str) -> dict[str, Any]:
-        """Company names, exchange and description. Use for profiles."""
+        """Tên công ty, sàn và mô tả. Dùng khi cần hồ sơ ngắn gọn.
+
+        Dùng khi: "FPT là công ty gì, niêm yết ở đâu".
+        Không dùng khi: cần cổ đông/lãnh đạo (dùng vn_company với detail=true); cần dossier giá + hồ
+            sơ (dùng stock_overview).
+
+        Ví dụ: {"symbol": "FPT"}.
+        """
         try:
             return make_envelope(
                 {"info": await _call("c", vs_p.company_info, symbol)}, source="vietstock"
@@ -60,7 +67,12 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_overview_trading(symbol: str) -> dict[str, Any]:
-        """EPS, BVPS, PE, PB, ROEA/ROAA snapshot. Use for valuation inputs."""
+        """Snapshot EPS, BVPS, PE, PB, ROEA/ROAA. Dùng làm input định giá nhanh.
+
+        Dùng khi: cần bội số hiện tại của 1 mã để so sánh.
+        Không dùng khi: cần vùng giá trị hợp lý (dùng valuation_run); cần so nhiều mã cùng lúc (dùng
+            peer_compare hoặc financial_ratios với peers).
+        """
         try:
             return make_envelope(
                 {"overview": await _call("o", vs_p.overview_trading, symbol)},

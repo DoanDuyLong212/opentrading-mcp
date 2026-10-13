@@ -34,11 +34,16 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def brief_build(
         scope: str = "vn", date: str | None = None, calendars: bool = False
     ) -> dict[str, Any]:
-        """Compose morning brief from news, sentiment pins and calendars. Use at session start.
+        """Soạn bản tin sáng từ tin tức, chốt tâm lý và lịch. Dùng lúc mở đầu phiên hoặc khi user
+            xin bản tin tổng hợp.
 
-        scope: 'vn' or 'world'. date: ISO date the brief is for (recorded as-is).
-        calendars: also attach IPO/macro/SBV sections (sbv_rates, macro_events_vn,
-        ipo_calendar_vn); off by default to keep the brief fast.
+        Dùng khi: "bản tin sáng", "tóm tắt thị trường hôm nay".
+        Không dùng khi: chỉ cần giá hiện tại (dùng market_snapshot/market_overview — nhẹ hơn nhiều);
+            chỉ cần tin 1 mã (dùng news_symbol).
+
+        scope: 'vn' hoặc 'world'. date: ngày ISO của bản tin (ghi nguyên văn).
+        calendars: kèm thêm mục IPO/vĩ mô/SBV (sbv_rates, macro_events_vn,
+        ipo_calendar_vn); tắt mặc định để bản tin nhanh.
         """
         if scope not in ("vn", "world"):
             return make_envelope(
@@ -95,13 +100,18 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         if not vs_ok:
             live_warnings.append(f"vietstock: {vs_state}")
         return make_envelope(data, source="composer", warnings=live_warnings or None)
-
     @server.tool(annotations=READ_ONLY)
     async def news_market(limit: int = 10, sources: str | None = None) -> dict[str, Any]:
-        """Market news: Fireant posts first, GDELT fallback. Use for catalyst checks.
+        """Tin thị trường: đọc Fireant trước, GDELT dự phòng. Dùng khi kiểm tra chất xúc tác chung
+            của thị trường.
 
-        sources: 'gdelt' routes straight to GDELT. Default reads the Fireant
-        crowd feed (token from env) and falls back to GDELT when empty.
+        Dùng khi: "có tin gì mới", "vì sao thị trường tăng/giảm".
+        Không dùng khi: tin về 1 mã cụ thể (dùng news_symbol); cần đọc bình luận đằng sau bài nóng
+            (lấy post_id từ news_symbol rồi dùng fireant_thread); tìm kiếm web tổng quát (dùng
+            web_search).
+
+        sources: 'gdelt' đi thẳng GDELT. Mặc định đọc feed đám đông Fireant
+        (token từ env), rỗng thì rơi về GDELT khi trống.
         """
         if sources == "gdelt":
             try:
@@ -125,10 +135,16 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def news_symbol(
         symbol: str, limit: int = 10, sources: str | None = None
     ) -> dict[str, Any]:
-        """Symbol news: Fireant posts about the ticker, GDELT fallback. Use to verify rumors.
+        """Tin về 1 mã: bài Fireant gắn mã đó, GDELT dự phòng. Dùng khi xác minh tin đồn về cổ phiếu
+            cụ thể.
 
-        sources: 'gdelt' routes straight to GDELT. Default reads Fireant posts
-        tagged with the symbol and falls back to GDELT when empty.
+        Dùng khi: "FPT có tin gì", "tin đồn về mã X có thật không".
+        Không dùng khi: tin chung thị trường (dùng news_market); đã có post_id muốn đọc replies
+            (dùng fireant_thread).
+
+        sources: 'gdelt' đi thẳng GDELT. Mặc định đọc bài Fireant gắn
+        symbol, rỗng thì rơi về GDELT khi trống.
+        Ví dụ: {"symbol": "FPT", "limit": 10}.
         """
         sym = symbol.strip().upper()
         if sources == "gdelt":
@@ -151,10 +167,14 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def fireant_thread(post_id: int, limit: int = 20) -> dict[str, Any]:
-        """One Fireant post plus its replies. Use to read comment threads behind a hot post.
+        """Một bài Fireant kèm replies. Dùng khi đọc luồng bình luận đằng sau bài nóng.
 
-        post_id: Fireant postID (from news_symbol posts). limit: max replies.
-        Rumor threads live in replies; root post may be thin.
+        Dùng khi: "dân Fireant đang bàn gì về FPT", cần tâm lý đám đông chi tiết.
+        Không dùng khi: chỉ cần điểm số tâm lý gọn (dùng sentiment_score); chưa có post_id (lấy từ
+            news_symbol trước).
+
+        post_id: postID của Fireant (lấy từ bài trong news_symbol). limit: số replies tối đa.
+        Tin đồn nằm ở replies; bài gốc có thể mỏng.
         """
         try:
             data = await _call(
@@ -166,10 +186,13 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def economic_calendar(scope: str = "vn", limit: int = 20) -> dict[str, Any]:
-        """Macro series catalogue as event proxy. Use for data-availability checks.
+        """Danh mục series vĩ mô dùng thay lịch sự kiện. Dùng khi kiểm tra khả năng có dữ liệu (có
+            series CPI/GDP nào không).
 
-        scope: 'vn' only (others return empty with a warning). limit: max series.
-        Not a real calendar; for trading dates use dnse_working_dates instead.
+        Không dùng khi: cần ngày công bố cụ thể (nguồn không có lịch thật); cần ngày giao
+            dịch (dùng dnse_working_dates); cần lịch cổ tức/ĐHĐCĐ (dùng event_calendar_vn).
+
+        scope: chỉ 'vn' (scope khác trả rỗng kèm cảnh báo). limit: số series tối đa.
         """
         if scope != "vn":
             return make_envelope(
@@ -196,9 +219,13 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def sbv_rates() -> dict[str, Any]:
-        """SBV policy and interbank rates, scraped static page. Use for rate regime.
+        """Nguồn lãi suất điều hành và liên ngân hàng SBV, trang tĩnh scrape. Dùng khi xem chế độ
+            lãi suất.
 
-        Values change rarely; upstream has no API.
+        Không dùng khi: cần lịch công bố số liệu (dùng macro_events_vn); cần ngày giao dịch (dùng
+            dnse_working_dates).
+
+        Giá trị đổi hiếm; nguồn không có API.
         """
         try:
             return make_envelope(await _call("s", pub_p.sbv_rates), source="sbv-scrape")
@@ -207,9 +234,14 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def macro_events_vn() -> dict[str, Any]:
-        """NSO release listings with reference and next dates. Use for data calendar.
+        """Danh sách công bố của Tổng cục Thống kê kèm ngày tham chiếu và ngày tới. Dùng khi lập
+            lịch dữ liệu vĩ mô.
 
-        Covers CPI schedule and releases; full year schedule lives in an NSO PDF.
+        Dùng khi: "khi nào công bố CPI", lịch ra số liệu vĩ mô.
+        Không dùng khi: cần lãi suất hiện hành (dùng sbv_rates); cần ngày giao dịch chứng khoán
+            (dùng dnse_working_dates).
+
+        Gồm lịch CPI và các đợt công bố; lịch cả năm đầy đủ nằm trong PDF của NSO.
         """
         try:
             return make_envelope(
@@ -220,11 +252,16 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def corporate_calendar(symbol: str | None = None, limit: int = 20) -> dict[str, Any]:
-        """Disclosures feed as corporate actions. Use for dividend/meeting scans.
+        """Feed công bố thông tin thô dùng như sự kiện doanh nghiệp. Dùng khi quét cổ tức/họp cổ
+            đông dạng feed thô.
 
-        symbol: omit for VN overview (defaults to VCB as sample feed); limit:
-        max disclosures. Raw feed; company_events classifies the same
-        disclosures into kinds; event_calendar_vn is the calendar view.
+        Dùng khi: cần feed disclosure nguyên bản.
+        Không dùng khi: cần lịch cổ tức/niêm yết/họp đã phân loại theo ngày (dùng event_calendar_vn
+            — dạng calendar); cần sự kiện đã phân loại theo loại (dùng company_events).
+
+        symbol: bỏ qua để xem toàn VN (mặc định lấy VCB làm feed mẫu); limit:
+        số công bố tối đa. Feed thô; company_events phân loại các công bố
+        giống vậy theo loại; event_calendar_vn là dạng xem calendar.
         """
         try:
             docs = await _call("d", vs_p.documents, symbol or "VCB", 60)

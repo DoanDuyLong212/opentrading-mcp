@@ -116,7 +116,13 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_foreign_flow() -> dict[str, Any]:
-        """Net foreign flow from WS cache. Use as primary smart-money read."""
+        """Mua/bán ròng khối ngoại từ cache WS. Dùng làm nguồn đọc smart-money chính, theo thời gian
+            thực.
+
+        Dùng khi: trong phiên, cần con số khối ngoại mới nhất.
+        Không dùng khi: cần chuỗi theo ngày để đối chiếu (dùng vs_nn_flow); cần tổng hợp nhiều nguồn
+            (dùng money_flow — fallback có sẵn).
+        """
         try:
             return make_envelope(dnse_p.ws_snapshot(["VNINDEX"]), source="dnse-ws")
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
