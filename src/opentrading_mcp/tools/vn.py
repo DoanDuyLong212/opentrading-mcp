@@ -57,12 +57,17 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         interval: str = "1D",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Candles for a VN symbol (1D/1W/1M), VCI then KBS fallback. Use for any price history.
+        """Nến 1 mã VN (1D/1W/1M), VCI trước KBS dự phòng. Dùng cho MỌI lịch sử giá của một mã.
 
-        There is no tool named stock_history — use this tool.
-        days: bars requested (max 365 nến; weekly/monthly span nhân hệ số).
-        interval: '1D' (mặc định), '1W', '1M'. summary/columns: summary returns
-        {count,last,high,low} only; columns keeps named fields.
+        Dùng khi: "lịch sử giá FPT", "HPG có vượt đỉnh 20 phiên không", mọi tính toán cần chuỗi giá
+            1 mã.
+        Không dùng khi: cần nhiều mã cùng lúc (dùng market_candles_batch); cần nến phút/intraday
+            (dùng vn_equity_ohlcv); cần giá khớp hiện tại (dùng vn_equity_quote_batch). Không có
+            tool nào tên stock_history — chính là tool này.
+
+        days: số nến yêu cầu (tối đa 365 nến; nến tuần/tháng bao phủ dài hơn theo hệ số).
+        interval: '1D' (mặc định), '1W', '1M'. summary/columns: summary chỉ trả
+        {count,last,high,low}; columns giữ trường nêu tên.
         """
         if ctx is not None:
             await ctx.log("info", f"vn_quote_history {symbol} {days}d {interval}")
@@ -86,10 +91,15 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary: bool = False,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
-        """One-request price board for many symbols. Use for snapshots and movers.
+        """Bảng giá một lần cho NHIỀU mã. Dùng khi chụp nhanh giá khớp nhiều mã hoặc làm movers thủ
+            công.
 
-        summary/columns: summary returns {count,symbols} only; columns keeps
-        named fields per quote.
+        Dùng khi: "giá 5 mã FPT HPG VCB MBB SSI", snapshot danh mục.
+        Không dùng khi: cần lịch sử nến (dùng vn_quote_history cho 1 mã, market_candles_batch cho
+            nhiều mã); cần top tăng/giảm đã xếp (dùng market_movers).
+
+        summary/columns: summary chỉ trả {count,symbols}; columns giữ
+        trường nêu tên từng báo giá.
         """
         try:
             quotes = await run_blocking(
@@ -131,9 +141,14 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_fundamentals(
         symbol: str, period: str = "year", report_type: str = "ttm"
     ) -> dict[str, Any]:
-        """Ratios and statements via vnstock Fundamental and Finance. Use for quick valuation.
+        """Chỉ số và BCTC qua vnstock Fundamental và Finance. Dùng khi định giá nhanh 1 mã.
 
-        period: 'year' or 'quarter'. report_type: 'ttm' (trailing twelve months) or 'latest'.
+        Dùng khi: "PE/PB/ROE của FPT", snapshot định giá nhanh.
+        Không dùng khi: cần vùng giá trị hợp lý theo ensemble PER/PB (dùng valuation_run); cần đọc
+            từng dòng BCTC (dùng financial_detail); cần BCTC không cần JWT (dùng
+            financial_statements hoặc vs_financeinfo).
+
+        period: 'year' hoặc 'quarter'. report_type: 'ttm' (12 tháng gần nhất) hoặc 'latest'.
         """
         try:
             from vnstock import Fundamental

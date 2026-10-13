@@ -36,12 +36,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         limit: int = 20,
         technical: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Screen universe by valuation and quality. Use when hunting candidates.
+        """Sàng lọc toàn thị trường theo định giá và chất lượng. Dùng khi săn ứng viên theo tiêu
+            chí.
 
-        filters: {field: [min, max]} ranges (None side unbounded) or plain
-        strings for symbol/exchange equality; use signals_screener_columns
-        to discover valid fields. max_pe/min_roe are shortcuts for the same.
-        technical: optional stage-3 timing filter on post-filter candidates
+        Dùng khi: "lọc cổ phiếu PE<10 ROE>15%", tìm mã theo điều kiện.
+        Không dùng khi: đã biết mã cần phân tích (đi thẳng tool của mã đó); cần so vài mã cụ thể
+            (dùng peer_compare); cần full chỉ báo kỹ thuật 1 mã (dùng signals_technical).
+
+        filters: {trường: [min, max]} (None là không chặn) hoặc chuỗi cho khớp mã/sàn;
+        dùng signals_screener_columns để biết trường hợp lệ. max_pe/min_roe là phím tắt.
+        technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
         ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).
         """
         from opentrading_mcp.providers import screener as sc_p
@@ -195,13 +199,18 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         indicators: list[str] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Full technicals rating from local candles on 1D/1W/1M. Use for timing entries.
+        """Chấm kỹ thuật đầy đủ từ nến local trên 1D/1W/1M. Dùng khi chọn thời điểm vào lệnh cho 1
+            mã.
 
-        indicators: keep only named outputs (e.g. rsi14, macd, sma20, recommend,
+        Dùng khi: "FPT có nên mua lúc này", RSI/MACD/MA, hỗ trợ/kháng cự, vị trí 52 tuần.
+        Không dùng khi: sàng nhiều mã (dùng stock_screener với technical); chỉ cần nến thô (dùng
+            vn_quote_history); backtest quy tắc (dùng backtest_strategies).
+
+        indicators: chỉ giữ output nêu tên (vd rsi14, macd, sma20, recommend,
         patterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,
-        swings, swing_trend, fib); omit for the full set. interval: 1D (250 bars),
-        1W (long history, min 30 bars) or 1M (min 24 bars); long-MA fields are
-        null when history is short.
+        swings, swing_trend, fib); bỏ qua để lấy full. interval: 1D (250 nến),
+        1W (dài, tối thiểu 30 nến) hoặc 1M (tối thiểu 24 nến); trường MA dài
+        null khi lịch sử ngắn.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
@@ -271,9 +280,13 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def sector_performance(level: int = 1, top_n: int = 50) -> dict[str, Any]:
-        """GICS heatmap rows. Use for sector rotation reads.
+        """Dòng heatmap GICS. Dùng khi đọc luân chuyển ngành (ngành nào đang khỏe).
 
-        level: GICS tree depth. top_n: rows returned.
+        Dùng khi: "ngành nào đang khỏe", so hiệu suất các ngành.
+        Không dùng khi: cần độ rộng toàn sàn (dùng breadth_scan); cần giá trị một ngành theo thời
+            gian (dùng vn_global_index hoặc chỉ số ngành tương ứng).
+
+        level: độ sâu cây GICS. top_n: số dòng trả về.
         """
         try:
             from opentrading_mcp.providers import vietstock as vs_p
@@ -300,11 +313,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def money_flow(symbols: list[str] | None = None) -> dict[str, Any]:
-        """Compose foreign flow: DNSE WS then Vietstock cross-check. Use for smart money.
+        """Tổng hợp dòng ngoại: DNSE WS trước, Vietstock đối chiếu sau. Dùng khi đọc smart money
+            tổng hợp.
 
-        symbols: WS channels to read (default ["VNINDEX"]); falls back to
-        Vietstock NN chart when cache is cold. Pair with block_trades for
-        per-symbol negotiated put-through prints (different granularity).
+        Dùng khi: "khối ngoại đang mua hay bán", dòng tiền thông minh hôm nay.
+        Không dùng khi: cần mua/bán ròng theo ngày để đối chiếu (dùng vs_nn_flow); cần dòng tiền
+            live từng mã (dùng dnse_foreign_flow); cần thỏa thuận từng mã (ghép với block_trades —
+            độ chi tiết khác nhau: tổng hợp vs từng lệnh).
+
+        symbols: kênh WS cần đọc (mặc định ["VNINDEX"]); cache lạnh thì rơi về
+        biểu đồ NN của Vietstock.
         """
         try:
             from opentrading_mcp.providers import dnse as dnse_mod

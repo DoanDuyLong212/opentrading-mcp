@@ -77,10 +77,15 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         columns: list[str] | None = None,
         interval: str = "1D",
     ) -> dict[str, Any]:
-        """Equity bars via Market API. Use as OHLCV alternative to quotes.
+        """Nến qua Market API, thay thế quotes khi cần OHLCV. Dùng khi cần nến phút/intraday hoặc
+            nguồn nến thứ hai để đối chiếu.
 
-        interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).
-        summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
+        Dùng khi: nến '15m'/'1m', đối chiếu chéo với vn_quote_history.
+        Không dùng khi: nến ngày/tuần/tháng thông thường (ưu tiên vn_quote_history — có fallback
+            VCI→KBS); cần nhiều mã (dùng market_candles_batch).
+
+        interval: cỡ nến ('1D' ngày; intraday như '1m'/'15m' nếu nguồn hỗ trợ).
+        summary/columns: summary chỉ trả {count,last,high,low}; columns giữ trường nêu tên.
         """
         try:
             rows = await _call("e", vn_p.equity_ohlcv, symbol, count, interval)
@@ -202,9 +207,13 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_company(symbol: str, detail: bool = False) -> dict[str, Any]:
-        """Profile, holders and officers. Use for company research.
+        """Hồ sơ, cổ đông và ban lãnh đạo công ty. Dùng khi nghiên cứu doanh nghiệp.
 
-        detail: false returns profile only; true adds holders and officers (heavier).
+        Dùng khi: "FPT làm gì, ai là cổ đông lớn".
+        Không dùng khi: chỉ cần giá và bội số nhanh (dùng stock_overview — dossier gọn); cần
+            tên/sàn/mô tả ngắn (dùng vs_company_info).
+
+        detail: false chỉ trả hồ sơ; true thêm cổ đông và lãnh đạo (nặng hơn).
         """
         try:
             return make_envelope(

@@ -17,14 +17,19 @@ from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
 def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def quant_risk(returns: list[float], periods_per_year: int = 252) -> dict[str, Any]:
-        """Sharpe, max drawdown and win rate from a return series. Use to gate models.
+        """Sharpe, sụt giảm tối đa và tỷ lệ thắng từ chuỗi lợi nhuận. Dùng khi chấm rủi ro một chiến
+            lược/mô hình.
 
-        returns: per-period simple returns (REQUIRED — build it first, e.g. from
-        vn_quote_history columns=close as pct changes, or vn_equity_ohlcv closes).
-        Do NOT call without returns. There is no tool named risk_metrics —
-        use this tool. periods_per_year: annualization
-        factor for Sharpe (252 daily, 52 weekly, 12 monthly).
-        Example: {"returns": [0.01, -0.005, 0.02], "periods_per_year": 252}.
+        Dùng khi: đánh giá backtest xong, "chiến lược này rủi ro thế nào".
+        Không dùng khi: chưa có chuỗi return (lấy nến từ vn_quote_history/vn_equity_ohlcv rồi tự
+            tính % thay đổi trước — KHÔNG gọi khi thiếu returns); cần thực hiện giao dịch thật (tool
+            này chỉ tính số).
+
+        returns: lợi nhuận đơn giản mỗi kỳ (BẮT BUỘC — tự dựng trước, ví dụ từ
+        cột close của vn_quote_history lấy % thay đổi, hoặc closes của vn_equity_ohlcv).
+        Không có tool nào tên risk_metrics — chính là tool này. periods_per_year: hệ số
+        năm hóa cho Sharpe (252 ngày, 52 tuần, 12 tháng).
+        Ví dụ: {"returns": [0.01, -0.005, 0.02], "periods_per_year": 252}.
         """
         if not returns:
             return make_envelope({"note": "empty series"}, source="local", availability="empty")

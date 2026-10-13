@@ -51,10 +51,14 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         limit: int = 20,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Cash dividends and share issues/splits. Use for payout history.
+        """Cổ tức tiền mặt và phát hành/tách cổ phiếu. Dùng khi xem lịch sử trả thưởng của 1 mã.
 
-        region: 'vn' (vnstock Company events: DIV cash, ISS bonus/private) or
-        'world' (yfinance actions). limit: max events returned.
+        Dùng khi: "FPT đã chia cổ tức những năm nào".
+        Không dùng khi: cần lịch cổ tức/niêm yết/họp toàn thị trường theo ngày (dùng
+            event_calendar_vn); cần feed công bố gốc (dùng corporate_calendar).
+
+        region: 'vn' (sự kiện Company của vnstock: DIV tiền mặt, ISS thưởng/phát hành riêng lẻ) hoặc
+        'world' (actions của yfinance). limit: số sự kiện tối đa.
         """
         area = region.strip().lower()
         if ctx is not None:
@@ -162,11 +166,15 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         limit: int = 20,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Vietstock corporate-action calendar. Use for dividend/meeting/listing dates.
+        """Lịch sự kiện doanh nghiệp của Vietstock. Dùng khi cần ngày cổ tức/niêm yết/họp theo lịch.
 
-        event: 'dividends' (payouts, bonus, issues), 'listings', 'meetings'.
-        symbol: filter one ticker (omit for market-wide). No earnings-report
-        dates exist upstream; KQKD dates come from company_events instead.
+        Dùng khi: "khi nào FPT chia cổ tức", "lịch họp ĐHĐCĐ".
+        Không dùng khi: cần feed công bố thô (dùng corporate_calendar); cần sự kiện đã phân loại
+            theo loại (dùng company_events); cần ngày BÁO CÁO KQKD — nguồn không có ngày này, dùng
+            company_events thay thế.
+
+        event: 'dividends' (trả cổ tức, thưởng, phát hành), 'listings', 'meetings'.
+        symbol: lọc 1 mã (bỏ qua để xem toàn thị trường).
         """
         if ctx is not None:
             await ctx.log("info", f"event_calendar_vn {event} {symbol}")
@@ -196,10 +204,15 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         limit: int = 30,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Matched vs negotiated put-through splits per day. Use for dark-pool-style reads.
+        """Tách khớp lệnh và thỏa thuận theo ngày. Dùng khi đọc dòng tiền thỏa thuận (dark-pool) của
+            1 mã.
 
-        from_date/to_date: ISO dates (default last 30d). pt_vol/pt_val are the
-        thỏa thuận leg; pt_pct is its share of daily value.
+        Dùng khi: "thỏa thuận HPG tuần này", kiểm tra tay to gom qua put-through.
+        Không dùng khi: cần dòng tiền khối ngoại tổng hợp (dùng money_flow); cần mua/bán ròng khối
+            ngoại theo ngày (dùng vs_nn_flow).
+
+        from_date/to_date: ngày ISO (mặc định 30 ngày gần nhất). pt_vol/pt_val là
+        chân thỏa thuận; pt_pct là tỷ trọng giá trị thỏa thuận trong ngày.
         """
         import datetime
 
@@ -281,22 +294,26 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         days: int | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Analyst ratings and price targets parsed from report titles. Use for street views.
+        """Khuyến nghị và giá mục tiêu của CTCK, tách từ tiêu đề báo cáo. Dùng khi xem quan điểm phố
+            (street views) về 1 mã hoặc toàn thị trường.
 
-        There is no tool named analyst_targets — this tool is the targets source.
-        symbol: filter one ticker (omit for latest across market). Ratings come
-        from title text (MUA/BÁN/NẮM GIỮ...), not a consensus feed; history per
-        symbol shows upgrades/downgrades by history. report_type: 'equity'
-        (ticker reports) or 'macro' (CTCK macro outlooks: GDP/CPI/rates/FX/Fed;
-        symbol filter does not apply, macro_topic set per report).
-        days: keep reports from the last N days by parsed dd/mm/yyyy date
-        (default None = no date filter). Rows without a parsed date are kept
-        and marked date_uncertain:true — treat their dates as uncertain.
-        Only the latest listing page is available (no pagination upstream).
-        Titles only — no report body. Each row's url is the report page: its
-        HTML summary after 'Tải về' (~500-700 chars) carries upside, revenue,
-        profit, EPS, P/E, P/B, dividend; 'Nguồn:' names the broker. The
-        'edocs/...pdf' file often fails text extraction (Vietstock fonts).
+        Dùng khi: "CTCK nói gì về FPT", "giá mục tiêu HPG", triển vọng vĩ mô của CTCK
+            (report_type='macro').
+        Không dùng khi: cần số liệu BCTC (dùng financial_detail); cần tin tức (dùng news_symbol).
+            Không có tool nào tên analyst_targets — chính là tool này.
+        symbol: lọc 1 mã (bỏ qua để xem mới nhất toàn thị trường). Ratings lấy từ chữ tiêu đề
+            (MUA/BÁN/NẮM GIỮ...), không phải feed consensus; lịch sử mỗi mã cho thấy nâng/hạ
+            khuyến nghị. report_type: 'equity'
+        (báo cáo theo mã) hoặc 'macro' (triển vọng vĩ mô của CTCK: GDP/CPI/lãi suất/FX/Fed;
+        bộ lọc symbol không áp dụng).
+        days: giữ báo cáo N ngày gần nhất theo ngày dd/mm/yyyy tách được
+        (mặc định không lọc). Dòng không tách được ngày vẫn giữ và đánh
+        date_uncertain:true — coi ngày của chúng là không chắc.
+        Chỉ có trang danh sách mới nhất (nguồn không phân trang).
+        Chỉ tiêu đề — không thân bài. url mỗi dòng là trang báo cáo: tóm tắt HTML sau
+        'Tải về' (~500-700 ký tự) mang upside, doanh thu, lợi nhuận, EPS, P/E, P/B, cổ tức;
+        'Nguồn:' cho biết tên CTCK. File 'edocs/...pdf' thường lỗi khi trích text (font
+        Vietstock) — dùng tóm tắt HTML.
         """
         if ctx is not None:
             await ctx.log("info", f"analyst_consensus {symbol} {report_type} d{days}")
@@ -534,14 +551,19 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         periods_n: int = 4,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """FULL detailed statements, every line item per period. Use for deep BCTC reads.
+        """BCTC chi tiết đầy đủ, từng dòng mỗi kỳ. Dùng khi đọc sâu BCTC (soi từng chỉ tiêu).
 
-        statement: KQKD (income), CDKT (balance), LCTT (cashflow via vnstock
-        fallback — Vietstock LCTT norms empty upstream), TM (notes),
-        BCTT. periods_n: recent permitted periods (unit VND billions; only
-        IsShowData_Permission=True periods). Real values on the Standard pack
-        via browser-session replay (HAR/env seed) — rows {norm_id, name,
-        values[...]}; report unavailable when the session gate rejects.
+        Dùng khi: phân tích forensic, kiểm tra dòng tiền/thuế/phải thu chi tiết.
+        Không dùng khi: chỉ cần đọc nhanh (dùng financial_statements — nhẹ hơn, không cần JWT); cần
+            BCTC mirror khi thiếu JWT (dùng vs_financeinfo); cần điểm số gian lận/chất lượng lợi
+            nhuận (dùng stock_forensic thay vì tự tính).
+
+        statement: KQKD (kết quả kinh doanh), CDKT (cân đối), LCTT (lưu chuyển tiền —
+        Vietstock trống norms phía nguồn nên rơi về vnstock), TM (thuyết minh),
+        BCTT. periods_n: các kỳ gần nhất được phép (đơn vị tỷ đồng; chỉ kỳ
+        IsShowData_Permission=True). Giá trị thật trên gói Standard qua phát lại
+        phiên trình duyệt — dòng {norm_id, name, values[...]}; báo cáo không khả dụng
+        khi cổng phiên từ chối.
         """
         if ctx is not None:
             await ctx.log("info", f"financial_detail {symbol} {statement}")

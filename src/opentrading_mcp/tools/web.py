@@ -33,11 +33,18 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def web_fetch(
         url: str, format: str = "markdown", timeout_seconds: int = 30
     ) -> dict[str, Any]:
-        """Fetch a URL and convert to markdown, text, html or pdf-text. Use for reading web content.
+        """Đọc một URL và chuyển thành markdown, text, html hoặc text PDF. Dùng khi đọc nội dung
+            trang web cụ thể.
 
-        format: 'markdown' (default), 'text', 'html' or 'pdf' (PDF text extraction,
-        best-effort stdlib-only; scanned PDFs report honestly). timeout_seconds: max
-        fetch time (default 30).
+        Dùng khi: đọc bài báo/công bố/báo cáo mà user đưa link; đọc chi tiết báo cáo CTCK (url từ
+            analyst_consensus).
+        Không dùng khi: cần TÌM thông tin mà chưa có link (dùng web_search); trang cần đăng nhập hay
+            chỉ render bằng JS (báo không đọc được).
+
+        format: 'markdown' (mặc định), 'text', 'html' hoặc 'pdf' (trích text PDF,
+        best-effort thuần stdlib; PDF scan báo thẳng là không trích được). timeout_seconds: thời
+            gian chờ
+        tối đa (mặc định 30).
         """
         try:
             data = await _call(
@@ -65,11 +72,16 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
             search_type: str = "auto",
             context_max_chars: int | None = None,
         ) -> dict[str, Any]:
-            """Search the web via Exa/Parallel providers. Use for up-to-date information.
+            """Tìm kiếm web qua Exa/Parallel. Dùng khi cần thông tin cập nhật mà chưa có link cụ
+                thể.
 
-            num_results: results requested (default 8). livecrawl: 'fallback' uses
-            cached index first, 'preferred' crawls live. search_type: 'auto' (default),
-            'fast', or 'deep'. context_max_chars: cap on returned context.
+            Dùng khi: tin tức mới, sự kiện vừa xảy ra, kiểm chứng thông tin ngoài dữ liệu server.
+            Không dùng khi: đã có URL (dùng web_fetch đọc thẳng); dữ liệu giá/chỉ số có sẵn (dùng
+                tool thị trường tương ứng — chính xác và có nguồn hơn).
+
+            num_results: số kết quả (mặc định 8). livecrawl: 'fallback' ưu tiên
+            index cache, 'preferred' crawl live. search_type: 'auto' (mặc định),
+            'fast', hoặc 'deep'. context_max_chars: trần ký tự context trả về.
             """
             try:
                 data = await _call(
@@ -92,5 +104,4 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
                 return _na("web_search", str(exc))
 
         registered.append({"name": "web_search"})
-
     return registered

@@ -104,10 +104,14 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_working_dates(year: int | None = None) -> dict[str, Any]:
-        """Trading calendar. Use for session planning.
+        """Lịch ngày giao dịch thực tế. Dùng khi lập kế hoạch phiên (ngày nào được giao dịch).
 
-        year: keep only dates starting with this year (e.g. 2026). Actual
-        trading dates; exchange_calendar holds static session mechanics.
+        Dùng khi: "thứ bảy có giao dịch không", "tháng này bao nhiêu phiên", kiểm tra ngày nghỉ lễ.
+        Không dùng khi: giờ ATO/ATC/thanh toán T+ (dùng exchange_calendar — cơ chế tĩnh); lịch sự
+            kiện doanh nghiệp (dùng event_calendar_vn).
+
+        year: chỉ giữ ngày bắt đầu bằng năm này (ví dụ 2026). Là ngày giao dịch
+        thật; exchange_calendar chứa cơ chế phiên tĩnh.
         """
         try:
             dates = await _call("w", dnse_p.working_dates)
@@ -124,7 +128,12 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def exchange_calendar() -> dict[str, Any]:
-        """HOSE/HNX/UPCOM hours, ATO/ATC, T+ settlement. Use for mechanics."""
+        """Giờ HOSE/HNX/UPCoM, ATO/ATC, thanh toán T+2. Dùng khi hỏi cơ chế phiên.
+
+        Dùng khi: "ATO là gì", "mấy giờ đóng cửa", "tỷ lệ ký quỹ bao lâu mới nhận tiền".
+        Không dùng khi: cần ngày giao dịch thật theo năm (dùng dnse_working_dates — dữ liệu động);
+            trạng thái phiên hiện tại (dùng dnse_market_status). Dữ liệu tĩnh.
+        """
         return make_envelope(
             {
                 "sessions": [

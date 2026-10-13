@@ -152,9 +152,13 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def sentiment_score(symbol: str, limit: int = 20) -> dict[str, Any]:
-        """Crowd sentiment from Fireant posts, Groq-scored. Use for hype risk.
+        """Điểm tâm lý đám đông từ bài Fireant, chấm bằng Groq. Dùng khi đo rủi ro hype quanh 1 mã.
 
-        limit: max posts scored; without Groq key falls back to likes heuristic.
+        Dùng khi: "cổ phiếu này có đang bị thổi phồng không", độ nóng cộng đồng.
+        Không dùng khi: cần đọc nội dung bình luận (dùng fireant_thread); tin tức báo chí (dùng
+            news_symbol).
+
+        limit: số bài chấm tối đa; không có key Groq thì rơi về heuristic lượt thích.
         """
         try:
             posts = await _call("s", intel_p.fireant_posts, symbol, max(int(limit), 1), secs=45.0)
@@ -238,9 +242,12 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def insider_trading(symbol: str, limit: int = 10) -> dict[str, Any]:
-        """Insider deals via vnstock Company. Use for informed-flow reads.
+        """Giao dịch nội bộ qua vnstock Company. Dùng khi đọc dòng tiền người trong cuộc.
 
-        limit: max deals returned.
+        Dùng khi: "ban lãnh đạo có mua/bán cổ phiếu không", kiểm tra informed flow.
+        Không dùng khi: khối ngoại (dùng money_flow); thỏa thuận (dùng block_trades).
+
+        limit: số giao dịch tối đa.
         """
         try:
             rows = await _call("i", vn_p.insider_trading, symbol, limit)

@@ -29,12 +29,15 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         benchmark: str = "VNINDEX",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Buy-and-hold backtest with costs over available history. Use for baseline stats.
+        """Backtest mua-giữ kèm chi phí trên lịch sử có sẵn. Dùng khi cần baseline so sánh.
 
-        Deprecated for strategies: use backtest_strategies (real SMA/momentum/RSI
-        engine) for anything beyond buy-and-hold baseline.
-        strategy: recorded label only (engine is buy-and-hold). cost_bps/slippage_bps:
-        round-trip bps each deducted twice from gross. benchmark: reference index label.
+        Dùng khi: baseline "nếu mua giữ 1 năm thì bao nhiêu".
+        Không dùng khi: cần chiến lược có quy tắc (SMA/momentum/RSI — dùng backtest_strategies,
+            engine thật); cần rủi ro từ chuỗi return (dùng quant_risk).
+
+        Deprecated cho chiến lược: dùng backtest_strategies cho mọi thứ ngoài buy-and-hold.
+        strategy: chỉ là nhãn ghi lại (engine là buy-and-hold). cost_bps/slippage_bps:
+        bps khứ hồi, mỗi loại trừ 2 lần từ gross. benchmark: nhãn chỉ số tham chiếu.
         """
         if ctx is not None:
             await ctx.report_progress(0, 2, "load candles")
@@ -80,9 +83,14 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def scenario_simulate(
         scenario: str, symbol: str = "VCB", shock_pct: float = -5.0
     ) -> dict[str, Any]:
-        """Apply a price shock to latest close and report P/L per 1000 shares. Use for sizing.
+        """Đặt cú sốc giá lên giá đóng gần nhất rồi tính L/L mỗi 1000 cổ phiếu. Dùng khi đo khẩu vị
+            rủi ro (sizing).
 
-        shock_pct: percent shock, negative for drops (e.g. -5.0).
+        Dùng khi: "nếu HPG xấu -5% thì mất bao nhiêu".
+        Không dùng khi: backtest lịch sử (dùng quant_backtest/backtest_strategies); rủi ro thống kê
+            (dùng quant_risk).
+
+        shock_pct: % cú sốc, âm là giảm (ví dụ -5.0).
         """
         try:
             candles = await run_blocking(
@@ -131,17 +139,22 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         condition_lookback: int = 20,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Rule-based backtests beyond buy-and-hold. Use to compare timing rules.
+        """Backtest theo quy tắc ngoài mua-giữ. Dùng khi so các quy tắc canh thời điểm trên 1 mã.
 
-        strategy: 'sma_cross' (fast SMA over slow), 'momentum' (close over
-        close[slow] ago), 'rsi_meanrev' (long when RSI14 < rsi_low, flat when
-        RSI14 > rsi_high), 'buy_hold'. fast/slow: lookback bars. cost_bps:
-        in+out bps deducted per position flip. months/quarters: entries only on
-        matching calendar months (1-12) / quarters (1-4); exits always allowed.
-        condition_symbol: gate entries on another asset (oil/gold/FX: BZ=F, GC=F,
-        USDVND...); condition_rule 'above_sma' (over its SMA) or 'rising'
-        (up over condition_lookback bars). VN symbols via vnstock, others via
-        yfinance daily history.
+        Dùng khi: "nếu cắt MA50 có tốt hơn mua giữ không", kiểm định chiến lược giao
+            cắt/seasonality.
+        Không dùng khi: chỉ cần baseline mua-giữ (dùng quant_backtest — gọn hơn); kỹ thuật hiện tại
+            không backtest (dùng signals_technical).
+
+        strategy: 'sma_cross' (SMA nhanh vượt SMA chậm), 'momentum' (giá trên
+        giá[slow] phiên trước), 'rsi_meanrev' (long khi RSI14 < rsi_low, flat khi
+        RSI14 > rsi_high), 'buy_hold'. fast/slow: số nến nhìn lại. cost_bps:
+        bps vào+ra trừ mỗi lần đảo vị thế. months/quarters: chỉ vào lệnh theo
+        tháng (1-12) / quý (1-4); thoát lệnh luôn cho phép.
+        condition_symbol: chặn vào lệnh theo tài sản khác (dầu/vàng/FX: BZ=F, GC=F,
+        USDVND...); condition_rule 'above_sma' (trên SMA của nó) hoặc 'rising'
+        (đang tăng trong condition_lookback nến). Mã VN qua vnstock, khác qua
+        lịch ngày yfinance.
         """
         if ctx is not None:
             await ctx.log("info", f"backtest_strategies {symbol} {strategy}")

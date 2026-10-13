@@ -260,11 +260,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         as_of: str | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Snapshot of VN market with provenance. Use when a broad market picture is needed.
+        """Toàn cảnh thị trường VN: bảng giá VN30 kèm nguồn gốc dữ liệu. Dùng khi cần bức tranh thị
+            trường rộng trong một lần gọi.
 
-        symbols: tickers to quote — default the full VN30 basket (P14).
-        as_of: requested timestamp label, recorded as requested_as_of
-        (data is always latest).
+        Dùng khi: hỏi "thị trường hôm nay sao", cần giá nhiều mã cùng lúc.
+        Không dùng khi: chỉ cần 1 mã (dùng vn_equity_quote_batch với đúng mã đó); cần top tăng/giảm
+            (dùng market_movers); cần bản tin soạn sẵn (dùng brief_build).
+
+        symbols: các mã cần báo giá — mặc định cả rổ VN30. as_of: nhãn thời điểm yêu cầu, ghi vào
+            requested_as_of (dữ liệu luôn là mới nhất).
         """
         key = cache_key("market_snapshot", ",".join(symbols or []))
         hit = await acache_get(key)
@@ -295,7 +299,12 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def source_status(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Health of every upstream plus TTL state. Use to debug stale data."""
+        """Sức khỏe từng nguồn dữ liệu + trạng thái TTL. Dùng khi nghi ngờ dữ liệu cũ hoặc tool báo
+            lỗi nguồn.
+
+        Không dùng khi: cần dữ liệu thị trường (gọi tool dữ liệu tương ứng); đây là tool chẩn đoán,
+            không trả giá.
+        """
         if ctx is not None:
             await ctx.log("debug", "source_status check")
         else:
@@ -336,10 +345,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         columns: list[str] | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Batch OHLCV for symbols, one request per symbol. Use for multi-chart context.
+        """Nến OHLCV theo ngày cho NHIỀU mã, mỗi mã một request. Dùng khi cần dữ liệu vẽ nhiều đồ
+            thị cùng lúc.
 
-        days: daily bars per symbol (max 100 symbols). summary/columns: summary
-        returns {count,last,high,low} only; columns keeps named fields.
+        Dùng khi: so sánh nhiều mã, chuẩn bị context nhiều chart.
+        Không dùng khi: chỉ 1 mã (dùng vn_quote_history — sâu hơn, tới 365 nến, có 1W/1M); cần nến
+            phút/intraday (dùng vn_equity_ohlcv).
+
+        days: số nến ngày mỗi mã (tối đa 100 mã). summary/columns: summary chỉ trả
+            {count,last,high,low}; columns giữ lại trường nêu tên.
         """
         capped = symbols[:100]
         warnings: list[str] = []
@@ -381,10 +395,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def symbol_lookup(
         query: str, limit: int = 10, offset: int = 0
     ) -> dict[str, Any]:
-        """Resolve company name to symbol, venue and sector. Use before any symbol-scoped call.
+        """Tra tên công ty ra mã, sàn và ngành. Dùng TRƯỚC mọi lệnh theo mã khi chưa chắc mã chính
+            xác.
 
-        limit/offset: paginate hits (matched by symbol or company name,
-        case- and accent-insensitive).
+        Dùng khi: user nêu tên công ty ("Hòa Phát") mà chưa rõ mã.
+        Không dùng khi: đã biết mã (gọi thẳng tool cần); mã không phải cổ phiếu VN như vàng, USD,
+            BTC hay chỉ số thế giới (dùng symbol_resolve).
+
+        limit/offset: phân trang kết quả (khớp theo mã hoặc tên công ty, không phân biệt hoa
+            thường/dấu).
         """
         try:
             rows = await run_blocking(vn_p.listing_symbols, "symbol_lookup")
@@ -408,10 +427,13 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     # ---- symbol_resolve: multi-asset resolver (local tables + VN listing) ----
     @server.tool(annotations=READ_ONLY)
     async def symbol_resolve(query: str, limit: int = 5) -> dict[str, Any]:
-        """Resolve ANY asset code to symbol + class + next tool. Use FIRST when unsure.
+        """Giải mã BẤT KỲ mã tài sản nào ra symbol + loại tài sản + tool tiếp theo. Dùng ĐẦU TIÊN
+            khi không chắc mã thuộc loại nào.
 
-        Covers VN stocks, crypto, forex, indices, futures, gold/oil. Returns ranked
-        candidates with fallback order; ambiguous=true means ask the user or try #1 then #2.
+        Dùng khi: mã lạ ("BTC", "USD", "VNI", "vàng SJC") — gồm cổ phiếu VN, crypto, forex, chỉ số,
+            phái sinh, vàng/dầu. Trả ứng viên xếp hạng kèm thứ tự fallback; ambiguous=true nghĩa là
+            hỏi user hoặc thử #1 rồi #2.
+        Không dùng khi: đã rõ là cổ phiếu VN (dùng symbol_lookup nhanh hơn).
         """
         cands: list[dict[str, Any]] = []
         warnings: list[str] = []
@@ -614,11 +636,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def market_movers(top_n: int = 10, universe: str = "vn30") -> dict[str, Any]:
-        """Top gainers, losers and volume leaders. Use for session pulse checks.
+        """Top tăng/giảm mạnh và dẫn đầu thanh khoản. Dùng khi kiểm tra nhịp phiên (mã nào đang
+            chạy, dòng tiền ở đâu).
 
-        top_n: rows per list. universe: 'vn30' (default, 30 liquid bluechips —
-        fast and stable) or 'hose' (full HOSE ref ≤60, slow; illiquid symbols
-        may hang vnstock and trip the batch timeout → partial with missing).
+        Dùng khi: hỏi "mã nào tăng mạnh hôm nay", "dòng tiền đang ở đâu".
+        Không dùng khi: cần đếm mã tăng/giảm toàn sàn (dùng breadth_scan); cần context gộp nhiều
+            chân cho bản tin (dùng market_overview).
+
+        top_n: số dòng mỗi bảng. universe: 'vn30' (mặc định, 30 bluechip — nhanh, ổn định) hoặc
+            'hose' (cả sàn ≤60 mã, chậm; mã kém thanh khoản có thể treo → trả partial kèm missing).
         """
         try:
             syms: list[str] = []
@@ -690,10 +716,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def breadth_scan(exchange: str | None = None) -> dict[str, Any]:
-        """Advancers, decliners, ceiling and floor counts. Use to judge rally health.
+        """Đếm mã tăng/giảm/trần/sàn toàn bảng. Dùng khi đánh giá sức khỏe đợt tăng (tăng có lan tỏa
+            hay chỉ vài trụ kéo).
 
-        exchange: filter rows carrying venue info (HOSE/HNX/UPCOM); ignored
-        with a warning when rows carry no venue info.
+        Dùng khi: hỏi "độ rộng thị trường", "đợt tăng này có chắc không".
+        Không dùng khi: chỉ cần top 3-5 mã tăng/giảm (dùng market_movers — nhẹ hơn); cần context gộp
+            cho bản tin (dùng market_overview).
+
+        exchange: lọc theo sàn (HOSE/HNX/UPCOM); bị bỏ qua kèm cảnh báo khi dòng dữ liệu không mang
+            thông tin sàn.
         """
         try:
             prices = await run_blocking(vs_p.market_price, "breadth_scan", timeout_secs=30.0)
@@ -752,11 +783,16 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def market_overview(top_n: int = 3, ctx: AnyContext | None = None) -> dict[str, Any]:
-        """One-call market context: bluechip quotes, movers, breadth, session. Use for briefs.
+        """Context thị trường một lần gọi: giá bluechip, movers, độ rộng, phiên. Dùng cho bản tin và
+            câu hỏi tổng quan.
 
-        top_n: gainers/losers rows each. Breadth counts the bluechip board
-        (breadth_scan covers the full Vietstock board). Legs degrade
-        independently: a dead leg becomes null plus a warning.
+        Dùng khi: hỏi "thị trường hôm nay sao", cần mọi thứ trong một gọi.
+        Không dùng khi: cần độ rộng TOÀN sàn Vietstock (dùng breadth_scan — overview chỉ đếm rổ
+            bluechip); cần rổ VN30 đầy đủ (dùng market_snapshot); cần nến lịch sử (dùng
+            market_candles_batch).
+
+        top_n: số dòng tăng/giảm mỗi bảng. Các chân suy yếu độc lập: chân chết trả null kèm cảnh
+            báo.
         """
         universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
         warnings: list[str] = []
@@ -817,7 +853,12 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_market_status() -> dict[str, Any]:
-        """DNSE session state plus latest index snapshot. Use for open/close checks."""
+        """Trạng thái phiên DNSE kèm snapshot chỉ số mới nhất. Dùng khi kiểm tra phiên đang mở hay
+            đóng.
+
+        Không dùng khi: cần giá VN30 đầy đủ (dùng market_snapshot); cần context gộp cho bản tin
+            (dùng market_overview).
+        """
         try:
             snap = dnse_p.ws_snapshot(["VNINDEX", "VN30", "VN30F1M"])
             return make_envelope(snap, source="dnse-ws")
