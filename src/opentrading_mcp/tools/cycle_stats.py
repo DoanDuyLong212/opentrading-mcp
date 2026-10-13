@@ -236,14 +236,14 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def cycle_yearly(basket: str | None = None,
                            year: int | None = None,
                            ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Yearly return % per basket. Omit args for full table."""
+        """Yearly return % per VN sector basket (bank, securities, realestate, steel, tech...); ranks sectors by year. Omit args for full table."""
         sql, args = _filters("SELECT basket, year, ret FROM cycle_yearly",
                              [("basket", basket), ("year", year)], "basket, year")
         return await db.read_rows("cycle_yearly", src, sql, args, ["basket", "year", "ret"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_trough_events(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """3M forward returns per basket after major troughs (who leads recoveries)."""
+        """3M forward returns per VN sector basket after major market troughs (which sectors lead recoveries)."""
         cols = ["trough", "vnindex_3m", "bank", "securities", "realestate", "oilgas", "steel", "utility", "tech"]
         return await db.read_rows("cycle_trough_events", src,
                                   f"SELECT {', '.join(cols)} FROM cycle_trough_events ORDER BY trough", [], cols)

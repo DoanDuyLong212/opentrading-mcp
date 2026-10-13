@@ -291,7 +291,6 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbol: str | None = None,
         limit: int = 30,
         report_type: str = "equity",
-        page: int = 1,
         days: int | None = None,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
@@ -302,29 +301,22 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             (report_type='macro').
         Không dùng khi: cần số liệu BCTC (dùng financial_detail); cần tin tức (dùng news_symbol).
             Không có tool nào tên analyst_targets — chính là tool này.
-        Ratings lấy từ chữ tiêu đề (MUA/BÁN/NẮM GIỮ...), không phải feed consensus; lịch sử mỗi mã
-            cho thấy nâng/hạ khuyến nghị. report_type: 'equity'
+        symbol: lọc 1 mã (bỏ qua để xem mới nhất toàn thị trường). Ratings lấy từ chữ tiêu đề
+            (MUA/BÁN/NẮM GIỮ...), không phải feed consensus; lịch sử mỗi mã cho thấy nâng/hạ
+            khuyến nghị. report_type: 'equity'
         (báo cáo theo mã) hoặc 'macro' (triển vọng vĩ mô của CTCK: GDP/CPI/lãi suất/FX/Fed;
         bộ lọc symbol không áp dụng).
-        page: trang danh sách (mặc định 1). Danh sách công khai KHÔNG phân trang được
-        (đã kiểm chứng ?page=N bị bỏ qua phía server) nên chỉ page=1 có dữ liệu;
-        page>1 trả rỗng kèm cảnh báo.
         days: giữ báo cáo N ngày gần nhất theo ngày dd/mm/yyyy tách được
         (mặc định không lọc). Dòng không tách được ngày vẫn giữ và đánh
         date_uncertain:true — coi ngày của chúng là không chắc.
-        Chỉ tiêu đề — không thân bài. Chỉ đọc chi tiết KHI user yêu cầu đích danh:
-        gọi web_fetch vào url báo cáo (markdown), tìm 'Nguồn:' (tên CTCK), đoạn sau
-        'Tải về' (tóm tắt ~500-700 ký tự: upside/doanh thu/lợi nhuận/EPS/P-E/P-B/cổ tức),
-        và link 'edocs/...pdf' (đưa link cho user; trích text PDF thường lỗi font
-        Vietstock — dùng tóm tắt HTML). Tối đa 3 lần đọc chi tiết mỗi truy vấn (mỗi trang
-        ~79k ký tự nhiễu điều hướng); ưu tiên khuyến nghị MUA và ngày mới nhất.
+        Chỉ có trang danh sách mới nhất (nguồn không phân trang).
+        Chỉ tiêu đề — không thân bài. url mỗi dòng là trang báo cáo: tóm tắt HTML sau
+        'Tải về' (~500-700 ký tự) mang upside, doanh thu, lợi nhuận, EPS, P/E, P/B, cổ tức;
+        'Nguồn:' cho biết tên CTCK. File 'edocs/...pdf' thường lỗi khi trích text (font
+        Vietstock) — dùng tóm tắt HTML.
         """
         if ctx is not None:
-            await ctx.log("info", f"analyst_consensus {symbol} {report_type} p{page} d{days}")
-        try:
-            page_n = max(int(page), 1)
-        except (TypeError, ValueError):
-            page_n = 1
+            await ctx.log("info", f"analyst_consensus {symbol} {report_type} d{days}")
         days_n: int | None = None
         if days is not None:
             try:
@@ -340,28 +332,9 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         warn: list[str] = []
-        if page_n > 1:
-            warn.append(
-                "public listing has no pagination (verified ?page=N is ignored "
-                "server-side and returns page 1); page>1 returns empty until the "
-                "authenticated CompanyReportSearch is wired"
-            )
-            return make_envelope(
-                {
-                    "symbol": (symbol or "").upper(),
-                    "report_type": kind,
-                    "reports": [],
-                    "page": page_n,
-                    "days": days_n,
-                    "cutoff": None,
-                    "has_more": False,
-                },
-                source="vietstock-scrape",
-                warnings=warn,
-            )
         try:
             reports = await run_blocking(
-                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10), kind, page_n),
+                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10), kind),
                 "analyst_consensus",
                 timeout_secs=45.0,
             )
@@ -417,10 +390,8 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "symbol": (symbol or "").upper(),
                 "report_type": kind,
                 "reports": rows[: max(int(limit), 1)],
-                "page": page_n,
                 "days": days_n,
                 "cutoff": cutoff,
-                "has_more": False,
             },
             source="vietstock-scrape",
             warnings=warn,
