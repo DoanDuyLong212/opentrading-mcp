@@ -9,7 +9,7 @@ async def test_full_matrix_stdio():
     server = create_server()
     tools = register_all(server)
     calls = all_calls()
-    assert len(calls) == len(tools) == 139, f"matrix {len(calls)} vs tools {len(tools)}"
+    assert len(calls) == len(tools) == 159, f"matrix {len(calls)} vs tools {len(tools)}"
     rows = await run_stdio_all()
     assert rows, "matrix returned no rows"
     assert len(rows) == len(calls)

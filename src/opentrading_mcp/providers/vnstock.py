@@ -54,8 +54,10 @@ def quota_info() -> dict[str, Any]:
         info = authenticator.get_tier_info()
         if isinstance(info, dict):
             lim = info.get("limits", {})
-            return {"tier": info.get("tier"),
-                    "per_minute": (lim.get("per_minute") if isinstance(lim, dict) else None)}
+            return {
+                "tier": info.get("tier"),
+                "per_minute": (lim.get("per_minute") if isinstance(lim, dict) else None),
+            }
         return {"tier": "keyed"}
     except Exception as exc:
         return {"tier": "unknown", "note": str(exc)[:100]}
@@ -366,16 +368,71 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
     return _records(frame)
 
 
+# Common spellings → the MSN-style codes vnstock's global index accepts
+# (mirrors vnstock.explorer.msn.const._GLOBAL_INDICES: INX, USA30, COMP...).
+GLOBAL_INDEX_ALIASES = {
+    "SPX": "INX",
+    "GSPC": "INX",
+    "^GSPC": "INX",
+    "SP500": "INX",
+    "S&P500": "INX",
+    "S&P": "INX",
+    "DJIA": "USA30",
+    "DJI": "USA30",
+    "^DJI": "USA30",
+    "DOW": "USA30",
+    "IXIC": "COMP",
+    "^IXIC": "COMP",
+    "NASDAQ": "COMP",
+    "NASDAQCOMPOSITE": "COMP",
+    "RUSSELL2000": "RUT",
+    "CAC40": "PX1",
+    "FCHI": "PX1",
+    "^FCHI": "PX1",
+    "FTSE": "UKX",
+    "FTSE100": "UKX",
+    "^FTSE": "UKX",
+    "NIKKEI": "N225",
+    "^N225": "N225",
+    "HANGSENG": "HSI",
+    "^HSI": "HSI",
+    "SHCOMP": "000001",
+    "SSEC": "000001",
+    "SHANGHAI": "000001",
+    "VNINDEX": "VNI",
+    "VN-INDEX": "VNI",
+    "SENSEX": "SENSEX",
+}
+
+
+def _normalize_global_symbol(symbol: str) -> str:
+    """Map common spellings (SPX, Nasdaq, Dow...) to vnstock's global codes."""
+    raw = str(symbol).strip().upper()
+    return GLOBAL_INDEX_ALIASES.get(raw, raw)
+
+
+VALID_GLOBAL_SYMBOLS = (
+    "INX (S&P 500), USA30/DJI (Dow Jones), COMP (Nasdaq Composite), RUT (Russell 2000), "
+    "NYA (NYSE Composite), RUI/RUA (Russell 1000/3000), UKX (FTSE 100), DAX, PX1 (CAC 40), "
+    "N225 (Nikkei 225), 000001 (Shanghai SE), HSI (Hang Seng), SENSEX, VNI (VN-Index)"
+)
+
+
 @guarded("vnstock")
 def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
+    normalized = _normalize_global_symbol(symbol)
     try:
-        frame = Market().index(symbol.upper(), scope="global").ohlcv(count=count)
+        frame = Market().index(normalized, scope="global").ohlcv(count=count)
     except Exception as exc:
-        raise ProviderUnavailable(f"vnstock global index failed: {symbol}") from exc
+        raise ProviderUnavailable(
+            f"vnstock global index failed: {symbol} (→ {normalized}). "
+            f"Valid symbols: {VALID_GLOBAL_SYMBOLS}. "
+            f"For indices not listed here (e.g. Nasdaq-100 NDX) use yf_global_indices."
+        ) from exc
     return _records(frame)
 
 
@@ -510,8 +567,13 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
                     except (TypeError, ValueError):
                         vals.append(None)
                 rows.append({"name": str(row[label_col]), "values": vals})
-        return {"symbol": symbol.upper(), "period": period, "unit": "VNDbn",
-                "periods": periods, "rows": rows}
+        return {
+            "symbol": symbol.upper(),
+            "period": period,
+            "unit": "VNDbn",
+            "periods": periods,
+            "rows": rows,
+        }
     except Exception as exc:
         raise ProviderBadData(f"malformed vnstock cashflow for {symbol}: {exc}") from exc
 
@@ -696,8 +758,12 @@ def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[s
             frame = msn.Quote(symbol_id).history(start=start, end=end, interval="1D")
             rows = frame.to_dict(orient="records")
             out.append(
-                {"symbol": symbol_id, "points": len(rows), "last": rows[-1] if rows else None,
-                 "series": rows[-35:] if rows else []}
+                {
+                    "symbol": symbol_id,
+                    "points": len(rows),
+                    "last": rows[-1] if rows else None,
+                    "series": rows[-35:] if rows else [],
+                }
             )
         except Exception as exc:
             raise ProviderUnavailable(f"vnstock msn failed: {symbol_id}: {exc}") from exc

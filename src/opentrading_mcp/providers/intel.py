@@ -313,7 +313,7 @@ def prediction_odds(
                 reverse=True,
             )
             return {"source": base, "events": _event_rows(events, limit)}
-        except (ProviderUnavailable, ProviderBadData, ValueError):
+        except (ProviderUnavailable, ProviderBadData, ValueError, httpx.HTTPError):
             continue
     raise ProviderUnavailable("polymarket unreachable via jina and direct")
 
@@ -375,7 +375,7 @@ def polymarket_event(slug: str) -> dict[str, Any]:
                 "markets": markets,
                 "fetched_at": datetime.datetime.now(datetime.UTC).isoformat(),
             }
-        except (ProviderUnavailable, ValueError):
+        except (ProviderUnavailable, ValueError, httpx.HTTPError):
             continue
     raise ProviderUnavailable(f"polymarket event {slug!r} unreachable")
 

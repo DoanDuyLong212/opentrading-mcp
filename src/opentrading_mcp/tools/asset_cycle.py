@@ -240,7 +240,10 @@ def register_asset_cycle_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Refresh the 6 VN assets (incremental) + recompute monthly. One refresh at a time."""
 
         async def work() -> dict[str, Any]:
-            summ = await refresh_vn_assets()
+            try:
+                summ = await refresh_vn_assets()
+            except db.DbUnavailable as exc:
+                return db.na("vn_asset_refresh", str(exc))
             return make_envelope(summ, source="asset_cycle")
 
         return await db.guarded_write("vn_asset_refresh", work)
@@ -250,7 +253,10 @@ def register_asset_cycle_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Refresh 17 ETFs + USREC (incremental) + recompute monthly/phase/corr."""
 
         async def work() -> dict[str, Any]:
-            summ = await refresh_global_assets()
+            try:
+                summ = await refresh_global_assets()
+            except db.DbUnavailable as exc:
+                return db.na("g_asset_refresh", str(exc))
             return make_envelope(summ, source="asset_cycle")
 
         return await db.guarded_write("g_asset_refresh", work)

@@ -61,7 +61,7 @@ HINTS: dict[str, str] = {
     "vn_forex_ohlcv": "lich su ty gia ngoai te | currency history",
     "vn_crypto_ohlv": "tien so bitcoin lich su gia | crypto price history",
     "vn_crypto_ohlcv": "tien so bitcoin nen lich su gia | crypto candles history",
-    "vn_global_index": "chi so the gioi lich su | world index history",
+    "vn_global_index": "chi so the gioi INX COMP USA30 Dow | world index history symbols",
     "vn_reference": "danh sach ma theo san nhom nganh | tickers by exchange group",
     "vn_company": "ho so cong ty co dong ban lanh dao | profile shareholders officers",
     "vn_msn_fx_gold": "ty gia USDVND vang the gioi | usd vnd gold xau",
