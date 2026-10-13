@@ -130,3 +130,41 @@ async def test_vs_indicator_data_coerces_model_typing(monkeypatch):
     env = await fn(category_id=15, term_type_id='"7"', sub_term_type_id='"2"')
     _check_envelope(env, "vs_indicator_data")
     assert seen == {"tt": 7, "cat": 15, "sub": "2"}, seen
+
+
+async def test_vs_indicator_data_resolves_named_indicators(monkeypatch):
+    from opentrading_mcp.providers import vietstock as vs_p
+
+    seen: dict[str, Any] = {}
+
+    def fake_macro(
+        tt: int, cat: int, sub: str = "", frm: str = "2022-01-01", to: str | None = None
+    ) -> Any:
+        seen.update(tt=tt, cat=cat, sub=sub)
+        return {"rows": [{"name": "X", "value": 1.0}]}
+
+    monkeypatch.setattr(vs_p, "macro_report_data", fake_macro)
+    fn = _tool_fn("vs_indicator_data")
+    await fn(indicator="gdp")
+    assert seen == {"tt": 3, "cat": 73, "sub": ""}
+    await fn(indicator="CPI")
+    assert seen == {"tt": 7, "cat": 15, "sub": "2"}
+    env = await fn(indicator="Exports", category_id=99)
+    assert seen == {"tt": 2, "cat": 38, "sub": ""}
+    assert any("ignored" in w for w in env["warnings"])
+
+
+async def test_vs_indicator_data_unknown_or_missing_indicator_is_explained(monkeypatch):
+    from opentrading_mcp.providers import vietstock as vs_p
+
+    def boom(*_: Any) -> Any:
+        raise AssertionError("provider must not be called")
+
+    monkeypatch.setattr(vs_p, "macro_report_data", boom)
+    fn = _tool_fn("vs_indicator_data")
+    env = await fn(indicator="FDI")
+    _check_envelope(env, "vs_indicator_data")
+    assert env["availability"] == "unavailable"
+    assert "vs_categories" in env["warnings"][0]
+    env = await fn()
+    assert env["availability"] == "unavailable"

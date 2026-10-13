@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -369,7 +370,8 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
 
 
 # Common spellings → the MSN-style codes vnstock's global index accepts
-# (mirrors vnstock.explorer.msn.const._GLOBAL_INDICES: INX, USA30, COMP...).
+# (vnstock.explorer.msn.const._GLOBAL_INDICES: INX, USA30, COMP...). Keys are already
+# normalized: upper case, no spaces, hyphens or dots ("S&P 500" → "S&P500").
 GLOBAL_INDEX_ALIASES = {
     "SPX": "INX",
     "GSPC": "INX",
@@ -381,33 +383,41 @@ GLOBAL_INDEX_ALIASES = {
     "DJI": "USA30",
     "^DJI": "USA30",
     "DOW": "USA30",
+    "DOWJONES": "USA30",
     "IXIC": "COMP",
     "^IXIC": "COMP",
     "NASDAQ": "COMP",
     "NASDAQCOMPOSITE": "COMP",
     "RUSSELL2000": "RUT",
+    "^RUT": "RUT",
+    "^NYA": "NYA",
+    "CAC": "PX1",
     "CAC40": "PX1",
     "FCHI": "PX1",
     "^FCHI": "PX1",
     "FTSE": "UKX",
     "FTSE100": "UKX",
     "^FTSE": "UKX",
+    "GDAXI": "DAX",
+    "^GDAXI": "DAX",
     "NIKKEI": "N225",
+    "NIKKEI225": "N225",
     "^N225": "N225",
     "HANGSENG": "HSI",
     "^HSI": "HSI",
     "SHCOMP": "000001",
     "SSEC": "000001",
     "SHANGHAI": "000001",
+    "SHANGHAICOMPOSITE": "000001",
+    "000001SS": "000001",
+    "^BSESN": "SENSEX",
     "VNINDEX": "VNI",
-    "VN-INDEX": "VNI",
-    "SENSEX": "SENSEX",
 }
 
 
 def _normalize_global_symbol(symbol: str) -> str:
-    """Map common spellings (SPX, Nasdaq, Dow...) to vnstock's global codes."""
-    raw = str(symbol).strip().upper()
+    """Map common spellings (SPX, "S&P 500", Dow Jones...) to vnstock's global codes."""
+    raw = re.sub(r"[\s.\-]+", "", str(symbol)).upper()
     return GLOBAL_INDEX_ALIASES.get(raw, raw)
 
 

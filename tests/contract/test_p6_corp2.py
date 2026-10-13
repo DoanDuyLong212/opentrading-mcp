@@ -288,33 +288,13 @@ async def test_analyst_consensus_macro_mode(monkeypatch):
     assert env["data"]["reports"][0]["macro_topic"] == "CPI"
 
 
-async def test_analyst_consensus_page_gt1_empty_with_warning(monkeypatch):
-    async def boom(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        raise AssertionError("provider must not be called for page>1")
+async def test_analyst_consensus_has_no_page_param():
+    import inspect
 
-    import opentrading_mcp.tools.corp as corp_mod
-
-    monkeypatch.setattr(corp_mod, "run_blocking", boom)
-    fn = _tool_fn("analyst_consensus")
-    env = await fn(page=2)
-    _check_envelope(env, "analyst_consensus")
-    assert env["data"]["reports"] == []
-    assert env["data"]["page"] == 2
-    assert env["data"]["has_more"] is False
-    assert any("pagination" in w for w in env["warnings"])
-
-
-async def test_analyst_consensus_page_clamped(monkeypatch):
-    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        return []
-
-    import opentrading_mcp.tools.corp as corp_mod
-
-    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
-    fn = _tool_fn("analyst_consensus")
-    env = await fn(page=0)
-    assert env["data"]["page"] == 1
-    assert env["data"]["reports"] == []
+    # The public listing has one page; a page parameter would only invite wasted calls.
+    params = inspect.signature(_tool_fn("analyst_consensus")).parameters
+    assert "page" not in params
+    assert "days" in params
 
 
 async def test_analyst_consensus_days_filter(monkeypatch):
@@ -372,16 +352,10 @@ async def test_analyst_consensus_days_filter(monkeypatch):
     assert any("date_uncertain" in w for w in env["warnings"])
 
 
-def test_analyst_consensus_docstring_has_harness_recipe():
+def test_analyst_consensus_docstring_describes_report_page():
     from tests.contract.test_p6_corp2 import _tool_fn as _tf
 
     fn = _tf("analyst_consensus")
     doc = fn.__doc__ or ""
-    for marker in ("Nguồn:", "Tải về", "edocs", "Max 3"):
-        assert marker in doc, f"docstring missing harness marker {marker!r}"
-
-
-def test_provider_analyst_reports_page_gt1_empty():
-    from opentrading_mcp.providers import vn_public as pub_p
-
-    assert pub_p.analyst_reports(10, "equity", page=2) == []
+    for marker in ("Nguồn:", "Tải về", "edocs"):
+        assert marker in doc, f"docstring missing report-page marker {marker!r}"
