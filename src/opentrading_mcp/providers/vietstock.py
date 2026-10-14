@@ -67,8 +67,14 @@ def _seed_token_from_trading_agents() -> str:
     ):
         if not candidate:
             continue
+        path = candidate
+        if not os.path.isabs(path):
+            # Trading_Agents/.env stores this relative to that repo, but this
+            # process runs elsewhere: resolve against the repo root, otherwise
+            # the seed is silently never found.
+            path = os.path.join("/home/doanlong/Trading_Agents", path)
         try:
-            with open(candidate, encoding="utf-8") as fh:
+            with open(path, encoding="utf-8") as fh:
                 saved = json.load(fh)
             token = str((saved.get("cookies") or {}).get("CookieLogin", ""))
             if token and _decode_jwt_exp(token) > time.time() + 300:

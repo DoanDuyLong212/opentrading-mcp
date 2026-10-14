@@ -1,0 +1,283 @@
+{
+ "label": "prod-before",
+ "date": "2026-10-15",
+ "commit": "e1b2fb7",
+ "redis_configured": false,
+ "call_timeout": 75.0,
+ "results": [
+  {
+   "tool": "market_snapshot",
+   "cold": {
+    "tool": "market_snapshot",
+    "ok": true,
+    "seconds": 4.31,
+    "availability": "available",
+    "source": "vnstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "market_snapshot",
+    "ok": true,
+    "seconds": 0.38,
+    "availability": "available",
+    "source": "cache",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "market_movers",
+   "cold": {
+    "tool": "market_movers",
+    "ok": true,
+    "seconds": 3.92,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "market_movers",
+    "ok": true,
+    "seconds": 0.37,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "breadth_scan",
+   "cold": {
+    "tool": "breadth_scan",
+    "ok": true,
+    "seconds": 0.44,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "breadth_scan",
+    "ok": true,
+    "seconds": 0.33,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "vn_quote_history",
+   "cold": {
+    "tool": "vn_quote_history",
+    "ok": true,
+    "seconds": 0.6,
+    "availability": "available",
+    "source": "vnstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vn_quote_history",
+    "ok": true,
+    "seconds": 0.63,
+    "availability": "available",
+    "source": "vnstock",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "vn_equity_quote_batch",
+   "cold": {
+    "tool": "vn_equity_quote_batch",
+    "ok": true,
+    "seconds": 0.24,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vn_equity_quote_batch",
+    "ok": true,
+    "seconds": 0.27,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "signals_technical",
+   "cold": {
+    "tool": "signals_technical",
+    "ok": true,
+    "seconds": 0.4,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "signals_technical",
+    "ok": true,
+    "seconds": 0.6,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "valuation_run",
+   "cold": {
+    "tool": "valuation_run",
+    "ok": true,
+    "seconds": 0.35,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "valuation_run",
+    "ok": true,
+    "seconds": 0.31,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "financial_ratios",
+   "cold": {
+    "tool": "financial_ratios",
+    "ok": true,
+    "seconds": 0.39,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "financial_ratios",
+    "ok": true,
+    "seconds": 0.38,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "sbv_rates",
+   "cold": {
+    "tool": "sbv_rates",
+    "ok": true,
+    "seconds": 1.75,
+    "availability": "available",
+    "source": "web",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "sbv_rates",
+    "ok": true,
+    "seconds": 2.46,
+    "availability": "available",
+    "source": "web",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "vs_categories",
+   "cold": {
+    "tool": "vs_categories",
+    "ok": true,
+    "seconds": 0.75,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vs_categories",
+    "ok": true,
+    "seconds": 0.61,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "distribution_count",
+   "cold": {
+    "tool": "distribution_count",
+    "ok": true,
+    "seconds": 0.31,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "distribution_count",
+    "ok": true,
+    "seconds": 0.3,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "news_market",
+   "cold": {
+    "tool": "news_market",
+    "ok": true,
+    "seconds": 0.59,
+    "availability": "available",
+    "source": "fireant",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "news_market",
+    "ok": true,
+    "seconds": 0.51,
+    "availability": "available",
+    "source": "fireant",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "vs_indicator_data",
+   "cold": {
+    "tool": "vs_indicator_data",
+    "ok": true,
+    "seconds": 1.0,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vs_indicator_data",
+    "ok": true,
+    "seconds": 1.06,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "economic_calendar",
+   "cold": {
+    "tool": "economic_calendar",
+    "ok": true,
+    "seconds": 0.42,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "economic_calendar",
+    "ok": true,
+    "seconds": 0.36,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   }
+  }
+ ],
+ "summary": {
+  "n_tools": 14,
+  "median_cold_s": 0.52,
+  "median_warm_s": 0.38,
+  "warm_faster": 9,
+  "warm_from_cache": 1,
+  "with_data_time": 0
+ }
+}
