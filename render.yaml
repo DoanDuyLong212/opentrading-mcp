@@ -1,20 +1,22 @@
-# NOTE (10/10/2026): the live service opentrading-mcp-web runs on the FREE plan
-# (0.1 CPU, sleeps after 15 min idle), not `starter`; the worker and the database
-# below do not exist on Render (Redis/Postgres are external). Heavy upstream work is
-# capped by MCP_BLOCKING_SLOTS (default 2) so concurrent calls cannot starve /healthz.
+# NOTE (10/10/2026, confirmed 14/10/2026 via Render API): only
+# opentrading-mcp-web exists, on the FREE plan (0.1 CPU, sleeps after 15 min
+# idle). Background workers need a paid plan, so the loops (DNSE WS, yfinance,
+# heartbeat) run inside the web service instead — health `worker: ok` proves
+# it. Redis/Postgres are external (Upstash + external PG); there is no managed
+# database on Render. Keep this file matching reality: DO NOT re-add worker/
+# database sections or raise the plan without explicit approval, as a Blueprint
+# sync would create billable resources.
 services:
   - type: web
     name: opentrading-mcp-web
     runtime: docker
     region: singapore
-    plan: starter
+    plan: free
     healthCheckPath: /healthz
     dockerfilePath: ./Dockerfile
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: opentrading-mcp-pg
-          property: connectionString
+        sync: false
       - key: REDIS_URL
         sync: false
       - key: MCP_BEARER_TEAM
@@ -31,25 +33,3 @@ services:
         sync: false
       - key: VNSTOCK_API_KEY
         sync: false
-
-  - type: worker
-    name: opentrading-mcp-worker
-    runtime: docker
-    region: singapore
-    plan: starter
-    dockerfilePath: ./Dockerfile
-    dockerCommand: python -m opentrading_mcp.loops
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: opentrading-mcp-pg
-          property: connectionString
-      - key: REDIS_URL
-        sync: false
-
-databases:
-  - name: opentrading-mcp-pg
-    databaseName: mcp
-    user: trading
-    region: singapore
-    plan: starter
