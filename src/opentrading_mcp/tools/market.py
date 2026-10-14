@@ -274,7 +274,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbols: các mã cần báo giá — mặc định cả rổ VN30. as_of: nhãn thời điểm yêu cầu, ghi vào
             requested_as_of (dữ liệu luôn là mới nhất).
         """
-        fp = ",".join(symbols or [])
+        fp = f"{','.join(symbols or [])}|{as_of}"
         hit = await cache_lookup("market_snapshot", fp)
         if hit is not None:
             return hit

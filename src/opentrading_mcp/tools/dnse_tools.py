@@ -66,7 +66,8 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         {symbol, count, last, high, low} instead of full bars. columns: keep only
         named fields per bar (t/o/h/l/c/v).
         """
-        fp = f"{symbol}|{resolution}|{bar_type}|{from_date}|{to_date}|{summary}|{columns}"
+        fp = (f"{symbol}|{resolution}|{bar_type}|{from_date}|{to_date}|"
+              f"{summary}|{columns}|{page_size}")
         hit = await cache_lookup("dnse_ohlc_history", fp)
         if hit is not None:
             return hit
