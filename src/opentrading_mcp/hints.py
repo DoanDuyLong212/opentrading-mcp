@@ -26,6 +26,7 @@ HINTS: dict[str, str] = {
     "breadth_scan": "do rong thi truong ma tang giam tran san | breadth advance decline",
     "market_overview": "tong quan thi truong hom nay | market summary today pulse",
     "dnse_market_status": "phien giao dich mo dong cua | session open closed status",
+    "distribution_count": "dem phien phan phoi oneil ftd | distribution days count follow through",
     # vn
     "vn_quote_history": "lich su gia nen ngay tuan thang co phieu | price history daily candles",
     "vn_equity_quote_batch": "bang gia nhieu ma gia khop | quotes many tickers board",
