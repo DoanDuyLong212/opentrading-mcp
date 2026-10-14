@@ -33,6 +33,7 @@ MATRIX: list[tuple[str, dict[str, Any], float]] = [
     ("symbol_lookup", {"query": "Vietcombank"}, 30.0),
     ("market_movers", {"top_n": 5}, 30.0),
     ("breadth_scan", {}, 30.0),
+    ("distribution_count", {"symbol": "VNINDEX", "days": 30}, 90.0),
     ("dnse_market_status", {}, 30.0),
     ("vn_quote_history", {"symbol": "VCB", "days": 5}, 60.0),
     ("vn_equity_quote_batch", {"symbols": ["VCB", "HPG"]}, 30.0),
