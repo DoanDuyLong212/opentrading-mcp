@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
@@ -14,7 +15,14 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    AnyContext,
+    cache_lookup,
+    cache_store,
+    price_ttl,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -77,11 +85,18 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         period: 'quarter' (12 quý) hoặc 'year' (năm).
         """
+        fp = f"{symbol}|{period}"
+        hit = await cache_lookup("vs_financeinfo", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"vs_financeinfo {symbol} {period}")
         try:
             data = await _call("vs_financeinfo", vs_p.financeinfo, symbol, period)
-            return make_envelope(data, source="vietstock")
+            return await cache_store(
+                "vs_financeinfo", fp, TTL_SECONDS["financeinfo"],
+                data, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financeinfo", str(exc))
 
@@ -91,20 +106,33 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         type: board id (2 = main board).
         """
+        fp = f"{type}"
+        hit = await cache_lookup("vs_market_price", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("vs_market_price", vs_p.market_price, type)
-            return make_envelope({"rows": data}, source="vietstock")
+            return await cache_store(
+                "vs_market_price", fp, price_ttl(),
+                {"rows": data}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_market_price", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def vs_market_index() -> dict[str, Any]:
         """Index closes with 1M and YTD change. Use for index context."""
+        hit = await cache_lookup("vs_market_index", "-")
+        if hit is not None:
+            return hit
         try:
             data = await _call(
                 "vs_market_index", vs_p._post, "/Data/GeneralMarket_GetMarketIndexVNData", {}
             )
-            return make_envelope({"indices": data}, source="vietstock")
+            return await cache_store(
+                "vs_market_index", "-", price_ttl(),
+                {"indices": data}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_market_index", str(exc))
 
@@ -118,12 +146,19 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         days: chỉ giữ N điểm biểu đồ gần nhất.
         """
+        fp = f"{days}"
+        hit = await cache_lookup("vs_nn_flow", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("vs_nn_flow", vs_p.nn_flow_chart)
             if isinstance(data, list) and len(data) == 2 and all(isinstance(p, list) for p in data):
                 tail = max(int(days), 1)
                 data = [data[0][-tail:], data[1][-tail:]]
-            return make_envelope({"flow": data}, source="vietstock")
+            return await cache_store(
+                "vs_nn_flow", fp, TTL_SECONDS["hour"],
+                {"flow": data}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na(
                 "vs_nn_flow",
@@ -133,9 +168,15 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vs_categories() -> dict[str, Any]:
         """Macro indicator catalogue (~60 categories). Use before indicator queries."""
+        hit = await cache_lookup("vs_categories", "-")
+        if hit is not None:
+            return hit
         try:
             data = await _call("vs_categories", vs_p.indicator_categories)
-            return make_envelope({"categories": data}, source="vietstock")
+            return await cache_store(
+                "vs_categories", "-", TTL_SECONDS["categories"],
+                {"categories": data}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_categories", str(exc))
 
@@ -180,6 +221,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "vs_indicator_data",
                 "pass indicator (GDP/CPI/XK) or category_id (see vs_categories)",
             )
+        fp = f"{category_id}|{term_type_id}|{sub_term_type_id}|{from_date}|{to_date}"
+        hit = await cache_lookup("vs_indicator_data", fp)
+        if hit is not None:
+            return hit
         try:
             ttid = _coerce_id(term_type_id, "term_type_id")
             sub = _coerce_sub(sub_term_type_id)
@@ -194,7 +239,8 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             rows = out.get("rows", []) if isinstance(out, dict) else []
             availability = "available" if rows else "empty"
-            return make_envelope(
+            return await cache_store(
+                "vs_indicator_data", fp, TTL_SECONDS["financeinfo"],
                 out, source="vietstock", availability=availability, warnings=warnings
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -206,6 +252,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         There is no tool named vs_prices or vs_financial_ratios — use this tool
         (snapshot) or financial_ratios (sets) instead."""
+        fp = f"{symbol}"
+        hit = await cache_lookup("vs_trading_info", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call(
                 "vs_trading_info",
@@ -213,7 +263,10 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "/company/tradinginfo",
                 {"code": symbol.upper(), "s": 0},
             )
-            return make_envelope({"symbol": symbol.upper(), "info": data}, source="vietstock")
+            return await cache_store(
+                "vs_trading_info", fp, TTL_SECONDS["overview"],
+                {"symbol": symbol.upper(), "info": data}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_trading_info", str(exc))
 

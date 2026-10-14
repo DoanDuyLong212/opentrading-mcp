@@ -7,15 +7,19 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
-from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import (
     CLOSE_KEYS,
     HIGH_KEYS,
     LOW_KEYS,
     READ_ONLY,
+    cache_lookup,
+    cache_store,
+    last_bar_time,
     pick_value,
+    price_ttl,
     project_rows,
     run_blocking,
     summarize_rows,
@@ -59,12 +63,27 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).
         summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
         """
+        fp = f"{symbol}|{count}|{summary}|{columns}|{interval}"
+        hit = await cache_lookup("vn_index_ohlcv", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("i", vn_p.index_ohlcv, symbol, count, interval)
             if summary:
-                return make_envelope(_summarize(symbol, rows), source="vnstock")
-            return make_envelope(
-                {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
+                s = _summarize(symbol, rows)
+                return await cache_store(
+                    "vn_index_ohlcv",
+                    f"{symbol}|{count}|{summary}|{columns}|{interval}",
+                    price_ttl(),
+                    s, source="vnstock", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "vn_index_ohlcv",
+                f"{symbol}|{count}|{summary}|{columns}|{interval}",
+                price_ttl(),
+                {"symbol": symbol.upper(), "bars": _project(rows, columns)},
+                source="vnstock",
+                data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_index_ohlcv", str(exc))
@@ -87,12 +106,23 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         interval: cỡ nến ('1D' ngày; intraday như '1m'/'15m' nếu nguồn hỗ trợ).
         summary/columns: summary chỉ trả {count,last,high,low}; columns giữ trường nêu tên.
         """
+        fp = f"{symbol}|{count}|{summary}|{columns}|{interval}"
+        hit = await cache_lookup("vn_equity_ohlcv", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("e", vn_p.equity_ohlcv, symbol, count, interval)
             if summary:
-                return make_envelope(_summarize(symbol, rows), source="vnstock")
-            return make_envelope(
-                {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
+                s = _summarize(symbol, rows)
+                return await cache_store(
+                    "vn_equity_ohlcv", fp, price_ttl(),
+                    s, source="vnstock", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "vn_equity_ohlcv", fp, price_ttl(),
+                {"symbol": symbol.upper(), "bars": _project(rows, columns)},
+                source="vnstock",
+                data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_equity_ohlcv", str(exc))
@@ -110,12 +140,23 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         interval: bar size ('1D' daily; intraday like '1m'/'15m' where supported).
         summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
         """
+        fp = f"{symbol}|{count}|{summary}|{columns}|{interval}"
+        hit = await cache_lookup("vn_futures_ohlcv", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("f", vn_p.futures_ohlcv, symbol, count, interval)
             if summary:
-                return make_envelope(_summarize(symbol, rows), source="vnstock")
-            return make_envelope(
-                {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
+                s = _summarize(symbol, rows)
+                return await cache_store(
+                    "vn_futures_ohlcv", fp, price_ttl(),
+                    s, source="vnstock", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "vn_futures_ohlcv", fp, price_ttl(),
+                {"symbol": symbol.upper(), "bars": _project(rows, columns)},
+                source="vnstock",
+                data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_futures_ohlcv", str(exc))
@@ -132,12 +173,23 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         pair like 'USDVND'. summary/columns: summary returns {count,last,high,low}
         only; columns keeps named fields.
         """
+        fp = f"{pair}|{count}|{summary}|{columns}"
+        hit = await cache_lookup("vn_forex_ohlcv", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("f", vn_p.forex_ohlcv, pair, count)
             if summary:
-                return make_envelope(_summarize(pair, rows), source="vnstock")
-            return make_envelope(
-                {"pair": pair.upper(), "bars": _project(rows, columns)}, source="vnstock"
+                s = _summarize(pair, rows)
+                return await cache_store(
+                    "vn_forex_ohlcv", fp, price_ttl(),
+                    s, source="vnstock", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "vn_forex_ohlcv", fp, price_ttl(),
+                {"pair": pair.upper(), "bars": _project(rows, columns)},
+                source="vnstock",
+                data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_forex_ohlcv", str(exc))
@@ -153,12 +205,23 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
         """
+        fp = f"{symbol}|{count}|{summary}|{columns}"
+        hit = await cache_lookup("vn_crypto_ohlcv", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("c", vn_p.crypto_ohlv, symbol, count)
             if summary:
-                return make_envelope(_summarize(symbol, rows), source="vnstock")
-            return make_envelope(
-                {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
+                s = _summarize(symbol, rows)
+                return await cache_store(
+                    "vn_crypto_ohlcv", fp, price_ttl(),
+                    s, source="vnstock", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "vn_crypto_ohlcv", fp, price_ttl(),
+                {"symbol": symbol.upper(), "bars": _project(rows, columns)},
+                source="vnstock",
+                data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_crypto_ohlcv", str(exc))
@@ -180,12 +243,23 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         Nasdaq-100 (NDX) is NOT in this source — use yf_global_indices.
         summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
         """
+        fp = f"{symbol}|{count}|{summary}|{columns}"
+        hit = await cache_lookup("vn_global_index", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("g", vn_p.global_index, symbol, count)
             if summary:
-                return make_envelope(_summarize(symbol, rows), source="vnstock")
-            return make_envelope(
-                {"symbol": symbol.upper(), "bars": _project(rows, columns)}, source="vnstock"
+                s = _summarize(symbol, rows)
+                return await cache_store(
+                    "vn_global_index", fp, price_ttl(),
+                    s, source="vnstock", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "vn_global_index", fp, price_ttl(),
+                {"symbol": symbol.upper(), "bars": _project(rows, columns)},
+                source="vnstock",
+                data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_global_index", str(exc))
@@ -199,9 +273,16 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         by: 'exchange' (use exchange=HOSE/HNX/UPCOM), 'group' or 'industry'
         (use key=group/industry name).
         """
+        fp = f"{exchange}|{by}|{key}"
+        hit = await cache_lookup("vn_reference", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("r", vn_p.reference_equity, exchange, by, key)
-            return make_envelope({"exchange": exchange.upper(), "rows": rows}, source="vnstock")
+            return await cache_store(
+                "vn_reference", fp, TTL_SECONDS["categories"],
+                {"exchange": exchange.upper(), "rows": rows}, source="vnstock",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_reference", str(exc))
 
@@ -215,9 +296,15 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         detail: false chỉ trả hồ sơ; true thêm cổ đông và lãnh đạo (nặng hơn).
         """
+        fp = f"{symbol}|{detail}"
+        hit = await cache_lookup("vn_company", fp)
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
-                await _call("c", vn_p.company_info, symbol, detail), source="vnstock"
+            data = await _call("c", vn_p.company_info, symbol, detail)
+            return await cache_store(
+                "vn_company", fp, TTL_SECONDS["overview"],
+                data, source="vnstock",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_company", str(exc))
@@ -228,9 +315,16 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         symbols: subset to fetch (default both); days: history depth.
         """
+        fp = f"{symbols}|{days}"
+        hit = await cache_lookup("vn_msn_fx_gold", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("m", vn_p.msn_fx_gold, symbols, days)
-            return make_envelope({"series": data}, source="msn")
+            return await cache_store(
+                "vn_msn_fx_gold", fp, price_ttl(),
+                {"series": data}, source="msn",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_msn_fx_gold", str(exc))
 
@@ -247,9 +341,16 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         board: board filter (default all boards). from_date/to_date: ISO dates
         bounding the trade window.
         """
+        fp = f"{symbol}|{limit}|{board}|{from_date}|{to_date}"
+        hit = await cache_lookup("vn_trades", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("t", vn_p.equity_trades, symbol, limit, board, from_date, to_date)
-            return make_envelope({"symbol": symbol.upper(), "trades": rows}, source="vnstock")
+            return await cache_store(
+                "vn_trades", fp, price_ttl(),
+                {"symbol": symbol.upper(), "trades": rows}, source="vnstock",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_trades", str(exc))
 

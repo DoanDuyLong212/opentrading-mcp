@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import webfetch as fetch_p
 from opentrading_mcp.providers import websearch as search_p
 from opentrading_mcp.providers.errors import (
@@ -15,7 +16,12 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY_OPEN, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY_OPEN,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -46,6 +52,10 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
             gian chờ
         tối đa (mặc định 30).
         """
+        fp = f"{url}|{format}|{timeout_seconds}"
+        hit = await cache_lookup("web_fetch", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call(
                 "web_fetch",
@@ -55,7 +65,10 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
                 min(timeout_seconds, 120),
                 secs=120.0,
             )
-            return make_envelope(data, source="web")
+            return await cache_store(
+                "web_fetch", fp, TTL_SECONDS["world"],
+                data, source="web",
+            )
         except (ProviderBadData, ProviderUnavailable) as exc:
             return _na("web_fetch", str(exc))
 
@@ -83,6 +96,13 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
             index cache, 'preferred' crawl live. search_type: 'auto' (mặc định),
             'fast', hoặc 'deep'. context_max_chars: trần ký tự context trả về.
             """
+            fp = f"{query}|{num_results}|{livecrawl}|{search_type}|{context_max_chars}"
+            hit = None
+            # livecrawl='preferred' explicitly requests a fresh crawl: never serve cache.
+            if livecrawl != "preferred":
+                hit = await cache_lookup("web_search", fp)
+            if hit is not None:
+                return hit
             try:
                 data = await _call(
                     "web_search",
@@ -95,7 +115,14 @@ def register_web_tools(server: FastMCP) -> list[dict[str, Any]]:
                     secs=60.0,
                 )
                 provider = data.get("provider", "web") if isinstance(data, dict) else "web"
-                return make_envelope(
+                if livecrawl == "preferred":
+                    return make_envelope(
+                        data,
+                        source="web-search",
+                        warnings=[f"provider={provider}"] if provider != "web" else None,
+                    )
+                return await cache_store(
+                    "web_search", fp, TTL_SECONDS["world"],
                     data,
                     source="web-search",
                     warnings=[f"provider={provider}"] if provider != "web" else None,

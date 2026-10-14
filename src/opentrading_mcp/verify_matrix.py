@@ -8,6 +8,7 @@ Contract asserts the shared envelope; data availability is NOT asserted
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import sys
@@ -231,6 +232,12 @@ def check_envelope(tool: str, payload: Any) -> list[str]:
             errors.append(f"{tool}: provenance missing as_of")
         if not provenance.get("source"):
             errors.append(f"{tool}: provenance missing source")
+        try:
+            datetime.datetime.fromisoformat(str(provenance.get("as_of", "")))
+        except (ValueError, TypeError):
+            errors.append(f"{tool}: provenance as_of not ISO")
+        if provenance.get("source") == "cache" and not provenance.get("data_time"):
+            errors.append(f"{tool}: cached response must disclose data_time")
     warnings = body.get("warnings")
     if not isinstance(warnings, list):
         errors.append(f"{tool}: warnings is not a list")

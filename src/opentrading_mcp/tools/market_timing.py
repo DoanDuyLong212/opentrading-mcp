@@ -20,6 +20,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import (
     ProviderBadData,
@@ -29,6 +30,8 @@ from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     AnyContext,
+    cache_lookup,
+    cache_store,
     pick_value,
     run_blocking,
 )
@@ -218,6 +221,10 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         sym = (symbol or "VNINDEX").strip().upper()
         want = max(30, min(int(days or 40), 90))
+        fp = f"{sym}|{want}"
+        hit = await cache_lookup("distribution_count", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await run_blocking(
                 functools.partial(vn_p.index_ohlcv, sym, want, "1D"),
@@ -250,7 +257,10 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         key, guidance = _status(count)
         hi = max(closes[-DD_WINDOW:]) if len(closes) >= DD_WINDOW else max(closes)
         decline = round(closes[-1] / hi * 100 - 100, 2) if hi else 0.0
-        return make_envelope(
+        return await cache_store(
+            "distribution_count",
+            fp,
+            TTL_SECONDS["hour"],
             {
                 "symbol": sym,
                 "window_sessions": DD_WINDOW,

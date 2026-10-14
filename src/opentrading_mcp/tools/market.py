@@ -16,7 +16,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from opentrading_mcp.cache import TTL_SECONDS, cache_key
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import dnse as dnse_p
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers import vnstock as vn_p
@@ -25,13 +25,17 @@ from opentrading_mcp.providers.errors import (
     ProviderBadData,
     ProviderUnavailable,
 )
-from opentrading_mcp.providers.store import acache_get, acache_set
+from opentrading_mcp.providers.store import acache_get
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     AnyContext,
+    cache_lookup,
+    cache_store,
+    last_bar_time,
     no_exit,
     pick_value,
+    price_ttl,
     project_rows,
     run_blocking,
     summarize_rows,
@@ -270,12 +274,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbols: các mã cần báo giá — mặc định cả rổ VN30. as_of: nhãn thời điểm yêu cầu, ghi vào
             requested_as_of (dữ liệu luôn là mới nhất).
         """
-        key = cache_key("market_snapshot", ",".join(symbols or []))
-        hit = await acache_get(key)
+        fp = ",".join(symbols or [])
+        hit = await cache_lookup("market_snapshot", fp)
         if hit is not None:
-            import json
-
-            return make_envelope(json.loads(hit), source="cache")
+            return hit
         if ctx is not None:
             await ctx.log("info", f"market_snapshot symbols={symbols or []}")
         try:
@@ -283,15 +285,18 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 functools.partial(vn_p.equity_quote_batch, symbols or vn_p.VN30),
                 "market_snapshot",
             )
-            await acache_set(key, {"quotes": quotes}, TTL_SECONDS["market"])
             quotes, missing = vn_p.split_batch(quotes)
             data: dict[str, Any] = {"quotes": quotes}
             if as_of is not None:
                 data["requested_as_of"] = as_of
             if missing:
                 data["missing"] = missing
-            return make_envelope(
-                data, source="vnstock",
+            return await cache_store(
+                "market_snapshot",
+                fp,
+                price_ttl(),
+                data,
+                source="vnstock",
                 warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -355,6 +360,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         days: số nến ngày mỗi mã (tối đa 100 mã). summary/columns: summary chỉ trả
             {count,last,high,low}; columns giữ lại trường nêu tên.
         """
+        fp = f"{','.join(symbols or [])}|{days}|{summary}|{columns}"
+        hit = await cache_lookup("market_candles_batch", fp)
+        if hit is not None:
+            return hit
         capped = symbols[:100]
         warnings: list[str] = []
         if len(symbols) > 100:
@@ -362,6 +371,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         total = max(len(capped), 1)
         series: list[dict[str, Any]] = []
         missing: list[dict[str, Any]] = []
+        last_t: str | None = None
         for i, symbol in enumerate(capped):
             if ctx is not None:
                 await ctx.report_progress(i, total, f"fetch {symbol}")
@@ -374,6 +384,9 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                     series.append(_summarize_candles(symbol, candles))
                 else:
                     series.append({"symbol": symbol, "candles": _project_rows(candles, columns)})
+                t = last_bar_time(candles)
+                if t is not None and (last_t is None or t > last_t):
+                    last_t = t
             except (ProviderUnavailable, ProviderBadData) as exc:
                 missing.append({"symbol": symbol, "error": str(exc)})
         if ctx is not None:
@@ -384,11 +397,15 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             availability = "unavailable"
         else:
             availability = None
-        return make_envelope(
+        return await cache_store(
+            "market_candles_batch",
+            f"{','.join(capped)}|{days}|{summary}|{columns}",
+            price_ttl(),
             {"series": series, "missing": missing},
             source="vnstock",
             availability=availability,
             warnings=warnings,
+            data_time=last_t,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -405,6 +422,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         limit/offset: phân trang kết quả (khớp theo mã hoặc tên công ty, không phân biệt hoa
             thường/dấu).
         """
+        fp = f"{query}|{limit}|{offset}"
+        hit = await cache_lookup("symbol_lookup", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await run_blocking(vn_p.listing_symbols, "symbol_lookup")
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -422,7 +443,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         ]
         items, page = paginate_list(hits, limit, offset)
-        return make_envelope({"hits": items}, source="vnstock", page=page)
+        return await cache_store(
+            "symbol_lookup", fp, TTL_SECONDS["categories"],
+            {"hits": items}, source="vnstock", page=page,
+        )
 
     # ---- symbol_resolve: multi-asset resolver (local tables + VN listing) ----
     @server.tool(annotations=READ_ONLY)
@@ -435,6 +459,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             hỏi user hoặc thử #1 rồi #2.
         Không dùng khi: đã rõ là cổ phiếu VN (dùng symbol_lookup nhanh hơn).
         """
+        fp = f"{query}|{limit}"
+        hit = await cache_lookup("symbol_resolve", fp)
+        if hit is not None:
+            return hit
         cands: list[dict[str, Any]] = []
         warnings: list[str] = []
         q_raw = (query or "").strip()
@@ -627,7 +655,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 or cands[0]["score"] < 60
             )
         )
-        return make_envelope(
+        return await cache_store(
+            "symbol_resolve",
+            f"{query}|{limit}",
+            TTL_SECONDS["categories"],
             {"query": q_raw, "resolved": resolved, "ambiguous": ambiguous, "candidates": cands},
             source="vnstock+local" if rows else "local",
             warnings=warnings,
@@ -646,6 +677,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         top_n: số dòng mỗi bảng. universe: 'vn30' (mặc định, 30 bluechip — nhanh, ổn định) hoặc
             'hose' (cả sàn ≤60 mã, chậm; mã kém thanh khoản có thể treo → trả partial kèm missing).
         """
+        fp = f"{top_n}|{universe}"
+        hit = await cache_lookup("market_movers", fp)
+        if hit is not None:
+            return hit
         try:
             syms: list[str] = []
             if universe.strip().lower() == "hose":
@@ -705,7 +740,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                     out2[k] = v
             return out2
 
-        return make_envelope(
+        return await cache_store(
+            "market_movers",
+            fp,
+            price_ttl(),
             {"gainers": [_clean(g) for g in gainers],
              "losers": [_clean(g) for g in losers],
              "volume_leaders": [_clean(g) for g in volume],
@@ -726,6 +764,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         exchange: lọc theo sàn (HOSE/HNX/UPCOM); bị bỏ qua kèm cảnh báo khi dòng dữ liệu không mang
             thông tin sàn.
         """
+        fp = f"{exchange}"
+        hit = await cache_lookup("breadth_scan", fp)
+        if hit is not None:
+            return hit
         try:
             prices = await run_blocking(vs_p.market_price, "breadth_scan", timeout_secs=30.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -775,7 +817,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             for r in rows
             if isinstance(r, dict) and _bchg(r) < 0
         )
-        return make_envelope(
+        return await cache_store(
+            "breadth_scan",
+            fp,
+            price_ttl(),
             {"advancers": adv, "decliners": dec, "rows": len(rows)},
             source="vietstock",
             warnings=warnings,
@@ -794,6 +839,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         top_n: số dòng tăng/giảm mỗi bảng. Các chân suy yếu độc lập: chân chết trả null kèm cảnh
             báo.
         """
+        fp = f"{top_n}"
+        hit = await cache_lookup("market_overview", fp)
+        if hit is not None:
+            return hit
         universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
         warnings: list[str] = []
         quotes: list[dict[str, Any]] | None = None
@@ -847,7 +896,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 return _unavailable("market_overview", "; ".join(warnings) or "all legs down")
         if ctx is not None:
             await ctx.log("info", "market_overview done")
-        return make_envelope(
+        return await cache_store(
+            "market_overview",
+            fp,
+            price_ttl(),
             data, source="vnstock+dnse", warnings=warnings, availability=availability
         )
 
@@ -859,9 +911,14 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         Không dùng khi: cần giá VN30 đầy đủ (dùng market_snapshot); cần context gộp cho bản tin
             (dùng market_overview).
         """
+        hit = await cache_lookup("dnse_market_status", "-")
+        if hit is not None:
+            return hit
         try:
             snap = dnse_p.ws_snapshot(["VNINDEX", "VN30", "VN30F1M"])
-            return make_envelope(snap, source="dnse-ws")
+            return await cache_store(
+                "dnse_market_status", "-", price_ttl(), snap, source="dnse-ws"
+            )
         except ProviderUnavailable:
             pass
         try:
@@ -870,7 +927,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "dnse_market_status",
                 timeout_secs=30.0,
             )
-            return make_envelope({"rest": trades}, source="dnse-rest")
+            return await cache_store(
+                "dnse_market_status", "-", price_ttl(),
+                {"rest": trades}, source="dnse-rest",
+            )
         except (ProviderAuthMissing, ProviderUnavailable) as exc:
             return _unavailable("dnse_market_status", str(exc))
 

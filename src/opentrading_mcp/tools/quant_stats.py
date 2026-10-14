@@ -7,11 +7,18 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.quant_shared import _align_returns, _dated_closes
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    AnyContext,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
@@ -31,6 +38,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         năm hóa cho Sharpe (252 ngày, 52 tuần, 12 tháng).
         Ví dụ: {"returns": [0.01, -0.005, 0.02], "periods_per_year": 252}.
         """
+        fp = f"{returns}|{periods_per_year}"
+        hit = await cache_lookup("quant_risk", fp)
+        if hit is not None:
+            return hit
         if not returns:
             return make_envelope({"note": "empty series"}, source="local", availability="empty")
         import statistics
@@ -46,7 +57,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             peak_eq = max(peak_eq, equity)
             max_dd = max(max_dd, (peak_eq - equity) / peak_eq)
         wins = sum(1 for r in returns if r > 0)
-        return make_envelope(
+        return await cache_store(
+            "quant_risk",
+            fp,
+            TTL_SECONDS["overview"],
             {
                 "sharpe_proxy": round(mean / std * annualize, 4),
                 "max_drawdown": round(max_dd, 4),
@@ -64,6 +78,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         lookback: daily closes fetched (20d factor windows fixed); also adds
         max_dd_full_pct over the full window.
         """
+        fp = f"{symbol}|{lookback}"
+        hit = await cache_lookup("quant_factors", fp)
+        if hit is not None:
+            return hit
         try:
             candles = await run_blocking(
                 functools.partial(vn_p.quote_history, symbol, max(int(lookback), 30) + 20),
@@ -97,7 +115,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             "max_dd_20d_pct": round((min(window) - max(window)) / max(window) * 100, 2),
             "max_dd_full_pct": round(max_dd_full * 100, 2),
         }
-        return make_envelope(factors, source="computed-local")
+        return await cache_store(
+            "quant_factors", fp, TTL_SECONDS["overview"],
+            factors, source="computed-local",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def correlation_matrix(
@@ -109,6 +130,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         Dates inner-join; vnstock day-only labels fall back to business-day
         walkback (see date_note).
         """
+        fp = f"{symbols}|{days}"
+        hit = await cache_lookup("correlation_matrix", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"correlation_matrix {symbols}")
         universe = [s.strip().upper() for s in symbols if s.strip()][:8]
@@ -149,7 +174,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             a: {b: round(float(matrix[i][j]), 4) for j, b in enumerate(universe)}
             for i, a in enumerate(universe)
         }
-        return make_envelope(
+        return await cache_store(
+            "correlation_matrix", fp, TTL_SECONDS["overview"],
             {
                 "symbols": universe,
                 "common_dates": len(common),
@@ -168,6 +194,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         window: trading days per window, 5-63 (21 ~= month). Buckets by window
         end month; vnstock day-only labels use business-day walkback.
         """
+        fp = f"{symbol}|{window}"
+        hit = await cache_lookup("seasonality", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"seasonality {symbol}")
         import statistics
@@ -205,7 +235,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "best_pct": round(max(rs) * 100, 2),
                 "worst_pct": round(min(rs) * 100, 2),
             }
-        return make_envelope(
+        return await cache_store(
+            "seasonality", fp, TTL_SECONDS["hour"],
             {
                 "symbol": symbol.upper(),
                 "window": win,
@@ -227,6 +258,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         objective: 'equal', 'inv_vol' (1/sigma), 'max_sharpe' (closed-form
         long-only heuristic, no scipy). days: daily bars each (max 8 symbols).
         """
+        fp = f"{symbols}|{objective}|{days}"
+        hit = await cache_lookup("portfolio_optimize", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"portfolio_optimize {symbols} {objective}")
         if objective not in ("equal", "inv_vol", "max_sharpe"):
@@ -298,7 +333,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             "ann_vol_pct": round(float(port.std() * (252**0.5) * 100), 2),
             "sharpe_proxy": round(float(port.mean() / (port.std() or 1e-9) * (252**0.5)), 4),
         }
-        return make_envelope(
+        return await cache_store(
+            "portfolio_optimize", fp, TTL_SECONDS["hour"],
             {
                 "symbols": universe,
                 "objective": objective,
@@ -328,6 +364,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         import datetime
 
+        fp = f"{symbol}|{dates}|{window_before}|{window_after}|{benchmark}"
+        hit = await cache_lookup("event_study", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"event_study {symbol} {len(dates or [])} dates")
         if not dates:
@@ -422,7 +462,10 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="empty",
             )
         cars_all = [float(r.get("car_pct") or 0.0) for r in rows]
-        return make_envelope(
+        return await cache_store(
+            "event_study",
+            fp,
+            TTL_SECONDS["hour"],
             {
                 "symbol": symbol.upper(),
                 "events": len(rows),

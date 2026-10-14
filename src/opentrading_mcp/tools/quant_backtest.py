@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
@@ -16,7 +17,13 @@ from opentrading_mcp.tools.quant_shared import (
     _run_strategy,
     _yf_closes,
 )
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    AnyContext,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
@@ -39,6 +46,10 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         strategy: chỉ là nhãn ghi lại (engine là buy-and-hold). cost_bps/slippage_bps:
         bps khứ hồi, mỗi loại trừ 2 lần từ gross. benchmark: nhãn chỉ số tham chiếu.
         """
+        fp = f"{symbol}|{cost_bps}|{strategy}|{slippage_bps}|{benchmark}"
+        hit = await cache_lookup("quant_backtest", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.report_progress(0, 2, "load candles")
         try:
@@ -64,7 +75,10 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         base = closes[0] or 1.0
         curve = [round(c / base - 1.0, 4) for c in closes]
         step = max(1, len(curve) // 100)
-        return make_envelope(
+        return await cache_store(
+            "quant_backtest",
+            fp,
+            TTL_SECONDS["hour"],
             {
                 "symbol": symbol.upper(),
                 "strategy": strategy,
@@ -92,6 +106,10 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         shock_pct: % cú sốc, âm là giảm (ví dụ -5.0).
         """
+        fp = f"{scenario}|{symbol}|{shock_pct}"
+        hit = await cache_lookup("scenario_simulate", fp)
+        if hit is not None:
+            return hit
         try:
             candles = await run_blocking(
                 functools.partial(vn_p.quote_history, symbol, 10),
@@ -110,7 +128,10 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
         last = closes[-1]
         shocked = round(last * (1 + shock_pct / 100), 2)
-        return make_envelope(
+        return await cache_store(
+            "scenario_simulate",
+            fp,
+            TTL_SECONDS["overview"],
             {
                 "scenario": scenario,
                 "symbol": symbol.upper(),
@@ -156,6 +177,11 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         (đang tăng trong condition_lookback nến). Mã VN qua vnstock, khác qua
         lịch ngày yfinance.
         """
+        fp = (f"{symbol}|{strategy}|{fast}|{slow}|{cost_bps}|{rsi_low}|{rsi_high}|"
+              f"{months}|{quarters}|{condition_symbol}|{condition_rule}|{condition_lookback}")
+        hit = await cache_lookup("backtest_strategies", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"backtest_strategies {symbol} {strategy}")
         if strategy not in ("sma_cross", "momentum", "buy_hold", "rsi_meanrev"):
@@ -257,7 +283,10 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 f"months={months} quarters={quarters}; exits always allowed"
             )
         warn.extend(cond_warn)
-        return make_envelope(out, source="computed-local", warnings=warn)
+        return await cache_store(
+            "backtest_strategies", fp, TTL_SECONDS["hour"],
+            out, source="computed-local", warnings=warn,
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def param_sweep(
@@ -275,6 +304,10 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         fast_range/slow_range: candidate bars (product capped at 30 combos).
         rsi_meanrev allowed (fixed 30/70 thresholds). months/quarters passthrough.
         """
+        fp = f"{symbol}|{strategy}|{fast_range}|{slow_range}|{cost_bps}|{months}|{quarters}"
+        hit = await cache_lookup("param_sweep", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"param_sweep {symbol} {strategy}")
         if strategy not in ("sma_cross", "momentum", "rsi_meanrev"):
@@ -316,7 +349,10 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             ranked.append({"fast": f, "slow": s, **res})
         ranked.sort(key=lambda r: r["net_return"], reverse=True)
-        return make_envelope(
+        return await cache_store(
+            "param_sweep",
+            fp,
+            TTL_SECONDS["hour"],
             {
                 "symbol": symbol.upper(),
                 "strategy": strategy,

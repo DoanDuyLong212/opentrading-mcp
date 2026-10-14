@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import technicals as tech_p
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import (
@@ -17,7 +18,16 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, READ_WRITE_STATE, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    READ_WRITE_STATE,
+    AnyContext,
+    blocking_slots,
+    cache_lookup,
+    cache_store,
+    price_ttl,
+    run_blocking,
+)
 
 ALERT_STATE_KEY = "mcp:scan:alert_state"
 # Cross state must outlive a single scan cycle, otherwise cross_up/cross_down
@@ -48,6 +58,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
         ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).
         """
+        fp = f"{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
+        hit = await cache_lookup("stock_screener", fp)
+        if hit is not None:
+            return hit
         from opentrading_mcp.providers import screener as sc_p
         from opentrading_mcp.providers import technicals as tech_p
 
@@ -68,14 +82,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         warnings: list[str] = []
         # Bounded enrich: full width (≤30) only when a valuation filter needs
         # fundamentals; otherwise cap at 10 for display. Concurrent via
-        # asyncio.gather + semaphore(5), 10s per symbol (run_blocking timeout).
+        # asyncio.gather + semaphore matched to blocking slots (10s per symbol
+        # run_blocking timeout starts at submission, so an oversized semaphore
+        # would only amplify queue timeouts).
         needs_valuation = any(k in eff for k in ("pe", "roe", "market_cap"))
         if needs_valuation:
             enrich_n = min(len(rows), max(max(limit, 1) * 2, 20), 30)
         else:
             enrich_n = min(len(rows), 10)
         enriched = 0
-        sem = asyncio.Semaphore(5)
+        sem = asyncio.Semaphore(blocking_slots())
 
         async def _enrich_one(entry: dict[str, Any]) -> bool:
             sym = str(entry.get("symbol", "")).upper()
@@ -129,15 +145,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 sym = str(entry.get("symbol", "")).upper()
                 if not sym:
                     return False
-                try:
-                    candles = await run_blocking(
-                        functools.partial(vn_p.quote_history, sym, 80),
-                        "stock_screener",
-                        timeout_secs=10.0,
-                    )
-                    out = tech_p.compute(candles)
-                except Exception:
-                    return False
+                async with sem:
+                    try:
+                        candles = await run_blocking(
+                            functools.partial(vn_p.quote_history, sym, 80),
+                            "stock_screener",
+                            timeout_secs=10.0,
+                        )
+                        out = tech_p.compute(candles)
+                    except Exception:
+                        return False
                 try:
                     if "rsi_lt" in technical and not (out["rsi14"] < float(technical["rsi_lt"])):
                         return False
@@ -158,7 +175,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             kept = await asyncio.gather(*(_tech_ok(e) for e in shortlisted))
             candidates = [e for e, ok in zip(shortlisted, kept, strict=True) if ok]
         partial = bool(warnings) or (bool(enrich_n) and enriched < enrich_n)
-        return make_envelope(
+        return await cache_store(
+            "stock_screener",
+            f"{filters}|{max_pe}|{min_roe}|{limit}|{technical}",
+            TTL_SECONDS["overview"],
             {
                 "universe": len(rows),
                 "filters": eff,
@@ -178,16 +198,26 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         group: keep only that column group; search: keep columns whose
         key or label contains this substring (case-insensitive).
         """
+        fp = f"{group}|{search}"
+        hit = await cache_lookup("signals_screener_columns", fp)
+        if hit is not None:
+            return hit
         from opentrading_mcp.providers import screener as sc_p
 
         cols = sc_p.screener_columns(group=group, search=search)
         if not cols:
-            return make_envelope(
+            return await cache_store(
+                "signals_screener_columns",
+                fp,
+                TTL_SECONDS["categories"],
                 {"count": 0, "group": group, "search": search, "columns": {}},
                 source="local",
                 availability="empty",
             )
-        return make_envelope(
+        return await cache_store(
+            "signals_screener_columns",
+            fp,
+            TTL_SECONDS["categories"],
             {"count": len(cols), "group": group, "search": search, "columns": cols},
             source="local",
         )
@@ -214,6 +244,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         from opentrading_mcp.providers import technicals as tech_p
 
+        fp = f"{symbol}|{interval}|{indicators}"
+        hit = await cache_lookup("signals_technical", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"signals_technical {symbol} {interval}")
         warnings_list: list[str] = []
@@ -272,7 +306,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         if indicators is not None:
             wanted = {i.lower() for i in indicators}
             out = {k: v for k, v in out.items() if str(k).lower() in wanted}
-        return make_envelope(
+        return await cache_store(
+            "signals_technical",
+            fp,
+            price_ttl(),
             {"symbol": symbol.upper(), "interval": iv, **out},
             source="computed-local",
             warnings=warnings_list,
@@ -288,6 +325,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         level: độ sâu cây GICS. top_n: số dòng trả về.
         """
+        fp = f"{level}|{top_n}"
+        hit = await cache_lookup("sector_performance", fp)
+        if hit is not None:
+            return hit
         try:
             from opentrading_mcp.providers import vietstock as vs_p
 
@@ -300,8 +341,12 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 for r in rows
                 if isinstance(r, dict) and int(r.get("Level", level) or level) == level
             ] or rows
-            return make_envelope(
-                {"level": level, "rows": filtered[: max(int(top_n), 1)]}, source="vietstock"
+            return await cache_store(
+                "sector_performance",
+                f"{level}|{top_n}",
+                TTL_SECONDS["world"],
+                {"level": level, "rows": filtered[: max(int(top_n), 1)]},
+                source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
@@ -324,11 +369,18 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbols: kênh WS cần đọc (mặc định ["VNINDEX"]); cache lạnh thì rơi về
         biểu đồ NN của Vietstock.
         """
+        fp = f"{symbols}"
+        hit = await cache_lookup("money_flow", fp)
+        if hit is not None:
+            return hit
         try:
             from opentrading_mcp.providers import dnse as dnse_mod
 
             ws = dnse_mod.ws_snapshot(symbols or ["VNINDEX"])
-            return make_envelope({"primary": "dnse-ws", "snapshot": ws}, source="dnse-ws")
+            return await cache_store(
+                "money_flow", fp, price_ttl(),
+                {"primary": "dnse-ws", "snapshot": ws}, source="dnse-ws",
+            )
         except ProviderUnavailable:
             pass
         try:
@@ -339,7 +391,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "money_flow",
                 timeout_secs=45.0,
             )
-            return make_envelope({"primary": "vietstock", "flow": data}, source="vietstock")
+            return await cache_store(
+                "money_flow", fp, price_ttl(),
+                {"primary": "vietstock", "flow": data}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "money_flow"},
@@ -406,15 +461,21 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             symbol_list = sorted(
                 {str(q.get("symbol", "")).upper() for q in quotes if q.get("symbol")}
             )
-            results = await asyncio.gather(
-                *(
-                    run_blocking(
+            # Bound concurrency to the blocking slots: run_blocking timeouts count
+            # queue time, so an unbounded gather over many symbols serializes into
+            # mass timeouts on a 2-slot executor.
+            alert_sem = asyncio.Semaphore(blocking_slots())
+
+            async def _rsi_history(sym: str) -> Any:
+                async with alert_sem:
+                    return await run_blocking(
                         functools.partial(vn_p.quote_history, sym, 30),
                         "alert_check_rsi",
                         timeout_secs=20.0,
                     )
-                    for sym in symbol_list
-                ),
+
+            results = await asyncio.gather(
+                *(_rsi_history(sym) for sym in symbol_list),
                 return_exceptions=True,
             )
             for sym, res in zip(symbol_list, results, strict=True):

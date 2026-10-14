@@ -21,6 +21,7 @@ from opentrading_mcp.cache import TTL_SECONDS, cache_key
 from opentrading_mcp.providers import dnse as dnse_p
 from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.store import cache_set
+from opentrading_mcp.schemas import utc_now_iso
 
 SYMBOLS_OHLC = ["VN30F1M"]
 INDICES = ["VNINDEX", "VN30"]
@@ -35,12 +36,12 @@ async def yf_loop(interval_seconds: int = 60) -> None:
         try:
             cache_set(
                 cache_key("yf_global_indices", "loop"),
-                {"indices": yf_p.batch_last(yf_p.GLOBAL_9)},
+                {"indices": yf_p.batch_last(yf_p.GLOBAL_9), "fetched_at": utc_now_iso()},
                 TTL_SECONDS["world"],
             )
             cache_set(
                 cache_key("yf_commodities", "loop"),
-                {"items": yf_p.batch_last(yf_p.COMMO_13)},
+                {"items": yf_p.batch_last(yf_p.COMMO_13), "fetched_at": utc_now_iso()},
                 TTL_SECONDS["world"],
             )
             _log("yf loop pumped")

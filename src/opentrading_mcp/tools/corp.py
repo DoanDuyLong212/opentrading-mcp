@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import dnse as dnse_p
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers import vn_public as pub_p
@@ -18,7 +19,14 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    AnyContext,
+    cache_lookup,
+    cache_store,
+    price_ttl,
+    run_blocking,
+)
 
 
 def _fnum(val: Any) -> float | None:
@@ -60,6 +68,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         region: 'vn' (sự kiện Company của vnstock: DIV tiền mặt, ISS thưởng/phát hành riêng lẻ) hoặc
         'world' (actions của yfinance). limit: số sự kiện tối đa.
         """
+        fp = f"{symbol}|{region}|{limit}"
+        hit = await cache_lookup("dividends_splits", fp)
+        if hit is not None:
+            return hit
         area = region.strip().lower()
         if ctx is not None:
             await ctx.log("info", f"dividends_splits {symbol} {area}")
@@ -105,7 +117,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope(
+        return await cache_store(
+            "dividends_splits",
+            fp,
+            TTL_SECONDS["documents"],
             {"symbol": symbol.upper(), "region": area, "events": events},
             source="vnstock" if area == "vn" else "yfinance",
         )
@@ -125,6 +140,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         area = region.strip().lower()
         want = kind.strip().lower()
+        fp = f"{symbol}|{area}|{want}"
+        hit = await cache_lookup("holders", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"holders {symbol} {area} {want}")
         try:
@@ -154,7 +173,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope(
+        return await cache_store(
+            "holders",
+            fp,
+            TTL_SECONDS["documents"],
             {"symbol": symbol.upper(), "region": area, "kind": want, "holders": holders_rows},
             source=src,
         )
@@ -176,6 +198,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         event: 'dividends' (trả cổ tức, thưởng, phát hành), 'listings', 'meetings'.
         symbol: lọc 1 mã (bỏ qua để xem toàn thị trường).
         """
+        fp = f"{event}|{symbol}|{limit}"
+        hit = await cache_lookup("event_calendar_vn", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"event_calendar_vn {event} {symbol}")
         try:
@@ -191,7 +217,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope(
+        return await cache_store(
+            "event_calendar_vn",
+            fp,
+            TTL_SECONDS["hour"],
             {"event": event, "symbol": (symbol or "").upper(), "events": events},
             source="vietstock",
         )
@@ -214,6 +243,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         from_date/to_date: ngày ISO (mặc định 30 ngày gần nhất). pt_vol/pt_val là
         chân thỏa thuận; pt_pct là tỷ trọng giá trị thỏa thuận trong ngày.
         """
+        fp = f"{symbol}|{from_date}|{to_date}|{limit}"
+        hit = await cache_lookup("block_trades", fp)
+        if hit is not None:
+            return hit
         import datetime
 
         if ctx is not None:
@@ -271,7 +304,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "pt_pct": round(pt_v / (mt_v + pt_v) * 100, 2) if mt_v + pt_v else 0.0,
                 }
             )
-        return make_envelope(
+        return await cache_store(
+            "block_trades",
+            fp,
+            TTL_SECONDS["hour"],
             {
                 "symbol": symbol.upper(),
                 "days": days,
@@ -315,6 +351,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         'Nguồn:' cho biết tên CTCK. File 'edocs/...pdf' thường lỗi khi trích text (font
         Vietstock) — dùng tóm tắt HTML.
         """
+        fp = f"{symbol}|{limit}|{report_type}|{days}"
+        hit = await cache_lookup("analyst_consensus", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"analyst_consensus {symbol} {report_type} d{days}")
         days_n: int | None = None
@@ -385,7 +425,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         elif symbol:
             want = symbol.strip().upper()
             rows = [r for r in rows if (r.get("symbol") or "").upper() == want]
-        return make_envelope(
+        return await cache_store(
+            "analyst_consensus",
+            fp,
+            TTL_SECONDS["hour"],
             {
                 "symbol": (symbol or "").upper(),
                 "report_type": kind,
@@ -406,6 +449,9 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         Calendar is often empty (no scheduled auctions); announcements carry
         the latest auction news with dates.
         """
+        hit = await cache_lookup("ipo_calendar_vn", "-")
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", "ipo_calendar_vn")
         try:
@@ -417,7 +463,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope(data, source="hnx-scrape")
+        return await cache_store(
+            "ipo_calendar_vn", "-", TTL_SECONDS["documents"],
+            data, source="hnx-scrape",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def futures_basis(
@@ -432,6 +481,9 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         import datetime
 
+        hit = await cache_lookup("futures_basis", "-")
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", "futures_basis")
         try:
@@ -500,14 +552,16 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
                 fut = None
         if fut is None or not spot:
-            return make_envelope(
+            return await cache_store(
+                "futures_basis", "-", price_ttl(),
                 {"futures": fut, "spot": spot},
                 source="dnse+vnstock",
                 warnings=["missing leg"],
                 availability="partial",
             )
         basis = fut - spot
-        return make_envelope(
+        return await cache_store(
+            "futures_basis", "-", price_ttl(),
             {
                 "futures": fut,
                 "spot": spot,
@@ -527,6 +581,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         (HAR/env seed); reports unavailable while the gate rejects — mirror +
         analyst_consensus cover expectations meanwhile.
         """
+        fp = f"{symbol}|{years}"
+        hit = await cache_lookup("planned_targets", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"planned_targets {symbol}")
         try:
@@ -542,7 +600,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope(data, source="vietstock")
+        return await cache_store(
+            "planned_targets", fp, TTL_SECONDS["categories"],
+            data, source="vietstock",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def financial_detail(
@@ -565,6 +626,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         phiên trình duyệt — dòng {norm_id, name, values[...]}; báo cáo không khả dụng
         khi cổng phiên từ chối.
         """
+        fp = f"{symbol}|{statement}|{periods_n}"
+        hit = await cache_lookup("financial_detail", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"financial_detail {symbol} {statement}")
         try:
@@ -583,7 +648,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "financial_detail_lctt_vs",
                         timeout_secs=90.0,
                     )
-                    return make_envelope(data, source="vietstock")
+                    return await cache_store(
+                        "financial_detail", fp, TTL_SECONDS["financeinfo"],
+                        data, source="vietstock",
+                    )
                 except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
                     pass
                 try:
@@ -618,7 +686,10 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        return make_envelope(data, source="vietstock")
+        return await cache_store(
+            "financial_detail", fp, TTL_SECONDS["financeinfo"],
+            data, source="vietstock",
+        )
 
     return [
         {"name": "dividends_splits"},

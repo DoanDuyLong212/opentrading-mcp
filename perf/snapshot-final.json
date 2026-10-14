@@ -1,0 +1,283 @@
+{
+ "label": "final",
+ "date": "2026-10-15",
+ "commit": "eeed4b5",
+ "redis_configured": false,
+ "call_timeout": 75.0,
+ "results": [
+  {
+   "tool": "market_snapshot",
+   "cold": {
+    "tool": "market_snapshot",
+    "ok": true,
+    "seconds": 10.01,
+    "availability": "available",
+    "source": "vnstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "market_snapshot",
+    "ok": true,
+    "seconds": 0.01,
+    "availability": "available",
+    "source": "cache",
+    "has_data_time": true
+   }
+  },
+  {
+   "tool": "market_movers",
+   "cold": {
+    "tool": "market_movers",
+    "ok": true,
+    "seconds": 8.57,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "market_movers",
+    "ok": true,
+    "seconds": 0.03,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "breadth_scan",
+   "cold": {
+    "tool": "breadth_scan",
+    "ok": true,
+    "seconds": 0.31,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "breadth_scan",
+    "ok": true,
+    "seconds": 0.14,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "vn_quote_history",
+   "cold": {
+    "tool": "vn_quote_history",
+    "ok": true,
+    "seconds": 0.03,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vn_quote_history",
+    "ok": true,
+    "seconds": 0.03,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "vn_equity_quote_batch",
+   "cold": {
+    "tool": "vn_equity_quote_batch",
+    "ok": true,
+    "seconds": 0.02,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vn_equity_quote_batch",
+    "ok": true,
+    "seconds": 0.02,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "signals_technical",
+   "cold": {
+    "tool": "signals_technical",
+    "ok": true,
+    "seconds": 0.02,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "signals_technical",
+    "ok": true,
+    "seconds": 0.03,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "valuation_run",
+   "cold": {
+    "tool": "valuation_run",
+    "ok": true,
+    "seconds": 0.18,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "valuation_run",
+    "ok": true,
+    "seconds": 0.1,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "financial_ratios",
+   "cold": {
+    "tool": "financial_ratios",
+    "ok": true,
+    "seconds": 0.11,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "financial_ratios",
+    "ok": true,
+    "seconds": 0.12,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "sbv_rates",
+   "cold": {
+    "tool": "sbv_rates",
+    "ok": true,
+    "seconds": 1.79,
+    "availability": "available",
+    "source": "web",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "sbv_rates",
+    "ok": true,
+    "seconds": 0.01,
+    "availability": "available",
+    "source": "cache",
+    "has_data_time": true
+   }
+  },
+  {
+   "tool": "vs_categories",
+   "cold": {
+    "tool": "vs_categories",
+    "ok": true,
+    "seconds": 0.08,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vs_categories",
+    "ok": true,
+    "seconds": 0.11,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "distribution_count",
+   "cold": {
+    "tool": "distribution_count",
+    "ok": true,
+    "seconds": 0.01,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "distribution_count",
+    "ok": true,
+    "seconds": 0.02,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "news_market",
+   "cold": {
+    "tool": "news_market",
+    "ok": true,
+    "seconds": 45.05,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "news_market",
+    "ok": true,
+    "seconds": 45.02,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  },
+  {
+   "tool": "vs_indicator_data",
+   "cold": {
+    "tool": "vs_indicator_data",
+    "ok": true,
+    "seconds": 0.87,
+    "availability": "available",
+    "source": "vietstock",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "vs_indicator_data",
+    "ok": true,
+    "seconds": 0.04,
+    "availability": "available",
+    "source": "cache",
+    "has_data_time": true
+   }
+  },
+  {
+   "tool": "economic_calendar",
+   "cold": {
+    "tool": "economic_calendar",
+    "ok": true,
+    "seconds": 0.02,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   },
+   "warm": {
+    "tool": "economic_calendar",
+    "ok": true,
+    "seconds": 0.02,
+    "availability": "unavailable",
+    "source": "unavailable",
+    "has_data_time": false
+   }
+  }
+ ],
+ "summary": {
+  "n_tools": 14,
+  "median_cold_s": 0.14,
+  "median_warm_s": 0.03,
+  "warm_faster": 7,
+  "warm_from_cache": 3,
+  "with_data_time": 3
+ }
+}
