@@ -22,11 +22,12 @@ import os
 import statistics
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from opentrading_mcp.verify import VerifyClient  # noqa: E402
-from opentrading_mcp.verify_matrix import _availability, extract_text  # noqa: E402
+from opentrading_mcp.verify import VerifyClient
+from opentrading_mcp.verify_matrix import extract_text
 
 CALL_TIMEOUT = 75.0
 
@@ -70,20 +71,105 @@ async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--transport", default="stdio", choices=["stdio", "http"])
+    ap.add_argument("--url", default="https://opentrading-mcp-web.onrender.com/mcp")
+    ap.add_argument("--token-env", default="MCP_PROD_TOKEN",
+                    help="env var holding the bearer token (never printed)")
     args = ap.parse_args()
 
     client = VerifyClient(server_label="opentrading")
-    command = [sys.executable, "-m", "opentrading_mcp", "serve"]
-    calls = [("source_status", {}, CALL_TIMEOUT)]
-    for name, tool_args in BENCH:
-        calls.append((name, tool_args, CALL_TIMEOUT))  # cold
-        calls.append((name, tool_args, CALL_TIMEOUT))  # warm
-    results = await client.run(calls, "stdio", command)
+    if args.transport == "http":
+        import urllib.request
 
-    rows = []
-    for (name, _, _), res in zip(calls, results):
-        info = payload_info(res.payload) if res.ok else {"availability": "error", "source": "-", "has_data_time": False}
-        rows.append({"tool": name, "ok": res.ok, "seconds": round(res.seconds, 2), **info})
+        token = os.environ.get(args.token_env, "")
+        assert token, f"{args.token_env} is not set"
+
+        async def http_run(calls):
+
+            out = []
+            _, sid = _post({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                            "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                                       "clientInfo": {"name": "perf", "version": "1"}}}, None)
+            _post({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
+            for i, (name, tool_args, _call_timeout) in enumerate(calls):
+                started = time.monotonic()
+                try:
+                    body, _ = _post({"jsonrpc": "2.0", "id": 100 + i, "method": "tools/call",
+                                     "params": {"name": name, "arguments": tool_args}}, sid)
+                    ok, payload, detail = _parse_body(body)
+                    out.append((ok, time.monotonic() - started, payload, detail))
+                except Exception as exc:
+                    out.append((False, time.monotonic() - started, None, f"{type(exc).__name__}"))
+            return out
+
+        def _post(payload, sid):
+            import json as _json
+
+            h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+                 "Accept": "application/json, text/event-stream"}
+            if sid:
+                h["mcp-session-id"] = sid
+            req = urllib.request.Request(args.url, data=_json.dumps(payload).encode(), headers=h)
+            with urllib.request.urlopen(req, timeout=150) as r:
+                return r.read().decode(), r.headers.get("mcp-session-id")
+
+        def _parse_body(body):
+            import json as _json
+
+            # The server may emit notifications/message log frames before the
+            # result frame: only the frame carrying "result" counts.
+            for line in body.splitlines():
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    res = _json.loads(line[5:])
+                except Exception:  # noqa: BLE001
+                    continue
+                result = res.get("result")
+                if not isinstance(result, dict):
+                    continue
+                try:
+                    return True, result["content"][0]["text"], ""
+                except Exception as exc:  # noqa: BLE001
+                    return False, None, f"parse: {exc}"
+            return False, None, "no result frame"
+
+        raw_calls = [("source_status", {}, CALL_TIMEOUT)]
+        for name, tool_args in BENCH:
+            raw_calls.append((name, tool_args, CALL_TIMEOUT))
+            raw_calls.append((name, tool_args, CALL_TIMEOUT))
+        results = await http_run(raw_calls)
+        rows = []
+        for (name, _, _), (ok, seconds, payload, _detail) in zip(raw_calls, results, strict=False):
+            if ok:
+                try:
+                    import json as _json
+
+                    body = _json.loads(payload)
+                    prov = body.get("provenance", {})
+                    info = {"availability": body.get("availability", "?"),
+                            "source": prov.get("source", "?"),
+                            "has_data_time": bool(prov.get("data_time"))}
+                except Exception:  # noqa: BLE001
+                    info = {"availability": "?", "source": "?", "has_data_time": False}
+                rows.append({"tool": name, "ok": True, "seconds": round(seconds, 2), **info})
+            else:
+                rows.append({"tool": name, "ok": False, "seconds": round(seconds, 2),
+                             "availability": "error", "source": "-", "has_data_time": False})
+    else:
+        command = [sys.executable, "-m", "opentrading_mcp", "serve"]
+        calls = [("source_status", {}, CALL_TIMEOUT)]
+        for name, tool_args in BENCH:
+            calls.append((name, tool_args, CALL_TIMEOUT))  # cold
+            calls.append((name, tool_args, CALL_TIMEOUT))  # warm
+        results = await client.run(calls, "stdio", command)
+        rows = []
+        for (name, _, _), res in zip(calls, results, strict=False):
+            if res.ok:
+                info = payload_info(res.payload)
+            else:
+                info = {"availability": "error", "source": "-", "has_data_time": False}
+            rows.append({"tool": name, "ok": res.ok, "seconds": round(res.seconds, 2), **info})
 
     out_rows = []
     for i in range(0, len(BENCH)):
@@ -112,9 +198,16 @@ async def main() -> int:
             "n_tools": len(out_rows),
             "median_cold_s": med("cold"),
             "median_warm_s": med("warm"),
-            "warm_faster": sum(1 for r in out_rows if r["warm"]["ok"] and r["cold"]["ok"] and r["warm"]["seconds"] < r["cold"]["seconds"]),
+            "warm_faster": sum(
+                1 for r in out_rows
+                if r["warm"]["ok"] and r["cold"]["ok"]
+                and r["warm"]["seconds"] < r["cold"]["seconds"]
+            ),
             "warm_from_cache": sum(1 for r in out_rows if r["warm"]["source"] == "cache"),
-            "with_data_time": sum(1 for r in out_rows if r["cold"]["has_data_time"] or r["warm"]["has_data_time"]),
+            "with_data_time": sum(
+                1 for r in out_rows
+                if r["cold"]["has_data_time"] or r["warm"]["has_data_time"]
+            ),
         },
     }
     with open(args.out, "w", encoding="utf-8") as f:
