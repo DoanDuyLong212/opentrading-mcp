@@ -7,12 +7,14 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import cache_key
 from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
     ProviderUnavailable,
 )
+from opentrading_mcp.providers.store import acache_get
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import READ_ONLY_OPEN, AnyContext, run_blocking
 
@@ -38,6 +40,15 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         if ctx is not None:
             await ctx.report_progress(0, 1, "fetch global")
+        if tickers is None and period == "2d" and interval == "1d":
+            # The 60s yf_loop keeps this exact board warm; custom args go live.
+            hit = await acache_get(cache_key("yf_global_indices", "loop"))
+            if hit is not None:
+                import json
+
+                cached = json.loads(hit)
+                data = {k: v for k, v in cached.items() if k != "fetched_at"}
+                return make_envelope(data, source="cache", data_time=cached.get("fetched_at"))
         try:
             data = await run_blocking(
                 functools.partial(yf_p.batch_last, tickers or yf_p.GLOBAL_9, period, interval),
@@ -57,6 +68,14 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
         tickers: subset override (default COMMO 13). period/interval: yfinance
         spellings.
         """
+        if tickers is None and period == "2d" and interval == "1d":
+            hit = await acache_get(cache_key("yf_commodities", "loop"))
+            if hit is not None:
+                import json
+
+                cached = json.loads(hit)
+                data = {k: v for k, v in cached.items() if k != "fetched_at"}
+                return make_envelope(data, source="cache", data_time=cached.get("fetched_at"))
         try:
             data = await run_blocking(
                 functools.partial(yf_p.batch_last, tickers or yf_p.COMMO_13, period, interval),

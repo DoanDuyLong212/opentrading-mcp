@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import intel as intel_p
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers import yfinance as yf_p
@@ -18,7 +19,12 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -112,12 +118,19 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         series_id like 'DGS10'; spark adds a value-only sparkline list.
         """
+        fp = f"{series_id}|{limit}|{spark}"
+        hit = await cache_lookup("fred_series", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("f", intel_p.fred_series, series_id, limit)
             if spark and isinstance(data, dict):
                 points = data.get("points", [])
                 data["spark"] = [p.get("v") for p in points if isinstance(p, dict)]
-            return make_envelope(data, source="fred")
+            return await cache_store(
+                "fred_series", fp, TTL_SECONDS["financeinfo"],
+                data, source="fred",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("fred_series", str(exc))
 
@@ -128,11 +141,18 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         iso3: 3-letter country code (VNM/USA); indicator like 'NY.GDP.MKTP.KD.ZG'.
         limit caps returned points.
         """
+        fp = f"{iso3}|{indicator}|{limit}"
+        hit = await cache_lookup("world_macro_country", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("w", intel_p.worldbank_country, iso3, indicator)
             if isinstance(data, dict) and isinstance(data.get("points"), list):
                 data["points"] = data["points"][: max(int(limit), 1)]
-            return make_envelope(data, source="worldbank")
+            return await cache_store(
+                "world_macro_country", fp, TTL_SECONDS["categories"],
+                data, source="worldbank",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("world_macro_country", str(exc))
 
@@ -142,11 +162,18 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         limit: number of recent daily readings returned.
         """
+        fp = f"{limit}"
+        hit = await cache_lookup("world_fear_greed", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("f", intel_p.fear_greed)
             if isinstance(data, dict) and isinstance(data.get("series"), list):
                 data["series"] = data["series"][: max(int(limit), 1)]
-            return make_envelope(data, source="alternative.me")
+            return await cache_store(
+                "world_fear_greed", fp, TTL_SECONDS["world"],
+                data, source="alternative.me",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("world_fear_greed", str(exc))
 
@@ -160,6 +187,10 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         limit: số bài chấm tối đa; không có key Groq thì rơi về heuristic lượt thích.
         """
+        fp = f"{symbol}|{limit}"
+        hit = await cache_lookup("sentiment_score", fp)
+        if hit is not None:
+            return hit
         try:
             posts = await _call("s", intel_p.fireant_posts, symbol, max(int(limit), 1), secs=45.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -176,14 +207,16 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                 str([p.get("text", "")[:200] for p in posts[:10]]),
                 secs=45.0,
             )
-            return make_envelope(
+            return await cache_store(
+                "sentiment_score", fp, TTL_SECONDS["world"],
                 {"symbol": symbol.upper(), "posts": len(posts), "llm": verdict[:500]},
                 source="fireant+groq",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             likes = sum(int(p.get("likes", 0) or 0) for p in posts)
             score = max(-1.0, min(1.0, (likes / max(len(posts), 1) - 5) / 20))
-            return make_envelope(
+            return await cache_store(
+                "sentiment_score", fp, TTL_SECONDS["world"],
                 {"symbol": symbol.upper(), "posts": len(posts), "score_heuristic": round(score, 2)},
                 source="fireant",
                 warnings=["groq unavailable, heuristic fallback"],
@@ -230,12 +263,17 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         assets: yfinance tickers (max 10). timeframe: '1d' (2d/1d),
         '1wk' (3mo/1wk), '1mo' (1y/1d) download window.
         """
+        fp = f"{assets}|{timeframe}"
+        hit = await cache_lookup("compare_assets", fp)
+        if hit is not None:
+            return hit
         windows = {"1d": ("2d", "1d"), "1wk": ("3mo", "1wk"), "1mo": ("1y", "1d")}
         period, interval = windows.get(timeframe, ("2d", "1d"))
         try:
-            return make_envelope(
-                await _call("c", yf_p.batch_last, assets[:10], period, interval, secs=60.0),
-                source="yfinance",
+            data = await _call("c", yf_p.batch_last, assets[:10], period, interval, secs=60.0)
+            return await cache_store(
+                "compare_assets", fp, TTL_SECONDS["world"],
+                data, source="yfinance",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("compare_assets", str(exc))
@@ -249,9 +287,16 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         limit: số giao dịch tối đa.
         """
+        fp = f"{symbol}|{limit}"
+        hit = await cache_lookup("insider_trading", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await _call("i", vn_p.insider_trading, symbol, limit)
-            return make_envelope({"symbol": symbol.upper(), "deals": rows}, source="vnstock")
+            return await cache_store(
+                "insider_trading", fp, TTL_SECONDS["overview"],
+                {"symbol": symbol.upper(), "deals": rows}, source="vnstock",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("insider_trading", str(exc))
 

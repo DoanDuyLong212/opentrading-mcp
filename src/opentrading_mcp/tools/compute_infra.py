@@ -9,13 +9,20 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import (
     ProviderBadData,
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    AnyContext,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -116,6 +123,10 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
         list capped at max_symbols (P14: up to 300, semaphore 5, progress +
         truncated honest). Scanning hundreds takes minutes — cache the call.
         """
+        fp = f"{universe}|{exchange}|{max_symbols}"
+        hit = await cache_lookup("signals_scan", fp)
+        if hit is not None:
+            return hit
         capped = max(min(int(max_symbols), 300), 1)
         if universe:
             names = [u.strip().upper() for u in universe if u.strip()][:capped]
@@ -142,7 +153,10 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
         data: dict[str, Any] = {"hits": hits, "scanned": scanned, "requested": total}
         if total > capped:
             data["truncated"] = True
-        return make_envelope(data, source="computed-local")
+        return await cache_store(
+            "signals_scan", fp, TTL_SECONDS["overview"],
+            data, source="computed-local",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def pattern_match(symbol: str, lookback: int = 60, limit: int = 5) -> dict[str, Any]:
@@ -151,6 +165,10 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
         lookback: daily closes fetched (window is last 20 bars). limit: top-N
         matches by correlation (best_* fields describe rank 1).
         """
+        fp = f"{symbol}|{lookback}|{limit}"
+        hit = await cache_lookup("pattern_match", fp)
+        if hit is not None:
+            return hit
         try:
             candles = await _call("p", vn_p.quote_history, symbol, lookback + 20, secs=60.0)
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -179,7 +197,8 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
         top = scored[: max(int(limit), 1)]
         matches = [{"corr": round(corr, 3), "offset_bars": i} for corr, i in top]
         best_corr, best_i = top[0] if top else (-2.0, -1)
-        return make_envelope(
+        return await cache_store(
+            "pattern_match", fp, TTL_SECONDS["overview"],
             {
                 "symbol": symbol.upper(),
                 "best_corr": round(best_corr, 3),

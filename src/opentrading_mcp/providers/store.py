@@ -14,6 +14,12 @@ from typing import Any
 
 _memory: dict[str, tuple[float, str]] = {}
 
+# Bound for the process-memory fallback: Redis is the shared tier, memory only
+# bridges restarts/outages. Oldest-insertion eviction (dicts preserve insertion
+# order); expired entries are swept first. Sized for ~365-bar histories
+# (~25KB each): 300 entries ≈ single-digit MB, safe on free-tier hosts.
+_MEMORY_MAX_KEYS = 300
+
 # One client (with its connection pool) per process. A new client per call meant a new
 # TLS handshake plus a PING for every cache read, and handlers call this from the event
 # loop. After a failure Redis is skipped for _RETRY_AFTER seconds instead of being retried
@@ -84,7 +90,20 @@ def cache_set(key: str, value: str | dict[str, Any], ttl_seconds: int) -> None:
             client.setex(key, ttl_seconds, payload)
         except Exception:
             _redis_failed()
-    _memory[key] = (time.time() + ttl_seconds, payload)
+    _memory_store(key, time.time() + ttl_seconds, payload)
+
+
+def _memory_store(key: str, expires_at: float, payload: str) -> None:
+    _memory[key] = (expires_at, payload)
+    if len(_memory) <= _MEMORY_MAX_KEYS:
+        return
+    now = time.time()
+    for k in [k for k, (exp, _) in _memory.items() if exp <= now]:
+        _memory.pop(k, None)
+        if len(_memory) <= _MEMORY_MAX_KEYS:
+            return
+    while len(_memory) > _MEMORY_MAX_KEYS:
+        _memory.pop(next(iter(_memory)))
 
 
 async def acache_get(key: str) -> str | None:

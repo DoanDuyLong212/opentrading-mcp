@@ -11,6 +11,11 @@ TTL_SECONDS: dict[str, int] = {
     "documents": 86400,
     "categories": 604800,
     "odds": 2700,
+    # Named buckets added for the read-through expansion (Phase 2). Values are
+    # ceilings; price data additionally switches short/long by VN session hour.
+    "mins10": 600,  # news, odds, fast-changing sentiment
+    "hour": 3600,  # retail gold/FX, corporate calendars, event feeds, slow computes
+    "market_offhours": 7200,  # prices when HOSE cannot move (night/weekend)
 }
 
 

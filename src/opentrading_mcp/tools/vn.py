@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
@@ -16,7 +17,11 @@ from opentrading_mcp.tools.shared import (
     LOW_KEYS,
     READ_ONLY,
     AnyContext,
+    cache_lookup,
+    cache_store,
+    last_bar_time,
     pick_value,
+    price_ttl,
     project_rows,
     run_blocking,
     summarize_rows,
@@ -69,6 +74,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         interval: '1D' (mặc định), '1W', '1M'. summary/columns: summary chỉ trả
         {count,last,high,low}; columns giữ trường nêu tên.
         """
+        fp = f"{symbol}|{days}|{summary}|{columns}|{interval}"
+        hit = await cache_lookup("vn_quote_history", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.log("info", f"vn_quote_history {symbol} {days}d {interval}")
         try:
@@ -77,10 +86,18 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "vn_quote_history",
             )
             if summary:
-                return make_envelope(_summarize(symbol, candles), source="vnstock")
-            return make_envelope(
+                s = _summarize(symbol, candles)
+                return await cache_store(
+                    "vn_quote_history", fp, price_ttl(),
+                    s, source="vnstock", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "vn_quote_history",
+                fp,
+                price_ttl(),
                 {"symbol": symbol.upper(), "candles": _project(candles, columns)},
                 source="vnstock",
+                data_time=last_bar_time(candles),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_quote_history", str(exc))
@@ -101,6 +118,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary/columns: summary chỉ trả {count,symbols}; columns giữ
         trường nêu tên từng báo giá.
         """
+        fp = f"{symbols}|{summary}|{columns}"
+        hit = await cache_lookup("vn_equity_quote_batch", fp)
+        if hit is not None:
+            return hit
         try:
             quotes = await run_blocking(
                 functools.partial(vn_p.equity_quote_batch, symbols),
@@ -113,7 +134,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 ]
                 return make_envelope({"count": len(quotes), "symbols": names}, source="vnstock")
             quotes, missing = vn_p.split_batch(quotes)
-            return make_envelope(
+            return await cache_store(
+                "vn_equity_quote_batch",
+                fp,
+                price_ttl(),
                 {"quotes": _project(quotes, columns),
                  **({"missing": missing} if missing else {})},
                 source="vnstock",
@@ -128,9 +152,16 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         limit: max symbols returned (universe ~1500).
         """
+        fp = f"{limit}"
+        hit = await cache_lookup("vn_listing", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await run_blocking(vn_p.listing_symbols, "vn_listing")
-            return make_envelope(
+            return await cache_store(
+                "vn_listing",
+                fp,
+                TTL_SECONDS["categories"],
                 {"count": len(rows), "symbols": rows[: max(int(limit), 1)]},
                 source="vnstock",
             )
@@ -150,6 +181,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         period: 'year' hoặc 'quarter'. report_type: 'ttm' (12 tháng gần nhất) hoặc 'latest'.
         """
+        fp = f"{symbol}|{period}|{report_type}"
+        hit = await cache_lookup("vn_fundamentals", fp)
+        if hit is not None:
+            return hit
         try:
             from vnstock import Fundamental
         except ImportError:
@@ -174,7 +209,13 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                         ratios = str(data)
             else:
                 ratios = data
-            return make_envelope({"symbol": symbol.upper(), "ratios": ratios}, source="vnstock")
+            return await cache_store(
+                "vn_fundamentals",
+                fp,
+                TTL_SECONDS["overview"],
+                {"symbol": symbol.upper(), "ratios": ratios},
+                source="vnstock",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_fundamentals", str(exc))
         except Exception as exc:
@@ -187,13 +228,20 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         source: retail source id (default 'btmc'). Direct BTMC https fetch
         first (15s); vnstock lib fallback (its http URL hangs without timeout).
         """
+        fp = f"{source}"
+        hit = await cache_lookup("vn_retail_gold", fp)
+        if hit is not None:
+            return hit
         if source.strip().lower() == "btmc":
             try:
                 from opentrading_mcp.providers import vn_public as pub_p
 
                 rows = await run_blocking(pub_p.btmc_gold, "vn_retail_gold", timeout_secs=20.0)
                 keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
-                return make_envelope({"rows": keep or rows}, source="btmc-direct")
+                return await cache_store(
+                    "vn_retail_gold", fp, TTL_SECONDS["hour"],
+                    {"rows": keep or rows}, source="btmc-direct",
+                )
             except (ProviderUnavailable, ProviderBadData):
                 pass
         try:
@@ -207,7 +255,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             rows = frame.to_dict(orient="records")
             keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
-            return make_envelope({"rows": keep or rows}, source="vnstock-retail")
+            return await cache_store(
+                "vn_retail_gold", fp, TTL_SECONDS["hour"],
+                {"rows": keep or rows}, source="vnstock-retail",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_retail_gold", str(exc))
         except Exception as exc:
@@ -216,13 +267,19 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vn_retail_fx() -> dict[str, Any]:
         """VCB USD buy/sell rates. Use for currency conversion context."""
+        hit = await cache_lookup("vn_retail_fx", "-")
+        if hit is not None:
+            return hit
         try:
             from vnstock import Retail
         except ImportError:
             return _na("vn_retail_fx", "vnstock not installed")
         try:
             frame = await run_blocking(Retail().exchange_rate, "vn_retail_fx")
-            return make_envelope({"rows": frame.to_dict(orient="records")}, source="vnstock-retail")
+            return await cache_store(
+                "vn_retail_fx", "-", TTL_SECONDS["hour"],
+                {"rows": frame.to_dict(orient="records")}, source="vnstock-retail",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_retail_fx", str(exc))
         except Exception as exc:

@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import intel as intel_p
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers import yfinance as yf_p
@@ -15,7 +16,13 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, READ_ONLY_OPEN, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    READ_ONLY_OPEN,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -41,10 +48,17 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         (e.g. 'economics', 'fed', 'crypto'). Rows carry outcomes + prob_pct,
         sorted by 24h volume.
         """
+        fp = f"{query}|{limit}|{tag}"
+        hit = await cache_lookup("world_prediction_odds", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("o", intel_p.prediction_odds, query, tag, limit, secs=60.0)
             events = data.get("events", []) if isinstance(data, dict) else []
-            return make_envelope(
+            return await cache_store(
+                "world_prediction_odds",
+                fp,
+                TTL_SECONDS["mins10"],
                 {"source": data.get("source"), "events": events[: max(int(limit), 1)]},
                 source="polymarket",
             )
@@ -60,9 +74,16 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         slug: from world_prediction_odds rows. Returns description, markets
         with outcome probs, volumes and end dates.
         """
+        fp = f"{slug}"
+        hit = await cache_lookup("polymarket_event", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("e", intel_p.polymarket_event, slug, secs=60.0)
-            return make_envelope(data, source="polymarket")
+            return await cache_store(
+                "polymarket_event", fp, TTL_SECONDS["mins10"],
+                data, source="polymarket",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("polymarket_event", str(exc))
 
@@ -159,6 +180,9 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def assets_rotation() -> dict[str, Any]:
         """Cross-asset 1y momentum classes into RISK-ON/OFF. Use for allocation reads."""
+        hit = await cache_lookup("assets_rotation", "-")
+        if hit is not None:
+            return hit
         try:
             drivers = await _call("r", yf_p.regime_assets, secs=120.0)
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -181,7 +205,8 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
             regime = "risk-off"
         else:
             regime = "neutral/mixed"
-        return make_envelope(
+        return await cache_store(
+            "assets_rotation", "-", TTL_SECONDS["documents"],
             {"regime": regime, "signals": signals, "drivers": drivers},
             source="computed-yfinance",
         )
@@ -194,6 +219,10 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         metrics: keep only matching row keys (symbol column always kept).
         """
+        fp = f"{symbols}|{metrics}"
+        hit = await cache_lookup("compare_equities", fp)
+        if hit is not None:
+            return hit
         wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
         warnings = (
@@ -221,7 +250,10 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                 rows.append(row)
             except (ProviderUnavailable, ProviderBadData) as exc:
                 rows.append({"symbol": symbol.upper(), "error": str(exc)})
-        return make_envelope({"rows": rows}, source="vnstock", warnings=warnings or None)
+        return await cache_store(
+            "compare_equities", fp, TTL_SECONDS["overview"],
+            {"rows": rows}, source="vnstock", warnings=warnings or None,
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def evidence_bundle(
@@ -243,11 +275,15 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def oracle_meta() -> dict[str, Any]:
         """Aggregator snapshot plus source health. Use for dashboard meta."""
+        hit = await cache_lookup("oracle_meta", "-")
+        if hit is not None:
+            return hit
         try:
             pins = await _call("p", yf_p.market_pins, secs=60.0)
         except (ProviderUnavailable, ProviderBadData):
             pins = {}
-        return make_envelope(
+        return await cache_store(
+            "oracle_meta", "-", TTL_SECONDS["world"],
             {"pins": pins, "health": "run source_status for upstream detail"},
             source="aggregator",
         )

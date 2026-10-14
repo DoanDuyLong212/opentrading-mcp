@@ -17,6 +17,10 @@ from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     AnyContext,
+    cache_lookup,
+    cache_store,
+    last_bar_time,
+    price_ttl,
     project_rows,
     run_blocking,
     summarize_rows,
@@ -62,6 +66,10 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         {symbol, count, last, high, low} instead of full bars. columns: keep only
         named fields per bar (t/o/h/l/c/v).
         """
+        fp = f"{symbol}|{resolution}|{bar_type}|{from_date}|{to_date}|{summary}|{columns}"
+        hit = await cache_lookup("dnse_ohlc_history", fp)
+        if hit is not None:
+            return hit
         if ctx is not None:
             await ctx.report_progress(0, 1, f"fetch {symbol}")
         try:
@@ -81,9 +89,16 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
             if ctx is not None:
                 await ctx.report_progress(1, 1, "done")
             if summary:
-                return make_envelope(_summarize(symbol, rows), source="dnse-rest")
-            return make_envelope(
-                {"symbol": symbol, "bars": _project(rows, columns)}, source="dnse-rest"
+                s = _summarize(symbol, rows)
+                return await cache_store(
+                    "dnse_ohlc_history", fp, price_ttl(),
+                    s, source="dnse-rest", data_time=s.get("last_t"),
+                )
+            return await cache_store(
+                "dnse_ohlc_history", fp, price_ttl(),
+                {"symbol": symbol, "bars": _project(rows, columns)},
+                source="dnse-rest",
+                data_time=last_bar_time(rows),
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_ohlc_history", str(exc))
@@ -98,6 +113,10 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary/columns: summary returns {count,symbols} only; columns keeps
         named fields per trade.
         """
+        fp = f"{symbols}|{summary}|{columns}"
+        hit = await cache_lookup("dnse_latest_trade", fp)
+        if hit is not None:
+            return hit
         try:
             data = await run_blocking(
                 functools.partial(dnse_p.latest_trade, symbols),
@@ -106,11 +125,15 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             rows = data if isinstance(data, list) else []
             if summary:
-                return make_envelope(
+                return await cache_store(
+                    "dnse_latest_trade", fp, price_ttl(),
                     {"count": len(rows), "symbols": [r.get("symbol") for r in rows]},
                     source="dnse-rest",
                 )
-            return make_envelope({"trades": _project(rows, columns)}, source="dnse-rest")
+            return await cache_store(
+                "dnse_latest_trade", fp, price_ttl(),
+                {"trades": _project(rows, columns)}, source="dnse-rest",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_latest_trade", str(exc))
 
@@ -123,8 +146,14 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         Không dùng khi: cần chuỗi theo ngày để đối chiếu (dùng vs_nn_flow); cần tổng hợp nhiều nguồn
             (dùng money_flow — fallback có sẵn).
         """
+        hit = await cache_lookup("dnse_foreign_flow", "-")
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(dnse_p.ws_snapshot(["VNINDEX"]), source="dnse-ws")
+            return await cache_store(
+                "dnse_foreign_flow", "-", price_ttl(),
+                dnse_p.ws_snapshot(["VNINDEX"]), source="dnse-ws",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_foreign_flow", str(exc))
 

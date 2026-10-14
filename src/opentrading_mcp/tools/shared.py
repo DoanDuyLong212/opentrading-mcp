@@ -58,14 +58,147 @@ def project_rows(rows: list[dict[str, Any]], columns: list[str] | None) -> list[
     return [{k: r[k] for k in columns if k in r} for r in rows]
 
 
+TIME_KEYS = ("t", "time", "Time", "date", "Date")
+
+
+def last_bar_time(rows: list[dict[str, Any]]) -> str | None:
+    """Newest bar timestamp in a candle series (or None) for data_time provenance."""
+    for r in reversed(rows):
+        if not isinstance(r, dict):
+            continue
+        t = pick_value(r, TIME_KEYS)
+        if t not in (None, ""):
+            return str(t)
+    return None
+
+
+def in_vn_session(now: Any = None) -> bool:
+    """True during HOSE continuous hours (Mon-Fri 09:00-15:00 ICT), best-effort.
+
+    Holidays are not consulted (calendar unverified); a holiday behaves like a
+    normal day here, which only costs shorter TTLs, never stale data.
+    Pass `now` (a ZoneInfo-aware datetime) in tests.
+    """
+    try:
+        if now is None:
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+
+            now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+    except Exception:
+        return True  # fail-open to short TTLs: fresh data over saved fetches
+    if now.weekday() >= 5:
+        return False
+    return 9 * 60 <= now.hour * 60 + now.minute < 15 * 60
+
+
+def price_ttl() -> int:
+    """TTL for price/board data: short in session, long when HOSE cannot move."""
+    from opentrading_mcp.cache import TTL_SECONDS
+
+    return TTL_SECONDS["market"] if in_vn_session() else TTL_SECONDS["market_offhours"]
+
+
+async def _cache_key_for(tool: str, fingerprint: str) -> str:
+    import hashlib
+
+    from opentrading_mcp.cache import cache_key
+
+    fp = fingerprint
+    if len(fp) > 100:
+        fp = "h:" + hashlib.sha256(fp.encode()).hexdigest()[:32]
+    return cache_key(tool, fp)
+
+
+async def cache_lookup(tool: str, fingerprint: str) -> dict[str, Any] | None:
+    """Rebuilt envelope on cache hit (with data_time + age warning), else None.
+
+    Callers check this FIRST and return immediately on hit. Failures and
+    unavailable/error envelopes are never stored, so a hit is always a
+    successful past response whose original fetch time is disclosed.
+    """
+    import json
+
+    from opentrading_mcp.providers.store import acache_get
+    from opentrading_mcp.schemas import make_envelope
+
+    hit = await acache_get(await _cache_key_for(tool, fingerprint))
+    if hit is None:
+        return None
+    try:
+        cached = json.loads(hit)
+        data = cached.get("data")
+    except (ValueError, TypeError):
+        return None
+    if data is None:
+        return None
+    data_time = cached.get("data_time") or cached.get("as_of")
+    env = make_envelope(
+        data,
+        source="cache",
+        warnings=list(cached.get("warnings") or []),
+        availability=cached.get("availability"),
+        page=cached.get("page"),
+        data_time=data_time,
+    )
+    env["warnings"] = [*env["warnings"], f"dữ liệu cache lúc {cached.get('as_of')}"]
+    return env
+
+
+async def cache_store(
+    tool: str,
+    fingerprint: str,
+    ttl_seconds: int,
+    data: Any,
+    source: str,
+    warnings: list[str] | None = None,
+    availability: str | None = None,
+    page: dict[str, Any] | None = None,
+    error: dict[str, Any] | None = None,
+    data_time: str | None = None,
+) -> dict[str, Any]:
+    """Build the envelope AND store a successful one for later hits."""
+    from opentrading_mcp.providers.store import acache_set
+    from opentrading_mcp.schemas import make_envelope
+
+    env = make_envelope(
+        data,
+        source=source,
+        warnings=warnings,
+        availability=availability,
+        page=page,
+        error=error,
+        data_time=data_time,
+    )
+    # Never persist failures — or empties: "not found" is often transient
+    # (a just-listed symbol, a pre-open board), and a cached empty would hide
+    # recovery until TTL expiry.
+    if env.get("availability") not in ("unavailable", "failed", "empty") and not env.get("error"):
+        await acache_set(
+            await _cache_key_for(tool, fingerprint),
+            {
+                "data": env["data"],
+                "warnings": env.get("warnings", []),
+                "availability": env.get("availability"),
+                "page": env.get("page"),
+                "as_of": env["provenance"]["as_of"],
+                "data_time": env["provenance"].get("data_time"),
+            },
+            ttl_seconds,
+        )
+    return env
+
+
 def summarize_rows(
     symbol: str, rows: list[dict[str, Any]], *, uppercase: bool = True
 ) -> dict[str, Any]:
-    """Summarize OHLC rows to {symbol, count, last, high, low} (P1 shared).
+    """Summarize OHLC rows to {symbol, count, last, high, low, last_t} (P1 shared).
 
     uppercase=True preserves vn.py/vn_ext.py behavior (symbol.upper());
     uppercase=False preserves market.py/dnse_tools.py behavior (symbol as-is).
     Key aliases cover c/close/Close/CLOSE etc (superset of dnse's old subset).
+    `last_t` is the newest bar timestamp (or None) so callers can judge
+    staleness without the full series.
     """
     name = symbol.upper() if uppercase else symbol
     if not rows:
@@ -82,12 +215,14 @@ def summarize_rows(
         low = min(lo for lo in lows if isinstance(lo, (int, float)))
     except ValueError:
         low = None
+    last_t = last_bar_time(rows)
     return {
         "symbol": name,
         "count": len(rows),
         "last": last_close,
         "high": high,
         "low": low,
+        "last_t": last_t,
     }
 
 

@@ -106,7 +106,15 @@ def make_envelope(
     availability: str | None = None,
     page: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
+    data_time: str | None = None,
 ) -> dict[str, Any]:
+    """Envelope with fetch-time AND data-time provenance.
+
+    `as_of` is always the fetch/response time. Pass `data_time` (ISO string of
+    the newest data point, e.g. max candle `t`) when known so callers can judge
+    staleness — critical once responses are served from cache, where `as_of`
+    alone would look freshly fetched.
+    """
     source = _SOURCE_ALIASES.get(source, source)
     has_data = data not in (None, {}, [], ())
     body: dict[str, Any] = {
@@ -120,6 +128,8 @@ def make_envelope(
         "warnings": warnings or [],
         "availability": availability or ("available" if has_data else "empty"),
     }
+    if data_time is not None:
+        body["provenance"]["data_time"] = data_time
     if page is not None:
         body["page"] = page
     if error is not None:

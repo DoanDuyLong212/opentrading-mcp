@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import intel as intel_p
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers import vn_public as pub_p
@@ -16,7 +17,12 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -45,6 +51,10 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         calendars: kèm thêm mục IPO/vĩ mô/SBV (sbv_rates, macro_events_vn,
         ipo_calendar_vn); tắt mặc định để bản tin nhanh.
         """
+        fp = f"{scope}|{date}|{calendars}"
+        hit = await cache_lookup("brief_build", fp)
+        if hit is not None:
+            return hit
         if scope not in ("vn", "world"):
             return make_envelope(
                 {"tool": "brief_build"},
@@ -99,7 +109,12 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         vs_ok = vs_state.get("authenticated", False) if isinstance(vs_state, dict) else False
         if not vs_ok:
             live_warnings.append(f"vietstock: {vs_state}")
-        return make_envelope(data, source="composer", warnings=live_warnings or None)
+        return await cache_store(
+            "brief_build",
+            f"{scope}|{date}|{calendars}",
+            TTL_SECONDS["world"],
+            data, source="composer", warnings=live_warnings or None,
+        )
     @server.tool(annotations=READ_ONLY)
     async def news_market(limit: int = 10, sources: str | None = None) -> dict[str, Any]:
         """Tin thị trường: đọc Fireant trước, GDELT dự phòng. Dùng khi kiểm tra chất xúc tác chung
@@ -113,21 +128,34 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         sources: 'gdelt' đi thẳng GDELT. Mặc định đọc feed đám đông Fireant
         (token từ env), rỗng thì rơi về GDELT khi trống.
         """
+        fp = f"{limit}|{sources}"
+        hit = await cache_lookup("news_market", fp)
+        if hit is not None:
+            return hit
         if sources == "gdelt":
             try:
                 data = await _call("g", intel_p.gdelt_events, "vietnam market", limit)
-                return make_envelope(data, source="gdelt")
+                return await cache_store(
+                    "news_market", f"{limit}|{sources}", TTL_SECONDS["mins10"],
+                    data, source="gdelt",
+                )
             except (ProviderUnavailable, ProviderBadData) as exc:
                 return _na("news_market", str(exc))
         try:
             posts = await _call("f", intel_p.fireant_posts, None, limit, secs=45.0)
             if posts:
-                return make_envelope({"posts": posts}, source="fireant")
+                return await cache_store(
+                    "news_market", f"{limit}|{sources}", TTL_SECONDS["mins10"],
+                    {"posts": posts}, source="fireant",
+                )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             pass
         try:
             data = await _call("g", intel_p.gdelt_events, "vietnam market", 20)
-            return make_envelope(data, source="gdelt")
+            return await cache_store(
+                "news_market", f"{limit}|{sources}", TTL_SECONDS["mins10"],
+                data, source="gdelt",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("news_market", str(exc))
 
@@ -146,22 +174,35 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbol, rỗng thì rơi về GDELT khi trống.
         Ví dụ: {"symbol": "FPT", "limit": 10}.
         """
+        fp = f"{symbol}|{limit}|{sources}"
+        hit = await cache_lookup("news_symbol", fp)
+        if hit is not None:
+            return hit
         sym = symbol.strip().upper()
         if sources == "gdelt":
             try:
                 data = await _call("g", intel_p.gdelt_events, sym, limit)
-                return make_envelope(data, source="gdelt")
+                return await cache_store(
+                    "news_symbol", fp, TTL_SECONDS["mins10"],
+                    data, source="gdelt",
+                )
             except (ProviderUnavailable, ProviderBadData) as exc:
                 return _na("news_symbol", str(exc))
         try:
             posts = await _call("f", intel_p.fireant_posts, sym, limit, secs=45.0)
             if posts:
-                return make_envelope({"symbol": sym, "posts": posts}, source="fireant")
+                return await cache_store(
+                    "news_symbol", fp, TTL_SECONDS["mins10"],
+                    {"symbol": sym, "posts": posts}, source="fireant",
+                )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             pass
         try:
             data = await _call("g", intel_p.gdelt_events, f"{sym} stock", 20, secs=45.0)
-            return make_envelope(data, source="gdelt")
+            return await cache_store(
+                "news_symbol", fp, TTL_SECONDS["mins10"],
+                data, source="gdelt",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("news_symbol", str(exc))
 
@@ -176,11 +217,18 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         post_id: postID của Fireant (lấy từ bài trong news_symbol). limit: số replies tối đa.
         Tin đồn nằm ở replies; bài gốc có thể mỏng.
         """
+        fp = f"{post_id}|{limit}"
+        hit = await cache_lookup("fireant_thread", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call(
                 "f", intel_p.fireant_thread, int(post_id), min(int(limit), 50), secs=45.0
             )
-            return make_envelope(data, source="fireant")
+            return await cache_store(
+                "fireant_thread", fp, TTL_SECONDS["documents"],
+                data, source="fireant",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("fireant_thread", str(exc))
 
@@ -194,6 +242,10 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         scope: chỉ 'vn' (scope khác trả rỗng kèm cảnh báo). limit: số series tối đa.
         """
+        fp = f"{scope}|{limit}"
+        hit = await cache_lookup("economic_calendar", fp)
+        if hit is not None:
+            return hit
         if scope != "vn":
             return make_envelope(
                 {"scope": scope},
@@ -211,7 +263,8 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
                 }
                 for c in (cats if isinstance(cats, list) else [])
             ]
-            return make_envelope(
+            return await cache_store(
+                "economic_calendar", fp, TTL_SECONDS["documents"],
                 {"scope": scope, "series": rows[: max(int(limit), 1)]}, source="vietstock"
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -227,8 +280,14 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         Giá trị đổi hiếm; nguồn không có API.
         """
+        hit = await cache_lookup("sbv_rates", "-")
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(await _call("s", pub_p.sbv_rates), source="sbv-scrape")
+            return await cache_store(
+                "sbv_rates", "-", TTL_SECONDS["financeinfo"],
+                await _call("s", pub_p.sbv_rates), source="sbv-scrape",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("sbv_rates", str(exc))
 
@@ -243,8 +302,12 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         Gồm lịch CPI và các đợt công bố; lịch cả năm đầy đủ nằm trong PDF của NSO.
         """
+        hit = await cache_lookup("macro_events_vn", "-")
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
+            return await cache_store(
+                "macro_events_vn", "-", TTL_SECONDS["documents"],
                 {"releases": await _call("m", pub_p.nso_releases)}, source="nso-scrape"
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -263,11 +326,16 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         số công bố tối đa. Feed thô; company_events phân loại các công bố
         giống vậy theo loại; event_calendar_vn là dạng xem calendar.
         """
+        fp = f"{symbol}|{limit}"
+        hit = await cache_lookup("corporate_calendar", fp)
+        if hit is not None:
+            return hit
         try:
             docs = await _call("d", vs_p.documents, symbol or "VCB", 60)
             if isinstance(docs, list):
                 docs = docs[: max(int(limit), 1)]
-            return make_envelope(
+            return await cache_store(
+                "corporate_calendar", fp, TTL_SECONDS["hour"],
                 {"symbol": (symbol or "VCB").upper(), "docs": docs}, source="vietstock"
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

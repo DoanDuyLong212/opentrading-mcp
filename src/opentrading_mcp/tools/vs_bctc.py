@@ -6,14 +6,20 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
     ProviderUnavailable,
 )
-from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    cache_lookup,
+    cache_store,
+    price_ttl,
+    run_blocking,
+)
 from opentrading_mcp.tools.vs import _na
 
 
@@ -27,9 +33,15 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vs_financial_terms() -> dict[str, Any]:
         """Report term catalogue (annual, Q1-Q4, H1, 9M). Use before BCTC value queries."""
+        hit = await cache_lookup("vs_financial_terms", "-")
+        if hit is not None:
+            return hit
         try:
             terms = await _call("t", vs_p.financial_terms)
-            return make_envelope({"terms": terms}, source="vietstock")
+            return await cache_store(
+                "vs_financial_terms", "-", TTL_SECONDS["categories"],
+                {"terms": terms}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financial_terms", str(exc))
 
@@ -39,11 +51,16 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         btype: 1 CTCP (general), 2 securities, 3 bank, 5 insurance.
         """
+        fp = f"{btype}"
+        hit = await cache_lookup("vs_financial_norms", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("n", vs_p.financial_norms, btype)
             rows = data if isinstance(data, list) else data.get("data", [])
-            return make_envelope(
-                {"btype": btype, "count": len(rows), "norms": rows}, source="vietstock"
+            return await cache_store(
+                "vs_financial_norms", fp, TTL_SECONDS["categories"],
+                {"btype": btype, "count": len(rows), "norms": rows}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financial_norms", str(exc))
@@ -58,9 +75,14 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         Ví dụ: {"symbol": "FPT"}.
         """
+        fp = f"{symbol}"
+        hit = await cache_lookup("vs_company_info", fp)
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
-                {"info": await _call("c", vs_p.company_info, symbol)}, source="vietstock"
+            return await cache_store(
+                "vs_company_info", fp, TTL_SECONDS["overview"],
+                {"info": await _call("c", vs_p.company_info, symbol)}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_company_info", str(exc))
@@ -73,8 +95,13 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         Không dùng khi: cần vùng giá trị hợp lý (dùng valuation_run); cần so nhiều mã cùng lúc (dùng
             peer_compare hoặc financial_ratios với peers).
         """
+        fp = f"{symbol}"
+        hit = await cache_lookup("vs_overview_trading", fp)
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
+            return await cache_store(
+                "vs_overview_trading", fp, TTL_SECONDS["overview"],
                 {"overview": await _call("o", vs_p.overview_trading, symbol)},
                 source="vietstock",
             )
@@ -87,8 +114,13 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         page_size: max documents returned (default 60).
         """
+        fp = f"{symbol}|{page_size}"
+        hit = await cache_lookup("vs_documents", fp)
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
+            return await cache_store(
+                "vs_documents", fp, TTL_SECONDS["documents"],
                 {"docs": await _call("d", vs_p.documents, symbol, page_size)},
                 source="vietstock",
             )
@@ -98,17 +130,27 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vs_industry_tree() -> dict[str, Any]:
         """GICS industry tree. Use before sector mapping."""
+        hit = await cache_lookup("vs_industry_tree", "-")
+        if hit is not None:
+            return hit
         try:
-            return make_envelope({"tree": await _call("t", vs_p.industry_tree)}, source="vietstock")
+            return await cache_store(
+                "vs_industry_tree", "-", TTL_SECONDS["categories"],
+                {"tree": await _call("t", vs_p.industry_tree)}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_industry_tree", str(exc))
 
     @server.tool(annotations=READ_ONLY)
     async def vs_industry_heatmap() -> dict[str, Any]:
         """Live sector heatmap. Use for intraday rotation."""
+        hit = await cache_lookup("vs_industry_heatmap", "-")
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
-                {"heatmap": await _call("h", vs_p.industry_heatmap)}, source="vietstock"
+            return await cache_store(
+                "vs_industry_heatmap", "-", TTL_SECONDS["world"],
+                {"heatmap": await _call("h", vs_p.industry_heatmap)}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_industry_heatmap", str(exc))
@@ -116,8 +158,14 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vs_selftrading() -> dict[str, Any]:
         """Prop-desk flow chart. Use alongside foreign flows."""
+        hit = await cache_lookup("vs_selftrading", "-")
+        if hit is not None:
+            return hit
         try:
-            return make_envelope({"flow": await _call("s", vs_p.selftrading)}, source="vietstock")
+            return await cache_store(
+                "vs_selftrading", "-", TTL_SECONDS["hour"],
+                {"flow": await _call("s", vs_p.selftrading)}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_selftrading", str(exc))
 
@@ -127,8 +175,13 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         group: index set (1, 2 or 3 return different groups).
         """
+        fp = f"{group}"
+        hit = await cache_lookup("vs_gics_index", fp)
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
+            return await cache_store(
+                "vs_gics_index", fp, price_ttl(),
                 {"group": group, "rows": await _call("g", vs_p.gics_index, group)},
                 source="vietstock",
             )
@@ -138,8 +191,14 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vs_currency() -> dict[str, Any]:
         """Reference FX table. Use as fallback FX source."""
+        hit = await cache_lookup("vs_currency", "-")
+        if hit is not None:
+            return hit
         try:
-            return make_envelope({"rows": await _call("c", vs_p.currency)}, source="vietstock")
+            return await cache_store(
+                "vs_currency", "-", TTL_SECONDS["hour"],
+                {"rows": await _call("c", vs_p.currency)}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_currency", str(exc))
 
@@ -149,8 +208,13 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         exchange: HOSE, HNX or UPCOM (endpoint is per-exchange, not per-symbol).
         """
+        fp = f"{exchange}"
+        hit = await cache_lookup("vs_market_info", fp)
+        if hit is not None:
+            return hit
         try:
-            return make_envelope(
+            return await cache_store(
+                "vs_market_info", fp, price_ttl(),
                 {
                     "exchange": exchange.strip().upper(),
                     "rows": await _call("m", vs_p.market_info_board, exchange),
@@ -168,6 +232,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         from_date default current year (ISO). Standard pack serves it; rows
         {name=country, group, period, year, value 'Triệu USD', timeorder}.
         """
+        fp = f"{direction}|{from_date}"
+        hit = await cache_lookup("vs_xnk_detail", fp)
+        if hit is not None:
+            return hit
         list_id = 64 if direction == "xk" else 65
         import datetime
 
@@ -176,7 +244,8 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             out = await _call("x", vs_p.macro_report_data, 2, list_id, "", frm)
             rows = out.get("rows", []) if isinstance(out, dict) else []
             availability = "available" if rows else "empty"
-            return make_envelope(
+            return await cache_store(
+                "vs_xnk_detail", fp, TTL_SECONDS["documents"],
                 {"direction": direction, **out}, source="vietstock", availability=availability
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

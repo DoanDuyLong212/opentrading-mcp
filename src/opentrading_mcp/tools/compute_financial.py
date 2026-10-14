@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import (
@@ -17,7 +18,13 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY,
+    AnyContext,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -142,6 +149,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         mục số cổ phiếu không có); 8/9 khi BCTC trả phí mở LCTT.
         detail=true thêm chuỗi input thô.
         """
+        fp = f"{symbol}|{detail}|{periods_n}"
+        hit = await cache_lookup("stock_forensic", fp)
+        if hit is not None:
+            return hit
         sym = symbol.strip().upper()
         try:
             kq = await _call(
@@ -312,7 +323,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             }
         if ctx is not None:
             await ctx.log("info", f"stock_forensic {sym} f={counted}")
-        return make_envelope(out, source="computed-local")
+        return await cache_store(
+            "stock_forensic", fp, TTL_SECONDS["financeinfo"],
+            out, source="computed-local",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def valuation_run(symbol: str, btype: int = 1, method: str = "auto") -> dict[str, Any]:
@@ -328,6 +342,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
+        fp = f"{symbol}|{btype}|{method}"
+        hit = await cache_lookup("valuation_run", fp)
+        if hit is not None:
+            return hit
         try:
             overview = await _call("v", vs_p.overview_trading, symbol, secs=45.0)
             quotes = await _call("q", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
@@ -370,7 +388,12 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 out["method"] = "per_pb"
         except (TypeError, ValueError):
             pass
-        return make_envelope(out, source="computed-local", warnings=warnings or None)
+        return await cache_store(
+            "valuation_run",
+            f"{symbol}|{btype}|{method}",
+            TTL_SECONDS["overview"],
+            out, source="computed-local", warnings=warnings or None,
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def financial_statements(
@@ -385,6 +408,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         Bọc vs_financeinfo (không cần JWT). statement: mục BCTC cần đọc
         ('all', hoặc khóa như 'KQKD'/'CDKT'); periods_n giới hạn số kỳ trả về.
         """
+        fp = f"{symbol}|{period}|{statement}|{periods_n}"
+        hit = await cache_lookup("financial_statements", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("f", vs_p.financeinfo, symbol, period, secs=60.0)
             pages = data.get("pages", []) if isinstance(data, dict) else []
@@ -399,16 +426,25 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                     for page in matched:
                         for values in page.values():
                             flat.extend(values if isinstance(values, list) else [values])
-                    return make_envelope(
+                    return await cache_store(
+                        "financial_statements",
+                        fp,
+                        TTL_SECONDS["financeinfo"],
                         {"symbol": symbol.upper(), "periods": flat[: max(int(periods_n), 1)]},
                         source="vietstock",
                     )
-                return make_envelope(
+                return await cache_store(
+                    "financial_statements",
+                    fp,
+                    TTL_SECONDS["financeinfo"],
                     {"symbol": symbol.upper(), "periods": pages},
                     source="vietstock",
                     warnings=[f"statement {statement!r} not found, returning all pages"],
                 )
-            return make_envelope(data, source="vietstock")
+            return await cache_store(
+                "financial_statements", fp, TTL_SECONDS["financeinfo"],
+                data, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_statements", str(exc))
 
@@ -430,6 +466,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         period: kỳ BCTC ('year'); peers: thêm mã vào danh sách.
         Rơi về vnstock fundamentals khi overview Vietstock trống.
         """
+        fp = f"{symbol}|{set}|{period}|{peers}"
+        hit = await cache_lookup("financial_ratios", fp)
+        if hit is not None:
+            return hit
         try:
             overview = await _call("r", vs_p.overview_trading, symbol)
             if not overview:
@@ -440,7 +480,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "period": period,
                         "ratios": fb,
                     }
-                    return make_envelope(out_fb, source="vnstock")
+                    return await cache_store(
+                        "financial_ratios", fp, TTL_SECONDS["overview"],
+                        out_fb, source="vnstock",
+                    )
                 except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
                     pass
             ratios = overview if isinstance(overview, dict) else {"overview": overview}
@@ -457,7 +500,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                     if isinstance(peer_data, dict) and "symbol" not in peer_data:
                         peer_data = {"symbol": peer.upper(), **peer_data}
                     out["peers"].append(peer_data)
-            return make_envelope(out, source="vietstock")
+            return await cache_store(
+                "financial_ratios", fp, TTL_SECONDS["overview"],
+                out, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_ratios", str(exc))
 
@@ -476,6 +522,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         (cột symbol luôn giữ).
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
+        fp = f"{symbol}|{peers}|{metrics}"
+        hit = await cache_lookup("peer_compare", fp)
+        if hit is not None:
+            return hit
         wanted = {m.lower() for m in metrics} if metrics else None
         rows: list[dict[str, Any]] = []
         for name in [symbol, *peers][:6]:
@@ -491,7 +541,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             elif isinstance(data, dict) and "symbol" not in data:
                 data = {"symbol": name.upper(), **data}
             rows.append(data if isinstance(data, dict) else {"symbol": name.upper(), "data": data})
-        return make_envelope({"rows": rows}, source="vietstock")
+        return await cache_store(
+            "peer_compare", fp, TTL_SECONDS["overview"],
+            {"rows": rows}, source="vietstock",
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def stock_overview(symbol: str) -> dict[str, Any]:
@@ -503,12 +556,19 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         Ví dụ: {"symbol": "FPT"}.
         """
+        fp = f"{symbol}"
+        hit = await cache_lookup("stock_overview", fp)
+        if hit is not None:
+            return hit
         try:
             trading = await _call(
                 "t", vs_p._post, "/company/tradinginfo", {"code": symbol.upper(), "s": 0}
             )
             company = await _call("c", vs_p.company_info, symbol)
-            return make_envelope({"trading": trading, "company": company}, source="vietstock")
+            return await cache_store(
+                "stock_overview", fp, TTL_SECONDS["overview"],
+                {"trading": trading, "company": company}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("stock_overview", str(exc))
 
@@ -520,6 +580,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         fields (e.g. 'bctc,nghi_quyet'). corporate_calendar is the raw
         unfiltered feed; company_events classifies it per symbol.
         """
+        fp = f"{symbol}|{types}"
+        hit = await cache_lookup("company_events", fp)
+        if hit is not None:
+            return hit
         try:
             docs = await _call("e", vs_p.documents, symbol)
             if types is not None and isinstance(docs, list):
@@ -532,7 +596,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                         {str(d.get("kind", "")).lower(), str(d.get("type", "")).lower()}
                     )
                 ]
-            return make_envelope({"symbol": symbol.upper(), "events": docs}, source="vietstock")
+            return await cache_store(
+                "company_events", fp, TTL_SECONDS["hour"],
+                {"symbol": symbol.upper(), "events": docs}, source="vietstock",
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("company_events", str(exc))
 
