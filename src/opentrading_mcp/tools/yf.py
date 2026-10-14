@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from opentrading_mcp.cache import cache_key
+from opentrading_mcp.cache import TTL_SECONDS, cache_key
 from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
@@ -16,7 +16,13 @@ from opentrading_mcp.providers.errors import (
 )
 from opentrading_mcp.providers.store import acache_get
 from opentrading_mcp.schemas import make_envelope
-from opentrading_mcp.tools.shared import READ_ONLY_OPEN, AnyContext, run_blocking
+from opentrading_mcp.tools.shared import (
+    READ_ONLY_OPEN,
+    AnyContext,
+    cache_lookup,
+    cache_store,
+    run_blocking,
+)
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -92,9 +98,15 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         Falls back to FRED DGS10/DGS2 when yfinance is blocked (datacenter IPs).
         """
+        hit = await cache_lookup("yf_yield_curve", "-")
+        if hit is not None:
+            return hit
         try:
             data = await run_blocking(yf_p.yield_curve, "yf_yield_curve", timeout_secs=50.0)
-            return make_envelope(data, source="yfinance")
+            return await cache_store(
+                "yf_yield_curve", "-", TTL_SECONDS["financeinfo"],
+                data, source="yfinance",
+            )
         except (ProviderUnavailable, ProviderBadData):
             pass
         try:
@@ -110,7 +122,8 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             us10y = float((ten.get("points") or [{}])[-1].get("v", 0)) / 100
             us2y = float((two.get("points") or [{}])[-1].get("v", 0)) / 100
-            return make_envelope(
+            return await cache_store(
+                "yf_yield_curve", "-", TTL_SECONDS["financeinfo"],
                 {"us10y": us10y, "us2y": us2y, "inverted": us2y > us10y},
                 source="fred",
                 warnings=["yfinance blocked — FRED DGS10/DGS2 fallback"] if us10y else None,

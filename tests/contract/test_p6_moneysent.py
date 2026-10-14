@@ -18,7 +18,14 @@ def test_fireant_posts_accepts_bare_list(monkeypatch):
         def json(self) -> Any:
             return [{"post_id": 1, "content": "VCB ngon", "user": {"name": "a"}, "likes": 5}]
 
-    monkeypatch.setattr("httpx.get", lambda *a, **k: FakeResp())
+    class FakeClient:
+        def get(self, *a: Any, **k: Any) -> Any:
+            return FakeResp()
+
+        def post(self, *a: Any, **k: Any) -> Any:
+            raise AssertionError("no POST expected here")
+
+    monkeypatch.setattr(intel_p, "_client", lambda: FakeClient())
     out = intel_p.fireant_posts("VCB", 3)
     assert isinstance(out, list) and len(out) == 1
 
@@ -89,7 +96,14 @@ def test_fireant_posts_reads_postid_fields(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr("httpx.get", lambda *a, **k: FakeResp())
+    class FakeClient:
+        def get(self, *a: Any, **k: Any) -> Any:
+            return FakeResp()
+
+        def post(self, *a: Any, **k: Any) -> Any:
+            raise AssertionError("no POST expected here")
+
+    monkeypatch.setattr(intel_p, "_client", lambda: FakeClient())
     out = intel_p.fireant_posts("PNJ", 3)
     assert out[0]["id"] == 42088453
     assert out[0]["user"] == "Vo Thi"
@@ -123,7 +137,14 @@ def test_fireant_thread_parses_replies(monkeypatch):
         assert url.endswith("/posts/1/replies")
         return FakeResp(reps)
 
-    monkeypatch.setattr("httpx.get", fake_get)
+    class FakeClient:
+        def get(self, url: str, **kwargs: Any) -> Any:
+            return fake_get(url, **kwargs)
+
+        def post(self, *a: Any, **k: Any) -> Any:
+            raise AssertionError("no POST expected here")
+
+    monkeypatch.setattr(intel_p, "_client", lambda: FakeClient())
     out = intel_p.fireant_thread(1, limit=10)
     assert out["post"]["id"] == 1
     assert out["reply_count"] == 2
