@@ -15,10 +15,30 @@ from opentrading_mcp.providers.errors import (
     ProviderUnavailable,
 )
 
+_CLIENT: httpx.Client | None = None
+
+
+def _client() -> httpx.Client:
+    """Shared connection-pooled HTTP client (keep-alive across calls).
+
+    Successive one-shot httpx.get() calls re-pay TCP+TLS handshake every time
+    (~11s TLS to some hosts from certain networks); a pooled client pays it
+    once per process. Thread-safe: calls run on run_blocking worker threads
+    and httpx connection pools are thread-safe. Lazily built so importing this
+    module never opens sockets (tests without network stay fast).
+    """
+    global _CLIENT
+    if _CLIENT is None:
+        _CLIENT = httpx.Client(
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=10),
+            timeout=httpx.Timeout(20.0),
+        )
+    return _CLIENT
+
 
 def _get_json(url: str, params: dict[str, Any] | None = None, timeout: int = 20) -> Any:
     try:
-        response = httpx.get(url, params=params, timeout=timeout)
+        response = _client().get(url, params=params, timeout=timeout)
     except httpx.TimeoutException as exc:
         raise ProviderUnavailable(f"timeout: {url}") from exc
     except httpx.HTTPError as exc:
@@ -72,7 +92,7 @@ def fireant_posts(symbol: str | None = None, limit: int = 20) -> list[dict[str, 
     if symbol:
         params["symbol"] = symbol.upper()
     try:
-        response = httpx.get(
+        response = _client().get(
             f"{base}/posts",
             params=params,
             headers={"Authorization": f"Bearer {token}"},
@@ -134,9 +154,9 @@ def fireant_thread(post_id: int | str, limit: int = 20) -> dict[str, Any]:
     base = os.environ.get("FIREANT_API_BASE", "https://restv2.fireant.vn").strip()
     headers = {"Authorization": f"Bearer {token}"}
     try:
-        root_resp = httpx.get(f"{base}/posts/{post_id}", headers=headers, timeout=30)
+        root_resp = _client().get(f"{base}/posts/{post_id}", headers=headers, timeout=30)
         root_body = root_resp.json() if root_resp.status_code == 200 else None
-        rep_resp = httpx.get(
+        rep_resp = _client().get(
             f"{base}/posts/{post_id}/replies",
             params={"limit": min(limit, 50)},
             headers=headers,
@@ -170,7 +190,7 @@ def groq_chat(system_msg: str, user_msg: str, max_tokens: int = 300) -> str:
         raise ProviderAuthMissing("GROQ_API_KEY is not set")
     model = os.environ.get("GROQ_MODEL_SENTIMENT", "llama-3.1-8b-instant")
     try:
-        response = httpx.post(
+            response = _client().post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}"},
             json={
@@ -274,7 +294,7 @@ def prediction_odds(
             qs = "active=true&closed=false&limit=100&order=volume24hr&ascending=false"
             if tag:
                 qs += f"&tag_slug={tag}"
-            response = httpx.get(
+            response = _client().get(
                 f"{base}/events?{qs}",
                 timeout=30,
                 headers=headers,
@@ -330,7 +350,7 @@ def polymarket_event(slug: str) -> dict[str, Any]:
     for base, return_format in attempts:
         try:
             headers = {"X-Return-Format": return_format} if return_format else None
-            response = httpx.get(
+            response = _client().get(
                 f"{base}/events?slug={httpx.QueryParams({'slug': slug})['slug']}",
                 timeout=30,
                 headers=headers,
@@ -393,6 +413,9 @@ def fear_greed() -> dict[str, Any]:
 
 
 _GDELT_CACHE_TTL = 600
+# GDELT 429 responses set this (monotonic seconds); see gdelt_events.
+_GDELT_THROTTLED_UNTIL = 0.0
+_GDELT_THROTTLE_COOLDOWN = 300.0
 
 
 @guarded("gdelt")
@@ -401,7 +424,14 @@ def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str
 
     GDELT throttles per-IP aggressively; the cache also keeps news_market /
     news_symbol / geo_intel / event_stats from hammering the same endpoint.
+    A 429 sets a 5-minute throttle flag so follow-up calls fail fast instead
+    of each burning ~40s on sleep+retry against a throttled endpoint.
     """
+    import time
+
+    global _GDELT_THROTTLED_UNTIL
+    if time.monotonic() < _GDELT_THROTTLED_UNTIL:
+        raise ProviderUnavailable("gdelt throttled, retry later")
     from opentrading_mcp.cache import cache_key
     from opentrading_mcp.providers.store import cache_get, cache_set
 
@@ -427,8 +457,7 @@ def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str
         except ProviderUnavailable as exc:
             last_exc = exc
             if attempt == 1 and "rate limited" in str(exc):
-                import time
-
+                _GDELT_THROTTLED_UNTIL = time.monotonic() + _GDELT_THROTTLE_COOLDOWN
                 time.sleep(20)
             else:
                 raise
