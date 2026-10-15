@@ -221,7 +221,10 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         sym = (symbol or "VNINDEX").strip().upper()
         want = max(30, min(int(days or 40), 90))
-        fp = f"{sym}|{want}"
+        # Date in fp: derived from daily candles, a new session must recompute.
+        from datetime import date
+
+        fp = f"{sym}|{want}|{date.today().isoformat()}"
         hit = await cache_lookup("distribution_count", fp)
         if hit is not None:
             return hit
@@ -260,7 +263,7 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         return await cache_store(
             "distribution_count",
             fp,
-            TTL_SECONDS["hour"],
+            TTL_SECONDS["financeinfo"],  # daily-candle derived; fp carries the date
             {
                 "symbol": sym,
                 "window_sessions": DD_WINDOW,

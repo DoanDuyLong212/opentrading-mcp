@@ -172,3 +172,39 @@ def test_run_blocking_heavy_pool():
     import opentrading_mcp.tools.shared as shared
 
     assert _run(shared.run_blocking(lambda: 42, "h", heavy=True)) == 42
+
+
+def test_neg_cache_fails_fast_after_timeout(monkeypatch):
+    """A timed-out leg is remembered briefly; auth-missing never is."""
+    import opentrading_mcp.tools.shared as shared
+    from opentrading_mcp.providers.errors import ProviderAuthMissing
+
+    monkeypatch.setenv("MCP_NEG_TTL", "60")
+    shared._neg.clear()
+
+    async def slow() -> None:
+        await shared.run_blocking(lambda: time.sleep(2), "negtool", 0.1)
+
+    with pytest.raises(ProviderUnavailable, match="timed out"):
+        _run(slow())
+    started = time.monotonic()
+    with pytest.raises(ProviderUnavailable, match="briefly unavailable"):
+        _run(shared.run_blocking(lambda: 1, "negtool", 5.0))
+    assert time.monotonic() - started < 1.0  # fast, no 5s wait
+
+    async def auth_fail() -> None:
+        def _raise() -> None:
+            raise ProviderAuthMissing("no key")
+
+        await shared.run_blocking(_raise, "negtool2", 5.0)
+
+    with pytest.raises(ProviderAuthMissing):
+        _run(auth_fail())
+    # auth-missing is NOT remembered: a second call still runs the fn
+    def _raise_again() -> None:
+        raise ProviderAuthMissing("x")
+
+    with pytest.raises(ProviderAuthMissing):
+        _run(shared.run_blocking(_raise_again, "negtool2", 5.0))
+    assert shared._neg.get("negtool2") is None
+    shared._neg.clear()

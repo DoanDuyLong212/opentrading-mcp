@@ -226,7 +226,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "f", intel_p.fireant_thread, int(post_id), min(int(limit), 50), secs=45.0
             )
             return await cache_store(
-                "fireant_thread", fp, TTL_SECONDS["documents"],
+                "fireant_thread", fp, TTL_SECONDS["hour"],  # rumor threads gain replies intraday
                 data, source="fireant",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -335,7 +335,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             if isinstance(docs, list):
                 docs = docs[: max(int(limit), 1)]
             return await cache_store(
-                "corporate_calendar", fp, TTL_SECONDS["hour"],
+                "corporate_calendar", fp, TTL_SECONDS["mins10"],  # disclosures move intraday
                 {"symbol": (symbol or "VCB").upper(), "docs": docs}, source="vietstock"
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

@@ -34,6 +34,7 @@ from opentrading_mcp.providers.errors import (
     ProviderBadData,
     ProviderUnavailable,
 )
+from opentrading_mcp.providers.pool import shared_client
 
 BASE = "https://openapi.dnse.com.vn"
 WS_URL = "wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json"
@@ -82,7 +83,9 @@ def _get(path: str, params: dict[str, Any] | None = None, timeout: int = 20) -> 
     except ProviderAuthMissing:
         raise
     try:
-        response = httpx.get(f"{BASE}{path}", headers=headers, params=params, timeout=timeout)
+        response = shared_client().get(
+            f"{BASE}{path}", headers=headers, params=params, timeout=timeout
+        )
     except httpx.TimeoutException as exc:
         raise ProviderUnavailable(f"dnse timeout: {path}") from exc
     except httpx.HTTPError as exc:

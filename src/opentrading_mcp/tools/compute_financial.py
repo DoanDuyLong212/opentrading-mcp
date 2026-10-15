@@ -23,6 +23,7 @@ from opentrading_mcp.tools.shared import (
     AnyContext,
     cache_lookup,
     cache_store,
+    price_ttl,
     run_blocking,
 )
 
@@ -566,7 +567,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             company = await _call("c", vs_p.company_info, symbol)
             return await cache_store(
-                "stock_overview", fp, TTL_SECONDS["overview"],
+                "stock_overview", fp, price_ttl(),  # embeds a live trading snapshot
                 {"trading": trading, "company": company}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

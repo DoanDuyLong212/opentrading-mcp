@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from opentrading_mcp.providers.errors import ProviderUnavailable
+from opentrading_mcp.providers.pool import shared_client
 
 MIL_CACHE_TTL = 60.0
 _MIL_CACHE: dict[str, Any] = {"ts": 0.0, "data": []}
@@ -104,7 +105,7 @@ def military_flights(timeout: float = 15.0) -> list[dict[str, Any]]:
     if now - _MIL_CACHE["ts"] < MIL_CACHE_TTL and _MIL_CACHE["data"]:
         return _MIL_CACHE["data"]
     try:
-        resp = httpx.get(
+        resp = shared_client().get(
             "https://api.adsb.lol/v2/mil",
             headers={"User-Agent": "opentrading-mcp/1.0"},
             timeout=timeout,

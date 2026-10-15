@@ -230,13 +230,18 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         articles — distinct from geo_intel (politics-filtered article list).
         limit: max articles fetched from GDELT before aggregating.
         """
+        fp = f"{query}|{limit}"
+        hit = await cache_lookup("event_stats", fp)
+        if hit is not None:
+            return hit
         try:
             data = await _call("e", intel_p.gdelt_events, query, max(int(limit), 1))
             from opentrading_mcp.providers import geo as geo_p
 
             articles = data.get("articles", []) if isinstance(data, dict) else []
             agg = geo_p.aggregate(articles)
-            return make_envelope(
+            return await cache_store(
+                "event_stats", fp, TTL_SECONDS["mins10"],
                 {"query": data.get("query"), **agg, "articles": articles[:5]},
                 source="gdelt",
             )
@@ -247,7 +252,8 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
 
                 articles = data.get("articles", []) if isinstance(data, dict) else []
                 agg = geo_p.aggregate(articles)
-                return make_envelope(
+                return await cache_store(
+                    "event_stats", fp, TTL_SECONDS["mins10"],
                     {"query": data.get("query"), **agg, "articles": articles[:5]},
                     source="gdelt",
                 )

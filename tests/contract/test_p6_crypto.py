@@ -108,7 +108,11 @@ def test_spot_board_normalizes_raw(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr("httpx.get", lambda url, params=None, timeout=None: FakeResp())
+    class FakeClient:
+        def get(self, *a: Any, **k: Any) -> Any:
+            return FakeResp()
+
+    monkeypatch.setattr(bn_p, "_shared", lambda: FakeClient())
     rows = bn_p.spot_board(["BTC/USDT"])
     assert rows[0]["symbol"] == "BTCUSDT"
     assert rows[0]["last"] == 67000.0

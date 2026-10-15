@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from opentrading_mcp.providers.errors import ProviderAuthMissing, ProviderUnavailable
+from opentrading_mcp.providers.pool import shared_client
 
 SEARCH_TIMEOUT = 25
 
@@ -118,7 +119,7 @@ def search(
     }
     try:
         url = PARALLEL_URL if provider == "parallel" else _exa_url()
-        response = httpx.post(
+        response = shared_client().post(
             url,
             json=payload,
             headers={"Accept": "application/json, text/event-stream", **headers},

@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from typing import Any
+
+import httpx
 
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
@@ -31,6 +34,25 @@ _COINGECKO_IDS = {
 FAPI_BASE = "https://fapi.binance.com"
 _REQ_TIMEOUT = 10.0
 
+# One pooled client (keep-alive): derivs_board fires up to 4 calls/symbol and
+# one-shot httpx.get() re-paid TLS on every one (~20 handshakes per call).
+_client: httpx.Client | None = None
+_client_lock = threading.Lock()
+
+
+def _shared() -> httpx.Client:
+    global _client
+    if _client is not None:
+        return _client
+    with _client_lock:
+        if _client is not None:
+            return _client
+        _client = httpx.Client(
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=10),
+            timeout=_REQ_TIMEOUT,
+        )
+        return _client
+
 
 def _norm(symbol: str) -> str:
     """Normalize BTC/USDT, BTC-USDT, btcusdt -> BTCUSDT (raises on garbage)."""
@@ -42,11 +64,7 @@ def _norm(symbol: str) -> str:
 
 def _get_json(url: str, params: dict[str, Any]) -> Any:
     try:
-        import httpx
-    except ImportError as exc:
-        raise ProviderUnavailable("httpx not installed") from exc
-    try:
-        resp = httpx.get(url, params=params, timeout=_REQ_TIMEOUT)
+        resp = _shared().get(url, params=params, timeout=_REQ_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
     except Exception as exc:
