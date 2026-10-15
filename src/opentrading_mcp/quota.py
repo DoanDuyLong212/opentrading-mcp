@@ -7,11 +7,97 @@ is unset, quota is skipped (local dev) — never fail closed on infra.
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import os
+import threading
 from typing import Any
 
 DEFAULT_QUOTA_DAY = 1000
+_POOL_SIZE = 3  # concurrent JWT quota checkouts; quota path must never fan out PG
+_POOL_WAIT_SECS = 5.0
+
+
+class _NoDatabaseError(Exception):
+    pass
+
+
+class _PoolBusy(Exception):
+    pass
+
+
+_pools: dict[int, asyncio.Queue] = {}
+_pool_sizes: dict[int, int] = {}
+_pool_guard = threading.Lock()
+
+
+async def _new_conn(url: str) -> Any:
+    import psycopg
+
+    return await psycopg.AsyncConnection.connect(url, autocommit=True, connect_timeout=5)
+
+
+async def _checkout(url: str) -> tuple[int, Any]:
+    """Take a pooled PG conn (loop-pinned). Raises _NoDatabaseError/_PoolBusy."""
+    try:
+        loop_key = id(asyncio.get_running_loop())
+    except RuntimeError:
+        raise _PoolBusy from None
+    with _pool_guard:
+        q = _pools.get(loop_key)
+        if q is None:
+            q = asyncio.Queue(maxsize=_POOL_SIZE)
+            _pools[loop_key] = q
+            _pool_sizes[loop_key] = 0
+    while True:
+        try:
+            conn = q.get_nowait()
+        except asyncio.QueueEmpty:
+            with _pool_guard:
+                if _pool_sizes[loop_key] < _POOL_SIZE:
+                    _pool_sizes[loop_key] += 1
+                    fresh = True
+                else:
+                    fresh = False
+            if fresh:
+                try:
+                    return loop_key, await _new_conn(url)
+                except Exception:
+                    with _pool_guard:
+                        _pool_sizes[loop_key] -= 1
+                    raise
+            try:
+                conn = await asyncio.wait_for(q.get(), _POOL_WAIT_SECS)
+            except TimeoutError:
+                raise _PoolBusy from None
+        if getattr(conn, "closed", False):
+            with _pool_guard:
+                _pool_sizes[loop_key] -= 1
+            continue
+        return loop_key, conn
+
+
+async def _checkin(loop_key: int, conn: Any, broken: bool) -> None:
+    with _pool_guard:
+        q = _pools.get(loop_key)
+    if broken or getattr(conn, "closed", False) or q is None:
+        with _pool_guard:
+            if loop_key in _pool_sizes:
+                _pool_sizes[loop_key] = max(0, _pool_sizes[loop_key] - 1)
+        try:
+            await conn.close()
+        except Exception:
+            pass
+        return
+    try:
+        q.put_nowait(conn)
+    except asyncio.QueueFull:
+        with _pool_guard:
+            _pool_sizes[loop_key] = max(0, _pool_sizes[loop_key] - 1)
+        try:
+            await conn.close()
+        except Exception:
+            pass
 
 
 async def _connect() -> Any:
@@ -22,10 +108,6 @@ async def _connect() -> Any:
         raise _NoDatabaseError
     conn = await psycopg.AsyncConnection.connect(url, autocommit=True, connect_timeout=5)
     return _PgConn(conn)
-
-
-class _NoDatabaseError(Exception):
-    pass
 
 
 class _PgConn:
@@ -58,14 +140,22 @@ def _seconds_until_midnight() -> int:
 async def check_and_record(
     user_id: str, tool: str, duration_ms: float, quota_default: int = DEFAULT_QUOTA_DAY
 ) -> tuple[bool, int]:
-    """Return (allowed, retry_after_seconds); records one billable call."""
-    if not os.environ.get("DATABASE_URL", "").strip():
+    """Return (allowed, retry_after_seconds); records one billable call.
+
+    Pooled PG (max 3 conns), fail-open whenever the database — not the user —
+    is the problem: missing DATABASE_URL, connection failure, or pool
+    exhaustion never blocks a legitimate request.
+    """
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url:
         return True, 0
     try:
-        conn = await _connect()
-    except _NoDatabaseError:
+        loop_key, raw = await _checkout(url)
+    except (_NoDatabaseError, _PoolBusy, Exception):
         return True, 0
-    async with conn:
+    conn = _PgConn(raw)
+    broken = False
+    try:
         row = await conn.fetchone(
             "SELECT COALESCE((SELECT quota_day FROM mcp_auth_tokens WHERE user_id = %s), %s),"
             " COALESCE((SELECT SUM(count) FROM mcp_tool_usage"
@@ -84,3 +174,8 @@ async def check_and_record(
             (user_id, tool, int(duration_ms)),
         )
         return True, 0
+    except Exception:
+        broken = True
+        return True, 0
+    finally:
+        await _checkin(loop_key, raw, broken)

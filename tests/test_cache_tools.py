@@ -208,3 +208,16 @@ def test_neg_cache_fails_fast_after_timeout(monkeypatch):
         _run(shared.run_blocking(_raise_again, "negtool2", 5.0))
     assert shared._neg.get("negtool2") is None
     shared._neg.clear()
+
+
+def test_cache_store_skips_oversized_payloads(monkeypatch):
+    """Entries over MCP_CACHE_MAX_BYTES stay correct but always live."""
+    import opentrading_mcp.tools.shared as shared
+
+    monkeypatch.setattr(store_mod, "_redis", lambda: None)
+    monkeypatch.setattr(shared, "cache_max_bytes", lambda: 100)
+    _memory.clear()
+    big = {"rows": [{"x": "y" * 50} for _ in range(20)]}
+    env = _run(cache_store("big", "fp", 60, big, source="live"))
+    assert env["data"] == big  # caller still gets the data
+    assert _run(cache_lookup("big", "fp")) is None  # ...but nothing was stored

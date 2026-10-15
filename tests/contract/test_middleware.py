@@ -47,8 +47,11 @@ def test_buckets_are_per_client_ip():
     client = _app(limit_per_minute=1)
     assert client.post("/mcp", json={}).status_code == 200
     assert client.post("/mcp", json={}).status_code == 429
+    # X-Forwarded-For from a direct (non-proxy) peer is NOT trusted: an
+    # attacker cannot rotate buckets with a header (proxy-trust case is
+    # covered by unit tests with a private peer).
     other = {"X-Forwarded-For": "9.9.9.9"}
-    assert client.post("/mcp", json={}, headers=other).status_code == 200
+    assert client.post("/mcp", json={}, headers=other).status_code == 429
 
 
 def test_tool_name_extracted_from_jsonrpc_body():

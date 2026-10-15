@@ -101,6 +101,19 @@ def price_ttl() -> int:
     return TTL_SECONDS["market"] if in_vn_session() else TTL_SECONDS["market_offhours"]
 
 
+def cache_max_bytes() -> int:
+    """Max serialized payload stored per key (env MCP_CACHE_MAX_BYTES, default 512KB).
+
+    Oversized entries (full-history DNSE pulls, 100-symbol candle batches,
+    fetched web pages) would churn Redis every minute and evict the whole
+    300-key memory fallback. They stay correct — just always live.
+    """
+    try:
+        return max(1024, int(os.environ.get("MCP_CACHE_MAX_BYTES", "524288")))
+    except ValueError:
+        return 524288
+
+
 async def _cache_key_for(tool: str, fingerprint: str) -> str:
     import hashlib
 
@@ -135,10 +148,24 @@ async def cache_lookup(tool: str, fingerprint: str) -> dict[str, Any] | None:
         waiter = _join_inflight(key)
         if waiter is None:
             return None  # leader: caller fetches, then cache_store resolves us
-        try:
-            await asyncio.wait_for(asyncio.shield(waiter), _WAITER_TIMEOUT)
-        except (TimeoutError, asyncio.CancelledError):
-            return None  # leader slow/failed: fetch ourselves (new leader)
+        # Waiter: poll in slices so a store lands promptly, but a leader that
+        # fails WITHOUT storing (no resolve) can never wedge us past budget —
+        # on expiry we pop the dead entry and fetch ourselves (neg-cache then
+        # fails fast if the upstream is really down).
+        import time as _time
+
+        deadline = _time.monotonic() + _WAITER_TIMEOUT
+        while True:
+            remaining = deadline - _time.monotonic()
+            if remaining <= 0:
+                _abandon_inflight(key, waiter)
+                return None
+            try:
+                await asyncio.wait_for(asyncio.shield(waiter), min(5.0, remaining))
+            except TimeoutError:
+                pass  # slice elapsed, leader still fetching: re-poll
+            if waiter.done():
+                break
         hit = await acache_get(key)
         if hit is None:
             return None
@@ -191,19 +218,20 @@ async def cache_store(
     # (a just-listed symbol, a pre-open board), and a cached empty would hide
     # recovery until TTL expiry.
     if env.get("availability") not in ("unavailable", "failed", "empty") and not env.get("error"):
+        import json
+
         key = await _cache_key_for(tool, fingerprint)
-        await acache_set(
-            key,
-            {
-                "data": env["data"],
-                "warnings": env.get("warnings", []),
-                "availability": env.get("availability"),
-                "page": env.get("page"),
-                "as_of": env["provenance"]["as_of"],
-                "data_time": env["provenance"].get("data_time"),
-            },
-            ttl_seconds,
-        )
+        payload = {
+            "data": env["data"],
+            "warnings": env.get("warnings", []),
+            "availability": env.get("availability"),
+            "page": env.get("page"),
+            "as_of": env["provenance"]["as_of"],
+            "data_time": env["provenance"].get("data_time"),
+        }
+        if len(json.dumps(payload, default=str)) > cache_max_bytes():
+            return env  # oversized: correct but always live (see cache_max_bytes)
+        await acache_set(key, payload, ttl_seconds)
         _resolve_inflight(key)
     return env
 
@@ -217,7 +245,7 @@ async def cache_store(
 _inflight: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Future, float]] = {}
 _inflight_guard = threading.Lock()
 _INFLIGHT_TTL = 120.0
-_WAITER_TIMEOUT = 60.0
+_WAITER_TIMEOUT = 30.0
 
 
 def _join_inflight(key: str) -> asyncio.Future | None:
@@ -247,6 +275,15 @@ def _resolve_inflight(key: str) -> None:
             ent[0].call_soon_threadsafe(ent[1].set_result, True)
         except RuntimeError:
             pass
+
+
+def _abandon_inflight(key: str, waiter: asyncio.Future) -> None:
+    """Waiter budget expired: drop the dead entry (if still ours) so the next
+    caller becomes leader immediately instead of queueing behind a corpse."""
+    with _inflight_guard:
+        ent = _inflight.get(key)
+        if ent is not None and ent[1] is waiter:
+            _inflight.pop(key, None)
 
 
 def summarize_rows(
