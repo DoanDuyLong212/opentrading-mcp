@@ -156,7 +156,7 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
                 tail = max(int(days), 1)
                 data = [data[0][-tail:], data[1][-tail:]]
             return await cache_store(
-                "vs_nn_flow", fp, TTL_SECONDS["hour"],
+                "vs_nn_flow", fp, price_ttl(),  # same smart-money question as money_flow
                 {"flow": data}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -240,7 +240,7 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             rows = out.get("rows", []) if isinstance(out, dict) else []
             availability = "available" if rows else "empty"
             return await cache_store(
-                "vs_indicator_data", fp, TTL_SECONDS["financeinfo"],
+                "vs_indicator_data", fp, TTL_SECONDS["documents"],  # immutable macro history
                 out, source="vietstock", availability=availability, warnings=warnings
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

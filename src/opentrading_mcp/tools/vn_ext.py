@@ -182,11 +182,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             if summary:
                 s = _summarize(pair, rows)
                 return await cache_store(
-                    "vn_forex_ohlcv", fp, price_ttl(),
+                    "vn_forex_ohlcv", fp, TTL_SECONDS["market"],  # 24/7 FX: fixed 60s
                     s, source="vnstock", data_time=s.get("last_t"),
                 )
             return await cache_store(
-                "vn_forex_ohlcv", fp, price_ttl(),
+                "vn_forex_ohlcv", fp, TTL_SECONDS["market"],
                 {"pair": pair.upper(), "bars": _project(rows, columns)},
                 source="vnstock",
                 data_time=last_bar_time(rows),
@@ -214,11 +214,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
-                    "vn_crypto_ohlcv", fp, price_ttl(),
+                    "vn_crypto_ohlcv", fp, TTL_SECONDS["market"],  # 24/7: fixed 60s
                     s, source="vnstock", data_time=s.get("last_t"),
                 )
             return await cache_store(
-                "vn_crypto_ohlcv", fp, price_ttl(),
+                "vn_crypto_ohlcv", fp, TTL_SECONDS["market"],
                 {"symbol": symbol.upper(), "bars": _project(rows, columns)},
                 source="vnstock",
                 data_time=last_bar_time(rows),
@@ -252,11 +252,11 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
-                    "vn_global_index", fp, price_ttl(),
+                    "vn_global_index", fp, TTL_SECONDS["market"],  # world trades 24/7
                     s, source="vnstock", data_time=s.get("last_t"),
                 )
             return await cache_store(
-                "vn_global_index", fp, price_ttl(),
+                "vn_global_index", fp, TTL_SECONDS["market"],
                 {"symbol": symbol.upper(), "bars": _project(rows, columns)},
                 source="vnstock",
                 data_time=last_bar_time(rows),
@@ -303,7 +303,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             data = await _call("c", vn_p.company_info, symbol, detail)
             return await cache_store(
-                "vn_company", fp, TTL_SECONDS["overview"],
+                "vn_company", fp, TTL_SECONDS["financeinfo"],  # static profile
                 data, source="vnstock",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -322,7 +322,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             data = await _call("m", vn_p.msn_fx_gold, symbols, days)
             return await cache_store(
-                "vn_msn_fx_gold", fp, price_ttl(),
+                "vn_msn_fx_gold", fp, TTL_SECONDS["market"],  # FX legs trade 24/7
                 {"series": data}, source="msn",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:

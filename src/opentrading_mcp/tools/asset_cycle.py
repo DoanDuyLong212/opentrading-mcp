@@ -26,8 +26,15 @@ from opentrading_mcp.tools.shared import (
     READ_ONLY,
     READ_WRITE_STATE,
     AnyContext,
-    run_blocking,
 )
+from opentrading_mcp.tools.shared import (
+    run_blocking as _run_blocking,
+)
+
+
+async def run_blocking(fn, tool, timeout_secs=60.0):
+    """Compute-module alias: all blocking work here rides the heavy pool."""
+    return await _run_blocking(fn, tool, timeout_secs, heavy=True)
 
 TOOL = "asset_cycle"
 MAX_BATCH = 15

@@ -11,6 +11,7 @@ from typing import Any
 
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.providers.pool import shared_client
 
 _BROWSER_UA = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
 
@@ -28,11 +29,7 @@ _DATE_RE = re.compile(r"(\d{1,2}/\d{1,2}/\d{4})")
 def _fetch(url: str, timeout: int = 20) -> tuple[str, bool]:
     """Return (html, tls_unverified). Falls back to verify=False on SSLError."""
     try:
-        import httpx
-    except ImportError as exc:
-        raise ProviderUnavailable("httpx not installed") from exc
-    try:
-        resp = httpx.get(
+        resp = shared_client().get(
             url, headers={"User-Agent": _BROWSER_UA}, timeout=timeout, follow_redirects=True
         )
         resp.raise_for_status()
@@ -41,7 +38,7 @@ def _fetch(url: str, timeout: int = 20) -> tuple[str, bool]:
         if "SSL" not in type(exc).__name__ and "SSL" not in str(exc):
             raise ProviderUnavailable(f"public page fetch failed: {url}: {exc}") from exc
     try:
-        resp = httpx.get(
+        resp = shared_client().get(
             url,
             headers={"User-Agent": _BROWSER_UA},
             timeout=timeout,
@@ -107,11 +104,7 @@ def btmc_gold() -> list[dict[str, Any]]:
     host stalls; https answers. Same default key the lib uses.
     """
     try:
-        import httpx
-    except ImportError as exc:
-        raise ProviderUnavailable("httpx not installed") from exc
-    try:
-        resp = httpx.get(BTMC_URL, timeout=15.0)
+        resp = shared_client().get(BTMC_URL, timeout=15.0)
         resp.raise_for_status()
         payload = resp.json()
     except Exception as exc:

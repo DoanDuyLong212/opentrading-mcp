@@ -314,6 +314,9 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("debug", "source_status check")
         else:
             _log_stderr("source_status check (no MCP context)")
+        hit = await cache_lookup("source_status", "-")
+        if hit is not None:
+            return hit
         try:
             await run_blocking(
                 functools.partial(vn_p.quote_history, "VCB", 1),
@@ -325,7 +328,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             vnstock_state = "unavailable"
         except Exception:
             vnstock_state = "unavailable"
-        return make_envelope(
+        return await cache_store(
+            "source_status",
+            "-",
+            TTL_SECONDS["market"],  # 60s: diagnostic, never a trading input
             {
                 "upstreams": {
                     "vietstock": vs_p.auth_status(),
@@ -846,20 +852,16 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         universe = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN"]
         warnings: list[str] = []
         quotes: list[dict[str, Any]] | None = None
-        # P14: retry the main leg twice (1s apart) before degrading.
-        for attempt in (1, 2):
-            try:
-                quotes = await run_blocking(
-                    functools.partial(vn_p.equity_quote_batch, universe),
-                    "market_overview",
-                    timeout_secs=30.0,
-                )
-                break
-            except (ProviderUnavailable, ProviderBadData) as exc:
-                if attempt == 2:
-                    warnings.append(f"quotes unavailable: {exc}")
-                else:
-                    await asyncio.sleep(1.0)
+        # Single attempt: slow-timeout legs fail fast via the negative cache
+        # instead of paying the 30s leg twice (1s apart) on every miss.
+        try:
+            quotes = await run_blocking(
+                functools.partial(vn_p.equity_quote_batch, universe),
+                "market_overview",
+                timeout_secs=30.0,
+            )
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            warnings.append(f"quotes unavailable: {exc}")
         rows = [q for q in (quotes or []) if isinstance(q, dict)]
 
         def _chg(row: dict[str, Any]) -> float:

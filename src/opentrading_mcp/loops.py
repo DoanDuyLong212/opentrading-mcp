@@ -172,6 +172,32 @@ async def main_async() -> None:
     await asyncio.gather(yf_loop(), heartbeat_loop(), dnse_ws_loop(), snapshot_loop())
 
 
+def start_in_web_loops() -> None:
+    """Run the light loops inside the web process (Render free has no worker).
+
+    Gated by MCP_LOOPS (0 disables; local stdio never calls this). Runs on a
+    dedicated daemon thread with its own event loop, so a slow pump (yfinance
+    TLS, DNSE backoff) can never stall /mcp. snapshot_loop stays worker-only:
+    it is a heavy once-a-day batch, pointless on a host that sleeps.
+    """
+    import threading
+
+    if os.environ.get("MCP_LOOPS", "1") == "0":
+        return
+
+    async def _run() -> None:
+        await asyncio.gather(yf_loop(), heartbeat_loop(), dnse_ws_loop())
+
+    def _boot() -> None:
+        try:
+            asyncio.run(_run())
+        except Exception as exc:  # pragma: no cover - background pump
+            _log(f"in-web loops exited: {exc}")
+
+    threading.Thread(target=_boot, name="in-web-loops", daemon=True).start()
+    _log("in-web loops started (yf + heartbeat + dnse-ws)")
+
+
 def main() -> None:
     asyncio.run(main_async())
 

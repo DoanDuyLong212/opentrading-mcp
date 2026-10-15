@@ -16,7 +16,6 @@ from opentrading_mcp.tools.shared import (
     AnyContext,
     cache_lookup,
     cache_store,
-    price_ttl,
     run_blocking,
 )
 
@@ -52,8 +51,8 @@ def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         return await cache_store(
-            "crypto_spot", fp, price_ttl(),
-            {"tickers": tickers}, source="binance-spot", warnings=warnings or None
+            "crypto_spot", fp, TTL_SECONDS["market"],  # 24/7 asset: fixed 60s, not HOSE hours
+            {"tickers": tickers}, source="binance", warnings=warnings or None,
         )
 
     @server.tool(annotations=READ_ONLY_OPEN)

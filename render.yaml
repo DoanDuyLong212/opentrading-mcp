@@ -1,8 +1,10 @@
 # NOTE (10/10/2026, confirmed 14/10/2026 via Render API): only
 # opentrading-mcp-web exists, on the FREE plan (0.1 CPU, sleeps after 15 min
-# idle). Background workers need a paid plan, so the loops (DNSE WS, yfinance,
-# heartbeat) run inside the web service instead — health `worker: ok` proves
-# it. Redis/Postgres are external (Upstash + external PG); there is no managed
+# idle). Background workers need a paid plan, so the light loops (yfinance
+# boards, heartbeat, DNSE WS) run inside the web service on a dedicated daemon
+# thread (loops.start_in_web_loops, MCP_LOOPS=0 disables) — health `worker: ok`
+# proves it. The heavy snapshot_loop stays worker-only (compose-local).
+# Redis/Postgres are external (Upstash + external PG); there is no managed
 # database on Render. Keep this file matching reality: DO NOT re-add worker/
 # database sections or raise the plan without explicit approval, as a Blueprint
 # sync would create billable resources.

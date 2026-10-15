@@ -62,7 +62,8 @@ def batch_last(
         raise ProviderUnavailable("yfinance not installed") from exc
     try:
         frame = yf.download(
-            tickers, period=period, interval=interval, group_by="ticker", progress=False
+            tickers, period=period, interval=interval, group_by="ticker", progress=False,
+            timeout=25,
         )
     except Exception as exc:
         raise ProviderUnavailable("yfinance download failed") from exc
@@ -85,8 +86,9 @@ def yield_curve() -> dict[str, Any]:
     except ImportError as exc:
         raise ProviderUnavailable("yfinance not installed") from exc
     try:
-        ten_y = float(yf.Ticker("^TNX").history(period="1d")["Close"].iloc[-1]) / 100
-        two_y = float(yf.Ticker("2YY=F").history(period="1d")["Close"].iloc[-1]) / 100
+        frame = yf.download(["^TNX", "2YY=F"], period="1d", progress=False, timeout=25)
+        ten_y = float(frame["^TNX"]["Close"].dropna().iloc[-1]) / 100
+        two_y = float(frame["2YY=F"]["Close"].dropna().iloc[-1]) / 100
     except Exception as exc:
         raise ProviderUnavailable("yfinance yield fetch failed") from exc
     return {"us10y": ten_y, "us2y": two_y, "inverted": two_y > ten_y}
@@ -110,7 +112,8 @@ def oracle_markets(groups: list[str] | None = None) -> dict[str, Any]:
             continue
         try:
             frame = yf.download(
-                tickers, period="1mo", interval="1d", group_by="ticker", progress=False
+                tickers, period="1mo", interval="1d", group_by="ticker", progress=False,
+                timeout=25,
             )
         except Exception as exc:
             raise ProviderUnavailable(f"yfinance oracle {group} failed") from exc
@@ -144,7 +147,10 @@ def regime_assets() -> dict[str, Any]:
     except ImportError as exc:
         raise ProviderUnavailable("yfinance not installed") from exc
     try:
-        frame = yf.download(REGIME_7, period="2y", interval="1d", group_by="ticker", progress=False)
+        frame = yf.download(
+            REGIME_7, period="2y", interval="1d", group_by="ticker", progress=False,
+            timeout=60,
+        )
     except Exception as exc:
         raise ProviderUnavailable("yfinance regime fetch failed") from exc
     out: dict[str, Any] = {}
@@ -213,7 +219,7 @@ def alloc_history(asset: str = "GC", timeframe: str = "1d") -> dict[str, Any]:
     except ImportError as exc:
         raise ProviderUnavailable("yfinance not installed") from exc
     try:
-        frame = yf.download(ticker, period="5y", interval=interval, progress=False)
+        frame = yf.download(ticker, period="5y", interval=interval, progress=False, timeout=60)
     except Exception as exc:
         raise ProviderUnavailable(f"yfinance alloc {ticker} failed") from exc
     try:
@@ -248,11 +254,19 @@ def market_pins() -> dict[str, Any]:
         import yfinance as yf
     except ImportError as exc:
         raise ProviderUnavailable("yfinance not installed") from exc
+    try:
+        frame = yf.download(
+            PINS_WORLD, period="5d", interval="1d", group_by="ticker", progress=False,
+            timeout=25,
+        )
+    except Exception:
+        return {"world": [], "vn": PINS_VN}
     pins: list[dict[str, Any]] = []
     for ticker in PINS_WORLD:
         try:
-            hist = yf.Ticker(ticker).history(period="5d")
-            closes = hist["Close"].dropna()
+            closes = frame[ticker]["Close"].dropna() if ticker in frame else None
+            if closes is None or len(closes) == 0:
+                continue
             pins.append(
                 {
                     "ticker": ticker,

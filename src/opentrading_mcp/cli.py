@@ -180,6 +180,9 @@ def main(argv: list[str] | None = None) -> int:
         app.add_middleware(AuthMiddleware)
         app.add_middleware(McpObservabilityMiddleware)
         start_warm_up()
+        from opentrading_mcp.loops import start_in_web_loops
+
+        start_in_web_loops()
         uvicorn.run(app, host="0.0.0.0", port=args.port)
     else:
         server.run(transport="stdio")

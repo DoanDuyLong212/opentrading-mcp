@@ -22,8 +22,15 @@ from opentrading_mcp.tools.shared import (
     AnyContext,
     cache_lookup,
     cache_store,
-    run_blocking,
 )
+from opentrading_mcp.tools.shared import (
+    run_blocking as _run_blocking,
+)
+
+
+async def run_blocking(fn, tool, timeout_secs=60.0):
+    """Compute-module alias: all blocking work here rides the heavy pool."""
+    return await _run_blocking(fn, tool, timeout_secs, heavy=True)
 
 
 def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
