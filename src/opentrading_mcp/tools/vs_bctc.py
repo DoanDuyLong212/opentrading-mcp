@@ -81,7 +81,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return hit
         try:
             return await cache_store(
-                "vs_company_info", fp, TTL_SECONDS["overview"],
+                "vs_company_info", fp, TTL_SECONDS["financeinfo"],  # static profile
                 {"info": await _call("c", vs_p.company_info, symbol)}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -101,7 +101,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
             return hit
         try:
             return await cache_store(
-                "vs_overview_trading", fp, TTL_SECONDS["overview"],
+                "vs_overview_trading", fp, price_ttl(),  # per-symbol trading snapshot
                 {"overview": await _call("o", vs_p.overview_trading, symbol)},
                 source="vietstock",
             )

@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.providers.pool import shared_client
 
 MAX_RESPONSE_SIZE = 5 * 1024 * 1024
 DEFAULT_TIMEOUT = 30
@@ -168,9 +169,13 @@ def _get(url: str, format: str, capped: int) -> httpx.Response:
     """GET with redirects followed by hand, each hop checked before it is requested."""
     for _ in range(MAX_REDIRECTS + 1):
         assert_public(url)
-        response = httpx.get(url, headers=_headers(BROWSER_UA, format), timeout=capped)
+        response = shared_client().get(
+            url, headers=_headers(BROWSER_UA, format), timeout=capped
+        )
         if response.status_code == 403 and response.headers.get("cf-mitigated") == "challenge":
-            response = httpx.get(url, headers=_headers(HONEST_UA, format), timeout=capped)
+            response = shared_client().get(
+                url, headers=_headers(HONEST_UA, format), timeout=capped
+            )
         location = response.headers.get("location")
         if response.is_redirect and location:
             url = str(response.url.join(location))

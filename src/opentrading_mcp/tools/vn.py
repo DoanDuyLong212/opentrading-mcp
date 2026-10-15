@@ -132,7 +132,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                     q.get("symbol", s) if isinstance(q, dict) else s
                     for q, s in zip(quotes, symbols, strict=False)
                 ]
-                return make_envelope({"count": len(quotes), "symbols": names}, source="vnstock")
+                return await cache_store(
+                    "vn_equity_quote_batch", fp, price_ttl(),
+                    {"count": len(quotes), "symbols": names}, source="vnstock",
+                )
             quotes, missing = vn_p.split_batch(quotes)
             return await cache_store(
                 "vn_equity_quote_batch",
@@ -161,7 +164,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return await cache_store(
                 "vn_listing",
                 fp,
-                TTL_SECONDS["categories"],
+                TTL_SECONDS["documents"],  # 24h: a just-listed symbol must resolve tomorrow
                 {"count": len(rows), "symbols": rows[: max(int(limit), 1)]},
                 source="vnstock",
             )
@@ -212,7 +215,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return await cache_store(
                 "vn_fundamentals",
                 fp,
-                TTL_SECONDS["overview"],
+                TTL_SECONDS["financeinfo"],  # quarterly ratios, not prices
                 {"symbol": symbol.upper(), "ratios": ratios},
                 source="vnstock",
             )

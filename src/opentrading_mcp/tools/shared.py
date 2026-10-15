@@ -337,6 +337,47 @@ _pending = 0
 _pending_guard = threading.Lock()
 
 
+def neg_ttl() -> float:
+    """Seconds a timed-out/slow-failed leg stays failed-fast (env MCP_NEG_TTL, default 90).
+
+    Only timeouts and slow upstream failures are remembered — auth-missing and
+    bad-data raise different errors and are never marked (auth flips on login,
+    bad params fail fast anyway). 0 disables.
+    """
+    try:
+        return max(0.0, float(os.environ.get("MCP_NEG_TTL", "90")))
+    except ValueError:
+        return 90.0
+
+
+_neg: dict[str, float] = {}
+_neg_guard = threading.Lock()
+
+
+def _neg_hit(tool: str) -> bool:
+    ttl = neg_ttl()
+    if ttl <= 0:
+        return False
+    with _neg_guard:
+        until = _neg.get(tool)
+        if until is None:
+            return False
+        if time.monotonic() < until:
+            return True
+        _neg.pop(tool, None)
+        return False
+
+
+def _neg_mark(tool: str) -> None:
+    ttl = neg_ttl()
+    if ttl <= 0:
+        return
+    with _neg_guard:
+        if len(_neg) > 2000:
+            _neg.pop(next(iter(_neg)))
+        _neg[tool] = time.monotonic() + ttl
+
+
 RATE_LIMITED = "upstream rate limit reached"
 
 
@@ -370,10 +411,17 @@ async def run_blocking[T](
 
     When more than ``shed_limit()`` calls are already outstanding, new calls
     fail fast ("server busy") instead of queueing toward a certain timeout.
+
+    Slow legs are also remembered briefly: a timeout (or slow upstream
+    failure) marks the tool label for ``neg_ttl()`` seconds, so retries and
+    concurrent waiters fail in milliseconds instead of re-paying the full
+    45-90s upstream cost.
     """
     from opentrading_mcp.providers.errors import ProviderUnavailable
 
     global _pending
+    if _neg_hit(tool):
+        raise ProviderUnavailable(f"{tool} briefly unavailable (recent timeout), retry shortly")
     with _pending_guard:
         if _pending >= shed_limit():
             raise ProviderUnavailable(
@@ -387,7 +435,11 @@ async def run_blocking[T](
     try:
         return await asyncio.wait_for(future, timeout_secs)
     except TimeoutError as exc:
+        _neg_mark(tool)
         raise ProviderUnavailable(f"{tool} timed out after {timeout_secs}s") from exc
+    except ProviderUnavailable:
+        _neg_mark(tool)
+        raise
     finally:
         with _pending_guard:
             _pending -= 1

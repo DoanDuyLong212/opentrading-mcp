@@ -33,14 +33,15 @@ def _jwks_url() -> str:
 
 
 def _fetch_jwks(url: str) -> dict[str, Any]:
-    import httpx
 
     now = time.monotonic()
     cached = _JWKS_CACHE.get(url)
     if cached and now - cached[0] < _JWKS_TTL_SECONDS:
         return cached[1]
     try:
-        response = httpx.get(url, timeout=10)
+        from opentrading_mcp.providers.pool import shared_client
+
+        response = shared_client().get(url, timeout=10)
         response.raise_for_status()
         body = response.json()
     except Exception as exc:

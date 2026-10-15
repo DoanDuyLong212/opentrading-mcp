@@ -21,6 +21,7 @@ from opentrading_mcp.tools.shared import (
     READ_ONLY_OPEN,
     cache_lookup,
     cache_store,
+    price_ttl,
     run_blocking,
 )
 
@@ -101,6 +102,10 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         military-activity reads around conflicts. limit: max articles. days: keep
         articles from the last N days (undated articles are kept).
         """
+        fp = f"{topic}|{limit}|{days}|{military}"
+        hit = await cache_lookup("geo_intel", fp)
+        if hit is not None:
+            return hit
         if military:
             from opentrading_mcp.providers import geo as geo_p
 
@@ -117,7 +122,8 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                         f.get("type", "mil-other"), 0
                     ) + 1
                 near = sorted(flights, key=lambda f: f.get("zone_km", 1e9))[:10]
-                return make_envelope(
+                return await cache_store(
+                    "geo_intel", fp, TTL_SECONDS["mins10"],
                     {
                         "count": len(flights),
                         "by_country": dict(
@@ -158,7 +164,8 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                 political = articles
                 agg = geo_p.aggregate(political)
                 warnings = ["no political match — showing unfiltered top articles"]
-            return make_envelope(
+            return await cache_store(
+                "geo_intel", fp, TTL_SECONDS["mins10"],
                 {
                     "query": data.get("query"),
                     **agg,
@@ -251,7 +258,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
             except (ProviderUnavailable, ProviderBadData) as exc:
                 rows.append({"symbol": symbol.upper(), "error": str(exc)})
         return await cache_store(
-            "compare_equities", fp, TTL_SECONDS["overview"],
+            "compare_equities", fp, price_ttl(),  # embeds live quotes + 1m momentum
             {"rows": rows}, source="vnstock", warnings=warnings or None,
         )
 

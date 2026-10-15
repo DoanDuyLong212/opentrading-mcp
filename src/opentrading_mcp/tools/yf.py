@@ -55,13 +55,22 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
                 cached = json.loads(hit)
                 data = {k: v for k, v in cached.items() if k != "fetched_at"}
                 return make_envelope(data, source="cache", data_time=cached.get("fetched_at"))
+        else:
+            custom = await cache_lookup(
+                "yf_global_indices", f"{tickers}|{period}|{interval}"
+            )
+            if custom is not None:
+                return custom
         try:
             data = await run_blocking(
                 functools.partial(yf_p.batch_last, tickers or yf_p.GLOBAL_9, period, interval),
                 "yf_global_indices",
                 timeout_secs=50.0,
             )
-            return make_envelope({"indices": data}, source="yfinance")
+            return await cache_store(
+                "yf_global_indices", f"{tickers}|{period}|{interval}",
+                TTL_SECONDS["world"], {"indices": data}, source="yfinance",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_global_indices", str(exc))
 
@@ -82,13 +91,22 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
                 cached = json.loads(hit)
                 data = {k: v for k, v in cached.items() if k != "fetched_at"}
                 return make_envelope(data, source="cache", data_time=cached.get("fetched_at"))
+        else:
+            custom = await cache_lookup(
+                "yf_commodities", f"{tickers}|{period}|{interval}"
+            )
+            if custom is not None:
+                return custom
         try:
             data = await run_blocking(
                 functools.partial(yf_p.batch_last, tickers or yf_p.COMMO_13, period, interval),
                 "yf_commodities",
                 timeout_secs=50.0,
             )
-            return make_envelope({"items": data}, source="yfinance")
+            return await cache_store(
+                "yf_commodities", f"{tickers}|{period}|{interval}",
+                TTL_SECONDS["world"], {"items": data}, source="yfinance",
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("yf_commodities", str(exc))
 
@@ -104,7 +122,7 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             data = await run_blocking(yf_p.yield_curve, "yf_yield_curve", timeout_secs=50.0)
             return await cache_store(
-                "yf_yield_curve", "-", TTL_SECONDS["financeinfo"],
+                "yf_yield_curve", "-", TTL_SECONDS["hour"],  # 2Y/10Y move intraday
                 data, source="yfinance",
             )
         except (ProviderUnavailable, ProviderBadData):
@@ -123,7 +141,7 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
             us10y = float((ten.get("points") or [{}])[-1].get("v", 0)) / 100
             us2y = float((two.get("points") or [{}])[-1].get("v", 0)) / 100
             return await cache_store(
-                "yf_yield_curve", "-", TTL_SECONDS["financeinfo"],
+                "yf_yield_curve", "-", TTL_SECONDS["hour"],
                 {"us10y": us10y, "us2y": us2y, "inverted": us2y > us10y},
                 source="fred",
                 warnings=["yfinance blocked — FRED DGS10/DGS2 fallback"] if us10y else None,
