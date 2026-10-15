@@ -32,9 +32,28 @@ _pool_guard = threading.Lock()
 
 
 async def _new_conn(url: str) -> Any:
-    import psycopg
+    # Fresh connections go through _connect (seam for tests) and are pooled
+    # as the opaque wrapper it returns.
+    return await _connect()
 
-    return await psycopg.AsyncConnection.connect(url, autocommit=True, connect_timeout=5)
+
+def _is_closed(wrapped: Any) -> bool:
+    raw = getattr(wrapped, "_conn", None)
+    if raw is None:
+        return False  # test fakes and the like: assume usable
+    return bool(getattr(raw, "closed", False))
+
+
+async def _close_quietly(wrapped: Any) -> None:
+    close = getattr(wrapped, "close", None)
+    if not callable(close):
+        return
+    try:
+        res = close()
+        if asyncio.iscoroutine(res) or isinstance(res, asyncio.Future):
+            await res
+    except Exception:
+        pass
 
 
 async def _checkout(url: str) -> tuple[int, Any]:
@@ -70,7 +89,7 @@ async def _checkout(url: str) -> tuple[int, Any]:
                 conn = await asyncio.wait_for(q.get(), _POOL_WAIT_SECS)
             except TimeoutError:
                 raise _PoolBusy from None
-        if getattr(conn, "closed", False):
+        if _is_closed(conn):
             with _pool_guard:
                 _pool_sizes[loop_key] -= 1
             continue
@@ -80,24 +99,18 @@ async def _checkout(url: str) -> tuple[int, Any]:
 async def _checkin(loop_key: int, conn: Any, broken: bool) -> None:
     with _pool_guard:
         q = _pools.get(loop_key)
-    if broken or getattr(conn, "closed", False) or q is None:
+    if broken or _is_closed(conn) or q is None:
         with _pool_guard:
             if loop_key in _pool_sizes:
                 _pool_sizes[loop_key] = max(0, _pool_sizes[loop_key] - 1)
-        try:
-            await conn.close()
-        except Exception:
-            pass
+        await _close_quietly(conn)
         return
     try:
         q.put_nowait(conn)
     except asyncio.QueueFull:
         with _pool_guard:
             _pool_sizes[loop_key] = max(0, _pool_sizes[loop_key] - 1)
-        try:
-            await conn.close()
-        except Exception:
-            pass
+        await _close_quietly(conn)
 
 
 async def _connect() -> Any:
@@ -120,6 +133,12 @@ class _PgConn:
     async def __aexit__(self, *args: Any) -> bool:
         await self._conn.close()
         return False
+
+    async def close(self) -> None:
+        try:
+            await self._conn.close()
+        except Exception:
+            pass
 
     async def fetchone(self, query: str, params: tuple[Any, ...]) -> Any:
         async with self._conn.cursor() as cur:
@@ -153,7 +172,9 @@ async def check_and_record(
         loop_key, raw = await _checkout(url)
     except (_NoDatabaseError, _PoolBusy, Exception):
         return True, 0
-    conn = _PgConn(raw)
+    # raw is whatever _connect returns: the real _PgConn wrapper or a test
+    # fake with fetchone/execute — call it directly, never re-wrap.
+    conn = raw
     broken = False
     try:
         row = await conn.fetchone(
