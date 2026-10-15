@@ -6,6 +6,8 @@ import asyncio
 import contextvars
 import functools
 import os
+import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -116,15 +118,30 @@ async def cache_lookup(tool: str, fingerprint: str) -> dict[str, Any] | None:
     Callers check this FIRST and return immediately on hit. Failures and
     unavailable/error envelopes are never stored, so a hit is always a
     successful past response whose original fetch time is disclosed.
+
+    On a miss, concurrent callers for the SAME key coalesce: the first becomes
+    the leader (returns None, fetches upstream), the rest wait for the leader
+    and re-read the cache. This stops a cold-key stampede from executing the
+    same 45-90s upstream N times on the 2-slot executor.
     """
     import json
 
     from opentrading_mcp.providers.store import acache_get
     from opentrading_mcp.schemas import make_envelope
 
-    hit = await acache_get(await _cache_key_for(tool, fingerprint))
+    key = await _cache_key_for(tool, fingerprint)
+    hit = await acache_get(key)
     if hit is None:
-        return None
+        waiter = _join_inflight(key)
+        if waiter is None:
+            return None  # leader: caller fetches, then cache_store resolves us
+        try:
+            await asyncio.wait_for(asyncio.shield(waiter), _WAITER_TIMEOUT)
+        except (TimeoutError, asyncio.CancelledError):
+            return None  # leader slow/failed: fetch ourselves (new leader)
+        hit = await acache_get(key)
+        if hit is None:
+            return None
     try:
         cached = json.loads(hit)
         data = cached.get("data")
@@ -174,8 +191,9 @@ async def cache_store(
     # (a just-listed symbol, a pre-open board), and a cached empty would hide
     # recovery until TTL expiry.
     if env.get("availability") not in ("unavailable", "failed", "empty") and not env.get("error"):
+        key = await _cache_key_for(tool, fingerprint)
         await acache_set(
-            await _cache_key_for(tool, fingerprint),
+            key,
             {
                 "data": env["data"],
                 "warnings": env.get("warnings", []),
@@ -186,7 +204,49 @@ async def cache_store(
             },
             ttl_seconds,
         )
+        _resolve_inflight(key)
     return env
+
+
+# --- Single-flight: coalesce concurrent misses for the same cache key --------
+# Leader = first misser (fetches upstream, cache_store resolves). Waiters =
+# later missers (await the leader, then re-read the cache). Entries are
+# (loop, future, created_at); stale entries (>_INFLIGHT_TTL) are ignored so a
+# crashed leader can never wedge waiters forever. Loop-pinned so multi-loop
+# processes (tests) simply skip coalescing instead of cross-loop awaiting.
+_inflight: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Future, float]] = {}
+_inflight_guard = threading.Lock()
+_INFLIGHT_TTL = 120.0
+_WAITER_TIMEOUT = 60.0
+
+
+def _join_inflight(key: str) -> asyncio.Future | None:
+    """None = you are the leader (fetch). Future = wait on it, then re-read."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+    now = time.monotonic()
+    with _inflight_guard:
+        ent = _inflight.get(key)
+        if ent is not None and ent[0] is loop and not ent[1].done():
+            if now - ent[2] < _INFLIGHT_TTL:
+                return ent[1]
+        if len(_inflight) > 2000:  # pathological keyspace: drop oldest
+            _inflight.pop(next(iter(_inflight)))
+        _inflight[key] = (loop, loop.create_future(), now)
+        return None
+
+
+def _resolve_inflight(key: str) -> None:
+    """Wake waiters after a successful store (best-effort, never raises)."""
+    with _inflight_guard:
+        ent = _inflight.pop(key, None)
+    if ent is not None and not ent[1].done():
+        try:
+            ent[0].call_soon_threadsafe(ent[1].set_result, True)
+        except RuntimeError:
+            pass
 
 
 def summarize_rows(
@@ -244,6 +304,39 @@ def blocking_slots() -> int:
 _EXECUTOR = ThreadPoolExecutor(max_workers=blocking_slots(), thread_name_prefix="upstream")
 
 
+def compute_slots() -> int:
+    """Slots for CPU/DB-bound compute jobs (env MCP_COMPUTE_SLOTS, default 1).
+
+    Long jobs (backtests, cycle/asset refresh, snapshots) must not sit on the
+    interactive pool: on 0.1 CPU one 900s job held 50% of server capacity.
+    """
+    try:
+        return max(1, int(os.environ.get("MCP_COMPUTE_SLOTS", "1")))
+    except ValueError:
+        return 1
+
+
+_HEAVY_EXECUTOR = ThreadPoolExecutor(max_workers=compute_slots(), thread_name_prefix="compute")
+
+
+def shed_limit() -> int:
+    """Max queued+running blocking calls before fast-reject (env MCP_QUEUE_SHED, default 50).
+
+    Without a cap the queue is unbounded and wait time counts toward each
+    caller's timeout — a stampede fails slowly (60s timeouts) instead of fast.
+    Past this many outstanding calls, new ones fail immediately with a
+    retryable error instead of joining the pile.
+    """
+    try:
+        return max(1, int(os.environ.get("MCP_QUEUE_SHED", "50")))
+    except ValueError:
+        return 50
+
+
+_pending = 0
+_pending_guard = threading.Lock()
+
+
 RATE_LIMITED = "upstream rate limit reached"
 
 
@@ -259,7 +352,9 @@ def no_exit[T](fn: Callable[[], T]) -> T:
         raise ProviderUnavailable(f"{RATE_LIMITED}: {str(exc)[:160]}") from None
 
 
-async def run_blocking[T](fn: Callable[[], T], tool: str, timeout_secs: float = 60.0) -> T:
+async def run_blocking[T](
+    fn: Callable[[], T], tool: str, timeout_secs: float = 60.0, heavy: bool = False
+) -> T:
     """Run a blocking upstream call in a worker thread with a hard timeout.
 
     Prevents one stalled upstream (e.g. retail endpoints from certain
@@ -269,13 +364,30 @@ async def run_blocking[T](fn: Callable[[], T], tool: str, timeout_secs: float = 
     toward ``timeout_secs``. On a timeout a call that has not started is cancelled and
     never runs; one that is running keeps its worker until it really ends (threads
     cannot be killed), so the cap holds even for stalled upstreams.
+
+    heavy=True routes to the separate compute pool (backtests, cycle/asset
+    refresh, snapshots) so long CPU/DB jobs never starve interactive tools.
+
+    When more than ``shed_limit()`` calls are already outstanding, new calls
+    fail fast ("server busy") instead of queueing toward a certain timeout.
     """
     from opentrading_mcp.providers.errors import ProviderUnavailable
 
+    global _pending
+    with _pending_guard:
+        if _pending >= shed_limit():
+            raise ProviderUnavailable(
+                f"{tool} shed: server busy ({_pending} calls outstanding), retry shortly"
+            )
+        _pending += 1
     loop = asyncio.get_running_loop()
     ctx = contextvars.copy_context()
-    future = loop.run_in_executor(_EXECUTOR, functools.partial(ctx.run, no_exit, fn))
+    pool = _HEAVY_EXECUTOR if heavy else _EXECUTOR
+    future = loop.run_in_executor(pool, functools.partial(ctx.run, no_exit, fn))
     try:
         return await asyncio.wait_for(future, timeout_secs)
     except TimeoutError as exc:
         raise ProviderUnavailable(f"{tool} timed out after {timeout_secs}s") from exc
+    finally:
+        with _pending_guard:
+            _pending -= 1

@@ -176,7 +176,9 @@ async def snapshot_loop() -> None:
                 from opentrading_mcp.loops import _log as worker_log
 
                 worker_log("snapshot job start")
-                result = await run_blocking(snapshot_once, "snapshot_once", timeout_secs=300.0)
+                result = await run_blocking(
+                    snapshot_once, "snapshot_once", timeout_secs=300.0, heavy=True
+                )
                 worker_log(f"snapshot job done: {result}")
                 ran_for = today
         except Exception:
