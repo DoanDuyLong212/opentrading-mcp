@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 from typing import Any
 
@@ -154,13 +155,23 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         import numpy as np
 
         try:
-            fetched: dict[str, list[dict[str, Any]]] = {}
-            for sym in universe:
-                fetched[sym] = await run_blocking(
-                    functools.partial(vn_p.quote_history, sym, max(int(days), 30) + 5),
-                    "correlation_matrix",
-                    timeout_secs=90.0,
-                )
+            # Bounded fan-out (was 8 serialized 90s fetches): one bad symbol
+            # still fails the matrix, but good symbols no longer wait in line.
+            parts = await asyncio.gather(
+                *(
+                    run_blocking(
+                        functools.partial(vn_p.quote_history, sym, max(int(days), 30) + 5),
+                        "correlation_matrix",
+                        timeout_secs=90.0,
+                    )
+                    for sym in universe
+                ),
+                return_exceptions=True,
+            )
+            fetched = dict(zip(universe, parts, strict=True))
+            for part in fetched.values():
+                if isinstance(part, BaseException):
+                    raise part
         except (ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "correlation_matrix"},
@@ -289,13 +300,21 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         try:
-            fetched = {}
-            for sym in universe:
-                fetched[sym] = await run_blocking(
-                    functools.partial(vn_p.quote_history, sym, max(int(days), 60) + 5),
-                    "portfolio_optimize",
-                    timeout_secs=90.0,
-                )
+            parts = await asyncio.gather(
+                *(
+                    run_blocking(
+                        functools.partial(vn_p.quote_history, sym, max(int(days), 60) + 5),
+                        "portfolio_optimize",
+                        timeout_secs=90.0,
+                    )
+                    for sym in universe
+                ),
+                return_exceptions=True,
+            )
+            fetched = dict(zip(universe, parts, strict=True))
+            for part in fetched.values():
+                if isinstance(part, BaseException):
+                    raise part
         except (ProviderUnavailable, ProviderBadData) as exc:
             return make_envelope(
                 {"tool": "portfolio_optimize"},

@@ -1,0 +1,6 @@
+{"tool": "crypto_spot", "args": {"symbols": ["BTCUSDT", "ETHUSDT"]}, "cold_s": 0.41, "cold_ok": true, "cold_note": "", "warm_s": 0.04, "warm_ok": true, "warm_note": ""}
+{"tool": "geo_intel", "args": {}, "cold_s": 41.96, "cold_ok": false, "cold_note": "unavailable: rate limited: https://api.gdeltproject.org/api/v2/doc/doc (retry-after-gdelt)", "warm_s": 45.05, "warm_ok": false, "warm_note": "unavailable: g briefly unavailable (recent timeout), retry shortly (retry-after-gdelt)"}
+{"tool": "source_status", "args": {}, "cold_s": 28.94, "cold_ok": true, "cold_note": "", "warm_s": 0.04, "warm_ok": true, "warm_note": ""}
+{"tool": "compare_equities", "args": {"symbols": ["VCB", "HPG"]}, "cold_s": 39.61, "cold_ok": true, "cold_note": "", "warm_s": 0.06, "warm_ok": true, "warm_note": ""}
+{"tool": "sbv_rates", "args": {}, "cold_s": 33.63, "cold_ok": false, "cold_note": "unavailable: public page fetch failed: https://sbv.gov.vn/l%C3%A3i-su%E1%BA%A5t1: The read operation timed out", "warm_s": 45.05, "warm_ok": false, "warm_note": "unavailable: s briefly unavailable (recent timeout), retry shortly"}
+{"tool": "market_snapshot", "args": {}, "cold_s": 45.04, "cold_ok": false, "cold_note": "TimeoutError: ", "warm_s": 105.04, "warm_ok": false, "warm_note": "unavailable: market_snapshot timed out after 60.0s"}

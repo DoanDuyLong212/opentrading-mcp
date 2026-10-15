@@ -19,6 +19,17 @@ _latency_ms_sum: dict[str, float] = {}
 _latency_ms_max: dict[str, float] = {}
 _upstream_failures: dict[str, int] = {}
 
+# Cardinality cap: tool names come from request bodies (tool_name_of), so a
+# scanner sending crafted method names must not grow these dicts (and the
+# /metrics output) without bound. Overflow folds into "other".
+MAX_SERIES = 500
+
+
+def _series(tool: str, table: dict) -> str:
+    if tool in table or len(table) < MAX_SERIES:
+        return tool
+    return "other"
+
 
 def reset() -> None:
     with _lock:
@@ -31,11 +42,12 @@ def reset() -> None:
 
 def record_tool_call(tool: str, duration_ms: float, ok: bool, error_code: str = "") -> None:
     with _lock:
+        tool = _series(tool, _calls)
         _calls[tool] = _calls.get(tool, 0) + 1
         _latency_ms_sum[tool] = _latency_ms_sum.get(tool, 0.0) + duration_ms
         _latency_ms_max[tool] = max(_latency_ms_max.get(tool, 0.0), duration_ms)
         if not ok:
-            key = (tool, error_code or "unknown")
+            key = (_series(tool, _calls), error_code or "unknown")
             _errors[key] = _errors.get(key, 0) + 1
 
 

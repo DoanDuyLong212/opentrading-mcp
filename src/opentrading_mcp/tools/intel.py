@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 from typing import Any
 
@@ -235,10 +236,15 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         warnings = (
             [f"capped 4 symbols, {len(symbols) - 4} dropped"] if len(symbols) > 4 else []
         )
-        for symbol in symbols[:4]:
+
+        async def _one(symbol: str) -> dict[str, Any]:
+            # Bounded fan-out (was 8 serialized blocking calls): symbols run
+            # together, each row still carries its own error on failure.
             try:
-                overview = await _call("o", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
-                candles = await _call("c", vn_p.quote_history, symbol.upper(), 30, secs=60.0)
+                overview, candles = await asyncio.gather(
+                    _call("o", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0),
+                    _call("c", vn_p.quote_history, symbol.upper(), 30, secs=60.0),
+                )
                 closes = [c["c"] for c in candles if c["c"]]
                 mom = (
                     round((closes[-1] - closes[-20]) / closes[-20] * 100, 2)
@@ -254,9 +260,13 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                     row = {"symbol": row["symbol"]} | {
                         k: v for k, v in row.items() if k.lower() in wanted
                     }
-                rows.append(row)
+                return row
             except (ProviderUnavailable, ProviderBadData) as exc:
-                rows.append({"symbol": symbol.upper(), "error": str(exc)})
+                return {"symbol": symbol.upper(), "error": str(exc)}
+
+        rows = list(
+            await asyncio.gather(*(_one(s) for s in symbols[:4]))
+        )
         return await cache_store(
             "compare_equities", fp, price_ttl(),  # embeds live quotes + 1m momentum
             {"rows": rows}, source="vnstock", warnings=warnings or None,

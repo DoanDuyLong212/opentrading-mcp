@@ -186,6 +186,7 @@ def start_in_web_loops() -> None:
         return
 
     async def _run() -> None:
+        await asyncio.to_thread(_prefetch)
         await asyncio.gather(yf_loop(), heartbeat_loop(), dnse_ws_loop())
 
     def _boot() -> None:
@@ -196,6 +197,30 @@ def start_in_web_loops() -> None:
 
     threading.Thread(target=_boot, name="in-web-loops", daemon=True).start()
     _log("in-web loops started (yf + heartbeat + dnse-ws)")
+
+
+def _prefetch() -> None:
+    """Best-effort cold-start prefetch on boot (own thread, never blocks /mcp).
+
+    Warms the vnstock import + 6h listing cache and validates the Redis tier
+    while the instance wakes, so the first user request skips them. Vietstock
+    login stays lazy (its quota should not burn on deploys with no traffic).
+    """
+    try:
+        from opentrading_mcp.providers import vnstock as vn_p
+
+        rows = vn_p.listing_symbols()
+        _log(f"prefetch: listing {len(rows)} symbols")
+    except Exception as exc:
+        _log(f"prefetch listing skipped: {exc}")
+    try:
+        from opentrading_mcp.providers.store import cache_get, cache_set
+
+        cache_set("mcp:health:prefetch", "1", 30)
+        cache_get("mcp:health:prefetch")
+        _log("prefetch: cache tier ok")
+    except Exception as exc:
+        _log(f"prefetch cache skipped: {exc}")
 
 
 def main() -> None:

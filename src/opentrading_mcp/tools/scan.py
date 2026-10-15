@@ -461,6 +461,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             symbol_list = sorted(
                 {str(q.get("symbol", "")).upper() for q in quotes if q.get("symbol")}
             )
+            if len(symbol_list) > 50:
+                warnings_list.append(
+                    f"alert universe capped 50 symbols, {len(symbol_list) - 50} dropped"
+                )
+                symbol_list = symbol_list[:50]
             # Bound concurrency to the blocking slots: run_blocking timeouts count
             # queue time, so an unbounded gather over many symbols serializes into
             # mass timeouts on a 2-slot executor.

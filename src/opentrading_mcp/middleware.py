@@ -18,13 +18,27 @@ from starlette.responses import JSONResponse, Response
 EXEMPT_PATHS = ("/healthz", "/.well-known/mcp.json")
 
 WINDOW_SECONDS = 60.0
+MAX_TRACKED_IPS = 5000
+
+
+def _is_private_peer(host: str) -> bool:
+    """True for proxy/private peers (Render terminates TLS at its proxy)."""
+    import ipaddress
+
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return host in ("localhost", "unknown")
 
 
 class RateLimiter(BaseHTTPMiddleware):
     """Per-IP sliding-window limiter for POST /mcp only.
 
-    Health/discovery routes are never limited. Client IP prefers
-    X-Forwarded-For (Render proxy) then the direct peer address.
+    Health/discovery routes are never limited. X-Forwarded-For is trusted
+    only behind a private peer (Render's proxy) and only when it parses as
+    an IP — otherwise the direct peer address is used, so attackers cannot
+    rotate identities with a header. The IP table is bounded (oldest-first
+    eviction) instead of growing one entry per scanner.
     """
 
     def __init__(self, app: Any, limit_per_minute: int = 120) -> None:
@@ -33,17 +47,30 @@ class RateLimiter(BaseHTTPMiddleware):
         self._hits: dict[str, deque[float]] = {}
 
     def _client_ip(self, request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        if forwarded:
-            return forwarded
         client = request.client
-        return client.host if client else "unknown"
+        peer = client.host if client else "unknown"
+        if _is_private_peer(peer):
+            forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+            if forwarded:
+                import ipaddress
+
+                try:
+                    ipaddress.ip_address(forwarded)
+                    return forwarded
+                except ValueError:
+                    pass
+        return peer
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
         if request.method != "POST" or request.url.path != "/mcp":
             return await call_next(request)
         now = time.monotonic()
-        bucket = self._hits.setdefault(self._client_ip(request), deque())
+        ip = self._client_ip(request)
+        bucket = self._hits.get(ip)
+        if bucket is None:
+            if len(self._hits) >= MAX_TRACKED_IPS:
+                self._hits.pop(next(iter(self._hits)))
+            bucket = self._hits.setdefault(ip, deque())
         cutoff = now - WINDOW_SECONDS
         while bucket and bucket[0] <= cutoff:
             bucket.popleft()
