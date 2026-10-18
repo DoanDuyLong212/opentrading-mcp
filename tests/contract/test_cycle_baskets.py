@@ -12,6 +12,8 @@ import asyncio
 import os
 from typing import Any
 
+import pandas as pd
+import psycopg
 import pytest
 
 from opentrading_mcp import dbinit
@@ -121,6 +123,74 @@ def test_canon_basket(raw: str, expected: str) -> None:
 def test_canon_basket_passthrough_and_none() -> None:
     assert _canon_basket("khong-ton-tai") == "khong-ton-tai"
     assert _canon_basket(None) is None
+
+
+def test_tool_docstring_lists_every_basket() -> None:
+    """The description is what the model reads before choosing basket=."""
+    doc = _fn("cycle_seasonality").__doc__ or ""
+    missing = [b for b in BASKETS if b not in doc]
+    assert not missing, f"basket keys missing from cycle_seasonality docstring: {missing}"
+
+
+def test_finalize_refuses_when_schema_ensure_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    from opentrading_mcp.tools import cycle_stats
+
+    monkeypatch.setattr(dbinit, "ensure_tables", lambda: False)
+    with pytest.raises(Exception, match="schema"):
+        cycle_stats._finalize_compute(None, [])
+
+
+def _seed_trough_cycle(conn: Any) -> None:
+    """Synthetic VNINDEX + one bank name: -20% drawdown then +25% recovery."""
+    dates = [pd.Timestamp("2020-01-01") + pd.Timedelta(days=i) for i in range(95)]
+    vn = []
+    v = 100.0
+    for i in range(95):
+        if i < 5:
+            pass
+        elif i < 20:
+            v *= 0.985  # ~ -20% by day 20
+        elif i < 35:
+            v *= 1.02  # recovery > 20%
+        vn.append(round(v, 2))
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO cycle_ohlcv(symbol,t,o,h,l,c,v) VALUES(%s,%s,%s,%s,%s,%s,0)"
+            " ON CONFLICT DO NOTHING",
+            [("VNINDEX", d.date(), c, c, c, c) for d, c in zip(dates, vn, strict=False)],
+        )
+        cur.executemany(
+            "INSERT INTO cycle_ohlcv(symbol,t,o,h,l,c,v) VALUES(%s,%s,%s,%s,%s,%s,0)"
+            " ON CONFLICT DO NOTHING",
+            [("VCB", d.date(), c, c, c, c) for d, c in zip(dates, vn, strict=False)],
+        )
+
+
+@needs_db
+def test_trough_insert_failure_aborts_finalize_instead_of_silently_skipping(
+    db: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from opentrading_mcp.tools import cycle_stats
+
+    _seed_trough_cycle(db)
+    with db.cursor() as cur:
+        cur.execute("ALTER TABLE cycle_trough_events DROP COLUMN vin")
+    # Simulate a DB where the migration cannot run, so ensure_tables cannot fix it.
+    monkeypatch.setattr(dbinit, "ensure_tables", lambda: True)
+    try:
+        with pytest.raises(psycopg.Error):
+            cycle_stats._finalize_compute(db, [])
+        # A failed rebuild must not stamp a fresh members_version.
+        with db.cursor() as cur:
+            cur.execute("SELECT value FROM cycle_meta WHERE key='members_version'")
+            row = cur.fetchone()
+        assert row is None or row[0] != "v2"
+    finally:
+        with db.cursor() as cur:
+            cur.execute(
+                "ALTER TABLE cycle_trough_events"
+                " ADD COLUMN IF NOT EXISTS vin DOUBLE PRECISION"
+            )
 
 
 def _fn(name: str) -> Any:

@@ -152,6 +152,8 @@ async def check_freshness(
     }
     if count is not None:
         data["rows"] = count
+    if expect_meta and "members_version" in expect_meta:
+        data["members_version_stored"] = meta.get("members_version")
     warnings: list[str] | None = None
     if not seeded:
         warnings = [NOT_SEEDED]

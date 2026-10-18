@@ -16,6 +16,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from opentrading_mcp import dbinit
 from opentrading_mcp.providers.errors import ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools import cycle_db as db
@@ -413,6 +414,11 @@ def _load_frame(conn: Any) -> Any:
 def _finalize_compute(conn: Any, extra_tet: list[str]) -> dict[str, Any]:
     import pandas as pd
 
+    # The rebuild stamps members_version: never stamp a version whose schema
+    # (e.g. the cycle_trough_events.vin migration) could not be ensured.
+    if not dbinit.ensure_tables():
+        raise ProviderUnavailable("cycle schema ensure failed — refusing to rebuild/stamp tables")
+
     px = _load_frame(conn)
     if "VNINDEX" not in px.columns:
         raise ProviderUnavailable("cache missing VNINDEX")
@@ -548,22 +554,19 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
         for t in troughs_ev:
             if t < pd.Timestamp("2018-10-01"):
                 continue
-            try:
-                base = vi_full.loc[:t].iloc[-1]
-                fwd = bdf.loc[t + pd.Timedelta(days=1): t + pd.Timedelta(days=95)]
-                if len(fwd) < 20:
-                    continue
-                vals = {"trough": str(t.date()),
-                        "vnindex_3m": round(float(vi_full.loc[fwd.index[-1]] / base - 1) * 100, 1)}
-                for c in TROUGH_BASKETS:
-                    vals[c] = round(float((1 + fwd[c].dropna()).prod() - 1) * 100, 1)
-                cols = ["trough", "vnindex_3m", *TROUGH_BASKETS]
-                cur.execute(
-                    f"INSERT INTO cycle_trough_events({', '.join(cols)})"
-                    f" VALUES({', '.join(['%s'] * len(cols))}) ON CONFLICT DO NOTHING",
-                    [vals[c] for c in cols])
-            except Exception:
+            base = vi_full.loc[:t].iloc[-1]
+            fwd = bdf.loc[t + pd.Timedelta(days=1): t + pd.Timedelta(days=95)]
+            if len(fwd) < 20:
                 continue
+            vals = {"trough": str(t.date()),
+                    "vnindex_3m": round(float(vi_full.loc[fwd.index[-1]] / base - 1) * 100, 1)}
+            for c in TROUGH_BASKETS:
+                vals[c] = round(float((1 + fwd[c].dropna()).prod() - 1) * 100, 1)
+            cols = ["trough", "vnindex_3m", *TROUGH_BASKETS]
+            cur.execute(
+                f"INSERT INTO cycle_trough_events({', '.join(cols)})"
+                f" VALUES({', '.join(['%s'] * len(cols))}) ON CONFLICT DO NOTHING",
+                [vals[c] for c in cols])
     # meta
     today = date.today().isoformat()
     with conn.cursor() as cur:
