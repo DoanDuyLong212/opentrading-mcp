@@ -161,3 +161,124 @@ async def test_web_fetch_pdf_format(monkeypatch):
     env = await fn(url="https://static2.vietstock.vn/x.pdf", format="pdf")
     assert env["availability"] == "available"
     assert "Bao cao" in env["data"]["output"]
+
+
+class _Servers:
+    """Two local HTTP servers: a stand-in "public" host and a "private" one."""
+
+    def __init__(self, public_handler):
+        import http.server
+        import threading
+
+        self.private_hits: list[str] = []
+        hits = self.private_hits
+
+        class Private(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"internal")
+
+            def log_message(self, *args):
+                pass
+
+        self.private = http.server.HTTPServer(("127.0.0.1", 0), Private)
+        public_handler.private_port = self.private.server_address[1]
+        self.public = http.server.HTTPServer(("127.0.0.1", 0), public_handler)
+        for server in (self.private, self.public):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    @property
+    def public_url(self) -> str:
+        return f"http://127.0.0.1:{self.public.server_address[1]}/"
+
+    def allow_only_public(self, monkeypatch):
+        port = f":{self.public.server_address[1]}/"
+
+        def fake_assert_public(url: str) -> None:
+            if port not in url:
+                raise webfetch.ProviderBadData(f"refusing {url}")
+
+        monkeypatch.setattr(webfetch, "assert_public", fake_assert_public)
+
+    def close(self):
+        for server in (self.private, self.public):
+            server.shutdown()
+            server.server_close()
+
+
+def test_fetch_url_checks_every_redirect_hop(monkeypatch):
+    import http.server
+
+    import pytest
+
+    class Public(http.server.BaseHTTPRequestHandler):
+        private_port = 0
+
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{self.private_port}/meta")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    servers = _Servers(Public)
+    try:
+        servers.allow_only_public(monkeypatch)
+        with pytest.raises(webfetch.ProviderBadData):
+            webfetch.fetch_url(servers.public_url, format="text")
+        assert servers.private_hits == []
+    finally:
+        servers.close()
+
+
+def test_fetch_url_keeps_no_cookies_between_calls(monkeypatch):
+    import http.server
+
+    seen: list[str | None] = []
+
+    class Public(http.server.BaseHTTPRequestHandler):
+        private_port = 0
+
+        def do_GET(self):
+            seen.append(self.headers.get("Cookie"))
+            self.send_response(200)
+            self.send_header("Set-Cookie", "session=abc; Path=/")
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *args):
+            pass
+
+    servers = _Servers(Public)
+    try:
+        servers.allow_only_public(monkeypatch)
+        webfetch.fetch_url(servers.public_url, format="text")
+        webfetch.fetch_url(servers.public_url, format="text")
+        assert seen == [None, None]
+    finally:
+        servers.close()
+
+
+def test_public_page_tls_fallback_uses_the_unverified_client(monkeypatch):
+    import httpx
+
+    from opentrading_mcp.providers import vn_public
+
+    class Failing:
+        def get(self, url, **kwargs):
+            raise httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+
+    class Unverified:
+        def get(self, url, **kwargs):
+            assert "verify" not in kwargs  # httpx.Client.get has no per-request verify
+            return httpx.Response(200, text="<html>ok</html>", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(vn_public, "shared_client", lambda: Failing())
+    monkeypatch.setattr(vn_public, "insecure_client", lambda: Unverified())
+    html, tls_unverified = vn_public._fetch("https://sbv.gov.vn/x")
+    assert html == "<html>ok</html>"
+    assert tls_unverified is True

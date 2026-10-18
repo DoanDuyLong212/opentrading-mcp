@@ -8,7 +8,6 @@ from typing import Any
 import httpx
 
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
-from opentrading_mcp.providers.pool import shared_client
 
 MAX_RESPONSE_SIZE = 5 * 1024 * 1024
 DEFAULT_TIMEOUT = 30
@@ -165,17 +164,16 @@ def assert_public(url: str) -> None:
             raise ProviderBadData(f"refusing to fetch {host}: resolves to a non-public address")
 
 
-def _get(url: str, format: str, capped: int) -> httpx.Response:
-    """GET with redirects followed by hand, each hop checked before it is requested."""
+def _get(client: httpx.Client, url: str, format: str, capped: int) -> httpx.Response:
+    """GET with redirects followed by hand, each hop checked before it is requested.
+
+    The client must not follow redirects itself, or later hops skip assert_public.
+    """
     for _ in range(MAX_REDIRECTS + 1):
         assert_public(url)
-        response = shared_client().get(
-            url, headers=_headers(BROWSER_UA, format), timeout=capped
-        )
+        response = client.get(url, headers=_headers(BROWSER_UA, format), timeout=capped)
         if response.status_code == 403 and response.headers.get("cf-mitigated") == "challenge":
-            response = shared_client().get(
-                url, headers=_headers(HONEST_UA, format), timeout=capped
-            )
+            response = client.get(url, headers=_headers(HONEST_UA, format), timeout=capped)
         location = response.headers.get("location")
         if response.is_redirect and location:
             url = str(response.url.join(location))
@@ -191,7 +189,10 @@ def fetch_url(url: str, format: str = "markdown", timeout: int = DEFAULT_TIMEOUT
         raise ProviderBadData("URL must start with http:// or https://")
     capped = min(timeout, MAX_TIMEOUT)
     try:
-        response = _get(url, format, capped)
+        # A fresh client per fetch, never the shared pool: the pool follows redirects
+        # (later hops would skip assert_public) and keeps one cookie jar for every caller.
+        with httpx.Client(follow_redirects=False) as client:
+            response = _get(client, url, format, capped)
         response.raise_for_status()
     except httpx.TimeoutException as exc:
         raise ProviderUnavailable(f"fetch timed out: {url}") from exc
