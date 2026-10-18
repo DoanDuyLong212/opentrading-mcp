@@ -17,6 +17,7 @@ import pytest
 from opentrading_mcp import dbinit
 from opentrading_mcp.server import create_server, register_all
 from opentrading_mcp.tools import cycle_db
+from opentrading_mcp.tools.cycle_stats import MEMBERS_VERSION
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL", "").strip()
 needs_db = pytest.mark.skipif(not TEST_DB, reason="TEST_DATABASE_URL not set")
@@ -70,6 +71,10 @@ def test_empty_tables_read_as_not_seeded_never_as_fresh(db: Any) -> None:
             " VALUES('bank',1,1.0,60,0.5,8)"
         )
         cur.execute("INSERT INTO cycle_meta(key,value) VALUES('as_of', CURRENT_DATE::text)")
+        cur.execute(
+            "INSERT INTO cycle_meta(key,value) VALUES('members_version', %s)",
+            (MEMBERS_VERSION,),
+        )
         cur.execute(
             "INSERT INTO cycle_watermark(symbol,last_date,mode,members_version)"
             " VALUES('VCB', CURRENT_DATE, 'incremental', 'v1')"

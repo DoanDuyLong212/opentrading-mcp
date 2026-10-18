@@ -10,6 +10,7 @@ from __future__ import annotations
 import functools
 import math
 import time
+import unicodedata
 from datetime import date, timedelta
 from typing import Any
 
@@ -33,7 +34,7 @@ async def run_blocking(fn, tool, timeout_secs=60.0):
     return await _run_blocking(fn, tool, timeout_secs, heavy=True)
 
 TOOL = "cycle_stats"
-MEMBERS_VERSION = "v1"
+MEMBERS_VERSION = "v2"
 OVERLAP_N = 10
 TOLERANCE = 0.005
 MAX_BATCH = 15
@@ -48,20 +49,76 @@ INDICES = [
 BASKETS: dict[str, list[str]] = {
     "bank": ["VCB", "BID", "CTG", "TCB", "MBB", "ACB", "VPB", "STB", "HDB", "SHB", "OCB", "VIB", "TPB", "BVB"],
     "securities": ["SSI", "HCM", "VCI", "VND", "SHS", "BVS", "VDS", "MBS", "APG", "PSI"],
-    "realestate": ["VHM", "VIC", "VRE", "NVL", "DXG", "NLG", "KDH", "KBC", "PDR", "SJS", "DIG", "ITA"],
+    "insurance": ["BVH", "PVI", "BIC", "MIG", "BMI", "VNR"],
+    # v2: VIC/VHM/VRE moved to `vin`; ITA dropped (suspended 2024-09-25).
+    "realestate": ["NVL", "DXG", "NLG", "KDH", "KBC", "PDR", "SJS", "DIG", "TCH", "HDC", "CEO", "CRE"],
+    # v2: Vin ecosystem as its own basket (VPL listed 2025-05-13; VIC/VHM/VRE carry history).
+    "vin": ["VIC", "VHM", "VRE", "VPL"],
+    "construction": ["CTD", "VCG", "CII", "HBC", "HHV", "FCN", "LCG", "DPG"],
+    # v2: POM dropped (trading gaps); SMC/TLH added.
+    "steel": ["HPG", "HSG", "NKG", "VGS", "SMC", "TLH"],
+    "chemical": ["DGC", "DCM", "DPM", "DDV", "LAS", "BFC", "CSV"],
     "oilgas": ["GAS", "BSR", "PVS", "PVD", "PVB", "PLX", "OIL", "PJT"],
-    "steel": ["HPG", "HSG", "NKG", "VGS", "POM"],
-    "utility": ["POW", "PC1", "NT2", "GEG", "REE", "DHP"],
-    "tech": ["FPT", "CMG", "ELC"],
-    "retail": ["MWG", "FRT", "DGW", "PNJ"],
-    "consumer": ["VNM", "MSN", "SAB"],
-    "transport": ["GMD", "HAH", "VSC"],
-    "chemical": ["DGC", "DCM", "DPM"],
-    "food": ["HAG", "VCF", "SFN"],
-    "insurance": ["BVH"],
-    "construction": ["CTD", "VCG", "CII"],
-    "telecom": ["VGI"],
+    "utility": ["POW", "PC1", "NT2", "GEG", "REE", "DHP", "QTP", "VSH", "SJD", "CHP"],
+    # v2: telecom merged into tech (VGI/FOX/ICT join FPT/CMG/ELC/SGT).
+    "tech": ["FPT", "CMG", "ELC", "SGT", "VGI", "FOX", "ICT"],
+    "retail": ["MWG", "FRT", "DGW", "PNJ", "PET"],
+    "consumer": ["VNM", "MSN", "SAB", "KDC", "MCM"],
+    # v2: SFN dropped (stale since 2026-09-24); 7 names added.
+    "food": ["HAG", "VCF", "PAN", "SBT", "QNS", "LSS", "DBC", "MML", "ANV"],
+    "transport": ["GMD", "HAH", "VSC", "PVT", "VOS", "SGP", "MVN", "VTO"],
 }
+
+# Relative-strength chains (A strong -> B vs VNINDEX next month), 1M and 3M horizons.
+CHAIN_PAIRS: list[tuple[str, str]] = [
+    ("bank", "securities"), ("bank", "realestate"), ("bank", "oilgas"),
+    ("bank", "steel"), ("securities", "bank"), ("securities", "realestate"),
+    ("securities", "tech"), ("realestate", "securities"), ("realestate", "oilgas"),
+    ("oilgas", "bank"), ("steel", "securities"), ("chemical", "bank"),
+    ("tech", "securities"), ("bank", "consumer"),
+    # v2: Vin ecosystem chains (split out of realestate).
+    ("bank", "vin"), ("vin", "realestate"), ("realestate", "vin"),
+]
+
+# Baskets tracked after major market troughs (cycle_trough_events columns).
+TROUGH_BASKETS = ["bank", "securities", "realestate", "oilgas", "steel", "utility", "tech", "vin"]
+
+
+def _fold(s: str) -> str:
+    """Lowercase, strip diacritics, collapse to words (for basket names)."""
+    s = unicodedata.normalize("NFKD", s or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.replace("đ", "d").replace("Đ", "D").lower()
+    return " ".join("".join(ch if ch.isalnum() else " " for ch in s).split())
+
+
+BASKET_ALIASES: dict[str, str] = {
+    **{key: key for key in BASKETS},
+    "ngan hang": "bank",
+    "chung khoan": "securities", "ck": "securities",
+    "bao hiem": "insurance",
+    "bat dong san": "realestate", "bds": "realestate", "dia oc": "realestate",
+    "ho vin": "vin", "vingroup": "vin", "vin group": "vin",
+    "xay dung": "construction", "dau tu cong": "construction",
+    "thep": "steel", "gang thep": "steel",
+    "hoa chat": "chemical", "phan bon": "chemical",
+    "dau khi": "oilgas", "nang luong": "oilgas",
+    "dien": "utility", "tien ich": "utility", "dien nuoc": "utility",
+    "cntt": "tech", "cong nghe": "tech", "cong nghe thong tin": "tech",
+    "vien thong": "tech", "tmt": "tech", "cntt vien thong": "tech",
+    "ban le": "retail",
+    "tieu dung": "consumer", "hang tieu dung": "consumer",
+    "thuc pham": "food", "nong nghiep": "food",
+    "van tai": "transport", "logistics": "transport",
+}
+
+
+def _canon_basket(name: str | None) -> str | None:
+    """Accept English keys and folded Vietnamese names; unknown names pass through."""
+    if name is None or not str(name).strip():
+        return None
+    raw = str(name).strip()
+    return BASKET_ALIASES.get(_fold(raw), raw)
 
 TETS = [
     "2012-01-23", "2013-02-10", "2014-01-31", "2015-02-19", "2016-02-08",
@@ -198,6 +255,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         return await db.check_freshness(
             "cycle_stats_check", src, "cycle_meta", "SELECT COUNT(*) FROM cycle_watermark",
             {"members_version": MEMBERS_VERSION},
+            expect_meta={"members_version": MEMBERS_VERSION},
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -206,11 +264,15 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                                 ctx: AnyContext | None = None) -> dict[str, Any]:
         """Month seasonality per basket from the stored table (mean/hit/relative vs VNINDEX). Omit args for full table.
 
+        Baskets: bank, securities, insurance, realestate, vin, construction, steel,
+        chemical, oilgas, utility, tech, retail, consumer, food, transport; Vietnamese
+        names without diacritics work too ("bất động sản", "dầu khí", "CNTT"...).
+
         Differs from `seasonality` (one symbol, computed live from candles): this is the
         long-run basket table; quote which one a number came from.
         """
         sql, args = _filters("SELECT basket, month, mean_ret, hit_rate, rel_ret, n FROM cycle_month_stats",
-                             [("basket", basket), ("month", month)], "basket, month")
+                             [("basket", _canon_basket(basket)), ("month", month)], "basket, month")
         return await db.read_rows("cycle_seasonality", src, sql, args,
                                   ["basket", "month", "mean_ret", "hit_rate", "rel_ret", "n"], bool(args))
 
@@ -233,9 +295,12 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def cycle_tet(basket: str | None = None,
                         ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Tet (Lunar New Year) effect per basket: compounded return over the 6 sessions before / 5 after."""
+        """Tet (Lunar New Year) effect per basket: compounded return over the 6 sessions before / 5 after.
+
+        Basket names as in cycle_seasonality (Vietnamese names without diacritics accepted).
+        """
         sql, args = _filters("SELECT basket, pre5_mean, pre5_hit, post5_mean, post5_hit, n FROM cycle_tet",
-                             [("basket", basket)], "pre5_mean DESC")
+                             [("basket", _canon_basket(basket))], "pre5_mean DESC")
         return await db.read_rows("cycle_tet", src, sql, args,
                                   ["basket", "pre5_mean", "pre5_hit", "post5_mean", "post5_hit", "n"], bool(args))
 
@@ -243,15 +308,18 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def cycle_yearly(basket: str | None = None,
                            year: int | None = None,
                            ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Yearly return % per VN sector basket (bank, securities, realestate, steel, tech...); ranks sectors by year. Omit args for full table."""
+        """Yearly return % per VN sector basket (bank, securities, realestate, vin, steel, tech...); ranks sectors by year. Omit args for full table.
+
+        Basket names as in cycle_seasonality (Vietnamese names without diacritics accepted).
+        """
         sql, args = _filters("SELECT basket, year, ret FROM cycle_yearly",
-                             [("basket", basket), ("year", year)], "basket, year")
+                             [("basket", _canon_basket(basket)), ("year", year)], "basket, year")
         return await db.read_rows("cycle_yearly", src, sql, args, ["basket", "year", "ret"], bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_trough_events(ctx: AnyContext | None = None) -> dict[str, Any]:
         """3M forward returns per VN sector basket after major market troughs (which sectors lead recoveries)."""
-        cols = ["trough", "vnindex_3m", "bank", "securities", "realestate", "oilgas", "steel", "utility", "tech"]
+        cols = ["trough", "vnindex_3m", *TROUGH_BASKETS]
         return await db.read_rows("cycle_trough_events", src,
                                   f"SELECT {', '.join(cols)} FROM cycle_trough_events ORDER BY trough", [], cols)
 
@@ -390,13 +458,8 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
     out: dict[str, Any] = {
         "range": [str(px.index.min().date()), str(px.index.max().date())]}
     rel_m = mb.sub(mb["VNINDEX"], axis=0)
-    pairs = [("bank", "securities"), ("bank", "realestate"), ("bank", "oilgas"),
-             ("bank", "steel"), ("securities", "bank"), ("securities", "realestate"),
-             ("securities", "tech"), ("realestate", "securities"), ("realestate", "oilgas"),
-             ("oilgas", "bank"), ("steel", "securities"), ("chemical", "bank"),
-             ("tech", "securities"), ("bank", "consumer")]
     chains = []
-    for a, b in pairs:
+    for a, b in CHAIN_PAIRS:
         for h in (1, 3):
             sig = rel_m[a].rolling(h).sum().shift(1)
             df = pd.concat([sig, rel_m[b]], axis=1, keys=["sig", "nxt"]).dropna()
@@ -492,14 +555,13 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
                     continue
                 vals = {"trough": str(t.date()),
                         "vnindex_3m": round(float(vi_full.loc[fwd.index[-1]] / base - 1) * 100, 1)}
-                for c in ["bank", "securities", "realestate", "oilgas", "steel", "utility", "tech"]:
+                for c in TROUGH_BASKETS:
                     vals[c] = round(float((1 + fwd[c].dropna()).prod() - 1) * 100, 1)
+                cols = ["trough", "vnindex_3m", *TROUGH_BASKETS]
                 cur.execute(
-                    "INSERT INTO cycle_trough_events(trough,vnindex_3m,bank,securities,"
-                    "realestate,oilgas,steel,utility,tech)"
-                    " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                    (vals["trough"], vals["vnindex_3m"], vals["bank"], vals["securities"],
-                     vals["realestate"], vals["oilgas"], vals["steel"], vals["utility"], vals["tech"]))
+                    f"INSERT INTO cycle_trough_events({', '.join(cols)})"
+                    f" VALUES({', '.join(['%s'] * len(cols))}) ON CONFLICT DO NOTHING",
+                    [vals[c] for c in cols])
             except Exception:
                 continue
     # meta

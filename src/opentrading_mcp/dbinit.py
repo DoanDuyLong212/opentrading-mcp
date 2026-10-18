@@ -114,7 +114,7 @@ _DDL = {
         " bank DOUBLE PRECISION, securities DOUBLE PRECISION,"
         " realestate DOUBLE PRECISION, oilgas DOUBLE PRECISION,"
         " steel DOUBLE PRECISION, utility DOUBLE PRECISION,"
-        " tech DOUBLE PRECISION)"
+        " tech DOUBLE PRECISION, vin DOUBLE PRECISION)"
     ),
     "cycle_meta": (
         "CREATE TABLE IF NOT EXISTS cycle_meta ("
@@ -186,6 +186,12 @@ _DDL = {
 }
 
 
+# CREATE TABLE IF NOT EXISTS never alters an existing table: new columns ride here.
+_MIGRATIONS = (
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS vin DOUBLE PRECISION",
+)
+
+
 def db_url() -> str:
     raw = os.environ.get("MCP_DB_URL") or os.environ.get("DATABASE_URL") or ""
     return raw.strip()
@@ -216,6 +222,8 @@ def ensure_tables() -> bool:
         with conn.cursor() as cur:
             for ddl in _DDL.values():
                 cur.execute(ddl)
+            for migration in _MIGRATIONS:
+                cur.execute(migration)
         conn.commit()
         _ensured = True
         return True

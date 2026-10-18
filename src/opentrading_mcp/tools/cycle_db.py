@@ -123,8 +123,13 @@ async def check_freshness(
     meta_table: str,
     count_sql: str | None,
     extra: dict[str, Any] | None = None,
+    expect_meta: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """as_of / days_stale / needs_refresh. Never seeded (no as_of, or no rows) needs a refresh."""
+    """as_of / days_stale / needs_refresh. Never seeded (no as_of, or no rows) needs a refresh.
+
+    expect_meta: meta keys the server's current config requires (e.g. members_version).
+    A missing or different value means the stored tables predate the config -> refresh.
+    """
     try:
         meta, count = await in_thread(_meta, meta_table, count_sql)
     except DbUnavailable as exc:
@@ -134,18 +139,29 @@ async def check_freshness(
         stale = (date.today() - date.fromisoformat(as_of)).days if as_of else None
     except ValueError:
         stale = None
+    mismatch = {k: (meta.get(k), v) for k, v in (expect_meta or {}).items() if meta.get(k) != v}
     seeded = bool(as_of) and (count is None or count > 0)
+    stale_or_mismatch = (stale is not None and stale > STALE_DAYS) or bool(mismatch)
     data = {
         "as_of": as_of or None,
         "stats_version": meta.get("stats_version"),
         "days_stale": stale,
         "seeded": seeded,
-        "needs_refresh": (not seeded) or (stale is not None and stale > STALE_DAYS),
+        "needs_refresh": (not seeded) or stale_or_mismatch,
         **(extra or {}),
     }
     if count is not None:
         data["rows"] = count
-    return make_envelope(data, source=source, warnings=None if seeded else [NOT_SEEDED])
+    warnings: list[str] | None = None
+    if not seeded:
+        warnings = [NOT_SEEDED]
+    elif mismatch:
+        detail = ", ".join(f"{k}={have or 'none'}→{want}" for k, (have, want) in mismatch.items())
+        warnings = [
+            f"Bảng được tạo từ cấu hình cũ ({detail}); "
+            "chạy refresh + finalize trước khi kết luận."
+        ]
+    return make_envelope(data, source=source, warnings=warnings)
 
 
 def transactional[R](fn: Callable[..., R], *args: Any) -> R:
