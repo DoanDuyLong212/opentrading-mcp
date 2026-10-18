@@ -236,8 +236,11 @@ def check_envelope(tool: str, payload: Any) -> list[str]:
             datetime.datetime.fromisoformat(str(provenance.get("as_of", "")))
         except (ValueError, TypeError):
             errors.append(f"{tool}: provenance as_of not ISO")
-        if provenance.get("source") == "cache" and not provenance.get("data_time"):
+        cached = provenance.get("cached") or provenance.get("source") == "cache"
+        if cached and not provenance.get("data_time"):
             errors.append(f"{tool}: cached response must disclose data_time")
+        if cached and provenance.get("source") in (None, "", "cache"):
+            errors.append(f"{tool}: cached response must keep the original source")
     warnings = body.get("warnings")
     if not isinstance(warnings, list):
         errors.append(f"{tool}: warnings is not a list")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import copy
 import functools
 import os
 import threading
@@ -94,11 +95,38 @@ def in_vn_session(now: Any = None) -> bool:
     return 9 * 60 <= now.hour * 60 + now.minute < 15 * 60
 
 
-def price_ttl() -> int:
-    """TTL for price/board data: short in session, long when HOSE cannot move."""
+def seconds_until_session(now: Any = None) -> float:
+    """Seconds until the next HOSE open (Mon-Fri 09:00 ICT); 0 during the session."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Asia/Ho_Chi_Minh")
+    moment = now.astimezone(tz) if now is not None else datetime.now(tz)
+    if in_vn_session(moment):
+        return 0.0
+    opening = moment.replace(hour=9, minute=0, second=0, microsecond=0)
+    if moment >= opening:
+        opening += timedelta(days=1)
+    while opening.weekday() >= 5:
+        opening += timedelta(days=1)
+    return (opening - moment).total_seconds()
+
+
+def price_ttl(now: Any = None) -> int:
+    """TTL for price/board data: short in session, long when HOSE cannot move.
+
+    The long off-hours TTL never reaches past the next open: a quote fetched at
+    08:59 must not still be served at 10:00.
+    """
     from opentrading_mcp.cache import TTL_SECONDS
 
-    return TTL_SECONDS["market"] if in_vn_session() else TTL_SECONDS["market_offhours"]
+    if in_vn_session(now):
+        return TTL_SECONDS["market"]
+    try:
+        until_open = int(seconds_until_session(now))
+    except Exception:
+        return TTL_SECONDS["market"]
+    return max(1, min(TTL_SECONDS["market_offhours"], until_open))
 
 
 async def _cache_key_for(tool: str, fingerprint: str) -> str:
@@ -117,48 +145,66 @@ async def cache_lookup(tool: str, fingerprint: str) -> dict[str, Any] | None:
 
     Callers check this FIRST and return immediately on hit. Failures and
     unavailable/error envelopes are never stored, so a hit is always a
-    successful past response whose original fetch time is disclosed.
+    successful past response. The original provider stays in
+    provenance.source; provenance.cached / cached_at disclose the reuse.
 
     On a miss, concurrent callers for the SAME key coalesce: the first becomes
-    the leader (returns None, fetches upstream), the rest wait for the leader
-    and re-read the cache. This stops a cold-key stampede from executing the
-    same 45-90s upstream N times on the 2-slot executor.
+    the leader (returns None, fetches upstream), the rest wait for the leader's
+    cache_store and get its envelope — stored or not, so an empty result is
+    shared instead of re-fetched. A leader that returns without cache_store
+    (an error envelope, an exception) is released when its request task ends;
+    waiters then re-read and one of them leads the retry. This stops a cold-key
+    stampede from executing the same 45-90s upstream N times on the 2-slot
+    executor.
     """
-    import json
-
     from opentrading_mcp.providers.store import acache_get
-    from opentrading_mcp.schemas import make_envelope
 
     key = await _cache_key_for(tool, fingerprint)
-    hit = await acache_get(key)
-    if hit is None:
+    deadline = time.monotonic() + _WAITER_TIMEOUT
+    while True:
+        hit = await acache_get(key)
+        if hit is not None:
+            return _envelope_from_cache(hit)
         waiter = _join_inflight(key)
         if waiter is None:
             return None  # leader: caller fetches, then cache_store resolves us
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None  # leader too slow: fetch ourselves
         try:
-            await asyncio.wait_for(asyncio.shield(waiter), _WAITER_TIMEOUT)
+            shared = await asyncio.wait_for(asyncio.shield(waiter), remaining)
         except (TimeoutError, asyncio.CancelledError):
-            return None  # leader slow/failed: fetch ourselves (new leader)
-        hit = await acache_get(key)
-        if hit is None:
             return None
+        if isinstance(shared, dict):
+            return copy.deepcopy(shared)
+        # The leader ended without a result: re-read, or lead the retry.
+
+
+def _envelope_from_cache(hit: str) -> dict[str, Any] | None:
+    import json
+
+    from opentrading_mcp.schemas import make_envelope
+
     try:
         cached = json.loads(hit)
         data = cached.get("data")
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, AttributeError):
         return None
     if data is None:
         return None
-    data_time = cached.get("data_time") or cached.get("as_of")
+    cached_at = cached.get("as_of")
     env = make_envelope(
         data,
-        source="cache",
+        # Entries written before the source was stored fall back to "cache".
+        source=cached.get("source") or "cache",
         warnings=list(cached.get("warnings") or []),
         availability=cached.get("availability"),
         page=cached.get("page"),
-        data_time=data_time,
+        data_time=cached.get("data_time") or cached_at,
     )
-    env["warnings"] = [*env["warnings"], f"dữ liệu cache lúc {cached.get('as_of')}"]
+    env["provenance"]["cached"] = True
+    env["provenance"]["cached_at"] = cached_at
+    env["warnings"] = [*env["warnings"], f"dữ liệu lấy lúc {cached_at}, dùng lại bản đã lưu"]
     return env
 
 
@@ -187,66 +233,101 @@ async def cache_store(
         error=error,
         data_time=data_time,
     )
+    key = await _cache_key_for(tool, fingerprint)
     # Never persist failures — or empties: "not found" is often transient
     # (a just-listed symbol, a pre-open board), and a cached empty would hide
-    # recovery until TTL expiry.
-    if env.get("availability") not in ("unavailable", "failed", "empty") and not env.get("error"):
-        key = await _cache_key_for(tool, fingerprint)
+    # recovery until TTL expiry. Partial results (some legs failed) are kept
+    # only briefly, for the same reason.
+    availability = env.get("availability")
+    if availability not in ("unavailable", "failed", "empty") and not env.get("error"):
+        if availability == "partial":
+            ttl_seconds = min(ttl_seconds, _PARTIAL_TTL)
         await acache_set(
             key,
             {
                 "data": env["data"],
                 "warnings": env.get("warnings", []),
-                "availability": env.get("availability"),
+                "availability": availability,
                 "page": env.get("page"),
+                "source": env["provenance"]["source"],
                 "as_of": env["provenance"]["as_of"],
                 "data_time": env["provenance"].get("data_time"),
             },
             ttl_seconds,
         )
-        _resolve_inflight(key)
+    # Waiters get this envelope whether or not it was stored.
+    _resolve_inflight(key, env)
     return env
 
 
 # --- Single-flight: coalesce concurrent misses for the same cache key --------
 # Leader = first misser (fetches upstream, cache_store resolves). Waiters =
-# later missers (await the leader, then re-read the cache). Entries are
-# (loop, future, created_at); stale entries (>_INFLIGHT_TTL) are ignored so a
-# crashed leader can never wedge waiters forever. Loop-pinned so multi-loop
+# later missers (await the leader's envelope). Entries are
+# (loop, future, created_at, owner task); stale entries (>_INFLIGHT_TTL) are
+# ignored so a crashed leader can never wedge waiters forever. The owner task
+# looking the key up again leads again instead of waiting on itself, and the
+# end of that task releases whatever it still holds. Loop-pinned so multi-loop
 # processes (tests) simply skip coalescing instead of cross-loop awaiting.
-_inflight: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Future, float]] = {}
+_inflight: dict[
+    str, tuple[asyncio.AbstractEventLoop, asyncio.Future, float, asyncio.Task | None]
+] = {}
 _inflight_guard = threading.Lock()
 _INFLIGHT_TTL = 120.0
 _WAITER_TIMEOUT = 60.0
+_PARTIAL_TTL = 60
 
 
 def _join_inflight(key: str) -> asyncio.Future | None:
-    """None = you are the leader (fetch). Future = wait on it, then re-read."""
+    """None = you are the leader (fetch). Future = wait on it for the leader's envelope."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return None
+    task = asyncio.current_task()
     now = time.monotonic()
     with _inflight_guard:
         ent = _inflight.get(key)
         if ent is not None and ent[0] is loop and not ent[1].done():
+            if task is not None and ent[3] is task:
+                return None  # the leader itself, looking the key up again
             if now - ent[2] < _INFLIGHT_TTL:
                 return ent[1]
         if len(_inflight) > 2000:  # pathological keyspace: drop oldest
             _inflight.pop(next(iter(_inflight)))
-        _inflight[key] = (loop, loop.create_future(), now)
-        return None
+        future = loop.create_future()
+        _inflight[key] = (loop, future, now, task)
+    if task is not None:
+        task.add_done_callback(lambda _task: _release_inflight(key, future))
+    return None
 
 
-def _resolve_inflight(key: str) -> None:
-    """Wake waiters after a successful store (best-effort, never raises)."""
+def _resolve_inflight(key: str, result: dict[str, Any] | None = None) -> None:
+    """Wake waiters with the leader's envelope (best-effort, never raises)."""
     with _inflight_guard:
         ent = _inflight.pop(key, None)
-    if ent is not None and not ent[1].done():
-        try:
-            ent[0].call_soon_threadsafe(ent[1].set_result, True)
-        except RuntimeError:
-            pass
+    if ent is not None:
+        _wake(ent[0], ent[1], result)
+
+
+def _release_inflight(key: str, future: asyncio.Future) -> None:
+    """The leader's task ended: release its entry if it still holds it."""
+    with _inflight_guard:
+        ent = _inflight.get(key)
+        if ent is None or ent[1] is not future:
+            return
+        _inflight.pop(key, None)
+    _wake(ent[0], future, None)
+
+
+def _wake(loop: asyncio.AbstractEventLoop, future: asyncio.Future, result: Any) -> None:
+    def _set() -> None:
+        if not future.done():
+            future.set_result(result)
+
+    try:
+        loop.call_soon_threadsafe(_set)
+    except RuntimeError:
+        pass  # loop already closed
 
 
 def summarize_rows(
@@ -354,28 +435,44 @@ _neg: dict[str, float] = {}
 _neg_guard = threading.Lock()
 
 
-def _neg_hit(tool: str) -> bool:
+# A ProviderUnavailable counts as slow (worth remembering) past this many seconds;
+# fast ones (rate limit, 4xx, unknown symbol) say nothing about the next call.
+_NEG_SLOW_SECONDS = 10.0
+
+
+def _neg_key(tool: str, fn: Callable[..., Any]) -> str:
+    """Tool label plus the call's arguments: one slow symbol must not block the others."""
+    if isinstance(fn, functools.partial):
+        try:
+            args = repr((fn.args, sorted(fn.keywords.items())))
+        except Exception:
+            return tool
+        return f"{tool}|{args[:200]}"
+    return tool
+
+
+def _neg_hit(key: str) -> bool:
     ttl = neg_ttl()
     if ttl <= 0:
         return False
     with _neg_guard:
-        until = _neg.get(tool)
+        until = _neg.get(key)
         if until is None:
             return False
         if time.monotonic() < until:
             return True
-        _neg.pop(tool, None)
+        _neg.pop(key, None)
         return False
 
 
-def _neg_mark(tool: str) -> None:
+def _neg_mark(key: str) -> None:
     ttl = neg_ttl()
     if ttl <= 0:
         return
     with _neg_guard:
         if len(_neg) > 2000:
             _neg.pop(next(iter(_neg)))
-        _neg[tool] = time.monotonic() + ttl
+        _neg[key] = time.monotonic() + ttl
 
 
 RATE_LIMITED = "upstream rate limit reached"
@@ -412,33 +509,36 @@ async def run_blocking[T](
     When more than ``shed_limit()`` calls are already outstanding, new calls
     fail fast ("server busy") instead of queueing toward a certain timeout.
 
-    Slow legs are also remembered briefly: a timeout (or slow upstream
-    failure) marks the tool label for ``neg_ttl()`` seconds, so retries and
-    concurrent waiters fail in milliseconds instead of re-paying the full
-    45-90s upstream cost.
+    Slow legs are also remembered briefly: a timeout (or an upstream failure
+    that took over ``_NEG_SLOW_SECONDS``) marks that call — tool label plus
+    arguments — for ``neg_ttl()`` seconds, so retries and concurrent waiters
+    fail in milliseconds instead of re-paying the full 45-90s upstream cost.
     """
     from opentrading_mcp.providers.errors import ProviderUnavailable
 
     global _pending
-    if _neg_hit(tool):
+    neg_key = _neg_key(tool, fn)
+    if _neg_hit(neg_key):
         raise ProviderUnavailable(f"{tool} briefly unavailable (recent timeout), retry shortly")
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    pool = _HEAVY_EXECUTOR if heavy else _EXECUTOR
     with _pending_guard:
         if _pending >= shed_limit():
             raise ProviderUnavailable(
                 f"{tool} shed: server busy ({_pending} calls outstanding), retry shortly"
             )
         _pending += 1
-    loop = asyncio.get_running_loop()
-    ctx = contextvars.copy_context()
-    pool = _HEAVY_EXECUTOR if heavy else _EXECUTOR
-    future = loop.run_in_executor(pool, functools.partial(ctx.run, no_exit, fn))
+    started = time.monotonic()
     try:
+        future = loop.run_in_executor(pool, functools.partial(ctx.run, no_exit, fn))
         return await asyncio.wait_for(future, timeout_secs)
     except TimeoutError as exc:
-        _neg_mark(tool)
+        _neg_mark(neg_key)
         raise ProviderUnavailable(f"{tool} timed out after {timeout_secs}s") from exc
     except ProviderUnavailable:
-        _neg_mark(tool)
+        if time.monotonic() - started >= _NEG_SLOW_SECONDS:
+            _neg_mark(neg_key)
         raise
     finally:
         with _pending_guard:
