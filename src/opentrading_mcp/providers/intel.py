@@ -190,7 +190,7 @@ def groq_chat(system_msg: str, user_msg: str, max_tokens: int = 300) -> str:
         raise ProviderAuthMissing("GROQ_API_KEY is not set")
     model = os.environ.get("GROQ_MODEL_SENTIMENT", "llama-3.1-8b-instant")
     try:
-            response = _client().post(
+        response = _client().post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}"},
             json={

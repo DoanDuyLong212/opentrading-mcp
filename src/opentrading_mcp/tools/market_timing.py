@@ -20,7 +20,6 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import (
     ProviderBadData,
@@ -32,7 +31,9 @@ from opentrading_mcp.tools.shared import (
     AnyContext,
     cache_lookup,
     cache_store,
+    in_vn_session,
     pick_value,
+    price_ttl,
     run_blocking,
 )
 
@@ -51,6 +52,13 @@ _HIGH_KEYS = ("h", "high", "High", "HIGH")
 _LOW_KEYS = ("l", "low", "Low", "LOW")
 _VOL_KEYS = ("v", "volume", "Volume", "VOLUME", "vol")
 _DATE_KEYS = ("t", "time", "Time", "date", "Date")
+
+
+def _bar_day(row: Any) -> str:
+    """YYYY-MM-DD of a candle row ("" when it has no date)."""
+    if not isinstance(row, dict):
+        return ""
+    return str(pick_value(row, _DATE_KEYS) or "")[:10]
 
 
 def _series(
@@ -175,19 +183,36 @@ def _follow_through(
 
 
 def _status(count: int) -> tuple[str, str]:
-    """User thresholds over a 1-month window: status key + VI guidance."""
+    """Risk level over the 25-session window: status key + VI reading of it.
+
+    The reading describes the market state under O'Neil's rule; it is not a
+    buy/sell instruction (the harness never gives one).
+    """
     if count <= 2:
-        return "binh_thuong", "0-2 phiên: không vấn đề, xu hướng tăng được xác nhận."
+        return (
+            "binh_thuong",
+            "0-2 phiên: theo quy tắc O'Neil, xu hướng tăng chưa có dấu hiệu bị phân phối.",
+        )
     if count == 3:
-        return "quan_sat", "3 phiên: quan sát, thận trọng với vị thế mua mới."
+        return (
+            "quan_sat",
+            "3 phiên: theo quy tắc O'Neil, mức cần quan sát — áp lực bán bắt đầu tích lũy.",
+        )
     if count == 4:
-        return "tim_dau_hieu_ban", "4 phiên: tìm dấu hiệu bán, thắt chặt cắt lỗ, không mua đuổi."
+        return (
+            "canh_bao",
+            "4 phiên: theo quy tắc O'Neil, mức cảnh báo — áp lực phân phối đã rõ.",
+        )
     if count == 5:
         return (
-            "thoat_moi_co_hoi",
-            "5 phiên: tìm mọi cơ hội để thoát, chỉ giữ vị thế có đệm lãi dày.",
+            "canh_bao_cao",
+            "5 phiên: theo quy tắc O'Neil, mức cảnh báo cao — xu hướng tăng có nguy cơ gãy.",
         )
-    return "nguy_hiem", "Trên 5 phiên: nguy hiểm, nên thoát và đứng ngoài cho tới FTD mới."
+    return (
+        "nguy_hiem",
+        "Trên 5 phiên: theo quy tắc O'Neil, mức nguy hiểm — xu hướng tăng thường đã gãy, "
+        "chờ một follow-through mới để xác nhận nhịp hồi.",
+    )
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -205,26 +230,28 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbol: str = "VNINDEX", days: int = 40, ctx: AnyContext | None = None
     ) -> dict[str, Any]:
         """Đếm phiên phân phối O'Neil + trạng thái follow-through. Dùng khi đánh giá
-        rủi ro thị trường (có nên giữ/mua hay thoát).
+        rủi ro chung của thị trường theo O'Neil.
 
-        Dùng khi: "thị trường có bao nhiêu phiên phân phối", "có nên thoát hàng không",
-        kiểm tra sức khỏe xu hướng theo O'Neil.
+        Dùng khi: "thị trường có bao nhiêu phiên phân phối", "thị trường đang rủi ro tới
+        mức nào", kiểm tra sức khỏe xu hướng theo O'Neil.
         Không dùng khi: rủi ro 1 mã cụ thể (dùng stock_forensic/insider_trading/sentiment_score);
         cần độ rộng toàn sàn (dùng breadth_scan); backtest quy tắc (dùng backtest_strategies).
 
         symbol: chỉ số VN (mặc định VNINDEX). days: số nến ngày lấy về (mặc định 40,
-        tối đa 90); đếm trong 25 phiên gần nhất.
-        Ngưỡng 1 tháng: 1-2 không vấn đề; 3 quan sát; 4 tìm dấu hiệu bán; 5 tìm mọi cơ hội
-        để thoát; trên 5 nguy hiểm nên thoát.
+        tối đa 90); đếm trong 25 phiên gần nhất, chỉ tính phiên đã đóng cửa.
+        Mức theo số phiên: 0-2 binh_thuong; 3 quan_sat; 4 canh_bao; 5 canh_bao_cao;
+        trên 5 nguy_hiem. Đây là đọc trạng thái thị trường, không phải lệnh mua/bán.
         Có FTD xác nhận thì đếm lại phiên phân phối từ đầu (rally mới xóa đếm cũ).
         Ví dụ: {"symbol": "VNINDEX", "days": 40}.
         """
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
         sym = (symbol or "VNINDEX").strip().upper()
         want = max(30, min(int(days or 40), 90))
-        # Date in fp: derived from daily candles, a new session must recompute.
-        from datetime import date
-
-        fp = f"{sym}|{want}|{date.today().isoformat()}"
+        # Date in fp (VN calendar, not the server's): a new session must recompute.
+        today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
+        fp = f"{sym}|{want}|{today}"
         hit = await cache_lookup("distribution_count", fp)
         if hit is not None:
             return hit
@@ -238,6 +265,11 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("distribution_count", str(exc))
         if not isinstance(rows, list) or not rows:
             return _na("distribution_count", "không có nến chỉ số")
+        warnings: list[str] = []
+        if in_vn_session() and rows and _bar_day(rows[-1]) == today:
+            # O'Neil judges a session at the close: today's bar still has partial volume.
+            rows = rows[:-1]
+            warnings.append("bỏ nến hôm nay vì phiên chưa đóng cửa")
         parsed = _series(rows)
         if parsed is None:
             return _na("distribution_count", "nến thiếu close/volume/low")
@@ -263,7 +295,8 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         return await cache_store(
             "distribution_count",
             fp,
-            TTL_SECONDS["financeinfo"],  # daily-candle derived; fp carries the date
+            # Short in session (a bar closes at 15:00), long when no session can move it.
+            price_ttl(),
             {
                 "symbol": sym,
                 "window_sessions": DD_WINDOW,
@@ -276,6 +309,8 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "decline_from_high_pct": decline,
             },
             source="vnstock",
+            warnings=warnings,
+            data_time=dates[-1] or None,
         )
 
     return [{"name": "distribution_count"}]
