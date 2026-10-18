@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from opentrading_mcp.cache import TTL_SECONDS, cache_key
@@ -25,6 +26,45 @@ from opentrading_mcp.schemas import utc_now_iso
 
 SYMBOLS_OHLC = ["VN30F1M"]
 INDICES = ["VNINDEX", "VN30"]
+
+# Cửa sổ phiên DNSE: 09:00-15:00 giờ Việt Nam, mọi ngày. Ngoài cửa sổ server
+# không gửi data → recv timeout 30s → reconnect vĩnh viễn (churn log, CPU uổng):
+# ngủ tới 09:00 thay vì giữ vòng connect. VN không có DST → offset cố định
+# +07:00, không cần tzdata (an toàn trên Render slim image).
+VN_TZ = timezone(timedelta(hours=7))
+DNSE_START_HOUR = 9
+DNSE_END_HOUR = 15
+
+
+def _vn(now: datetime | None = None) -> datetime:
+    """`now` về múi giờ VN; naive được hiểu là giờ VN."""
+    moment = now or datetime.now(VN_TZ)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=VN_TZ)
+    return moment.astimezone(VN_TZ)
+
+
+def dnse_window(now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Cửa sổ [09:00, 15:00) giờ VN của ngày chứa `now`."""
+    moment = _vn(now)
+    start = moment.replace(hour=DNSE_START_HOUR, minute=0, second=0, microsecond=0)
+    end = moment.replace(hour=DNSE_END_HOUR, minute=0, second=0, microsecond=0)
+    return start, end
+
+
+def dnse_off_hours(now: datetime | None = None) -> bool:
+    """True nếu ngoài [09:00, 15:00) giờ VN — lúc đó WS không có dữ liệu."""
+    start, end = dnse_window(now)
+    return not (start <= _vn(now) < end)
+
+
+def _seconds_until_open(now: datetime | None = None) -> float:
+    """Số giây tới lần mở cửa sổ kế tiếp (09:00 hôm nay nếu chưa 15:00, không thì mai)."""
+    moment = _vn(now)
+    start, end = dnse_window(moment)
+    if moment >= end:
+        start += timedelta(days=1)
+    return max(0.0, (start - moment).total_seconds())
 
 
 def _log(message: str) -> None:
@@ -80,6 +120,11 @@ async def dnse_ws_loop(publish_seconds: int = 5) -> None:
         return
     backoff = 5
     while True:
+        if dnse_off_hours():
+            wait = _seconds_until_open()
+            _log(f"dnse ws ngoài cửa sổ 9-15h: tạm dừng {int(wait)}s tới 09:00")
+            await asyncio.sleep(wait)
+            continue
         try:
             await _dnse_ws_once(api_key, api_secret, publish_seconds)
             backoff = 5
@@ -108,11 +153,15 @@ async def _dnse_ws_once(api_key: str, api_secret: str, publish_seconds: int) -> 
         for index in INDICES:
             await ws.send(json.dumps(dnse_p.build_ws_subscribe(f"market_index.{index}.json", [])))
         await ws.send(json.dumps(dnse_p.build_ws_subscribe("foreign.*.json", SYMBOLS_OHLC)))
+        window_end = dnse_window()[1]
         while True:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=30)
             except TimeoutError:
                 _log("dnse recv timeout, reconnecting")
+                return
+            if _vn() >= window_end:
+                _log("dnse ws hết cửa sổ 15:00: ngắt kết nối tới phiên sau")
                 return
             data = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
             if data.get("action") == "ping":
