@@ -11,7 +11,7 @@ from typing import Any
 
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
-from opentrading_mcp.providers.pool import shared_client
+from opentrading_mcp.providers.pool import insecure_client, shared_client
 
 _BROWSER_UA = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
 
@@ -38,12 +38,8 @@ def _fetch(url: str, timeout: int = 20) -> tuple[str, bool]:
         if "SSL" not in type(exc).__name__ and "SSL" not in str(exc):
             raise ProviderUnavailable(f"public page fetch failed: {url}: {exc}") from exc
     try:
-        resp = shared_client().get(
-            url,
-            headers={"User-Agent": _BROWSER_UA},
-            timeout=timeout,
-            verify=False,
-            follow_redirects=True,
+        resp = insecure_client().get(
+            url, headers={"User-Agent": _BROWSER_UA}, timeout=timeout, follow_redirects=True
         )
         resp.raise_for_status()
         return resp.text, True

@@ -15,14 +15,18 @@ from typing import Any
 import httpx
 
 _client: httpx.Client | None = None
+_insecure: httpx.Client | None = None
 _lock = threading.Lock()
 
 
 def shared_client() -> httpx.Client:
     """Process-wide keep-alive client (10 conns, 20s default timeout).
 
-    Per-request ``timeout=`` / ``verify=`` overrides still apply — pooling
-    only reuses the TCP/TLS layer, it does not pin request options.
+    Per-request ``timeout=``/``headers=``/``follow_redirects=`` apply; TLS
+    verification is fixed per client (httpx has no per-request ``verify``),
+    so unverified fallbacks use ``insecure_client()``. Redirects are followed
+    and cookies persist: only for fixed provider hosts, never arbitrary URLs
+    (webfetch builds its own client).
     """
     global _client
     if _client is not None:
@@ -36,6 +40,26 @@ def shared_client() -> httpx.Client:
             follow_redirects=True,
         )
         return _client
+
+
+def insecure_client() -> httpx.Client:
+    """Keep-alive client with TLS verification off, for hosts with broken chains.
+
+    Callers must report the response as unverified (vn_public's tls flag).
+    """
+    global _insecure
+    if _insecure is not None:
+        return _insecure
+    with _lock:
+        if _insecure is not None:
+            return _insecure
+        _insecure = httpx.Client(
+            limits=httpx.Limits(max_connections=4, max_keepalive_connections=4),
+            timeout=20.0,
+            follow_redirects=True,
+            verify=False,
+        )
+        return _insecure
 
 
 def get(url: str, **kwargs: Any) -> httpx.Response:
