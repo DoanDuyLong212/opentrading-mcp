@@ -52,6 +52,7 @@ def _install_forensic_fakes(monkeypatch) -> None:
             {"norm_id": 3014, "name": "I. Nợ ngắn hạn", "values": [300.0, 320.0]},
             {"norm_id": 2998, "name": "D. VỐN CHỦ SỞ HỮU", "values": [500.0, 580.0]},
             {"norm_id": 3002, "name": "Tiền và tương đương tiền", "values": [100.0, 110.0]},
+            {"norm_id": 3005, "name": "III. Các khoản phải thu ngắn hạn", "values": [60.0, 72.0]},
             {"norm_id": 3022, "name": "Phải thu ngắn hạn của khách hàng", "values": [50.0, 60.0]},
         ],
     }
