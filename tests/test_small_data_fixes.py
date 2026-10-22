@@ -103,6 +103,11 @@ def test_index_candles_are_labelled_points():
         "market_candles_batch", {"data": {"series": [{"symbol": "VNINDEX"}], "missing": []}}
     )
     assert only_index["units"]["o, h, l, c, last, high, low"] == POINTS
+    # VNI is a listed stock, not the index
+    assert with_units("vn_quote_history", {"data": {"symbol": "VNI"}})["units"][
+        "o, h, l, c, last, high, low"] == THOUSAND_DONG
+    shock = with_units("scenario_simulate", {"data": {"symbol": "VNINDEX"}})
+    assert shock["units"]["last_close, shocked_price"] == POINTS
 
 
 # --- regime_assets: one calendar year back ----------------------------------------------

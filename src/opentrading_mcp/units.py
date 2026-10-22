@@ -42,16 +42,20 @@ _BOARD = {
 
 # vn_quote_history / market_candles_batch also serve index symbols, whose candles are
 # index points, not thousand dong (VNINDEX 1760.63). Explicit list: stock codes such as
-# VNM or VND also start with "VN".
+# VNM or VND also start with "VN", and VNI is a listed stock (checked against the listing).
 INDEX_SYMBOLS = frozenset(
     "VNINDEX VN30 VN100 VNMID VNSML VNALL VNXALL VNX50 VNDIAMOND VNFINLEAD VNFINSELECT "
     "VNFIN VNMAT VNREAL VNUTI VNIT VNSI VNHEAL VNIND VNCONS VNCOND VNENE "
-    "HNXINDEX HNX30 HNXUPCOMINDEX UPCOMINDEX VNI".split()
+    "HNXINDEX HNX30 HNXUPCOMINDEX UPCOMINDEX".split()
 )
 _INDEX_HISTORY = {"o, h, l, c, last, high, low": POINTS, "v": SHARES}
 _SCENARIO = {
     "last_close, shocked_price": THOUSAND_DONG,
     "pnl_per_1000_shares": "nghìn đồng cho 1000 cổ phiếu (-1062,5 = -1.062.500 đ)",
+}
+_INDEX_SCENARIO = {
+    "last_close, shocked_price": POINTS,
+    "pnl_per_1000_shares": "điểm x 1000 (chỉ số, không phải tiền)",
 }
 
 UNITS: dict[str, dict[str, str]] = {
@@ -73,9 +77,9 @@ def _units_for(tool: str, result: dict[str, Any]) -> dict[str, str] | None:
     data = result.get("data")
     if not units or not isinstance(data, dict):
         return units
-    if tool == "vn_quote_history":
+    if tool in ("vn_quote_history", "scenario_simulate"):
         if str(data.get("symbol", "")).upper() in INDEX_SYMBOLS:
-            return _INDEX_HISTORY
+            return _INDEX_HISTORY if tool == "vn_quote_history" else _INDEX_SCENARIO
     elif tool == "market_candles_batch":
         symbols = [
             str(s.get("symbol", "")).upper()
