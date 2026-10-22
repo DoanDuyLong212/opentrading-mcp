@@ -58,6 +58,8 @@ async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
     assert data["periods"] == ["2025", "2024", "2023", "2022"]
     assert [r["item_id"] for r in data["ratios"]] == ["roe", "roe_trailling"]
     assert data["ratios"][0]["values"]["2025"] == 28.3
+    # vnstock's 0.0 in every year means "no value", not an ROE of 0
+    assert set(data["ratios"][1]["values"].values()) == {None}
 
 
 async def test_financial_ratios_peers_carry_the_newest_period(monkeypatch):
@@ -78,3 +80,10 @@ async def test_peer_compare_metric_aliases(monkeypatch):
         "trailing_eps": 6021.21,
         "roe": 28.3,
     }
+
+
+async def test_peer_compare_warns_on_a_metric_the_table_lacks(monkeypatch):
+    _install(monkeypatch, [])
+    env = await _tool("peer_compare")(symbol="FPT", peers=[], metrics=["pe", "market_cap"])
+    assert env["data"]["rows"][0]["p_e"] == 15.91
+    assert "metric 'market_cap' is not in the vnstock ratio table" in env["warnings"]

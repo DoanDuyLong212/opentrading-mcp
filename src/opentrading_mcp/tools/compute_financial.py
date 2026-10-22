@@ -567,6 +567,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
         rows: list[dict[str, Any]] = []
         warnings: list[str] = []
+        seen_ids: set[str] = set()
         for name in [symbol, *peers][:6]:
             try:
                 table = await _call("p", vn_p.equity_ratios, name, "year", secs=45.0)
@@ -576,10 +577,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 continue
             newest = table["periods"][0]
             row: dict[str, Any] = {"symbol": name.upper(), "period_label": newest}
+            seen_ids.update(r["item_id"].lower() for r in table["ratios"])
             for ratio in table["ratios"]:
                 if wanted is None or ratio["item_id"].lower() in wanted:
                     row[ratio["item_id"]] = ratio["values"].get(newest)
             rows.append(row)
+        if wanted is not None and seen_ids:
+            for metric in sorted(wanted - seen_ids):
+                warnings.append(f"metric {metric!r} is not in the vnstock ratio table")
         return await cache_store(
             "peer_compare", fp, TTL_SECONDS["overview"],
             {"rows": rows}, source="vnstock", warnings=warnings or None,

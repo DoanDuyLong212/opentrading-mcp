@@ -638,7 +638,9 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
     """Every clean period of a long-format ratio frame, newest first, and its rows.
 
     Returns (periods, [{item_id, item, values: {period: value or None}}]); None when
-    the frame is not in the item/item_id + period-column layout.
+    the frame is not in the item/item_id + period-column layout. vnstock writes 0.0 where
+    it has nothing (FPT roe_trailling is 0.0 in every year), so a row that is exactly 0
+    in every period comes back as None, not as a ratio of 0.
     """
     try:
         if "item_id" not in [str(c) for c in frame.columns]:
@@ -664,6 +666,8 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
                 except (TypeError, ValueError):
                     num = float("nan")
                 values[label] = num if math.isfinite(num) else None
+            if all(v in (None, 0.0) for v in values.values()):
+                values = dict.fromkeys(values)
             rows.append({"item_id": key, "item": str(row.get("item") or "").strip(),
                          "values": values})
         return periods, rows
