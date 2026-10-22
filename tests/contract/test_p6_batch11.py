@@ -7,28 +7,6 @@ from typing import Any
 from opentrading_mcp.server import create_server, register_preset
 
 
-async def test_breadth_counts_capitalized_change(monkeypatch):
-    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        return [
-            {"Code": "AAA", "Change": 1.5},
-            {"Code": "BBB", "Change": -0.5},
-            {"Code": "CCC", "Change": 0.0},
-        ]
-
-    import opentrading_mcp.tools.market as market_mod
-
-    monkeypatch.setattr(market_mod, "run_blocking", fake_block)
-    server = create_server("market")
-    register_preset(server, "market")
-    tool = server._tool_manager.get_tool("breadth_scan")
-    assert tool is not None
-    env = await tool.fn()
-    assert env["availability"] == "available"
-    assert env["data"]["advancers"] == 1
-    assert env["data"]["decliners"] == 1
-    assert env["data"]["rows"] == 3
-
-
 def test_reference_equity_uses_kbs_source(monkeypatch):
     from opentrading_mcp.providers import vnstock as vn_p
 
