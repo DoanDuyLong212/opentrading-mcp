@@ -268,7 +268,7 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         want = max(30, min(int(days or 40), 90))
         # Date in fp (VN calendar, not the server's): a new session must recompute.
         today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
-        fp = f"{sym}|{want}|{today}"
+        fp = f"v2|{sym}|{want}|{today}"  # v2: ISO dates, new attempt after a failure
         hit = await cache_lookup("distribution_count", fp)
         if hit is not None:
             return hit
