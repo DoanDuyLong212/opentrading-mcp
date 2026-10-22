@@ -93,34 +93,27 @@ def compute(
     # avg_loss==0 & avg_gain>0 -> 100; both zero -> 50
     rsi = rsi.where(avg_loss != 0, np.where(avg_gain > 0, 100.0, 50.0))
     rsi = rsi.clip(0, 100)
+    # Too few bars gives None, never an invented neutral 50 (same for every indicator below).
     rsi14 = _last_float(rsi)
-    if rsi14 is None:
-        rsi14 = 50.0
 
     # Stoch (14,3)
     ll = low.rolling(14, min_periods=14).min()
     hh = high.rolling(14, min_periods=14).max()
-    denom = (hh - ll).replace(0, np.nan)
-    k = 100 * (close - ll) / denom
-    k = k.where(denom.notna().fillna(False), 50.0)
-    k = k.fillna(50.0).clip(0, 100)
-    d = k.rolling(3, min_periods=1).mean()
+    span_hl = hh - ll
+    k = 100 * (close - ll) / span_hl.replace(0, np.nan)
+    # A flat 14-bar range puts %K mid-range; bars before the window fills stay NaN.
+    k = k.where(span_hl != 0, 50.0).where(span_hl.notna()).clip(0, 100)
+    d = k.rolling(3, min_periods=3).mean()
     stoch_k = _last_float(k)
     stoch_d = _last_float(d)
-    if stoch_k is None:
-        stoch_k = 50.0
-    if stoch_d is None:
-        stoch_d = 50.0
 
     # CCI20
     tp = (high + low + close) / 3
     sma_tp = tp.rolling(20, min_periods=20).mean()
     md = (tp - sma_tp).abs().rolling(20, min_periods=20).mean()
     cci = (tp - sma_tp) / (0.015 * md.replace(0, np.nan))
-    cci = cci.replace([np.inf, -np.inf], 0.0).fillna(0.0)
+    cci = cci.where(md != 0, 0.0).where(md.notna())  # flat window: 0; warm-up: NaN
     cci20 = _last_float(cci)
-    if cci20 is None:
-        cci20 = 0.0
 
     # ATR14 Wilder + ADX14
     prev_c = close.shift(1)
@@ -130,8 +123,6 @@ def compute(
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
     atr = tr.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
     atr14 = _last_float(atr)
-    if atr14 is None:
-        atr14 = 0.0
 
     up = high.diff()
     down = -low.diff()
@@ -142,43 +133,36 @@ def compute(
     atr_sm = tr.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean().replace(0, np.nan)
     plus_di = 100 * plus_sm / atr_sm
     minus_di = 100 * minus_sm / atr_sm
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    dx = dx.replace([np.inf, -np.inf], 0.0).fillna(0.0)
+    di_sum = plus_di + minus_di
+    dx = 100 * (plus_di - minus_di).abs() / di_sum.replace(0, np.nan)
+    # No directional movement gives DX 0; the DI warm-up stays NaN so it is not
+    # averaged into ADX as fake zeros.
+    dx = dx.where(~((di_sum == 0) & plus_di.notna()), 0.0)
     adx = dx.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
     adx14 = _last_float(adx)
-    if adx14 is None:
-        adx14 = 0.0
 
     # MACD (12,26,9)
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
+    ema12 = close.ewm(span=12, min_periods=12, adjust=False).mean()
+    ema26 = close.ewm(span=26, min_periods=26, adjust=False).mean()
     macd_line = ema12 - ema26
-    macd_signal = macd_line.ewm(span=9, adjust=False).mean()
+    macd_signal = macd_line.ewm(span=9, min_periods=9, adjust=False).mean()
     line_f = _last_float(macd_line, 4)
     sig_f = _last_float(macd_signal, 4)
-    if line_f is None:
-        line_f = 0.0
-    if sig_f is None:
-        sig_f = 0.0
-    hist_f = round(line_f - sig_f, 4)
+    hist_f = round(line_f - sig_f, 4) if line_f is not None and sig_f is not None else None
 
     # Momentum10
     mom = close - close.shift(10)
     momentum10 = _last_float(mom)
-    if momentum10 is None:
-        momentum10 = 0.0
 
     # AO (5,34 median)
     median = (high + low) / 2
     ao_s = median.rolling(5, min_periods=5).mean() - median.rolling(34, min_periods=34).mean()
     ao = _last_float(ao_s)
-    if ao is None:
-        ao = 0.0
 
     # EMA / SMA
-    ema10 = _last_float(close.ewm(span=10, adjust=False).mean())
-    ema20 = _last_float(close.ewm(span=20, adjust=False).mean())
-    ema50 = _last_float(close.ewm(span=50, adjust=False).mean())
+    ema10 = _last_float(close.ewm(span=10, min_periods=10, adjust=False).mean())
+    ema20 = _last_float(close.ewm(span=20, min_periods=20, adjust=False).mean())
+    ema50 = _last_float(close.ewm(span=50, min_periods=50, adjust=False).mean())
     sma10 = _last_float(close.rolling(10, min_periods=10).mean())
     sma20 = _last_float(close.rolling(20, min_periods=20).mean())
     sma50 = _last_float(close.rolling(50, min_periods=50).mean())
@@ -233,30 +217,35 @@ def compute(
     boll_upper = _last_float(mid + 2 * std)
     boll_lower = _last_float(mid - 2 * std)
 
-    # Ichimoku (9/26/52): tenkan/kijun/senkou/chikou + cloud signal.
-    def _donchian(s: Any, period: int) -> Any:
+    # Ichimoku (9/26/52). Each line is the midpoint of the highest high and the lowest
+    # low over its window. The senkou spans are plotted 26 bars ahead, so the cloud
+    # under today's price is the spans computed 26 bars ago: senkou_a/senkou_b report
+    # that cloud (what the signal compares against), *_ahead the spans just computed.
+    def _midpoint(period: int) -> Any:
         return (
-            s.rolling(period, min_periods=period).max()
-            + s.rolling(period, min_periods=period).min()
+            high.rolling(period, min_periods=period).max()
+            + low.rolling(period, min_periods=period).min()
         ) / 2
 
     try:
-        tenkan_s = (_donchian(high, 9) + _donchian(low, 9)) / 2
-        kijun_s = (_donchian(high, 26) + _donchian(low, 26)) / 2
+        tenkan_s = _midpoint(9)
+        kijun_s = _midpoint(26)
         senkou_a_s = (tenkan_s + kijun_s) / 2
-        senkou_b_s = (_donchian(high, 52) + _donchian(low, 52)) / 2
-        chikou_s = close.shift(26)
+        senkou_b_s = _midpoint(52)
+        chikou_s = close.shift(26)  # the close 26 bars ago, which chikou is read against
         tenkan = _last_float(tenkan_s)
         kijun = _last_float(kijun_s)
-        senkou_a = _last_float(senkou_a_s)
-        senkou_b = _last_float(senkou_b_s)
+        senkou_a = _last_float(senkou_a_s.shift(26))
+        senkou_b = _last_float(senkou_b_s.shift(26))
+        senkou_a_ahead = _last_float(senkou_a_s)
+        senkou_b_ahead = _last_float(senkou_b_s)
         chikou = _last_float(chikou_s)
     except Exception:
-        tenkan = kijun = senkou_a = senkou_b = chikou = None
-    if tenkan is None or kijun is None:
+        tenkan = kijun = senkou_a = senkou_b = senkou_a_ahead = senkou_b_ahead = chikou = None
+    cloud_parts = [x for x in (senkou_a, senkou_b) if x is not None]
+    if tenkan is None or kijun is None or not cloud_parts:
         ichi_signal = None
     else:
-        cloud_parts = [x for x in (senkou_a, senkou_b) if x is not None]
         top = max(cloud_parts)
         bot = min(cloud_parts)
         if last > top and tenkan > kijun:
@@ -270,6 +259,8 @@ def compute(
         "kijun": kijun,
         "senkou_a": senkou_a,
         "senkou_b": senkou_b,
+        "senkou_a_ahead": senkou_a_ahead,
+        "senkou_b_ahead": senkou_b_ahead,
         "chikou": chikou,
         "signal": ichi_signal,
     }
@@ -317,13 +308,20 @@ def compute(
     except Exception:
         fib = {"direction": None, "anchor_lo": None, "anchor_hi": None, "levels": {}}
 
-    # Recommend vote: rsi / macd / adx / stoch / ma trend
+    # Recommend vote: rsi / macd / adx / stoch / ma trend (an indicator without a value
+    # votes Neutral).
     votes: list[str] = []
-    votes.append("Buy" if rsi14 > 55 else ("Sell" if rsi14 < 45 else "Neutral"))
-    votes.append("Buy" if hist_f > 0 else ("Sell" if hist_f < 0 else "Neutral"))
-    if stoch_k > stoch_d:
+    if rsi14 is not None:
+        votes.append("Buy" if rsi14 > 55 else ("Sell" if rsi14 < 45 else "Neutral"))
+    else:
+        votes.append("Neutral")
+    if hist_f is not None:
+        votes.append("Buy" if hist_f > 0 else ("Sell" if hist_f < 0 else "Neutral"))
+    else:
+        votes.append("Neutral")
+    if stoch_k is not None and stoch_d is not None and stoch_k > stoch_d:
         votes.append("Buy")
-    elif stoch_k < stoch_d:
+    elif stoch_k is not None and stoch_d is not None and stoch_k < stoch_d:
         votes.append("Sell")
     else:
         votes.append("Neutral")

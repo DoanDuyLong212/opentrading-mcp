@@ -239,8 +239,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         indicators: chỉ giữ output nêu tên (vd rsi14, macd, sma20, recommend,
         patterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,
         swings, swing_trend, fib); bỏ qua để lấy full. interval: 1D (250 nến),
-        1W (dài, tối thiểu 30 nến) hoặc 1M (tối thiểu 24 nến); trường MA dài
-        null khi lịch sử ngắn.
+        1W (dài, tối thiểu 30 nến) hoặc 1M (tối thiểu 24 nến); chỉ báo nào chưa đủ
+        nến thì null (không điền 50/0). ichimoku: senkou_a/senkou_b là mây dưới giá
+        hiện tại (đường tính từ 26 nến trước), senkou_*_ahead là mây chiếu 26 nến tới;
+        chikou là giá đóng cửa 26 nến trước.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
