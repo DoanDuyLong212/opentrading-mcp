@@ -202,14 +202,14 @@ def test_crypto_spot_vision_fallback(monkeypatch):
 
 
 def test_valuation_run_eps_fallback(monkeypatch):
-    """overview lacks EPS → derive from vnstock PE."""
+    """overview lacks EPS → vnstock trailing EPS/BVPS (not price / period-end PE)."""
     from opentrading_mcp.tools import compute_financial as comp_fin
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
         if tool == "v":
             return {"ClosePrice": 57000}
         if tool == "f":
-            return {"pe": 15.0}
+            return {"pe": 99.0, "eps": 3800.0, "bvps": 19000.0, "period_label": "2025"}
         return [{"close_price": 57000.0}]
 
     monkeypatch.setattr(comp_fin, "_call", fake_call)
@@ -220,7 +220,8 @@ def test_valuation_run_eps_fallback(monkeypatch):
     _check_envelope(env, "valuation_run")
     assert env["data"]["method"] == "pb_bank_broker"
     assert env["data"]["per"] == 15.0
-    assert any("vnstock PE" in w for w in (env["warnings"] or []))
+    assert env["data"]["pb"] == 3.0
+    assert "2025" in env["data"]["eps_source"]
 
 
 def test_financial_detail_lctt_vnstock_fallback(monkeypatch):
