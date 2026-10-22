@@ -442,6 +442,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 and entry.get("symbol")
                 and entry.get("threshold") is not None
             ):
+                warnings_list.append(f"rule {i}: needs symbol and threshold")
                 continue
             op = _ALERT_OP_ALIASES.get(str(entry.get("op", ">")).strip().lower())
             metric = str(entry.get("metric", "price")).strip().lower()

@@ -74,9 +74,11 @@ async def test_unknown_op_is_skipped_not_read_as_less_than(board):
         [
             {"symbol": "HPG", "metric": "price", "op": "above", "threshold": 999999},
             {"symbol": "HPG", "metric": "volume", "op": ">", "threshold": 1},
+            {"symbol": "HPG", "op": ">"},
         ]
     )
     assert env["data"]["triggered"] == []
+    assert any("rule 2: needs symbol and threshold" in w for w in env["warnings"])
     assert any("unknown op 'above'" in w for w in env["warnings"])
     assert any("unknown metric 'volume'" in w for w in env["warnings"])
 
