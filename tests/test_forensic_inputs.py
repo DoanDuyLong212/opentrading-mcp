@@ -84,3 +84,26 @@ async def test_bank_template_uses_bank_lines(monkeypatch):
     assert series["receivables"] == []
     assert data["dsri"] is None and data["aqi"] is None
     assert set(data["m_partial"]) >= {"dsri", "aqi", "tata"}
+    # "current ratio up" cannot be computed without current assets/liabilities:
+    # left out of the F-Score, not counted as failed
+    assert data["f_missing"] == ["current ratio up"]
+    assert data["f_score"].endswith("/5")
+
+
+@pytest.mark.parametrize(
+    ("symbol", "expected"),
+    [
+        ("SSI", {"revenue": 4590, "gross": 4592, "net_income": 4585, "receivables": 4484,
+                 "assets": 4476, "cash": 4774, "current_assets": 4480,
+                 "current_liabilities": 4493, "liabilities": 4477, "equity": 4478}),
+        ("BVH", {"revenue": 3204, "gross": 3205, "net_income": 3200, "receivables": 3104,
+                 "assets": 3095, "cash": 3102, "current_assets": 3099,
+                 "current_liabilities": 3113, "liabilities": 3096, "equity": 3097}),
+    ],
+)
+def test_securities_and_insurance_templates_resolve_to_their_total_lines(symbol, expected):
+    for line, norm_id in expected.items():
+        statement = "KQKD" if line in ("revenue", "gross", "net_income") else "CDKT"
+        rows = DETAIL[symbol][statement]["rows"]
+        want = next(r["values"] for r in rows if r["norm_id"] == norm_id)
+        assert comp_fin._fd_line(DETAIL[symbol][statement], line) == want, line

@@ -110,28 +110,38 @@ def _fd_row(
     return values if any(v is not None for v in values) else []
 
 
-# Statement lines used by stock_forensic: Vietstock norm ids of the general (FPT) and
-# bank (VCB) templates, checked live 2026-10-23, then exact line names for other templates.
+# Statement lines used by stock_forensic: Vietstock norm ids of the general (FPT), bank
+# (VCB), securities (SSI) and insurance (BVH) templates, checked live 2026-10-23, then
+# exact line names for any other template.
 _FD_LINES: dict[str, tuple[tuple[int, ...], tuple[str, ...]]] = {
     "revenue": (
-        (2216, 4385),
+        (2216, 4385, 4590, 3204),
         ("doanh thu thuần về bán hàng và cung cấp dịch vụ", "doanh thu thuần",
-         "thu nhập lãi thuần"),
+         "thu nhập lãi thuần", "doanh thu thuần hđkd bh"),
     ),
-    "gross": ((2217,), ("lợi nhuận gộp về bán hàng và cung cấp dịch vụ", "lợi nhuận gộp")),
+    "gross": (
+        (2217, 4592, 3205),
+        ("lợi nhuận gộp về bán hàng và cung cấp dịch vụ", "lợi nhuận gộp",
+         "lợi nhuận gộp của hoạt động kinh doanh",
+         "lợi nhuận gộp hoạt động kinh doanh bảo hiểm"),
+    ),
     "net_income": (
-        (2212, 4378),
-        ("lợi nhuận sau thuế thu nhập doanh nghiệp", "lợi nhuận sau thuế"),
+        (2212, 4378, 4585, 3200),
+        ("lợi nhuận sau thuế thu nhập doanh nghiệp", "lợi nhuận sau thuế",
+         "lợi nhuận kế toán sau thuế tndn"),
     ),
-    "selling": ((2227,), ("chi phí bán hàng",)),
-    "admin": ((2224,), ("chi phí quản lý doanh nghiệp", "chi phí quản lý")),
-    "receivables": ((3005,), ("các khoản phải thu ngắn hạn",)),
-    "assets": ((2996, 4375), ("tổng cộng tài sản",)),
-    "cash": ((3003,), ("tiền và các khoản tương đương tiền", "tiền và tương đương tiền")),
-    "current_assets": ((3000,), ("tài sản ngắn hạn",)),
-    "current_liabilities": ((3014,), ("nợ ngắn hạn",)),
-    "liabilities": ((2997, 4304), ("nợ phải trả", "tổng nợ phải trả")),
-    "equity": ((2998, 4325), ("vốn chủ sở hữu", "vốn và các quỹ")),
+    "selling": ((2227, 5478, 3251), ("chi phí bán hàng",)),
+    "admin": ((2224, 3231), ("chi phí quản lý doanh nghiệp", "chi phí quản lý")),
+    "receivables": ((3005, 4484, 3104), ("các khoản phải thu ngắn hạn",)),
+    "assets": ((2996, 4375, 4476, 3095), ("tổng cộng tài sản",)),
+    "cash": (
+        (3003, 4774, 3102),
+        ("tiền và các khoản tương đương tiền", "tiền và tương đương tiền"),
+    ),
+    "current_assets": ((3000, 4480, 3099), ("tài sản ngắn hạn",)),
+    "current_liabilities": ((3014, 4493, 3113), ("nợ ngắn hạn",)),
+    "liabilities": ((2997, 4304, 4477, 3096), ("nợ phải trả", "tổng nợ phải trả")),
+    "equity": ((2998, 4325, 4478, 3097), ("vốn chủ sở hữu", "vốn và các quỹ")),
     "cfo": ((2234,), ("lưu chuyển tiền thuần từ hoạt động kinh doanh",)),
 }
 
@@ -304,27 +314,30 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             flags.append("unusually fast sales growth (SGI>1.3)")
         if m_score is not None and m_score > -1.78:
             flags.append(f"M-Score {m_score} above -1.78 (manipulation evidence)")
-        # Piotroski: 6 items always computable here; +2 CFO items when LCTT exists.
+        # Piotroski: up to 6 items from KQKD/CDKT, +2 CFO items when LCTT exists. An item
+        # whose inputs are missing (no current-asset line on a bank) is left out of the
+        # score instead of counting as failed.
+        def _up(now: float | None, before: float | None) -> bool | None:
+            return None if now is None or before is None else now > before
+
         items: list[tuple[str, bool | None]] = []
         if ni_t is not None and assets_t:
             roa_t, roa_p = _safe_div(ni_t, assets_t), _safe_div(ni_p, assets_p)
-            items.append(("ROA>0", roa_t is not None and roa_t > 0))
-            items.append(("dROA>0", roa_t is not None and roa_p is not None and roa_t > roa_p))
+            items.append(("ROA>0", roa_t > 0 if roa_t is not None else None))
+            items.append(("dROA>0", _up(roa_t, roa_p)))
             lev_t, lev_p = _safe_div(debt_t, eq_t), _safe_div(debt_p, eq_p)
-            items.append(
-                ("leverage down", lev_t is not None and lev_p is not None and lev_t < lev_p)
-            )
+            items.append(("leverage down", _up(lev_p, lev_t)))
             cr_t, cr_p = _safe_div(ca_t, cl_t), _safe_div(ca_p, cl_p)
-            items.append(
-                ("current ratio up", cr_t is not None and cr_p is not None and cr_t > cr_p)
-            )
+            items.append(("current ratio up", _up(cr_t, cr_p)))
             gm_t, gm_p = _safe_div(gross_t, rev_t), _safe_div(gross_p, rev_p)
-            items.append(("gross margin up", gm_t is not None and gm_p is not None and gm_t > gm_p))
+            items.append(("gross margin up", _up(gm_t, gm_p)))
             to_t, to_p = _safe_div(rev_t, assets_t), _safe_div(rev_p, assets_p)
-            items.append(("turnover up", to_t is not None and to_p is not None and to_t > to_p))
+            items.append(("turnover up", _up(to_t, to_p)))
             if cfo_t is not None:
                 items.append(("CFO>0", cfo_t > 0))
-                items.append(("CFO>NI", ni_t is not None and cfo_t > ni_t))
+                items.append(("CFO>NI", cfo_t > ni_t))
+        f_missing = [name for name, ok in items if ok is None]
+        items = [(name, ok) for name, ok in items if ok is not None]
         counted = sum(1 for _, ok in items if ok is True)
         out: dict[str, Any] = {
             "symbol": sym,
@@ -338,6 +351,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             "m_score": m_score,
             "m_partial": missing or None,
             "f_score": f"{counted}/{len(items)}",
+            "f_missing": f_missing or None,
             "flags": flags,
         }
         if detail:

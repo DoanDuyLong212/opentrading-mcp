@@ -1,5 +1,5 @@
 {
-"_source": "Live deployed MCP 2026-10-23: financial_detail periods_n=2 (Q1/2026, Q2/2026, VND bn) for FPT (general template) and VCB (bank template).",
+"_source": "Live deployed MCP 2026-10-23: financial_detail periods_n=2 (VND bn) for FPT (general template), VCB (bank), SSI (securities) and BVH (insurance).",
 "FPT": {
 "KQKD": {
 "symbol": "FPT",
@@ -2195,6 +2195,3846 @@ null
 "values": [
 2550963.0,
 2657441.0
+]
+}
+]
+}
+},
+"SSI": {
+"KQKD": {
+"symbol": "SSI",
+"statement": "KQKD",
+"unit": "VNDbn",
+"periods": [
+"Q2/2026",
+"Q3/2026"
+],
+"rows": [
+{
+"norm_id": 5409,
+"name": "I. DOANH THU HOẠT ĐỘNG",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5434,
+"name": "1.1. Lãi từ các tài sản tài chính ghi nhận thông qua lãi/lỗ (FVTPL)",
+"values": [
+1422.0,
+1344.0
+]
+},
+{
+"norm_id": 5472,
+"name": "a. Lãi bán các tài sản tài chính",
+"values": [
+655.0,
+799.0
+]
+},
+{
+"norm_id": 5473,
+"name": "b. Chênh lệch tăng đánh giá lại các TSTC thông qua lãi/lỗ",
+"values": [
+127.0,
+30.0
+]
+},
+{
+"norm_id": 5474,
+"name": "c. Cổ tức, tiền lãi phát sinh từ tài sản tài chính PVTPL",
+"values": [
+597.0,
+508.0
+]
+},
+{
+"norm_id": 5712,
+"name": "d. Chênh lệch giảm do đánh giá lại phải trả chứng quyền đang lưu hành",
+"values": [
+43.0,
+7.0
+]
+},
+{
+"norm_id": 5435,
+"name": "1.2. Lãi từ các khoản đầu tư nắm giữ đến ngày đáo hạn (HTM)",
+"values": [
+129.0,
+140.0
+]
+},
+{
+"norm_id": 5436,
+"name": "1.3. Lãi từ các khoản cho vay và phải thu",
+"values": [
+1091.0,
+1115.0
+]
+},
+{
+"norm_id": 5437,
+"name": "1.4. Lãi từ các tài sản tài chính sẵn sàng để bán (AFS)",
+"values": [
+16.0,
+70.0
+]
+},
+{
+"norm_id": 5438,
+"name": "1.5. Lãi từ các công cụ phái sinh phòng ngừa rủi ro",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4599,
+"name": "1.6. Doanh thu môi giới chứng khoán",
+"values": [
+462.0,
+350.0
+]
+},
+{
+"norm_id": 4600,
+"name": "- Doanh thu hoạt động đầu tư chứng khoán, góp vốn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4602,
+"name": "1.7. Doanh thu bảo lãnh phát hành, đại lý phát hành chứng khoán",
+"values": [
+4.0,
+null
+]
+},
+{
+"norm_id": 4601,
+"name": "- Doanh thu quản lý danh mục đầu tư cho  người uỷ thác đầu tư",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4603,
+"name": "1.8. Doanh thu hoạt động tư vấn",
+"values": [
+46.0,
+1.0
+]
+},
+{
+"norm_id": 4608,
+"name": "1.9. Doanh thu hoạt động ủy thác đấu giá",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4604,
+"name": "1.10. Doanh thu lưu ký chứng khoán",
+"values": [
+16.0,
+17.0
+]
+},
+{
+"norm_id": 4606,
+"name": "- Doanh thu cho thuê sử dụng tài sản",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4605,
+"name": "1.11. Thu nhập hoạt động khác",
+"values": [
+132.0,
+41.0
+]
+},
+{
+"norm_id": 4593,
+"name": "Các khoản giảm trừ doanh thu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4589,
+"name": "Cộng doanh thu hoạt động (01->11)",
+"values": [
+3319.0,
+3079.0
+]
+},
+{
+"norm_id": 4590,
+"name": "Doanh thu thuần",
+"values": [
+3319.0,
+3079.0
+]
+},
+{
+"norm_id": 5410,
+"name": "II. CHI PHÍ HOẠT ĐỘNG",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5439,
+"name": "2.1. Lỗ các tài sản tài chính ghi nhận thông qua lỗ (FVTPL)",
+"values": [
+448.0,
+512.0
+]
+},
+{
+"norm_id": 5475,
+"name": "a. Lỗ bán các tài sản tài chính",
+"values": [
+282.0,
+336.0
+]
+},
+{
+"norm_id": 5476,
+"name": "b. Chênh lệch giảm đánh giá lại các TSTC thông qua lãi/lỗ",
+"values": [
+19.0,
+110.0
+]
+},
+{
+"norm_id": 5477,
+"name": "c. Chi phí giao dịch mua các tài sản tài chính (FVTPL)",
+"values": [
+3.0,
+4.0
+]
+},
+{
+"norm_id": 5713,
+"name": "d. Chênh lệch tăng do đánh giá lại phải trả chứng quyền đang lưu hành",
+"values": [
+144.0,
+62.0
+]
+},
+{
+"norm_id": 5440,
+"name": "2.2. Lỗ các khoản đầu tư năm giữ đến ngày đáo hạn (HTM)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5441,
+"name": "2.3. Chi phí lãi vay, lỗ từ các khoản cho vay và phải thu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5442,
+"name": "2.4 Lỗ bán các tài sản tài chính sẵn sàng để bán (AFS)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5714,
+"name": "Chi phí dự phòng TSTC, xử lý tổn thất các khoản phải thu khó đòi và lỗ suy giảm TSTC và chi phí đi vay của các khoản cho vay",
+"values": [
+null,
+-41.0
+]
+},
+{
+"norm_id": 5443,
+"name": "2.5. Lỗ từ các tài sản tài chính phái sinh phòng ngừa rủi ro",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5444,
+"name": "2.6. Chi phí hoạt động tự doanh",
+"values": [
+24.0,
+37.0
+]
+},
+{
+"norm_id": 5445,
+"name": "2.7. Chi phí môi giới chứng khoán",
+"values": [
+341.0,
+284.0
+]
+},
+{
+"norm_id": 5446,
+"name": "2.8. Chi phí hoạt động bảo lãnh, đại lý phát hành chứng  khoán",
+"values": [
+1.0,
+null
+]
+},
+{
+"norm_id": 5447,
+"name": "2.9. Chi phí tư vấn",
+"values": [
+9.0,
+10.0
+]
+},
+{
+"norm_id": 5448,
+"name": "2.10. Chi phí hoạt động đấu giá, ủy thác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5449,
+"name": "2.11. Chi phí lưu ký chứng khoán",
+"values": [
+17.0,
+18.0
+]
+},
+{
+"norm_id": 5450,
+"name": "2.12. Chi phí khác",
+"values": [
+52.0,
+21.0
+]
+},
+{
+"norm_id": 5451,
+"name": "Trong đó: Chi phí sửa lỗi giao dịch chứng khoán, lỗi khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4607,
+"name": "- Chi phí trực tiếp hoạt động kinh doanh chứng khoán",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4609,
+"name": "- Chi phí dự phòng chứng khoán",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4591,
+"name": "Cộng chi phí hoạt động (21->33)",
+"values": [
+892.0,
+842.0
+]
+},
+{
+"norm_id": 4592,
+"name": "Lợi nhuận gộp của hoạt động kinh doanh",
+"values": [
+2426.0,
+2237.0
+]
+},
+{
+"norm_id": 5411,
+"name": "III. DOANH THU HOẠT ĐỘNG TÀI CHÍNH",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5452,
+"name": "3.1. Chênh lệch lãi tỷ giá hối đoái đã và chưa thực hiện",
+"values": [
+-11.0,
+2.0
+]
+},
+{
+"norm_id": 5453,
+"name": "3.2. Doanh thu, dự thu cổ tức, lãi tiền gửi không cố định phát sinh trong kỳ",
+"values": [
+23.0,
+6.0
+]
+},
+{
+"norm_id": 5454,
+"name": "3.3. Lãi bán, thanh lý các khoản đầu tư vào công ty con, liên kết, liên doanh",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5455,
+"name": "3.4. Doanh thu khác về đầu tư",
+"values": [
+26.0,
+5.0
+]
+},
+{
+"norm_id": 5431,
+"name": "Cộng doanh thu hoạt động tài chính (41->44)",
+"values": [
+38.0,
+14.0
+]
+},
+{
+"norm_id": 5412,
+"name": "IV. CHÍ PHÍ TÀI CHÍNH",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5456,
+"name": "4.1. Chênh lệch lỗ tỷ giá hối đoái đã và chưa thưc hiện",
+"values": [
+10.0,
+20.0
+]
+},
+{
+"norm_id": 5433,
+"name": "4.2. Chi phí lãi vay",
+"values": [
+812.0,
+850.0
+]
+},
+{
+"norm_id": 5457,
+"name": "4.3. Lỗ bán, thanh lý các khoản đầu tư vào công ty con, liên kết, liên doanh",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5458,
+"name": "4.4. Chi phí đầu tư khác",
+"values": [
+46.0,
+32.0
+]
+},
+{
+"norm_id": 5432,
+"name": "Cộng chi phí tài chính (51->54)",
+"values": [
+868.0,
+902.0
+]
+},
+{
+"norm_id": 5478,
+"name": "V. CHI PHÍ BÁN HÀNG",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4596,
+"name": "VI. CHI PHÍ QUẢN LÝ CÔNG TY CHỨNG KHOÁN",
+"values": [
+67.0,
+69.0
+]
+},
+{
+"norm_id": 4581,
+"name": "VII. KẾT QUẢ HOẠT ĐỘNG",
+"values": [
+1529.0,
+1281.0
+]
+},
+{
+"norm_id": 5413,
+"name": "VIII. THU NHẬP KHÁC VÀ CHI PHÍ KHÁC",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4597,
+"name": "8.1. Thu nhập khác",
+"values": [
+1.0,
+14.0
+]
+},
+{
+"norm_id": 4598,
+"name": "8.2. Chi phí khác",
+"values": [
+0.0,
+0.0
+]
+},
+{
+"norm_id": 4582,
+"name": "Cộng kết quả hoạt động khác",
+"values": [
+0.0,
+14.0
+]
+},
+{
+"norm_id": 4583,
+"name": "Lãi/lỗ từ công ty liên doanh, liên kết",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4584,
+"name": "IX. TỔNG LỢI NHUẬN KẾ TOÁN TRƯỚC THUẾ",
+"values": [
+1529.0,
+1295.0
+]
+},
+{
+"norm_id": 5459,
+"name": "9.1. Lợi nhuận đã thực hiện",
+"values": [
+1526.0,
+1454.0
+]
+},
+{
+"norm_id": 5460,
+"name": "9.2. Lợi nhuận chưa thực hiện",
+"values": [
+3.0,
+-159.0
+]
+},
+{
+"norm_id": 5479,
+"name": "X. CHI PHÍ THUẾ THU NHẬP DOANH NGHIỆP",
+"values": [
+297.0,
+252.0
+]
+},
+{
+"norm_id": 4594,
+"name": "10.1. Chi phí thuế TNDN hiện hành",
+"values": [
+302.0,
+265.0
+]
+},
+{
+"norm_id": 4595,
+"name": "10.2. Chi phí thuế TNDN hoãn lại",
+"values": [
+-5.0,
+-14.0
+]
+},
+{
+"norm_id": 4585,
+"name": "XI.  LỢI NHUẬN KẾ TOÁN SAU THUẾ TNDN",
+"values": [
+1232.0,
+1043.0
+]
+},
+{
+"norm_id": 4587,
+"name": "11.1. Lợi nhuận sau thuế phân bổ cho chủ sở hữu",
+"values": [
+1231.0,
+1038.0
+]
+},
+{
+"norm_id": 5461,
+"name": "11.2. Lợi nhuận sau thuế trích các Quỹ (Quỹ dự trữ điều lệ, Quỹ Dự phòng tài chính và rủi ro nghề nghiệp theo quy định của Điều lệ Công ty là %)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4586,
+"name": "11.3.  Lợi nhuận thuần phân bổ cho  lợi ích cổ đông không kiểm soát",
+"values": [
+1.0,
+null
+]
+},
+{
+"norm_id": 5429,
+"name": "XII. THU NHẬP (LỖ) TOÀN DIỆN KHÁC SAU THUẾ TNDN",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5462,
+"name": "12.1. Lãi/(Lỗ) từ đánh giá lại các khoản đầu tư giữ đến ngày đáo hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5463,
+"name": "12.2.Lãi/(Lỗ) từ đánh giá lại các tài sản tài chính sẵn sàng để bán",
+"values": [
+-30.0,
+-81.0
+]
+},
+{
+"norm_id": 5464,
+"name": "12.3. Lãi (lỗ) toàn diện khác được chia từ hoạt động đầu tư vào công ty con, đầu tư liên kết, liên doanh",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5465,
+"name": "12.4. Lãi/(Lỗ) từ đánh giá lại các công cụ tài chính phái sinh",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5466,
+"name": "12.5. Lãi/(lỗ) chênh lệch tỷ giá của hoạt động tại nước ngoài",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5467,
+"name": "12.6. Lãi, lỗ từ các khoản đầu tư vào công ty con. Công ty liên kết, liên doanh chưa chia",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5468,
+"name": "12.7. Lãi, lỗ đánh giá công cụ phái sinh",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5469,
+"name": "12.8. Lãi, lỗ đánh giá lại tài sản cố định theo mô hình giá trị hợp lý",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5430,
+"name": "Tổng thu nhập toàn diện",
+"values": [
+-30.0,
+-81.0
+]
+},
+{
+"norm_id": 5470,
+"name": "Thu nhập toàn diện phân bổ cho chủ sở hữu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5471,
+"name": "Thu nhập toàn diện phân bổ cho cổ đông không nắm quyền kiểm soát",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5428,
+"name": "XIII. THU NHẬP THUẦN TRÊN CỔ PHIẾU PHỔ THÔNG",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4588,
+"name": "13.1.Lãi cơ bản trên cổ phiếu (Đồng/1 cổ phiếu)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5480,
+"name": "13.2.Thu nhập pha loãng trên cổ phiếu (Đồng/1 cổ phiếu)",
+"values": [
+null,
+null
+]
+}
+]
+},
+"CDKT": {
+"symbol": "SSI",
+"statement": "CDKT",
+"unit": "VNDbn",
+"periods": [
+"Q2/2026",
+"Q3/2026"
+],
+"rows": [
+{
+"norm_id": 4475,
+"name": "TÀI SẢN ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4480,
+"name": "A. TÀI SẢN NGẮN HẠN",
+"values": [
+91592.0,
+87181.0
+]
+},
+{
+"norm_id": 5370,
+"name": "I. Tài sản tài chính ngắn hạn",
+"values": [
+91457.0,
+87031.0
+]
+},
+{
+"norm_id": 4774,
+"name": "1. Tiền và các khoản tương đương tiền",
+"values": [
+532.0,
+984.0
+]
+},
+{
+"norm_id": 4497,
+"name": "1.1. Tiền",
+"values": [
+532.0,
+984.0
+]
+},
+{
+"norm_id": 4498,
+"name": "1.2. Các khoản tương đương tiền",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4483,
+"name": "Các khoản đầu tư tài chính ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4499,
+"name": "+Đầu tư ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4575,
+"name": "+Đầu tư ngắn hạn của người ủy thác Đầu tư",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4500,
+"name": "Dự phòng giảm giá đầu tư ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5372,
+"name": "2. Các tài sản tài chính ghi nhận thông qua lãi lỗ (FVTPL)",
+"values": [
+44114.0,
+43133.0
+]
+},
+{
+"norm_id": 5398,
+"name": "3. Các khoản đầu tư nắm giữ đến ngày đáo hạn (HTM)",
+"values": [
+4516.0,
+3635.0
+]
+},
+{
+"norm_id": 5373,
+"name": "4. Các khoản cho vay",
+"values": [
+40473.0,
+38294.0
+]
+},
+{
+"norm_id": 5374,
+"name": "5. Các tài sản tài chính sẵn sàn để bán (AFS)",
+"values": [
+691.0,
+301.0
+]
+},
+{
+"norm_id": 5375,
+"name": "6. Dự phòng suy giảm giá trị tài sản tài chính và tài sản thế chấp",
+"values": [
+0.0,
+0.0
+]
+},
+{
+"norm_id": 4484,
+"name": "7. Các khoản phải thu ngắn hạn",
+"values": [
+942.0,
+716.0
+]
+},
+{
+"norm_id": 5387,
+"name": "7.1. Phải thu bán các tài sản tài chính",
+"values": [
+155.0,
+116.0
+]
+},
+{
+"norm_id": 5388,
+"name": "7.2. Phải thu và dự thu cổ tức, tiền lãi các tài sản tài chính",
+"values": [
+787.0,
+600.0
+]
+},
+{
+"norm_id": 5389,
+"name": "7.2.1. Phải thu cổ tức, tiền lãi đến ngày nhận",
+"values": [
+null,
+600.0
+]
+},
+{
+"norm_id": 5390,
+"name": "Trong đó: Phải thu khó đòi về cổ tức, tiền lãi đến ngày nhận  nhưng chưa nhận được",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5391,
+"name": "7.2.2. Dự thu cổ tức, tiền lãi chưa đến ngày nhận",
+"values": [
+787.0,
+null
+]
+},
+{
+"norm_id": 4502,
+"name": "Trả trước cho người bán",
+"values": [
+77.0,
+54.0
+]
+},
+{
+"norm_id": 5376,
+"name": "9. Phải thu các dịch vụ CTCK cung cấp",
+"values": [
+29.0,
+10.0
+]
+},
+{
+"norm_id": 4504,
+"name": "Phải thu hoạt động giao dịch chứng khoán",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4503,
+"name": "10. Phải thu nội bộ ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5377,
+"name": "11. Phải thu về lỗi giao dịch chứng khoán",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4505,
+"name": "12. Các khoản phải thu khác",
+"values": [
+233.0,
+11.0
+]
+},
+{
+"norm_id": 5400,
+"name": "13. Dự phòng suy giảm giá trị các khoản phải thu",
+"values": [
+-149.0,
+-107.0
+]
+},
+{
+"norm_id": 4564,
+"name": "Dự phòng các khoản phải thu ngắn hạn khó đòi",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4501,
+"name": "Phải thu khách hàng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4485,
+"name": "Hàng tồn kho",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4506,
+"name": "Hàng tồn kho (chi tiết)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4565,
+"name": "Dự phòng giảm giá hàng tồn kho",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4486,
+"name": "II. Tài sản ngắn hạn khác",
+"values": [
+135.0,
+150.0
+]
+},
+{
+"norm_id": 5401,
+"name": "1. Tạm ứng",
+"values": [
+16.0,
+21.0
+]
+},
+{
+"norm_id": 5402,
+"name": "2. Vật tư văn phòng, công cụ, dụng cụ",
+"values": [
+0.0,
+0.0
+]
+},
+{
+"norm_id": 4507,
+"name": "3. Chi phí trả trước ngắn hạn",
+"values": [
+69.0,
+51.0
+]
+},
+{
+"norm_id": 5379,
+"name": "4. Cầm cố, thế chấp, ký quỹ, ký cược ngắn hạn",
+"values": [
+1.0,
+0.0
+]
+},
+{
+"norm_id": 4508,
+"name": "8. Thuế GTGT còn được khấu trừ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4509,
+"name": "Thuế và các khoản khác phải thu của nhà nước",
+"values": [
+0.0,
+null
+]
+},
+{
+"norm_id": 5284,
+"name": "Giao dịch mua bán lại trái phiếu Chính phủ (TS)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4510,
+"name": "5. Tài sản ngắn hạn khác",
+"values": [
+50.0,
+78.0
+]
+},
+{
+"norm_id": 5378,
+"name": "6. Dự phòng suy giảm giá trị tài sản ngắn hạn khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4481,
+"name": "B. TÀI SẢN DÀI HẠN",
+"values": [
+4869.0,
+5259.0
+]
+},
+{
+"norm_id": 5371,
+"name": "I. Tài sản tài chính dài hạn",
+"values": [
+3781.0,
+4453.0
+]
+},
+{
+"norm_id": 4487,
+"name": "1. Các khoản phải thu dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4511,
+"name": "1.1. Phải thu dài hạn của khách hàng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4512,
+"name": "1.2. Vốn kinh doanh ở các đơn vị trực thuộc",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4513,
+"name": "1.3.  Phải thu dài hạn nội bộ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4566,
+"name": "1.4. Phải thu dài hạn khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4567,
+"name": "1.5. Dự phòng phải thu dài hạn khó đòi",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4490,
+"name": "2. Các khoản đầu tư",
+"values": [
+3781.0,
+4453.0
+]
+},
+{
+"norm_id": 5399,
+"name": "2.1. Các khoản đầu tư nắm giữ đến ngày đáo hạn",
+"values": [
+3065.0,
+2931.0
+]
+},
+{
+"norm_id": 4520,
+"name": "2.2. Đầu tư vào công ty con",
+"values": [
+null,
+979.0
+]
+},
+{
+"norm_id": 4521,
+"name": "2.3 Đầu tư vào công ty liên kết, liên doanh",
+"values": [
+716.0,
+543.0
+]
+},
+{
+"norm_id": 4556,
+"name": "2.4 Đầu tư chứng khoán dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4578,
+"name": "- Chứng khoán sẵn sàng để bán",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4579,
+"name": "- Chứng khoán nắm giữ đến ngày đáo hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4522,
+"name": "2.5 Đầu tư dài hạn khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4523,
+"name": "2.6 Dự phòng giảm giá đầu tư dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4488,
+"name": "II. Tài sản cố định",
+"values": [
+176.0,
+693.0
+]
+},
+{
+"norm_id": 4514,
+"name": "1. Tài sản cố định hữu hình",
+"values": [
+89.0,
+618.0
+]
+},
+{
+"norm_id": 4568,
+"name": " - Nguyên giá",
+"values": [
+427.0,
+965.0
+]
+},
+{
+"norm_id": 4569,
+"name": "- Giá trị hao mòn lũy kế",
+"values": [
+-337.0,
+-347.0
+]
+},
+{
+"norm_id": 5392,
+"name": "- Đánh giá TSCĐHH theo giá trị hợp lý",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4515,
+"name": "2. Tài sản cố định thuê tài chính",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4570,
+"name": " - Nguyên giá",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4571,
+"name": "- Giá trị hao mòn lũy kế",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5393,
+"name": "- Đánh giá TSCĐTTC theo giá trị hợp lý",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4516,
+"name": "3. Tài sản cố định vô hình",
+"values": [
+87.0,
+76.0
+]
+},
+{
+"norm_id": 4572,
+"name": " - Nguyên giá",
+"values": [
+332.0,
+319.0
+]
+},
+{
+"norm_id": 4573,
+"name": "- Giá trị hao mòn lũy kế",
+"values": [
+-245.0,
+-243.0
+]
+},
+{
+"norm_id": 5394,
+"name": "- Đánh giá TSCĐVH theo giá trị hợp lý",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4489,
+"name": "III. Bất động sản đầu tư",
+"values": [
+287.0,
+null
+]
+},
+{
+"norm_id": 4518,
+"name": "- Nguyên giá",
+"values": [
+392.0,
+null
+]
+},
+{
+"norm_id": 4519,
+"name": "- Giá trị hao mòn lũy kế",
+"values": [
+-105.0,
+null
+]
+},
+{
+"norm_id": 5395,
+"name": "- Đánh giá BĐSĐT theo giá trị hợp lý",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4517,
+"name": "IV. Chi phí xây dựng cơ bản dở dang",
+"values": [
+532.0,
+13.0
+]
+},
+{
+"norm_id": 4492,
+"name": "V. Tài sản dài hạn khác",
+"values": [
+92.0,
+100.0
+]
+},
+{
+"norm_id": 5380,
+"name": "1. Cầm cố, thế chấp, ký quỹ, ký cược dài hạn",
+"values": [
+29.0,
+30.0
+]
+},
+{
+"norm_id": 4524,
+"name": "2. Chi phí trả trước dài hạn",
+"values": [
+16.0,
+32.0
+]
+},
+{
+"norm_id": 4525,
+"name": "3. Tài sản thuế thu nhập hoãn lại",
+"values": [
+12.0,
+3.0
+]
+},
+{
+"norm_id": 4557,
+"name": "4. Tiền nộp Quỹ hỗ trợ thanh toán",
+"values": [
+20.0,
+20.0
+]
+},
+{
+"norm_id": 4526,
+"name": "5. Tài sản dài hạn khác",
+"values": [
+15.0,
+15.0
+]
+},
+{
+"norm_id": 4491,
+"name": "6. Lợi thế thương mại",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5427,
+"name": "VI. Dự phòng suy giảm giá trị tài sản dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4476,
+"name": "TỔNG CỘNG TÀI SẢN (270=100+200)",
+"values": [
+96461.0,
+92441.0
+]
+},
+{
+"norm_id": 4474,
+"name": "NGUỒN VỐN",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4477,
+"name": "A. NỢ PHẢI TRẢ (300=310+340)",
+"values": [
+55737.0,
+54384.0
+]
+},
+{
+"norm_id": 4493,
+"name": "I. Nợ ngắn hạn",
+"values": [
+55639.0,
+54375.0
+]
+},
+{
+"norm_id": 4558,
+"name": "1. Vay và nợ thuê tài chính ngắn hạn",
+"values": [
+54038.0,
+51904.0
+]
+},
+{
+"norm_id": 5414,
+"name": "1.1. Vay ngắn hạn",
+"values": [
+54038.0,
+51904.0
+]
+},
+{
+"norm_id": 5396,
+"name": "1.2 Nợ thuê tài sản tài chính ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5381,
+"name": "2. Vay tài sản tài chính ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5382,
+"name": "3. Trái phiếu chuyển đổi ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5415,
+"name": "4. Trái phiếu phát hành ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5383,
+"name": "5. Vay quỹ hỗ trợ thanh toán",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4559,
+"name": "6. Phải trả hoạt động giao dịch chứng khoán",
+"values": [
+179.0,
+33.0
+]
+},
+{
+"norm_id": 5416,
+"name": "7. Phải trả về lỗi giao dịch các tài sản tài chính",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4527,
+"name": "8. Phải trả người bán ngắn hạn",
+"values": [
+314.0,
+1239.0
+]
+},
+{
+"norm_id": 4528,
+"name": "9. Người mua trả tiền trước ngắn hạn",
+"values": [
+7.0,
+54.0
+]
+},
+{
+"norm_id": 4529,
+"name": "10. Thuế và các khoản phải nộp Nhà nước",
+"values": [
+381.0,
+410.0
+]
+},
+{
+"norm_id": 4530,
+"name": "11. Phải trả người lao động",
+"values": [
+31.0,
+24.0
+]
+},
+{
+"norm_id": 5417,
+"name": "12. Các khoản trích nộp phúc lợi nhân viên",
+"values": [
+1.0,
+1.0
+]
+},
+{
+"norm_id": 4531,
+"name": "13. Chi phí phải trả ngắn hạn",
+"values": [
+104.0,
+122.0
+]
+},
+{
+"norm_id": 4532,
+"name": "14. Phải trả nội bộ ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4819,
+"name": "15. Doanh thu chưa thực hiện ngắn hạn",
+"values": [
+1.0,
+10.0
+]
+},
+{
+"norm_id": 5384,
+"name": "16. Nhận ký quỹ, ký cược ngắn hạn",
+"values": [
+1.0,
+null
+]
+},
+{
+"norm_id": 4534,
+"name": "17. Các khoản phải trả, phải nộp khác ngắn hạn",
+"values": [
+19.0,
+22.0
+]
+},
+{
+"norm_id": 4560,
+"name": "Phải trả hộ cổ tức, gốc và lãi trái phiếu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4561,
+"name": "Phải trả tổ chức phát hành chứng khoán",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4535,
+"name": "18. Dự phòng phải trả ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4576,
+"name": "Giao dịch mua bán lại trái phiếu chính phủ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4553,
+"name": "19. Quỹ khen thưởng phúc lợi",
+"values": [
+563.0,
+556.0
+]
+},
+{
+"norm_id": 4496,
+"name": "II. Nợ dài hạn",
+"values": [
+98.0,
+9.0
+]
+},
+{
+"norm_id": 4562,
+"name": "1. Vay và nợ thuê tài chính dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5420,
+"name": "1.1. Vay dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5397,
+"name": "1.2 Nợ thuê tài sản tài chính dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5386,
+"name": "2. Vay tài sản tài chính dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5418,
+"name": "3. Trái phiếu chuyển đổi dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5419,
+"name": "4. Trái phiếu phát hành dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4536,
+"name": "5. Phải trả người bán dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5403,
+"name": "6. Người mua trả tiền trước dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5404,
+"name": "7. Chi phí phải trả dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4537,
+"name": "8. Phải trả nội bộ dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4781,
+"name": "9. Doanh thu chưa thực hiện dài hạn",
+"values": [
+45.0,
+null
+]
+},
+{
+"norm_id": 5421,
+"name": "10. Nhận ký quỹ, ký cược dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4538,
+"name": "11. Phải trả, phải nộp khác dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4563,
+"name": "Vốn nhận ủy thác đầu tư dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4540,
+"name": "Dự phòng trợ cấp mất việc làm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4541,
+"name": "12. Dự phòng phải trả dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4577,
+"name": "13. Dự phòng bồi thường thiệt hại cho nhà đầu tư",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4539,
+"name": "14. Thuế thu nhập hoãn lại phải trả",
+"values": [
+52.0,
+9.0
+]
+},
+{
+"norm_id": 4782,
+"name": "15. Quỹ phát triển khoa học và công nghệ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4478,
+"name": "B. VỐN CHỦ SỞ HỮU (400=410+420)",
+"values": [
+40724.0,
+38057.0
+]
+},
+{
+"norm_id": 4494,
+"name": "I. Vốn chủ sở hữu",
+"values": [
+40724.0,
+38057.0
+]
+},
+{
+"norm_id": 5422,
+"name": "1. Vốn đầu tư của chủ sở hữu",
+"values": [
+30397.0,
+32089.0
+]
+},
+{
+"norm_id": 4542,
+"name": "1.1. Vốn góp của chủ sở hữu",
+"values": [
+25031.0,
+30033.0
+]
+},
+{
+"norm_id": 5424,
+"name": "a. Cổ phiếu phổ thông",
+"values": [
+25031.0,
+30033.0
+]
+},
+{
+"norm_id": 5423,
+"name": "b. Cổ phiếu ưu đãi",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4543,
+"name": "1.2. Thặng dư vốn cổ phần",
+"values": [
+5385.0,
+2076.0
+]
+},
+{
+"norm_id": 5425,
+"name": "1.3. Quyền chọn chuyển đổi trái phiếu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4544,
+"name": "1.4. Vốn khác của chủ sở hữu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4545,
+"name": "1.5. Cổ phiếu quỹ",
+"values": [
+-19.0,
+-19.0
+]
+},
+{
+"norm_id": 4546,
+"name": "2. Chênh lệch đánh giá lại tài sản theo giá trị hợp lý",
+"values": [
+102.0,
+1.0
+]
+},
+{
+"norm_id": 4547,
+"name": "3. Chênh lệch tỷ giá hối đoái",
+"values": [
+88.0,
+null
+]
+},
+{
+"norm_id": 5426,
+"name": "4. Quỹ dự trữ điều lệ",
+"values": [
+3.0,
+null
+]
+},
+{
+"norm_id": 4548,
+"name": "Quỹ đầu tư phát triển",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4549,
+"name": "5. Quỹ dự phòng tài chính và rủi ro nghề nghiệp",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4550,
+"name": "6. Quỹ khác thuộc vốn chủ sở hữu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4551,
+"name": "7. Lợi nhuận sau thuế chưa phân phối",
+"values": [
+10004.0,
+5967.0
+]
+},
+{
+"norm_id": 5407,
+"name": "7.1. Lợi nhuận đã thực hiện",
+"values": [
+9951.0,
+6090.0
+]
+},
+{
+"norm_id": 5408,
+"name": "7.2. Lợi nhuận chưa thực hiện",
+"values": [
+53.0,
+-124.0
+]
+},
+{
+"norm_id": 4552,
+"name": "Nguồn vốn đầu tư XDCB",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4574,
+"name": "Quỹ hỗ trợ sắp xếp doanh nghiệp",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4482,
+"name": "8. Lợi ích cổ đông không nắm quyền kiểm soát",
+"values": [
+131.0,
+null
+]
+},
+{
+"norm_id": 4495,
+"name": "II. Nguồn kinh phí và quỹ khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4554,
+"name": "1. Nguồn kinh phí",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4555,
+"name": "2. Nguồn kinh phí đã hình thành TSCĐ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4479,
+"name": "TỔNG CỘNG NGUỒN VỐN  (440=300+400)",
+"values": [
+96461.0,
+92441.0
+]
+},
+{
+"norm_id": 5405,
+"name": "LỢI NHUẬN ĐÃ PHÂN PHỐI CHO NHÀ ĐẦU TƯ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5406,
+"name": "1. Lợi nhuận đã phân phối cho Nhà đầu tư trong năm",
+"values": [
+null,
+null
+]
+}
+]
+}
+},
+"BVH": {
+"KQKD": {
+"symbol": "BVH",
+"statement": "KQKD",
+"unit": "VNDbn",
+"periods": [
+"Q1/2026",
+"Q2/2026"
+],
+"rows": [
+{
+"norm_id": 5335,
+"name": "1. Doanh thu phí bảo hiểm (01= (01.1+01.2-01.3)",
+"values": [
+10577.0,
+497.0
+]
+},
+{
+"norm_id": 3207,
+"name": "- Thu phí bảo hiểm gốc",
+"values": [
+10937.0,
+497.0
+]
+},
+{
+"norm_id": 3208,
+"name": "- Thu phí nhận tái bảo hiểm",
+"values": [
+265.0,
+null
+]
+},
+{
+"norm_id": 5342,
+"name": "- Tăng (giảm) dự phòng phí bảo hiểm gốc và nhận tái bảo hiểm",
+"values": [
+625.0,
+null
+]
+},
+{
+"norm_id": 5349,
+"name": "2. Phí nhượng tái bảo hiểm",
+"values": [
+983.0,
+null
+]
+},
+{
+"norm_id": 3234,
+"name": "- Phí nhượng tái bảo hiểm",
+"values": [
+1154.0,
+null
+]
+},
+{
+"norm_id": 5343,
+"name": "- Tăng (giảm) dự phòng phí nhượng tái bảo hiểm",
+"values": [
+171.0,
+null
+]
+},
+{
+"norm_id": 3209,
+"name": "Các khoản giảm trừ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3235,
+"name": "- Giảm phí Bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3236,
+"name": "- Hoàn phí Bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3237,
+"name": "- Các khoản giảm trừ khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3210,
+"name": "Tăng (giảm) dự phòng phí, dự phòng toán học",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5336,
+"name": "3. Doanh thu phí bảo hiểm thuần (03=01-02)",
+"values": [
+9594.0,
+497.0
+]
+},
+{
+"norm_id": 5337,
+"name": "4. Hoa hồng nhượng tái bảo hiểm và doanh thu khác HĐKDBH (04=04.1+04.2)",
+"values": [
+225.0,
+null
+]
+},
+{
+"norm_id": 3211,
+"name": "- Thu hoa hồng nhượng tái Bảo hiểm",
+"values": [
+225.0,
+null
+]
+},
+{
+"norm_id": 3212,
+"name": "- Thu khác hoạt động kinh doanh Bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3238,
+"name": "+ Thu khác nhận tái Bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3239,
+"name": "+ Thu khác nhượng tái bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3240,
+"name": "+ Thu khác (giám định, đại lý,…)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3204,
+"name": "5. Doanh thu thuần HĐKD BH (10=03+04)",
+"values": [
+9819.0,
+497.0
+]
+},
+{
+"norm_id": 4820,
+"name": "5.1. Doanh thuần BH và CCDV",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3216,
+"name": "6. Chi bồi thường",
+"values": [
+5388.0,
+null
+]
+},
+{
+"norm_id": 5344,
+"name": "- Tổng chi bồi thường",
+"values": [
+5389.0,
+null
+]
+},
+{
+"norm_id": 3213,
+"name": "+ Chi bồi thường bảo hiểm gốc, trả tiền bảo hiểm",
+"values": [
+5373.0,
+null
+]
+},
+{
+"norm_id": 3214,
+"name": "+ Chi bồi thường nhận tái bảo hiểm, trả tiền bảo hiểm",
+"values": [
+15.0,
+null
+]
+},
+{
+"norm_id": 3215,
+"name": "- Các khoản giảm trừ",
+"values": [
+0.0,
+null
+]
+},
+{
+"norm_id": 3242,
+"name": "+ Thu đòi người thứ ba bồi hoàn",
+"values": [
+0.0,
+null
+]
+},
+{
+"norm_id": 3243,
+"name": "+ Thu hàng đã xử lý bồi thường 100%",
+"values": [
+0.0,
+null
+]
+},
+{
+"norm_id": 3241,
+"name": "7. Thu bồi thường nhượng tái bảo hiểm",
+"values": [
+318.0,
+null
+]
+},
+{
+"norm_id": 5348,
+"name": "Tăng (giảm) dự phòng toán học (dành riêng BVH)",
+"values": [
+3278.0,
+null
+]
+},
+{
+"norm_id": 5338,
+"name": "8. Tăng (giảm) dự phòng bồi thường bảo hiểm gốc và nhận tái bảo hiểm",
+"values": [
+-155.0,
+null
+]
+},
+{
+"norm_id": 5339,
+"name": "9. Tăng (giảm) dự phòng bồi thường nhượng tái bảo hiểm",
+"values": [
+-126.0,
+null
+]
+},
+{
+"norm_id": 3218,
+"name": "9.1. Tăng (giảm) dự phòng bồi thường",
+"values": [
+-29.0,
+null
+]
+},
+{
+"norm_id": 5340,
+"name": "10. Tổng chi bồi thường bảo hiểm (15=11-12+13-14)",
+"values": [
+8319.0,
+null
+]
+},
+{
+"norm_id": 3219,
+"name": "11. Tăng (giảm) dự phòng dao động lớn",
+"values": [
+18.0,
+null
+]
+},
+{
+"norm_id": 3217,
+"name": "Chi bồi thường từ dự phòng dao động lớn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3220,
+"name": "12. Chi khác hoạt động kinh doanh bảo hiểm",
+"values": [
+1175.0,
+108.0
+]
+},
+{
+"norm_id": 4065,
+"name": "- Chi hoa hồng bảo hiểm",
+"values": [
+709.0,
+null
+]
+},
+{
+"norm_id": 5345,
+"name": "- Chi phí khác hoạt động kinh doanh bảo hiểm",
+"values": [
+1175.0,
+108.0
+]
+},
+{
+"norm_id": 3244,
+"name": "+ Chi khác hoạt động kinh doanh bảo hiểm gốc",
+"values": [
+1175.0,
+108.0
+]
+},
+{
+"norm_id": 3252,
+"name": "• Chi giám định tổn thất",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3253,
+"name": "• Chi đòi người thứ 3",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3254,
+"name": "• Chi xử lý hàng bồi thường 100%",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3255,
+"name": "• Chi đánh giá rủi ro của đối tượng bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3256,
+"name": "• Chi đề phòng hạn chế rủi ro, tổn thất",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3257,
+"name": "• Chi khác",
+"values": [
+466.0,
+108.0
+]
+},
+{
+"norm_id": 3245,
+"name": "+ Chi khác hoạt động kinh doanh nhận tái bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3258,
+"name": "• Chi hoa hồng nhận tái bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3259,
+"name": "• Chi đánh giá rủi ro của đối tượng bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3260,
+"name": "• Chi khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3246,
+"name": "+ Chi hoạt động nhượng tái bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3247,
+"name": "+ Chi phí trực tiếp kinh doanh hoạt động khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3221,
+"name": "13. Tổng chi phí hoạt động kinh doanh bảo hiểm",
+"values": [
+9512.0,
+108.0
+]
+},
+{
+"norm_id": 5350,
+"name": "13.1. Giá vốn cung cấp hàng hóa, dịch vụ khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3205,
+"name": "14. Lợi nhuận gộp hoạt động kinh doanh bảo hiểm",
+"values": [
+308.0,
+389.0
+]
+},
+{
+"norm_id": 5351,
+"name": "14.1. Lợi nhuận gộp cung cấp hàng hóa, dịch vụ khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3197,
+"name": "14.2. Lợi nhuận thuần hoạt động kinh doanh bảo hiểm",
+"values": [
+-1608.0,
+389.0
+]
+},
+{
+"norm_id": 5346,
+"name": "15. Doanh thu kinh doanh bất động sản đầu tư",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5347,
+"name": "16. Giá vốn bất động sản đầu tư",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5341,
+"name": "17. Lợi nhuận từ hoạt động đầu tư bất động sản (22=20-21)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3230,
+"name": "18. Doanh thu hoạt động tài chính",
+"values": [
+3990.0,
+null
+]
+},
+{
+"norm_id": 3222,
+"name": "19. Chi hoạt động tài chính",
+"values": [
+1032.0,
+null
+]
+},
+{
+"norm_id": 3248,
+"name": "- Dự phòng toán học trích lãi từ đầu tư",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3250,
+"name": "   - Dự phòng chia lãi",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3249,
+"name": "   - Chi khác hoạt động tài chính",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3223,
+"name": "20. Lợi nhuận gộp hoạt động tài chính",
+"values": [
+2958.0,
+null
+]
+},
+{
+"norm_id": 3251,
+"name": "Chi phí bán hàng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3231,
+"name": "21. Chi phí quản lý doanh nghiệp",
+"values": [
+2295.0,
+53.0
+]
+},
+{
+"norm_id": 5352,
+"name": "22. Lợi nhuận thuần từ hoạt động kinh doanh",
+"values": [
+972.0,
+336.0
+]
+},
+{
+"norm_id": 3232,
+"name": "23. Thu nhập khác",
+"values": [
+162.0,
+0.0
+]
+},
+{
+"norm_id": 3233,
+"name": "24. Chi phí  khác",
+"values": [
+157.0,
+null
+]
+},
+{
+"norm_id": 3198,
+"name": "25. Lợi nhuận khác",
+"values": [
+5.0,
+0.0
+]
+},
+{
+"norm_id": 3199,
+"name": "Phần lợi nhuận/lỗ từ công ty liên kết liên doanh",
+"values": [
+29.0,
+null
+]
+},
+{
+"norm_id": 3224,
+"name": "26. Tổng lợi nhuận kế toán trước thuế",
+"values": [
+1006.0,
+336.0
+]
+},
+{
+"norm_id": 3225,
+"name": "Các khoản điều chỉnh tăng (+) hoặc giảm (-) lợi nhuận để xác định lợi nhuận chịu thuế TNDN",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3226,
+"name": "Tổng lợi nhuận trước thuế thu nhập doanh nghiệp",
+"values": [
+1006.0,
+336.0
+]
+},
+{
+"norm_id": 3227,
+"name": "Dự phòng đảm bảo cân đối",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3206,
+"name": "Lợi nhuận chịu thuế thu nhập doanh nghiệp",
+"values": [
+1006.0,
+336.0
+]
+},
+{
+"norm_id": 3228,
+"name": "27. Chi phí thuế thu nhập hiện hành",
+"values": [
+192.0,
+null
+]
+},
+{
+"norm_id": 3229,
+"name": "28. Chi phí thuế thu nhập hoãn lại",
+"values": [
+-1.0,
+null
+]
+},
+{
+"norm_id": 3200,
+"name": "29. Lợi nhuận sau thuế thu nhập doanh nghiệp",
+"values": [
+816.0,
+336.0
+]
+},
+{
+"norm_id": 3201,
+"name": "30. Lợi ích của cổ đông thiểu số",
+"values": [
+16.0,
+null
+]
+},
+{
+"norm_id": 3202,
+"name": "31. Lợi nhuận sau thuế của cổ đông của Công ty mẹ",
+"values": [
+799.0,
+336.0
+]
+},
+{
+"norm_id": 3203,
+"name": "32. Lãi cơ bản trên cổ phiếu.",
+"values": [
+1077.0,
+null
+]
+}
+]
+},
+"CDKT": {
+"symbol": "BVH",
+"statement": "CDKT",
+"unit": "VNDbn",
+"periods": [
+"Q1/2026",
+"Q2/2026"
+],
+"rows": [
+{
+"norm_id": 3094,
+"name": "TÀI SẢN ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3099,
+"name": "A. TÀI SẢN NGẮN HẠN (100=110+120+130+140+150+190)",
+"values": [
+153490.0,
+5888.0
+]
+},
+{
+"norm_id": 3102,
+"name": "I.   Tiền và các khoản tương đương tiền",
+"values": [
+2609.0,
+90.0
+]
+},
+{
+"norm_id": 3118,
+"name": "1. Tiền",
+"values": [
+1290.0,
+90.0
+]
+},
+{
+"norm_id": 3119,
+"name": "2. Các khoản tương đương tiền",
+"values": [
+1319.0,
+null
+]
+},
+{
+"norm_id": 3103,
+"name": "II.  Đầu tư tài chính ngắn hạn",
+"values": [
+138675.0,
+3252.0
+]
+},
+{
+"norm_id": 3120,
+"name": "1. Chứng khoán kinh doanh",
+"values": [
+4242.0,
+62.0
+]
+},
+{
+"norm_id": 4055,
+"name": "2. Dự phòng giảm giá chứng khoán kinh doanh (*)",
+"values": [
+-1395.0,
+-317.0
+]
+},
+{
+"norm_id": 5353,
+"name": "3. Đầu tư nắm giữ đến ngày đáo hạn",
+"values": [
+135828.0,
+3507.0
+]
+},
+{
+"norm_id": 3104,
+"name": "III. Các khoản phải thu ngắn hạn",
+"values": [
+7477.0,
+2523.0
+]
+},
+{
+"norm_id": 3121,
+"name": "1. Phải thu ngắn hạn của khách hàng",
+"values": [
+2408.0,
+2510.0
+]
+},
+{
+"norm_id": 5329,
+"name": "1.1. Phải thu về hợp đồng bảo hiểm",
+"values": [
+1437.0,
+null
+]
+},
+{
+"norm_id": 5330,
+"name": "1.2. Phải thu khác của khách hàng",
+"values": [
+971.0,
+2510.0
+]
+},
+{
+"norm_id": 3122,
+"name": "2. Trả trước cho người bán ngắn hạn",
+"values": [
+31.0,
+10.0
+]
+},
+{
+"norm_id": 3123,
+"name": "3. Phải thu nội bộ ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5355,
+"name": "4. Phải thu về cho vay ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3125,
+"name": "5. Phải thu ngắn hạn khác",
+"values": [
+5554.0,
+3.0
+]
+},
+{
+"norm_id": 3179,
+"name": "6. Dự phòng phải thu ngắn hạn khó đòi (*)",
+"values": [
+-516.0,
+null
+]
+},
+{
+"norm_id": 5356,
+"name": "7. Tài sản thiếu chờ xử lý",
+"values": [
+0.0,
+null
+]
+},
+{
+"norm_id": 3124,
+"name": "8. Phải thu theo tiến độ kế hoạch hợp đồng xây dựng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3105,
+"name": "IV. Hàng tồn kho",
+"values": [
+84.0,
+0.0
+]
+},
+{
+"norm_id": 3126,
+"name": "1. Hàng tồn kho",
+"values": [
+84.0,
+0.0
+]
+},
+{
+"norm_id": 3180,
+"name": "2. Dự phòng giảm giá hàng tồn kho ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3106,
+"name": "V. Tài sản ngắn hạn khác",
+"values": [
+918.0,
+22.0
+]
+},
+{
+"norm_id": 3127,
+"name": "1. Chi phí trả trước ngắn hạn",
+"values": [
+898.0,
+18.0
+]
+},
+{
+"norm_id": 5331,
+"name": "1.1. Chi phí hoa hồng chưa phân bổ",
+"values": [
+795.0,
+null
+]
+},
+{
+"norm_id": 5332,
+"name": "1.2. Chi phí trả trước ngắn hạn khác",
+"values": [
+102.0,
+18.0
+]
+},
+{
+"norm_id": 3128,
+"name": "2. Thuế GTGT còn được khấu trừ",
+"values": [
+7.0,
+null
+]
+},
+{
+"norm_id": 3129,
+"name": "3. Thuế và các khoản khác phải thu của nhà nước",
+"values": [
+10.0,
+5.0
+]
+},
+{
+"norm_id": 4776,
+"name": "4. Giao dịch mua bán lại trái phiếu Chính phủ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3130,
+"name": "5. Tài sản ngắn hạn khác",
+"values": [
+3.0,
+null
+]
+},
+{
+"norm_id": 5325,
+"name": "VIII. Tài sản tái bảo hiểm",
+"values": [
+3728.0,
+null
+]
+},
+{
+"norm_id": 5326,
+"name": "1. Dự phòng phí nhượng tái bảo hiểm",
+"values": [
+2062.0,
+null
+]
+},
+{
+"norm_id": 5327,
+"name": "2. Dự phòng bồi thường nhượng tái bảo hiểm",
+"values": [
+1666.0,
+null
+]
+},
+{
+"norm_id": 3100,
+"name": "B. TÀI SẢN DÀI HẠN (200=210+220+240+250+260+270)",
+"values": [
+153997.0,
+13479.0
+]
+},
+{
+"norm_id": 3107,
+"name": "I. Các khoản phải thu dài hạn",
+"values": [
+82.0,
+1.0
+]
+},
+{
+"norm_id": 3131,
+"name": "1. Phải thu dài hạn của khách hàng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5357,
+"name": "2. Trả trước cho người bán dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3132,
+"name": "3. Vốn kinh doanh ở các đơn vị trực thuộc",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3133,
+"name": "4.  Phải thu dài hạn nội bộ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5358,
+"name": "5. Phải thu về cho vay dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3181,
+"name": "6. Phải thu dài hạn khác",
+"values": [
+82.0,
+1.0
+]
+},
+{
+"norm_id": 3183,
+"name": "6.1 Ký quỹ bảo hiểm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5359,
+"name": "6.2. Phải thu dài hạn khác",
+"values": [
+82.0,
+1.0
+]
+},
+{
+"norm_id": 3182,
+"name": "7. Dự phòng phải thu dài hạn khó đòi",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3108,
+"name": "II. Tài sản cố định",
+"values": [
+1671.0,
+335.0
+]
+},
+{
+"norm_id": 3134,
+"name": "1. Tài sản cố định hữu hình",
+"values": [
+778.0,
+68.0
+]
+},
+{
+"norm_id": 3191,
+"name": "      - Nguyên giá",
+"values": [
+2772.0,
+679.0
+]
+},
+{
+"norm_id": 3192,
+"name": "      - Giá trị hao mòn lũy kế ",
+"values": [
+-1994.0,
+-611.0
+]
+},
+{
+"norm_id": 3135,
+"name": "2. Tài sản cố định thuê tài chính",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3193,
+"name": "      - Nguyên giá",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3194,
+"name": "      - Giá trị hao mòn lũy kế ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3136,
+"name": "3. Tài sản cố định vô hình",
+"values": [
+893.0,
+267.0
+]
+},
+{
+"norm_id": 3195,
+"name": "      - Nguyên giá",
+"values": [
+1845.0,
+824.0
+]
+},
+{
+"norm_id": 3196,
+"name": "      - Giá trị hao mòn lũy kế ",
+"values": [
+-952.0,
+-557.0
+]
+},
+{
+"norm_id": 3109,
+"name": "III. Bất động sản đầu tư",
+"values": [
+94.0,
+91.0
+]
+},
+{
+"norm_id": 3138,
+"name": "      - Nguyên giá",
+"values": [
+182.0,
+239.0
+]
+},
+{
+"norm_id": 3139,
+"name": "      - Giá trị hao mòn lũy kế ",
+"values": [
+-89.0,
+-148.0
+]
+},
+{
+"norm_id": 5360,
+"name": "IV. Tài sản dở dang dài hạn",
+"values": [
+144.0,
+28.0
+]
+},
+{
+"norm_id": 3137,
+"name": "1. Chi phí xây dựng cơ bản dở dang",
+"values": [
+144.0,
+28.0
+]
+},
+{
+"norm_id": 3110,
+"name": "V. Đầu tư tài chính dài hạn",
+"values": [
+151724.0,
+13008.0
+]
+},
+{
+"norm_id": 3140,
+"name": "1. Đầu tư vào công ty con",
+"values": [
+null,
+10352.0
+]
+},
+{
+"norm_id": 3141,
+"name": "2. Đầu tư vào công ty liên kết, liên doanh",
+"values": [
+2902.0,
+2138.0
+]
+},
+{
+"norm_id": 5361,
+"name": "3. Đầu tư góp vốn vào đơn vị khác",
+"values": [
+1500.0,
+518.0
+]
+},
+{
+"norm_id": 4056,
+"name": "4. Dự phòng đầu tư tài chính dài hạn",
+"values": [
+-93.0,
+null
+]
+},
+{
+"norm_id": 5354,
+"name": "5. Đầu tư nắm giữ đến ngày đáo hạn",
+"values": [
+147415.0,
+null
+]
+},
+{
+"norm_id": 3142,
+"name": "6. Đầu tư dài hạn khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3112,
+"name": "VI. Tài sản dài hạn khác",
+"values": [
+282.0,
+15.0
+]
+},
+{
+"norm_id": 3143,
+"name": "1. Chi phí trả trước dài hạn",
+"values": [
+231.0,
+15.0
+]
+},
+{
+"norm_id": 3144,
+"name": "2. Tài sản thuế thu nhập hoãn lại",
+"values": [
+12.0,
+null
+]
+},
+{
+"norm_id": 5362,
+"name": "3. Thiết bị, vật tư, phụ tùng thay thế dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3145,
+"name": "4. Tài sản dài hạn khác",
+"values": [
+39.0,
+null
+]
+},
+{
+"norm_id": 3111,
+"name": "5. Lợi thế thương mại",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5733,
+"name": "VII. Lợi thế thương mại (áp dụng trước năm 2015)",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5734,
+"name": "VIII. Tài sản tài khoản riêng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3095,
+"name": "TỔNG CỘNG TÀI SẢN (270=100+200)",
+"values": [
+307488.0,
+19367.0
+]
+},
+{
+"norm_id": 3093,
+"name": "NGUỒN VỐN",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3096,
+"name": "A. NỢ PHẢI TRẢ (300=210+330)",
+"values": [
+281192.0,
+154.0
+]
+},
+{
+"norm_id": 3113,
+"name": "I. Nợ ngắn hạn",
+"values": [
+75433.0,
+141.0
+]
+},
+{
+"norm_id": 3177,
+"name": "1. Vay và nợ ngắn hạn",
+"values": [
+4053.0,
+null
+]
+},
+{
+"norm_id": 3146,
+"name": "2. Phải trả người bán ngắn hạn",
+"values": [
+2977.0,
+3.0
+]
+},
+{
+"norm_id": 5333,
+"name": "2.1. Phải trả về hợp đồng bảo hiểm",
+"values": [
+2899.0,
+null
+]
+},
+{
+"norm_id": 5334,
+"name": "2.2. Phải trả khác cho người bán",
+"values": [
+78.0,
+3.0
+]
+},
+{
+"norm_id": 3147,
+"name": "3. Người mua trả tiền trước ngắn hạn",
+"values": [
+4.0,
+null
+]
+},
+{
+"norm_id": 3148,
+"name": "4. Thuế và các khoản phải nộp Nhà nước",
+"values": [
+311.0,
+5.0
+]
+},
+{
+"norm_id": 3149,
+"name": "5. Phải trả công nhân viên",
+"values": [
+1413.0,
+55.0
+]
+},
+{
+"norm_id": 3150,
+"name": "6. Chi phí phải trả ngắn hạn",
+"values": [
+220.0,
+15.0
+]
+},
+{
+"norm_id": 3151,
+"name": "7. Phải trả nội bộ ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3153,
+"name": "8. Phải trả ngắn hạn khác",
+"values": [
+544.0,
+53.0
+]
+},
+{
+"norm_id": 5328,
+"name": "9. Doanh thu hoa hồng chưa được hưởng",
+"values": [
+498.0,
+null
+]
+},
+{
+"norm_id": 3154,
+"name": "10. Dự phòng phải trả ngắn hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3172,
+"name": "11. Quỹ khen thưởng phúc lợi",
+"values": [
+236.0,
+10.0
+]
+},
+{
+"norm_id": 4775,
+"name": "12. Giao dịch mua bán lại trái phiếu Chính phủ",
+"values": [
+64907.0,
+null
+]
+},
+{
+"norm_id": 3117,
+"name": "13. Dự phòng nghiệp vụ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3184,
+"name": "13.1. Dự phòng phí bảo hiểm gốc và nhận tái bảo hiểm",
+"values": [
+6465.0,
+null
+]
+},
+{
+"norm_id": 3186,
+"name": "13.2. Dự phòng bồi thường bảo hiểm gốc và nhận tái bảo hiểm",
+"values": [
+3068.0,
+null
+]
+},
+{
+"norm_id": 3187,
+"name": "13.3. Dự phòng dao động lớn",
+"values": [
+191.0,
+null
+]
+},
+{
+"norm_id": 3185,
+"name": "13.4 Dự phòng toán học",
+"values": [
+174355.0,
+null
+]
+},
+{
+"norm_id": 3188,
+"name": "13.5. Dự phòng chia lãi",
+"values": [
+4269.0,
+null
+]
+},
+{
+"norm_id": 3189,
+"name": "13.6. Dự phòng bảo đảm cân đối",
+"values": [
+17100.0,
+null
+]
+},
+{
+"norm_id": 5368,
+"name": "14. Doanh thu chưa thực hiện ngắn hạn",
+"values": [
+270.0,
+null
+]
+},
+{
+"norm_id": 3152,
+"name": "15. Phải trả theo tiến độ kế hoạch hợp đồng xây dựng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3116,
+"name": "II. Nợ dài hạn ",
+"values": [
+311.0,
+13.0
+]
+},
+{
+"norm_id": 3155,
+"name": "1. Phải trả người bán dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3156,
+"name": "2. Phải trả nội bộ dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3157,
+"name": "3. Phải trả dài hạn khác",
+"values": [
+307.0,
+13.0
+]
+},
+{
+"norm_id": 3178,
+"name": "4. Vay và nợ thuê tài chính dài hạn",
+"values": [
+1.0,
+null
+]
+},
+{
+"norm_id": 3158,
+"name": "5. Thuế thu nhập hoãn lại phải trả",
+"values": [
+3.0,
+null
+]
+},
+{
+"norm_id": 3159,
+"name": "6. Dự phòng trợ cấp mất việc làm",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3160,
+"name": "7. Dự phòng phải trả dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4777,
+"name": "8. Doanh thu chưa thực hiện dài hạn",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4778,
+"name": "9. Quỹ phát triển khoa học và công nghệ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 5735,
+"name": "III. Công nợ tài khoản riêng",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3097,
+"name": "B. VỐN CHỦ SỞ HỮU (400=410+430)",
+"values": [
+26296.0,
+19212.0
+]
+},
+{
+"norm_id": 3114,
+"name": "I. Vốn chủ sở hữu",
+"values": [
+26296.0,
+19212.0
+]
+},
+{
+"norm_id": 3161,
+"name": "1. Vốn góp của chủ sở hữu",
+"values": [
+7423.0,
+7423.0
+]
+},
+{
+"norm_id": 5364,
+"name": "- Cổ phiếu phổ thông có quyền biểu quyết",
+"values": [
+7423.0,
+7423.0
+]
+},
+{
+"norm_id": 5363,
+"name": "- Cổ phiếu ưu đãi",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3162,
+"name": "2. Thặng dư vốn cổ phần",
+"values": [
+7310.0,
+7310.0
+]
+},
+{
+"norm_id": 3163,
+"name": "3. Vốn khác của chủ sở hữu",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3164,
+"name": "4. Cổ phiếu quỹ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3165,
+"name": "5. Chênh lệch đánh giá lại tài sản",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3166,
+"name": "6. Chênh lệch tỷ giá hối đoái",
+"values": [
+15.0,
+null
+]
+},
+{
+"norm_id": 3167,
+"name": "7. Quỹ đầu tư phát triển",
+"values": [
+3869.0,
+3154.0
+]
+},
+{
+"norm_id": 3168,
+"name": "8. Quỹ dự phòng tài chính",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3190,
+"name": "9. Quỹ dự trữ bắt buộc",
+"values": [
+819.0,
+null
+]
+},
+{
+"norm_id": 3169,
+"name": "10. Quỹ khác thuộc vốn chủ sở hữu",
+"values": [
+104.0,
+null
+]
+},
+{
+"norm_id": 3170,
+"name": "11. Lợi nhuận sau thuế chưa phân phối",
+"values": [
+5710.0,
+1325.0
+]
+},
+{
+"norm_id": 5365,
+"name": "- LNST chưa phân phối lũy kế đến cuối kỳ trước",
+"values": [
+4916.0,
+643.0
+]
+},
+{
+"norm_id": 5366,
+"name": "- LNST chưa phân phối kỳ này",
+"values": [
+793.0,
+682.0
+]
+},
+{
+"norm_id": 5367,
+"name": "12. Lợi ích cổ đông không kiểm soát",
+"values": [
+1046.0,
+null
+]
+},
+{
+"norm_id": 3171,
+"name": "13. Nguồn vốn đầu tư XDCB",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 4779,
+"name": "14. Quỹ hỗ trợ sắp xếp doanh nghiệp",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3115,
+"name": "II. Nguồn kinh phí và quỹ khác",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3173,
+"name": "1. Nguồn kinh phí",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3174,
+"name": "2. Nguồn kinh phí đã hình thành TSCĐ",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3101,
+"name": "C. LỢI ÍCH CỦA CỔ ĐÔNG KHÔNG KIỂM SOÁT",
+"values": [
+null,
+null
+]
+},
+{
+"norm_id": 3098,
+"name": "TỔNG CỘNG NGUỒN VỐN (440=300+400+500)",
+"values": [
+307488.0,
+19367.0
 ]
 }
 ]
