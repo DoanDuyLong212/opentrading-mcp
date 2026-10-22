@@ -19,6 +19,8 @@ SERVER_INSTRUCTIONS = (
     "Single full tools/list; clients filter (OpenTrading activeTools, opencode glob, "
     "Cursor toggle, Claude tool search). "
     "Envelope {data, provenance{source,as_of,timezone}, warnings[], availability}. "
+    "Price results carry units{fields: unit}: VN stock candles are in thousand dong, "
+    "the price board in dong; convert before putting both in one table. "
     "Detail maps: termTypeID/tids/btype in opentrading://reference/term-types. "
     "Long lists support limit/offset+columns/summary; results may include "
     "page{total,offset,limit,next}."
@@ -135,6 +137,9 @@ def register_all(server: FastMCP) -> list[dict[str, Any]]:
     from opentrading_mcp.hints import apply_search_hints
 
     apply_search_hints(server)
+    from opentrading_mcp.units import apply_units
+
+    apply_units(server)
     names = [t["name"] for t in collected]
     if len(names) != len(set(names)):
         raise ValueError("duplicate tool names in full surface")
