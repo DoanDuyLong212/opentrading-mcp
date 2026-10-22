@@ -143,6 +143,7 @@ def oracle_markets(groups: list[str] | None = None) -> dict[str, Any]:
 @guarded("yfinance")
 def regime_assets() -> dict[str, Any]:
     try:
+        import pandas as pd
         import yfinance as yf
     except ImportError as exc:
         raise ProviderUnavailable("yfinance not installed") from exc
@@ -159,15 +160,14 @@ def regime_assets() -> dict[str, Any]:
             series = frame[ticker]["Close"].dropna() if ticker in frame else None
             if series is None or len(series) < 2:
                 continue
+            # One calendar year back, not 252 bars: BTC trades 7 days a week, so 252 bars
+            # was about 8 months for it.
+            year_ago = series[series.index <= series.index[-1] - pd.Timedelta(days=365)]
+            base = float(year_ago.iloc[-1]) if len(year_ago) else None
             out[ticker] = {
                 "last": float(series.iloc[-1]),
-                "chg_1y_pct": round(
-                    (float(series.iloc[-1]) - float(series.iloc[-252]))
-                    / float(series.iloc[-252])
-                    * 100,
-                    2,
-                )
-                if len(series) >= 252
+                "chg_1y_pct": round((float(series.iloc[-1]) - base) / base * 100, 2)
+                if base
                 else None,
             }
         except Exception:
