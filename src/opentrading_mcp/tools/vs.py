@@ -84,7 +84,8 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
             (dùng financial_statements — cùng nguồn mirror, gọn hơn).
 
         period: 'quarter' (12 quý) hoặc 'year' (năm). Trả {periods: [kỳ cũ→mới],
-        statements: {tên mục: [{name, unit, values: {"Q2/2026": số, ...}}]}}; đơn vị đồng.
+        statements: {tên mục: [{name, unit, values: {"Q2/2026": số, ...}}]}}; đơn vị theo unit
+        của dòng (đồng khi nguồn để trống).
         """
         # v2: values keyed by period (v1 cached the raw pages with reversed Value1..5)
         fp = f"v2|{symbol}|{period}"

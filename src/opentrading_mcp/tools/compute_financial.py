@@ -409,7 +409,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         Bọc vs_financeinfo (không cần JWT). statement: mục BCTC cần đọc
         ('all', 'KQKD' kết quả kinh doanh, 'CDKT' cân đối, 'CSTC' chỉ số); periods_n: số kỳ
         gần nhất. Trả {periods: [kỳ cũ→mới], statements: {tên mục: [{name, unit,
-        values: {"Q2/2026": số, ...}}]}} — mỗi số gắn nhãn kỳ của nó; đơn vị đồng.
+        values: {"Q2/2026": số, ...}}]}} — mỗi số gắn nhãn kỳ của nó; đơn vị theo
+        unit của dòng (đồng khi nguồn để trống).
         """
         # v2: values keyed by period (v1 cached the raw pages with reversed Value1..5)
         fp = f"v2|{symbol}|{period}|{statement}|{periods_n}"
