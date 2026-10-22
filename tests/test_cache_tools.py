@@ -46,13 +46,19 @@ def test_in_vn_session_boundaries():
     assert in_vn_session(_dt(10, 0, 5)) is False
 
 
-def test_price_ttl_switches(monkeypatch):
-    import opentrading_mcp.tools.shared as shared
+def test_price_ttl_switches():
+    assert price_ttl(_dt(10, 0, 0)) == TTL_SECONDS["market"]
+    assert price_ttl(_dt(20, 0, 0)) == TTL_SECONDS["market_offhours"]  # 13h to the open
 
-    monkeypatch.setattr(shared, "in_vn_session", lambda: True)
-    assert price_ttl() == TTL_SECONDS["market"]
-    monkeypatch.setattr(shared, "in_vn_session", lambda: False)
-    assert price_ttl() == TTL_SECONDS["market_offhours"]
+
+def test_price_ttl_never_reaches_past_the_open():
+    # 08:59 Monday: one minute to the open, not the 2h off-hours ceiling.
+    assert price_ttl(_dt(8, 59, 0)) == 60
+    # Friday 15:30 and Saturday noon: next open is Monday 09:00, ceiling applies.
+    assert price_ttl(_dt(15, 30, 4)) == TTL_SECONDS["market_offhours"]
+    assert price_ttl(_dt(12, 0, 5)) == TTL_SECONDS["market_offhours"]
+    # Sunday 08:00: Monday's open is 25h away.
+    assert price_ttl(_dt(8, 0, 6)) == TTL_SECONDS["market_offhours"]
 
 
 def test_cache_store_skips_failures_and_empties():
@@ -77,9 +83,35 @@ def test_cache_roundtrip_with_data_time():
     assert env["provenance"]["data_time"] == "2026-10-14"
     hit = _run(cache_lookup("t2", "fp"))
     assert hit is not None
-    assert hit["provenance"]["source"] == "cache"
+    # The provider survives the round trip; the reuse is flagged separately.
+    assert hit["provenance"]["source"] == "s"
+    assert hit["provenance"]["cached"] is True
+    assert hit["provenance"]["cached_at"] == env["provenance"]["as_of"]
     assert hit["provenance"]["data_time"] == "2026-10-14"
-    assert any("cache lúc" in w for w in hit["warnings"])
+    assert any("dùng lại bản đã lưu" in w for w in hit["warnings"])
+
+
+def test_legacy_entry_without_source_reads_as_cache():
+    import json
+
+    from opentrading_mcp.providers.store import cache_set
+    from opentrading_mcp.tools.shared import _cache_key_for
+
+    key = _run(_cache_key_for("t2old", "fp"))
+    cache_set(key, json.dumps({"data": {"a": 1}, "as_of": "2026-10-14T09:00:00+07:00"}), 60)
+    hit = _run(cache_lookup("t2old", "fp"))
+    assert hit["provenance"]["source"] == "cache"
+    assert hit["provenance"]["data_time"] == "2026-10-14T09:00:00+07:00"
+
+
+def test_partial_results_are_kept_briefly(monkeypatch):
+    import opentrading_mcp.tools.shared as shared
+
+    seen: list[int] = []
+    monkeypatch.setattr(store_mod, "cache_set", lambda key, value, ttl: seen.append(ttl))
+    _run(cache_store("t4", "fp", 900, {"rows": [1]}, source="s", availability="partial"))
+    _run(cache_store("t4", "fp2", 900, {"rows": [1]}, source="s"))
+    assert seen == [shared._PARTIAL_TTL, 900]
 
 
 def test_long_fingerprint_hashes_no_collision():
@@ -108,42 +140,127 @@ def test_last_bar_time():
     assert last_bar_time(["nope"]) is None
 
 
+def _tool(key: str, fetch, availability: str | None = None):
+    """One request the way tools use the helpers: lookup, else fetch and store."""
+
+    async def request():
+        hit = await cache_lookup("sf", key)
+        if hit is not None:
+            return hit
+        data = await fetch()
+        return await cache_store("sf", key, 60, data, source="live", availability=availability)
+
+    return request
+
+
 def test_singleflight_coalesces_concurrent_misses(monkeypatch):
-    """5 concurrent missers -> 1 leader fetches, waiters share the store."""
+    """5 concurrent requests -> 1 upstream fetch, every caller gets its data."""
     import opentrading_mcp.tools.shared as shared
 
     monkeypatch.setattr(store_mod, "_redis", lambda: None)
     monkeypatch.setattr(shared, "_WAITER_TIMEOUT", 5.0)
-    _memory.clear()
+    calls = 0
+
+    async def fetch():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.1)
+        return {"v": 1}
 
     async def main():
-        leader = asyncio.create_task(cache_lookup("sf", "k1"))
-        await asyncio.sleep(0.05)  # let the leader register first
-        waiters = [asyncio.create_task(cache_lookup("sf", "k1")) for _ in range(4)]
-        await asyncio.sleep(0.05)
-        assert await leader is None  # leader fetches upstream
-        stored = await cache_store("sf", "k1", 60, {"v": 1}, source="live")
-        assert stored["data"] == {"v": 1}
-        for env in await asyncio.gather(*waiters):
-            assert env["data"] == {"v": 1}
-            assert any("cache lúc" in w for w in env["warnings"])
+        request = _tool("k1", fetch)
+        envs = await asyncio.gather(*(asyncio.create_task(request()) for _ in range(5)))
+        assert calls == 1
+        assert all(env["data"] == {"v": 1} for env in envs)
+        assert all(env["provenance"]["source"] == "live" for env in envs)
 
     _run(main())
 
 
-def test_singleflight_waiter_times_out_when_leader_dies(monkeypatch):
-    """A leader that never stores must not wedge waiters forever."""
+def test_singleflight_shares_an_empty_result_and_a_retry_does_not_wait(monkeypatch):
+    """Empties are not stored, but waiters get them and the next call fetches at once."""
+    import opentrading_mcp.tools.shared as shared
+
+    monkeypatch.setattr(store_mod, "_redis", lambda: None)
+    monkeypatch.setattr(shared, "_WAITER_TIMEOUT", 5.0)
+    calls = 0
+
+    async def fetch():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.1)
+        return {}
+
+    async def main():
+        request = _tool("k2", fetch, availability="empty")
+        envs = await asyncio.gather(*(asyncio.create_task(request()) for _ in range(3)))
+        assert calls == 1
+        assert all(env["availability"] == "empty" for env in envs)
+        started = time.monotonic()
+        await asyncio.create_task(request())  # a later retry of the same call
+        assert calls == 2
+        assert time.monotonic() - started < 1.0
+
+    _run(main())
+
+
+def test_singleflight_leader_without_store_releases_waiters(monkeypatch):
+    """A leader that returns an error envelope (no cache_store) frees waiters when it ends."""
+    import opentrading_mcp.tools.shared as shared
+
+    monkeypatch.setattr(store_mod, "_redis", lambda: None)
+    monkeypatch.setattr(shared, "_WAITER_TIMEOUT", 5.0)
+
+    async def failing_leader():
+        assert await cache_lookup("sf", "k3") is None
+        await asyncio.sleep(0.1)
+        return "error envelope"  # returns without cache_store
+
+    async def main():
+        leader = asyncio.create_task(failing_leader())
+        await asyncio.sleep(0.02)
+        started = time.monotonic()
+        waiter = asyncio.create_task(cache_lookup("sf", "k3"))
+        assert await leader == "error envelope"
+        assert await waiter is None  # becomes the leader of the retry
+        assert time.monotonic() - started < 1.0
+
+    _run(main())
+
+
+def test_singleflight_same_task_lookup_never_waits_on_itself(monkeypatch):
+    import opentrading_mcp.tools.shared as shared
+
+    monkeypatch.setattr(store_mod, "_redis", lambda: None)
+    monkeypatch.setattr(shared, "_WAITER_TIMEOUT", 5.0)
+
+    async def main():
+        assert await cache_lookup("sf", "k4") is None
+        started = time.monotonic()
+        assert await cache_lookup("sf", "k4") is None
+        assert time.monotonic() - started < 0.5
+
+    _run(main())
+
+
+def test_singleflight_waiter_times_out_on_a_stuck_leader(monkeypatch):
+    """A leader that never finishes must not wedge waiters forever."""
     import opentrading_mcp.tools.shared as shared
 
     monkeypatch.setattr(store_mod, "_redis", lambda: None)
     monkeypatch.setattr(shared, "_WAITER_TIMEOUT", 0.2)
-    _memory.clear()
+
+    async def stuck_leader():
+        assert await cache_lookup("sf", "k5") is None
+        await asyncio.sleep(10)
 
     async def main():
-        assert await cache_lookup("sf", "k2") is None  # leader
+        leader = asyncio.create_task(stuck_leader())
+        await asyncio.sleep(0.02)
         started = time.monotonic()
-        assert await cache_lookup("sf", "k2") is None  # waiter times out
+        assert await cache_lookup("sf", "k5") is None
         assert time.monotonic() - started >= 0.2
+        leader.cancel()
 
     _run(main())
 
@@ -207,4 +324,33 @@ def test_neg_cache_fails_fast_after_timeout(monkeypatch):
     with pytest.raises(ProviderAuthMissing):
         _run(shared.run_blocking(_raise_again, "negtool2", 5.0))
     assert shared._neg.get("negtool2") is None
+    shared._neg.clear()
+
+
+def test_neg_cache_is_per_call_and_ignores_fast_failures(monkeypatch):
+    """A timeout blocks only that call's arguments; a quick failure blocks nothing."""
+    import functools
+
+    import opentrading_mcp.tools.shared as shared
+
+    monkeypatch.setenv("MCP_NEG_TTL", "60")
+    shared._neg.clear()
+
+    def quote(symbol: str) -> str:
+        if symbol == "SLOW":
+            time.sleep(2)
+        if symbol == "BAD":
+            raise ProviderUnavailable("unknown symbol")
+        return symbol
+
+    with pytest.raises(ProviderUnavailable, match="timed out"):
+        _run(shared.run_blocking(functools.partial(quote, "SLOW"), "vn_quote_history", 0.1))
+    with pytest.raises(ProviderUnavailable, match="briefly unavailable"):
+        _run(shared.run_blocking(functools.partial(quote, "SLOW"), "vn_quote_history", 5.0))
+    # Another symbol on the same tool still runs.
+    assert _run(shared.run_blocking(functools.partial(quote, "FPT"), "vn_quote_history")) == "FPT"
+    # A fast ProviderUnavailable is not remembered.
+    for _ in range(2):
+        with pytest.raises(ProviderUnavailable, match="unknown symbol"):
+            _run(shared.run_blocking(functools.partial(quote, "BAD"), "vn_quote_history"))
     shared._neg.clear()
