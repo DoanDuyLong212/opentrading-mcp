@@ -1,0 +1,119 @@
+{
+ "_source": "Live deployed MCP 2026-10-23: vn_fundamentals FPT (vnstock Fundamental().equity().ratio()) for period=year and period=quarter, trimmed to 7 items. Column order and the odd 2025-Q4_1 column are as returned.",
+ "year": [
+  {
+   "item": "Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS)",
+   "item_id": "trailing_eps",
+   "2025": 6021.21,
+   "2024": 5703.67,
+   "2023": 5471.26,
+   "2022": 5251.94
+  },
+  {
+   "item": "Giá trị sổ sách của cổ phiếu (BVPS)",
+   "item_id": "book_value_per_share_bvps",
+   "2025": 25679.55,
+   "2024": 24284.92,
+   "2023": 23567.71,
+   "2022": 23110.99
+  },
+  {
+   "item": "Chỉ số giá thị trường trên thu nhập (P/E)",
+   "item_id": "p_e",
+   "2025": 15.91,
+   "2024": 26.74,
+   "2023": 17.56,
+   "2022": 14.64
+  },
+  {
+   "item": "Chỉ số giá thị trường trên giá trị sổ sách (P/B)",
+   "item_id": "p_b",
+   "2025": 3.73,
+   "2024": 6.28,
+   "2023": 4.08,
+   "2022": 3.33
+  },
+  {
+   "item": "Tỷ suất lợi nhuận gộp biên",
+   "item_id": "gross_profit_margin",
+   "2025": 36.92,
+   "2024": 37.71,
+   "2023": 38.62,
+   "2022": 39.01
+  },
+  {
+   "item": "Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA)",
+   "item_id": "roe",
+   "2025": 28.3,
+   "2024": 28.69,
+   "2023": 28.1,
+   "2022": 27.24
+  },
+  {
+   "item": "ROE bình quân 4 quý gần nhất",
+   "item_id": "roe_trailling",
+   "2025": 0.0,
+   "2024": 0.0,
+   "2023": 0.0,
+   "2022": 0.0
+  }
+ ],
+ "quarter": [
+  {
+   "item": "Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS)",
+   "item_id": "trailing_eps",
+   "2026-Q2": 5988.42,
+   "2025-Q4": 5772.14,
+   "2026-Q1": 6016.81,
+   "2025-Q4_1": 5988.42
+  },
+  {
+   "item": "Giá trị sổ sách của cổ phiếu (BVPS)",
+   "item_id": "book_value_per_share_bvps",
+   "2026-Q2": 25141.0,
+   "2025-Q4": 25759.0,
+   "2026-Q1": 25682.0,
+   "2025-Q4_1": 25141.0
+  },
+  {
+   "item": "Chỉ số giá thị trường trên thu nhập (P/E)",
+   "item_id": "p_e",
+   "2026-Q2": 15.53,
+   "2025-Q4": 20.96,
+   "2026-Q1": 15.92,
+   "2025-Q4_1": 15.53
+  },
+  {
+   "item": "Chỉ số giá thị trường trên giá trị sổ sách (P/B)",
+   "item_id": "p_b",
+   "2026-Q2": 3.7,
+   "2025-Q4": 4.7,
+   "2026-Q1": 3.73,
+   "2025-Q4_1": 3.7
+  },
+  {
+   "item": "Tỷ suất lợi nhuận gộp biên",
+   "item_id": "gross_profit_margin",
+   "2026-Q2": 37.89,
+   "2025-Q4": 39.24,
+   "2026-Q1": 34.88,
+   "2025-Q4_1": 37.89
+  },
+  {
+   "item": "Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA)",
+   "item_id": "roe",
+   "2026-Q2": 5.89,
+   "2025-Q4": 5.91,
+   "2026-Q1": 6.93,
+   "2025-Q4_1": 7.05
+  },
+  {
+   "item": "ROE bình quân 4 quý gần nhất",
+   "item_id": "roe_trailling",
+   "2026-Q2": 27.33,
+   "2025-Q4": 27.62,
+   "2026-Q1": 27.23,
+   "2025-Q4_1": 27.33
+  }
+ ]
+}

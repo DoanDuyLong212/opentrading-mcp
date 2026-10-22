@@ -61,7 +61,8 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.report_progress(0, 2, "load candles")
         try:
             candles = await run_blocking(
-                functools.partial(vn_p.quote_history, symbol, 365),
+                # One trading year (~250 sessions): quote_history counts candles.
+                functools.partial(vn_p.quote_history, symbol, 250),
                 "quant_backtest",
                 timeout_secs=90.0,
             )
