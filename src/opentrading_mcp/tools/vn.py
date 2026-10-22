@@ -71,9 +71,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             tool nào tên stock_history — chính là tool này.
 
         days: số nến yêu cầu (tối đa 365 nến; nến tuần/tháng bao phủ dài hơn theo hệ số).
-        interval: '1D' (mặc định), '1W', '1M'. Nến 1W mang ngày Chủ nhật cuối tuần nên nến tuần hiện
-        tại có thể ghi một ngày chưa tới; tuần không có phiên (Tết) bị bỏ. summary/columns: summary
-        chỉ trả {count,last,high,low}; columns giữ trường nêu tên.
+        interval: '1D' (mặc định), '1W', '1M'. Nến 1W/1M mang ngày cuối kỳ (Chủ nhật cuối tuần,
+        ngày cuối tháng) nên nến của kỳ hiện tại có thể ghi một ngày chưa tới; kỳ không có phiên
+        (tuần Tết) bị bỏ. summary/columns: summary chỉ trả {count,last,high,low}; columns giữ
+        trường nêu tên.
         """
         fp = f"{symbol}|{days}|{summary}|{columns}|{interval}"
         hit = await cache_lookup("vn_quote_history", fp)

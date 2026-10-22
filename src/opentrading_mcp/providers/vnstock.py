@@ -90,10 +90,12 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
     iv = interval.strip().upper()
     if iv not in ("1D", "1W", "1M"):
         raise ProviderBadData(f"unknown interval {interval!r} (1D|1W|1M)")
-    # `days` counts candles. A year has ~250 sessions in ~365 calendar days, plus Tet and
-    # other holidays, so 1.5x calendar days + 30 always covers the requested count.
-    span = int(max(days, 5) * 1.5) + 30
-    if iv == "1W":
+    span = max(days, 5) + 30
+    if iv == "1D":
+        # `days` counts candles. A year has ~250 sessions in ~365 calendar days, plus Tet
+        # and other holidays, so 1.5x calendar days + 30 always covers the count.
+        span = int(max(days, 5) * 1.5) + 30
+    elif iv == "1W":
         span = span * 7 + 40
     elif iv == "1M":
         span = span * 31 + 60
