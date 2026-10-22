@@ -309,7 +309,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def cycle_yearly(basket: str | None = None,
                            year: int | None = None,
                            ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Yearly return % per VN sector basket (bank, securities, realestate, vin, steel, tech...); ranks sectors by year. Omit args for full table.
+        """Yearly return % per VN sector basket (bank, securities, realestate, vin, steel, tech...); ranks sectors by year (current year = year to date). Omit args for full table.
 
         Basket names as in cycle_seasonality (Vietnamese names without diacritics accepted).
         """
@@ -411,6 +411,50 @@ def _load_frame(conn: Any) -> Any:
     return px.sort_index()
 
 
+def _complete_months(monthly: Any, today: date | None = None) -> Any:
+    """Drop the trailing month while it is still running.
+
+    A refresh on 23/10 made October a 3-week return that then sat in the October
+    averages next to whole months. Only the current calendar month is dropped: a past
+    month counts even if its last session fell before the month-end date.
+    """
+    import pandas as pd
+
+    if len(monthly) == 0:
+        return monthly
+    current = pd.Timestamp(today or date.today()).to_period("M")
+    last = monthly.index[-1]
+    last_period = last if isinstance(last, pd.Period) else pd.Timestamp(last).to_period("M")
+    return monthly.iloc[:-1] if last_period >= current else monthly
+
+
+def _major_troughs(closes: Any) -> list[Any]:
+    """Dates of major troughs: a fall of more than 15% from the running peak, followed
+    by a recovery to a new peak at least 20% above the trough.
+
+    A new peak always closes the drawdown. Before, a new peak reached with less than a
+    20% rebound kept the old trough, so a later, higher trough was never recorded and
+    the event was dated at the stale one.
+    """
+    troughs: list[Any] = []
+    if len(closes) == 0:
+        return troughs
+    peak = closes.iloc[0]
+    state, t_px, t_date = "up", None, None
+    for d, v in closes.items():
+        if v > peak:
+            peak = v
+            if state == "down" and t_px is not None and v / t_px - 1 >= 0.20:
+                troughs.append(t_date)
+            t_px, t_date = None, None
+            state = "up"
+        elif v < peak * 0.85 and state == "up":
+            state = "down"
+        if state == "down" and (t_px is None or v < t_px):
+            t_px, t_date = v, d
+    return troughs
+
+
 def _finalize_compute(conn: Any, extra_tet: list[str]) -> dict[str, Any]:
     import pandas as pd
 
@@ -438,6 +482,7 @@ def _finalize_compute(conn: Any, extra_tet: list[str]) -> dict[str, Any]:
     mb = (1 + bdf).resample("ME").prod(min_count=1) - 1
     mb = mb[mb["VNINDEX"].notna()]
     mb.index = mb.index.to_period("M")
+    mb = _complete_months(mb)
     mean_t = (mb.groupby(mb.index.month).mean() * 100).round(2)
     hit_t = (mb.groupby(mb.index.month).apply(
         lambda g: (g > 0).sum() / g.notna().sum() * 100).round(0))
@@ -535,20 +580,7 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
                         " ON CONFLICT DO NOTHING", (c, int(y), round(float(v) * 100, 1)))
     # trough events: drawdown >15% then recovery >20% -> 3M forward per basket
     vi_full = px["VNINDEX"].dropna()
-    troughs_ev = []
-    peak = vi_full.iloc[0]
-    state, t_px, t_date = "up", None, None
-    for d, v in vi_full.items():
-        if v > peak:
-            peak = v
-            if state == "down" and t_px is not None and v / t_px - 1 >= 0.20:
-                troughs_ev.append(t_date)
-                t_px = None
-            state = "up"
-        elif v < peak * 0.85 and state == "up":
-            state = "down"
-        if state == "down" and (t_px is None or v < t_px):
-            t_px, t_date = v, d
+    troughs_ev = _major_troughs(vi_full)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM cycle_trough_events")
         for t in troughs_ev:

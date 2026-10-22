@@ -108,29 +108,36 @@ def _condition_gate(
     lookback: int,
 ) -> list[bool]:
     """Per-bar entries-allowed flag from a condition asset (aligned by date)."""
+    import datetime as _dt
     import statistics
 
     cmap = dict(zip(cond_dates, cond_closes, strict=False))
     lb = max(int(lookback), 2)
-    out: list[bool] = []
-    for i, d in enumerate(stock_dates):
-        # exact date else nearest prior close within 5 calendar days
+
+    def _value_on(d: Any) -> Any:
+        """Exact date, else the nearest prior close within 5 calendar days."""
         c = cmap.get(d)
         if c is None and hasattr(d, "toordinal"):
             for back in range(1, 6):
                 try:
-                    import datetime as _dt
-
                     cand = d - _dt.timedelta(days=back)
-                except Exception:
+                except OverflowError:
                     break
                 if cand in cmap:
-                    c = cmap[cand]
-                    break
+                    return cmap[cand]
+        return c
+
+    # The same lookup feeds the current value and its history window: the history
+    # used exact dates only, so every US holiday inside the window (a VN session with
+    # no condition close) left it short and blocked entries for `lookback` bars.
+    values = [_value_on(d) for d in stock_dates]
+    out: list[bool] = []
+    for i in range(len(stock_dates)):
+        c = values[i]
         if c is None:
             out.append(True)  # no condition data: never block
             continue
-        hist = [cmap.get(dd) for dd in stock_dates[max(0, i - lb + 1) : i + 1]]
+        hist = values[max(0, i - lb + 1) : i + 1]
         vals = [float(x) for x in hist if isinstance(x, (int, float)) and x == x]
         if len(vals) < lb:
             out.append(False)
