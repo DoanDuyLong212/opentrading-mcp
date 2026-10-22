@@ -240,9 +240,9 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
                 overview = await _call("o", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
                 candles = await _call("c", vn_p.quote_history, symbol.upper(), 30, secs=60.0)
                 closes = [c["c"] for c in candles if c["c"]]
-                mom = (
-                    round((closes[-1] - closes[-20]) / closes[-20] * 100, 2)
-                    if len(closes) >= 20
+                mom = (  # 20 sessions back is closes[-21]
+                    round((closes[-1] - closes[-21]) / closes[-21] * 100, 2)
+                    if len(closes) >= 21
                     else None
                 )
                 row: dict[str, Any] = {
