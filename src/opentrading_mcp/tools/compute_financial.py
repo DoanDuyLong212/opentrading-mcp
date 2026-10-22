@@ -407,44 +407,21 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             gốc mirror khi thiếu JWT (dùng vs_financeinfo).
 
         Bọc vs_financeinfo (không cần JWT). statement: mục BCTC cần đọc
-        ('all', hoặc khóa như 'KQKD'/'CDKT'); periods_n giới hạn số kỳ trả về.
+        ('all', 'KQKD' kết quả kinh doanh, 'CDKT' cân đối, 'CSTC' chỉ số); periods_n: số kỳ
+        gần nhất. Trả {periods: [kỳ cũ→mới], statements: {tên mục: [{name, unit,
+        values: {"Q2/2026": số, ...}}]}} — mỗi số gắn nhãn kỳ của nó; đơn vị đồng.
         """
-        fp = f"{symbol}|{period}|{statement}|{periods_n}"
+        # v2: values keyed by period (v1 cached the raw pages with reversed Value1..5)
+        fp = f"v2|{symbol}|{period}|{statement}|{periods_n}"
         hit = await cache_lookup("financial_statements", fp)
         if hit is not None:
             return hit
         try:
-            data = await _call("f", vs_p.financeinfo, symbol, period, secs=60.0)
-            pages = data.get("pages", []) if isinstance(data, dict) else []
-            if statement != "all" and isinstance(pages, list):
-                matched = [
-                    p
-                    for p in pages
-                    if isinstance(p, dict) and any(statement.lower() in str(k).lower() for k in p)
-                ]
-                if matched:
-                    flat: list[Any] = []
-                    for page in matched:
-                        for values in page.values():
-                            flat.extend(values if isinstance(values, list) else [values])
-                    return await cache_store(
-                        "financial_statements",
-                        fp,
-                        TTL_SECONDS["financeinfo"],
-                        {"symbol": symbol.upper(), "periods": flat[: max(int(periods_n), 1)]},
-                        source="vietstock",
-                    )
-                return await cache_store(
-                    "financial_statements",
-                    fp,
-                    TTL_SECONDS["financeinfo"],
-                    {"symbol": symbol.upper(), "periods": pages},
-                    source="vietstock",
-                    warnings=[f"statement {statement!r} not found, returning all pages"],
-                )
+            raw = await _call("f", vs_p.financeinfo, symbol, period, secs=60.0)
+            data, warnings = vs_p.align_financeinfo(raw, statement, periods_n)
             return await cache_store(
                 "financial_statements", fp, TTL_SECONDS["financeinfo"],
-                data, source="vietstock",
+                data, source="vietstock", warnings=warnings or None,
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_statements", str(exc))

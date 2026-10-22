@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from opentrading_mcp.server import create_server, register_preset
+
+FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 
 def _tool_fn(name: str, preset: str = "scan"):
@@ -235,14 +239,10 @@ async def test_company_events_types_filters_docs(monkeypatch):
 
 
 async def test_financial_statements_statement_and_periods(monkeypatch):
-
-    pages = [
-        {"KQKD": [{"q": 1}, {"q": 2}, {"q": 3}]},
-        {"CDKT": [{"q": 1}]},
-    ]
+    raw = json.loads((FIXTURES / "financeinfo_fpt_quarter.json").read_text(encoding="utf-8"))
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        return {"pages": pages}
+        return raw
 
     import opentrading_mcp.tools.compute_financial as comp_fin
     import opentrading_mcp.tools.compute_infra as comp_infra
@@ -252,9 +252,13 @@ async def test_financial_statements_statement_and_periods(monkeypatch):
     monkeypatch.setattr(comp_intel, "_call", fake_call)
     monkeypatch.setattr(comp_infra, "_call", fake_call)
     fn = _tool_fn("financial_statements")
-    env = await fn(symbol="VCB", statement="kqkd", periods_n=2)
+    env = await fn(symbol="FPT", statement="kqkd", periods_n=2)
     _check_envelope(env, "financial_statements")
-    assert env["data"]["periods"] == [{"q": 1}, {"q": 2}]
+    assert env["warnings"] == []
+    assert env["data"]["periods"] == ["Q1/2026", "Q2/2026"]
+    assert list(env["data"]["statements"]) == ["Kết quả kinh doanh"]
+    revenue = env["data"]["statements"]["Kết quả kinh doanh"][0]
+    assert revenue["values"] == {"Q1/2026": 12479997206775.0, "Q2/2026": 13788503461199.0}
 
 
 async def test_financial_ratios_peers_merged(monkeypatch):
