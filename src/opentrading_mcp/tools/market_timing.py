@@ -80,7 +80,9 @@ def _series(
         closes.append(c)
         volumes.append(v)
         lows.append(lo)
-        dates.append(str(pick_value(r, _DATE_KEYS) or ""))
+        # ISO date ("2026-10-22"), not the upstream "2026-10-22 00:00:00"; every
+        # reader (distribution days, FTD state, the FTD cut) uses this same list.
+        dates.append(_bar_day(r))
     if len(closes) < 6:
         return None
     return closes, volumes, lows, dates
@@ -121,7 +123,11 @@ def _follow_through(
     dates: list[str],
     lookback: int = FTD_LOOKBACK,
 ) -> dict[str, Any]:
-    """State machine for the latest rally attempt: none/rally_attempt/confirmed/failed/stale."""
+    """State machine for the latest rally attempt: none/rally_attempt/confirmed/failed/stale.
+
+    A failed attempt stays the answer only until the next Day 1: once a new attempt
+    starts, it is reported, and the failed one moves to `last_failed`.
+    """
     n = len(closes)
     none: dict[str, Any] = {
         "state": "none",
@@ -154,6 +160,7 @@ def _follow_through(
     day1_low = 0.0
     ftd: int | None = None
     outcome = dict(none)
+    last_failed: dict[str, Any] | None = None
     j = start + 1
     while j < n:
         if day1 is None:
@@ -161,10 +168,18 @@ def _follow_through(
                 rolling_low = lows[j]
             elif closes[j] > closes[j - 1]:
                 day1, day1_low, ftd = j, rolling_low, None
+                if outcome["state"] == "failed":
+                    # a new attempt replaces the failed one as the latest
+                    outcome = dict(none)
             j += 1
             continue
         if closes[j] < day1_low:
             outcome = pack("failed", day1, day1_low, ftd)
+            last_failed = {
+                "day1_date": dates[day1],
+                "day1_low": round(day1_low, 2),
+                "failed_date": dates[j],
+            }
             day1, ftd = None, None
             rolling_low = lows[j]
             j += 1
@@ -179,6 +194,8 @@ def _follow_through(
     if day1 is not None and outcome["state"] == "none":
         age = n - 1 - day1
         outcome = pack("stale" if age > FTD_MAX_DAY else "rally_attempt", day1, day1_low, ftd)
+    if last_failed is not None and outcome["state"] != "failed":
+        outcome["last_failed"] = last_failed
     return outcome
 
 
