@@ -27,10 +27,11 @@ from opentrading_mcp.schemas import utc_now_iso
 SYMBOLS_OHLC = ["VN30F1M"]
 INDICES = ["VNINDEX", "VN30"]
 
-# Cửa sổ phiên DNSE: 09:00-15:00 giờ Việt Nam, mọi ngày. Ngoài cửa sổ server
-# không gửi data → recv timeout 30s → reconnect vĩnh viễn (churn log, CPU uổng):
-# ngủ tới 09:00 thay vì giữ vòng connect. VN không có DST → offset cố định
-# +07:00, không cần tzdata (an toàn trên Render slim image).
+# Cửa sổ phiên DNSE: 09:00-15:00 giờ Việt Nam, thứ Hai-thứ Sáu. Ngoài cửa sổ
+# server không gửi data → recv timeout 30s → reconnect vĩnh viễn (churn log, CPU
+# uổng): ngủ tới 09:00 ngày giao dịch kế tiếp thay vì giữ vòng connect. Ngày lễ
+# chưa được tính (như in_vn_session). VN không có DST → offset cố định +07:00,
+# không cần tzdata (an toàn trên Render slim image).
 VN_TZ = timezone(timedelta(hours=7))
 DNSE_START_HOUR = 9
 DNSE_END_HOUR = 15
@@ -53,16 +54,21 @@ def dnse_window(now: datetime | None = None) -> tuple[datetime, datetime]:
 
 
 def dnse_off_hours(now: datetime | None = None) -> bool:
-    """True nếu ngoài [09:00, 15:00) giờ VN — lúc đó WS không có dữ liệu."""
-    start, end = dnse_window(now)
-    return not (start <= _vn(now) < end)
+    """True nếu ngoài [09:00, 15:00) giờ VN hoặc cuối tuần — lúc đó WS không có dữ liệu."""
+    moment = _vn(now)
+    if moment.weekday() >= 5:
+        return True
+    start, end = dnse_window(moment)
+    return not (start <= moment < end)
 
 
 def _seconds_until_open(now: datetime | None = None) -> float:
-    """Số giây tới lần mở cửa sổ kế tiếp (09:00 hôm nay nếu chưa 15:00, không thì mai)."""
+    """Số giây tới 09:00 của ngày giao dịch kế tiếp (hôm nay nếu chưa tới 15:00)."""
     moment = _vn(now)
     start, end = dnse_window(moment)
     if moment >= end:
+        start += timedelta(days=1)
+    while start.weekday() >= 5:
         start += timedelta(days=1)
     return max(0.0, (start - moment).total_seconds())
 

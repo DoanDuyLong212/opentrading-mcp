@@ -16,7 +16,8 @@ from opentrading_mcp import loops
 from opentrading_mcp.loops import VN_TZ, _seconds_until_open, dnse_off_hours, dnse_window
 
 
-def vn(hour: int, minute: int = 0, day: int = 18) -> datetime:
+def vn(hour: int, minute: int = 0, day: int = 19) -> datetime:
+    # 2026-10-19 is a Monday.
     return datetime(2026, 10, day, hour, minute, tzinfo=VN_TZ)
 
 
@@ -24,7 +25,7 @@ def test_window_is_9_to_15_same_day():
     start, end = dnse_window(vn(10, 30))
     assert (start.hour, start.minute) == (9, 0)
     assert (end.hour, end.minute) == (15, 0)
-    assert start.day == end.day == 18
+    assert start.day == end.day == 19
 
 
 def test_active_at_open_boundary():
@@ -60,7 +61,7 @@ def test_off_after_close_sleeps_to_next_day_open():
 
 
 def test_naive_datetime_is_interpreted_as_vn_time():
-    naive = datetime(2026, 10, 18, 10, 30)
+    naive = datetime(2026, 10, 19, 10, 30)
     assert dnse_off_hours(naive) is False
 
 
@@ -80,3 +81,13 @@ def test_loop_sleeps_until_open_when_off_hours(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(loops.dnse_ws_loop())
     assert slept == [42.0]
+
+
+def test_weekend_is_off_and_sleeps_to_monday_open():
+    # Saturday 10:30 (inside 9-15h, but no session) → Monday 09:00 = 46h30m.
+    assert dnse_off_hours(vn(10, 30, day=17)) is True
+    assert _seconds_until_open(vn(10, 30, day=17)) == pytest.approx(46 * 3600 + 30 * 60)
+    # Friday 15:01 → Monday 09:00 = 65h59m.
+    assert _seconds_until_open(vn(15, 1, day=23)) == pytest.approx(65 * 3600 + 59 * 60)
+    # Sunday 23:00 → Monday 09:00 = 10h.
+    assert _seconds_until_open(vn(23, 0, day=18)) == pytest.approx(10 * 3600.0)

@@ -61,9 +61,10 @@ def _seed_token_from_trading_agents() -> str:
     Priority: VIETSTOCK_COOKIE_LOGIN env -> Trading_Agents session.json ->
     "" (caller falls back to EMAIL/PASSWORD re-login).
     """
+    root = _env("TRADING_AGENTS_DIR") or os.path.expanduser("~/Trading_Agents")
     for candidate in (
         _env("VIETSTOCK_SESSION_FILE"),
-        "/home/doanlong/Trading_Agents/backend/mcp/tools/vietstock/session.json",
+        os.path.join(root, "backend/mcp/tools/vietstock/session.json"),
     ):
         if not candidate:
             continue
@@ -72,7 +73,7 @@ def _seed_token_from_trading_agents() -> str:
             # Trading_Agents/.env stores this relative to that repo, but this
             # process runs elsewhere: resolve against the repo root, otherwise
             # the seed is silently never found.
-            path = os.path.join("/home/doanlong/Trading_Agents", path)
+            path = os.path.join(root, path)
         try:
             with open(path, encoding="utf-8") as fh:
                 saved = json.load(fh)
