@@ -422,7 +422,14 @@ def _complete_months(monthly: Any, today: date | None = None) -> Any:
 
     if len(monthly) == 0:
         return monthly
-    current = pd.Timestamp(today or date.today()).to_period("M")
+    if today is None:
+        # VN calendar, not the server's (UTC on Render): at 01:00 VN on the 1st, UTC is
+        # still the previous month and would drop a finished month.
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    current = pd.Timestamp(today).to_period("M")
     last = monthly.index[-1]
     last_period = last if isinstance(last, pd.Period) else pd.Timestamp(last).to_period("M")
     return monthly.iloc[:-1] if last_period >= current else monthly
