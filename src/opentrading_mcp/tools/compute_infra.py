@@ -129,13 +129,13 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
             return hit
         capped = max(min(int(max_symbols), 300), 1)
         if universe:
-            names = [u.strip().upper() for u in universe if u.strip()][:capped]
+            pool = [u.strip().upper() for u in universe if u.strip()]
         elif exchange:
             rows = await _call("r", vn_p.reference_equity, exchange)
             pool = [str(r.get("symbol")) for r in rows if isinstance(r, dict) and r.get("symbol")]
-            names = pool[:capped]
         else:
-            names = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN", "MWG", "FPT", "CTG", "BID"][:capped]
+            pool = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN", "MWG", "FPT", "CTG", "BID"]
+        names = pool[:capped]
         hits: list[dict[str, Any]] = []
         scanned = 0
         total = len(names)
@@ -151,8 +151,10 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
             if ctx is not None and total > 20:
                 await ctx.report_progress(scanned, total, name)
         data: dict[str, Any] = {"hits": hits, "scanned": scanned, "requested": total}
-        if total > capped:
+        if len(pool) > capped:
+            # names was cut to max_symbols, so total never exceeded it
             data["truncated"] = True
+            data["available"] = len(pool)
         return await cache_store(
             "signals_scan", fp, TTL_SECONDS["overview"],
             data, source="computed-local",
