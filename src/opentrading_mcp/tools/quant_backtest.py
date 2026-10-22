@@ -111,7 +111,8 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         Không dùng khi: backtest lịch sử (dùng quant_backtest/backtest_strategies); rủi ro thống kê
             (dùng quant_risk).
 
-        shock_pct: % cú sốc, âm là giảm (ví dụ -5.0).
+        shock_pct: % cú sốc, âm là giảm (ví dụ -5.0). Giá theo nghìn đồng/cổ phiếu như nến;
+        pnl_per_1000_shares tính bằng nghìn đồng (-1062,5 = -1.062.500 đ).
         """
         fp = f"{scenario}|{symbol}|{shock_pct}"
         hit = await cache_lookup("scenario_simulate", fp)
@@ -134,7 +135,8 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         if not closes:
             return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
         last = closes[-1]
-        shocked = round(last * (1 + shock_pct / 100), 2)
+        shocked_exact = last * (1 + shock_pct / 100)
+        shocked = round(shocked_exact, 2)
         return await cache_store(
             "scenario_simulate",
             fp,
@@ -145,7 +147,8 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "last_close": last,
                 "shock_pct": shock_pct,
                 "shocked_price": shocked,
-                "pnl_per_1000_shares": round((shocked - last) * 1000, 0),
+                # from the unrounded price: HPG 21.25 -5% is -1062.5, not -1060
+                "pnl_per_1000_shares": round((shocked_exact - last) * 1000, 1),
                 "assumptions": ["linear shock, no liquidity slippage"],
             },
             source="computed-local",
