@@ -906,6 +906,12 @@ def align_financeinfo(
             warnings.append(f"page {n}: period headers without unique IDs, skipped")
             continue
         by_id = {h["ID"]: _financeinfo_label(h) for h in headers}
+        page_labels = list(by_id.values())
+        dupes = sorted({lbl for lbl in page_labels if page_labels.count(lbl) > 1})
+        if dupes:
+            # e.g. a consolidated and a parent-only report for one quarter: both map to
+            # one label and only the first header's values are kept.
+            warnings.append(f"page {n}: headers share period label {', '.join(dupes)}")
         for h in headers:
             labels[_financeinfo_label(h)] = (
                 int(h.get("YearPeriod") or 0),

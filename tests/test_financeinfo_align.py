@@ -85,3 +85,10 @@ def test_page_with_unmappable_headers_is_skipped():
 def test_no_mappable_page_raises():
     with pytest.raises(ProviderBadData):
         align_financeinfo({"symbol": "FPT", "pages": [[[], {}]]})
+
+
+def test_duplicate_period_label_on_a_page_warns():
+    raw = copy.deepcopy(RAW)
+    raw["pages"][0][0][1]["TermCode"] = "Q2"  # ID 4 now also labels as Q2/2025
+    _data, warnings = align_financeinfo(raw)
+    assert warnings == ["page 1: headers share period label Q2/2025"]
