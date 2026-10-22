@@ -592,7 +592,8 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
 
     The /data detail-norms endpoint returns {} for LCTT, but BCTC_GetChiTieuForTable
     carries the full LCTT-GT section — load values via BCTC_LoadReportData_Async.
-    Returns {symbol, unit VNDbn, periods, rows: [{norm_id, name, values}]}.
+    Returns {symbol, unit VNDbn, periods, rows: [{norm_id, name, values}]}; periods are
+    Q1..Q4/yyyy, 6T/yyyy (first six months, cumulative), 9T/yyyy or NAM/yyyy.
     """
     norms = financial_norms(1)
     nl = norms if isinstance(norms, list) else norms.get("data", [])
@@ -632,7 +633,9 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
     rows = body.get("data", body) if isinstance(body, dict) else body
     if not isinstance(rows, list) or not rows:
         raise ProviderBadData(f"vietstock no LCTT values for {symbol}")
-    _TERM_LABELS = {2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4", 9: "NAM"}
+    # Vietstock GetListReportTerm: 1 Năm, 2-5 quarters, 9 "6T đầu năm" (first six
+    # months, cumulative), 12 "9T đầu năm". Term 9 was labelled NAM (a full year).
+    _TERM_LABELS = {1: "NAM", 2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4", 9: "6T", 12: "9T"}
     # periods from ACTUAL response terms (endpoint may lack latest quarters)
     seen_terms: list[tuple] = []
     for r in rows:
