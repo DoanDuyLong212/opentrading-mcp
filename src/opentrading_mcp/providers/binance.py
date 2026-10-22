@@ -100,8 +100,9 @@ def _coingecko_fallback(syms: list[str], last_exc: Exception | None) -> list[dic
     out = [
         {"symbol": sym, "lastPrice": v.get("usd"),
          "priceChangePercent": v.get("usd_24h_change"),
+         # CoinGecko's 24h volume is in USD: quote volume, not base-asset volume
          "highPrice": None, "lowPrice": None,
-         "volume": v.get("usd_24h_vol"), "quoteVolume": None}
+         "volume": None, "quoteVolume": v.get("usd_24h_vol")}
         for cid, sym in ids.items()
         if isinstance((v := data.get(cid)), dict) and v.get("usd") is not None
     ]
