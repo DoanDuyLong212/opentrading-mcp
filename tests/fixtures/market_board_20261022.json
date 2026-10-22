@@ -1,5 +1,5 @@
 {
- "_source": "Live deployed MCP 2026-10-23: vs_market_info HOSE rows (Vietstock /data/marketinfo) and market_overview quotes (vnstock board, trimmed to price/volume fields).",
+ "_source": "Live deployed MCP 2026-10-23: vs_market_info HOSE/HNX/UPCOM rows (Vietstock /data/marketinfo) and market_overview quotes (vnstock board, trimmed to price/volume fields).",
  "marketinfo_hose": [
   {
    "exId": 1,
@@ -82,6 +82,62 @@
    "price_change": 200,
    "percent_change": 0.27137042062415195,
    "volume_accumulated": 5501900
+  }
+ ],
+ "marketinfo_hnx": [
+  {
+   "exId": 2,
+   "c": "HNX-Index",
+   "n": "Chỉ số HNX Index",
+   "e": "HNX",
+   "p": 261.08,
+   "ch": -0.59,
+   "pch": -0.23,
+   "vol": 55913787,
+   "val": 870818692400,
+   "up": 50,
+   "upc": 7,
+   "st": 66,
+   "dn": 68,
+   "dnf": 6,
+   "putvol": 4787440,
+   "putval": 107552600000,
+   "fbvol": 27682210000,
+   "fsvol": 37188410000,
+   "bvol": 68305300,
+   "svol": 76111300,
+   "volny": 20939034991,
+   "vollh": 21111078468,
+   "mc": 454619937532800,
+   "s": 0
+  }
+ ],
+ "marketinfo_upcom": [
+  {
+   "exId": 3,
+   "c": "UPCOM-Index",
+   "n": "Chỉ số UPCoM Index",
+   "e": "UPCOM",
+   "p": 126.91,
+   "ch": 0.67,
+   "pch": 0.53,
+   "vol": 23064694,
+   "val": 397628720400,
+   "up": 96,
+   "upc": 15,
+   "st": 93,
+   "dn": 79,
+   "dnf": 7,
+   "putvol": 1074337,
+   "putval": 11075276100,
+   "fbvol": 9744250000,
+   "fsvol": 6785300000,
+   "bvol": 45628600,
+   "svol": 43069200,
+   "volny": 48604242458,
+   "vollh": 50928955825,
+   "mc": 1314536349297100,
+   "s": 0
   }
  ]
 }

@@ -292,8 +292,9 @@ def _board_breadth(exchange: str, raw: Any) -> dict[str, Any] | None:
             continue
         out: dict[str, Any] = {"exchange": exchange.upper()}
         for name, key in _BREADTH_FIELDS.items():
+            # A missing count stays null: 0 would read as "no stock at ceiling".
             try:
-                out[name] = int(row.get(key) or 0)
+                out[name] = int(row[key]) if row.get(key) is not None else None
             except (TypeError, ValueError):
                 out[name] = None
         return out

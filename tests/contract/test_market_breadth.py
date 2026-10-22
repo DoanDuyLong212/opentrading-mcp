@@ -20,10 +20,8 @@ FIXTURE = json.loads(
     )
 )
 HOSE = FIXTURE["marketinfo_hose"]
-# Same row shape as the live HOSE board, other counts.
-HNX = [{**HOSE[0], "c": "HNX-Index", "e": "HNX", "up": 60, "upc": 4, "st": 40, "dn": 70, "dnf": 1}]
-UPCOM = [{**HOSE[0], "c": "UPCOM", "e": "UPCOM", "up": 120, "upc": 9, "st": 300, "dn": 110,
-          "dnf": 5}]
+HNX = FIXTURE["marketinfo_hnx"]
+UPCOM = FIXTURE["marketinfo_upcom"]
 
 
 def _tool_fn(name: str):
@@ -66,10 +64,12 @@ async def test_breadth_sums_the_three_exchange_boards(monkeypatch):
         "ceiling": 2,
         "floor": 3,
     }
-    assert data["advancers"] == 147 + 60 + 120
-    assert data["decliners"] == 164 + 70 + 110
-    assert data["unchanged"] == 57 + 40 + 300
-    assert data["advancers_pct"] == round(327 / (327 + 344 + 397) * 100, 1)
+    assert data["advancers"] == 147 + 50 + 96
+    assert data["decliners"] == 164 + 68 + 79
+    assert data["unchanged"] == 57 + 66 + 93
+    assert data["ceiling"] == 2 + 7 + 15
+    assert data["floor"] == 3 + 6 + 7
+    assert data["advancers_pct"] == round(293 / (293 + 311 + 216) * 100, 1)
 
 
 async def test_breadth_one_exchange_only_calls_that_board(monkeypatch):
@@ -116,8 +116,8 @@ async def test_breadth_falls_back_to_the_daily_snapshot(monkeypatch):
     assert env["availability"] == "stale"
     assert env["data"]["from_snapshot"] is True
     assert env["data"]["exchanges"] == [
-        {"exchange": "HNX", "advancers": 60, "decliners": 70, "unchanged": 40, "ceiling": 4,
-         "floor": 1}
+        {"exchange": "HNX", "advancers": 50, "decliners": 68, "unchanged": 66, "ceiling": 7,
+         "floor": 6}
     ]
 
 
@@ -138,3 +138,12 @@ async def test_market_overview_ranks_and_counts_on_percent_change(monkeypatch):
     assert data["breadth"] == {"advancers": 4, "decliners": 2, "flat": 0}
     assert [m["symbol"] for m in data["movers"]] == ["VIC", "VHM"]
     assert [m["symbol"] for m in data["losers"]] == ["SSI", "VCB"]
+
+
+async def test_breadth_missing_field_is_null_not_zero(monkeypatch):
+    bare = [{k: v for k, v in HOSE[0].items() if k not in ("upc", "dnf")}]
+    _fake_boards(monkeypatch, {"HOSE": bare})
+    env = await _tool_fn("breadth_scan")(exchange="HOSE")
+    board = env["data"]["exchanges"][0]
+    assert board["ceiling"] is None and board["floor"] is None
+    assert board["advancers"] == 147
