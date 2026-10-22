@@ -32,16 +32,17 @@ def test_ichimoku_lines_are_high_low_midpoints():
     assert ich["senkou_b_ahead"] == pytest.approx(_mid(CANDLES, 52), abs=0.01)
 
 
-def test_ichimoku_cloud_under_price_is_the_spans_from_26_bars_ago():
+def test_ichimoku_cloud_under_price_is_the_spans_from_25_bars_ago():
+    # TradingView built-in: plot(leadLine, offset = displacement - 1), displacement 26.
     full = tech.compute(CANDLES)["ichimoku"]
-    earlier = tech.compute(CANDLES[:-26])["ichimoku"]
+    earlier = tech.compute(CANDLES[:-25])["ichimoku"]
     assert full["senkou_a"] == earlier["senkou_a_ahead"]
     assert full["senkou_b"] == earlier["senkou_b_ahead"]
-    assert full["chikou"] == round(CANDLES[-27]["c"], 2)
+    assert full["chikou"] == round(CANDLES[-26]["c"], 2)
 
 
 def test_ichimoku_without_a_cloud_has_no_signal():
-    # 40 bars: tenkan/kijun exist, but no span was computed 26 bars ago yet.
+    # 40 bars: tenkan/kijun exist, but no span was computed 25 bars ago yet.
     ich = tech.compute(CANDLES[:40])["ichimoku"]
     assert ich["tenkan"] is not None and ich["kijun"] is not None
     assert ich["senkou_a"] is None and ich["senkou_b"] is None

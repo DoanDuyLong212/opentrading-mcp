@@ -217,10 +217,12 @@ def compute(
     boll_upper = _last_float(mid + 2 * std)
     boll_lower = _last_float(mid - 2 * std)
 
-    # Ichimoku (9/26/52). Each line is the midpoint of the highest high and the lowest
-    # low over its window. The senkou spans are plotted 26 bars ahead, so the cloud
-    # under today's price is the spans computed 26 bars ago: senkou_a/senkou_b report
-    # that cloud (what the signal compares against), *_ahead the spans just computed.
+    # Ichimoku (9/26/52, displacement 26). Each line is the midpoint of the highest high
+    # and the lowest low over its window. As in TradingView's built-in (offset =
+    # displacement - 1, the current bar counts as the first), the spans are plotted 25
+    # bars ahead, so the cloud under today's price is the spans computed 25 bars ago:
+    # senkou_a/senkou_b report that cloud (what the signal compares against), *_ahead
+    # the spans just computed.
     def _midpoint(period: int) -> Any:
         return (
             high.rolling(period, min_periods=period).max()
@@ -232,11 +234,11 @@ def compute(
         kijun_s = _midpoint(26)
         senkou_a_s = (tenkan_s + kijun_s) / 2
         senkou_b_s = _midpoint(52)
-        chikou_s = close.shift(26)  # the close 26 bars ago, which chikou is read against
+        chikou_s = close.shift(25)  # the close chikou is plotted against (offset -25)
         tenkan = _last_float(tenkan_s)
         kijun = _last_float(kijun_s)
-        senkou_a = _last_float(senkou_a_s.shift(26))
-        senkou_b = _last_float(senkou_b_s.shift(26))
+        senkou_a = _last_float(senkou_a_s.shift(25))
+        senkou_b = _last_float(senkou_b_s.shift(25))
         senkou_a_ahead = _last_float(senkou_a_s)
         senkou_b_ahead = _last_float(senkou_b_s)
         chikou = _last_float(chikou_s)
