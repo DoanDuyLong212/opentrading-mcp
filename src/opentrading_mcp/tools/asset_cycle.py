@@ -22,6 +22,7 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.providers.errors import ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools import cycle_db as db
+from opentrading_mcp.tools.cycle_stats import _complete_months
 from opentrading_mcp.tools.shared import (
     READ_ONLY,
     READ_WRITE_STATE,
@@ -212,7 +213,7 @@ def register_asset_cycle_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def g_asset_corr(regime: str | None = None,
                            ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Cross-asset monthly correlations. regime: full|pre22|post22."""
+        """Cross-asset monthly correlations in percent (85.3 = 0.853). regime: full|pre22|post22."""
         sql, args = _filters("SELECT a, b, corr, regime FROM g_asset_corr",
                              [("regime", regime)], "regime, a, b")
         return await db.read_rows("g_asset_corr", src, sql, args, ["a", "b", "corr", "regime"],
@@ -349,6 +350,7 @@ def _vn_finalize(conn: Any) -> dict[str, Any]:
     px.index = pd.to_datetime(px.index)
     px = px.sort_index().ffill()
     mb = (1 + px.pct_change(fill_method=None)).resample("ME").prod(min_count=1) - 1
+    mb = _complete_months(mb)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM vn_asset_monthly")
         for a in mb.columns:
@@ -381,6 +383,7 @@ def _g_finalize(conn: Any) -> dict[str, Any]:
     px.index = pd.to_datetime(px.index)
     px = px.sort_index().ffill()
     gm = (1 + px.pct_change(fill_method=None)).resample("ME").prod(min_count=1) - 1
+    gm = _complete_months(gm)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM g_asset_monthly")
         for a in gm.columns:
