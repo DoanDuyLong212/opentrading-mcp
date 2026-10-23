@@ -215,8 +215,20 @@ def _publish_dnse_snapshot(state: dict[str, Any], now: float) -> None:
             30,
         )
     for name, index in state["index"].items():
-        payload = {"index": index, "foreign": state["foreign"]}
+        # Issue #38: foreign dict chỉ chứa flow của WS_FOREIGN_SCOPE (VN30F1M),
+        # không phải toàn thị trường — payload phải mang nhãn scope.
+        payload = {
+            "index": index,
+            "foreign": state["foreign"],
+            "foreign_scope": dnse_p.WS_FOREIGN_SCOPE,
+        }
         cache_set(f"mcp:market:dnse_ws_snapshot:{name}", payload, 30)
+    if state["foreign"]:
+        cache_set(
+            "mcp:market:dnse_ws_foreign",
+            {"scope": dnse_p.WS_FOREIGN_SCOPE, "flow": state["foreign"]},
+            30,
+        )
     if state["ohlc"] or state["index"]:
         _log(f"dnse snapshot pumped ohlc={len(state['ohlc'])} idx={len(state['index'])}")
 

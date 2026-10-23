@@ -626,7 +626,9 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         phiên trình duyệt — dòng {norm_id, name, values[...]}; báo cáo không khả dụng
         khi cổng phiên từ chối.
         """
-        fp = f"{symbol}|{statement}|{periods_n}"
+        # v2 (issues #36/#37): output thêm report_type + warnings, LCTT đủ term
+        # 1/12 — cache cũ thiếu các trường này nên phải bỏ.
+        fp = f"v2|{symbol}|{statement}|{periods_n}"
         hit = await cache_lookup("financial_detail", fp)
         if hit is not None:
             return hit
@@ -686,9 +688,13 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
+        provider_warnings: list[str] = []
+        if isinstance(data, dict):
+            provider_warnings = data.pop("warnings", []) or []
         return await cache_store(
             "financial_detail", fp, TTL_SECONDS["financeinfo"],
             data, source="vietstock",
+            warnings=provider_warnings or None,
         )
 
     return [

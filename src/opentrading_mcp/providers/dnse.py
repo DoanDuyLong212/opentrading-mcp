@@ -193,6 +193,26 @@ def ws_snapshot(symbols: list[str]) -> dict[str, Any]:
     return data
 
 
+# Issue #38: WS chỉ subscribe `foreign.*.json` cho các symbol này (trùng
+# SYMBOLS_OHLC), nên foreign flow từ WS KHÔNG PHẢI dòng ngoại toàn thị trường.
+# Mọi payload foreign phải gắn scope này để không bị đọc nhầm.
+WS_FOREIGN_SCOPE = ["VN30F1M"]
+
+
+def ws_foreign_snapshot() -> dict[str, Any]:
+    """Foreign flow từ cache WS + scope thật của nó (issue #38).
+
+    Worker publish key riêng `mcp:market:dnse_ws_foreign` — không ghép foreign
+    vào index snapshot nữa. Raises ProviderUnavailable khi worker chưa publish.
+    """
+    from opentrading_mcp.providers.store import cache_get
+
+    hit = cache_get("mcp:market:dnse_ws_foreign")
+    if hit is None:
+        raise ProviderUnavailable("ws foreign worker has not published yet")
+    return json.loads(hit)
+
+
 def build_ws_auth(api_key: str, api_secret: str, timestamp: int, nonce: str) -> dict[str, Any]:
     message = f"{api_key}:{timestamp}:{nonce}"
     signature = hmac.new(api_secret.encode(), message.encode(), hashlib.sha256).hexdigest()
