@@ -490,7 +490,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ. peers: thêm chỉ số kỳ mới
         nhất của từng mã.
         """
-        fp = f"v2|{symbol}|{set}|{period}|{peers}"  # v2: vnstock ratio table
+        fp = f"v3|{symbol}|{set}|{period}|{peers}"  # v3: zeros are kept as returned
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -556,7 +556,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         EPS/BVPS, bội số cuối kỳ cho P/E, P/B.
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
-        fp = f"v2|{symbol}|{peers}|{metrics}"  # v2: vnstock ratio table
+        fp = f"v3|{symbol}|{peers}|{metrics}"  # v3: zeros are kept as returned
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit

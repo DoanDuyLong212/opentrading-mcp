@@ -638,9 +638,10 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
     """Every clean period of a long-format ratio frame, newest first, and its rows.
 
     Returns (periods, [{item_id, item, values: {period: value or None}}]); None when
-    the frame is not in the item/item_id + period-column layout. vnstock writes 0.0 where
-    it has nothing (FPT roe_trailling is 0.0 in every year), so a row that is exactly 0
-    in every period comes back as None, not as a ratio of 0.
+    the frame is not in the item/item_id + period-column layout. Cells that do not
+    parse, or are NaN/±Infinity, come back as None; every finite number the source
+    returns is kept as-is — a 0 is data (vnstock does write 0.0 rows, e.g. FPT
+    roe_trailling), and a zero alone does not prove the source has nothing.
     """
     try:
         if "item_id" not in [str(c) for c in frame.columns]:
@@ -666,8 +667,6 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
                 except (TypeError, ValueError):
                     num = float("nan")
                 values[label] = num if math.isfinite(num) else None
-            if all(v in (None, 0.0) for v in values.values()):
-                values = dict.fromkeys(values)
             rows.append({"item_id": key, "item": str(row.get("item") or "").strip(),
                          "values": values})
         return periods, rows
@@ -681,7 +680,9 @@ def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
 
     Ratios are rows {item_id, item, values: {period: value}}: margins, returns and
     growth in percent (roe 28.3 = 28.3%), EPS/BVPS/CPS in dong, multiples as plain
-    numbers. Raises ProviderBadData when vnstock returns another layout.
+    numbers. Finite values the source returns are kept as-is (0 stays 0); cells
+    that do not parse or are NaN/±Infinity are None. Raises ProviderBadData when
+    vnstock returns another layout.
     """
     try:
         from vnstock import Fundamental

@@ -58,8 +58,54 @@ async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
     assert data["periods"] == ["2025", "2024", "2023", "2022"]
     assert [r["item_id"] for r in data["ratios"]] == ["roe", "roe_trailling"]
     assert data["ratios"][0]["values"]["2025"] == 28.3
-    # vnstock's 0.0 in every year means "no value", not an ROE of 0
-    assert set(data["ratios"][1]["values"].values()) == {None}
+    # vnstock's annual roe_trailling reads 0.0 in the source: the observed zero
+    # is kept (a 0 cannot be inferred to mean "missing" from the number alone).
+    assert data["ratios"][1]["values"] == {
+        "2025": 0.0,
+        "2024": 0.0,
+        "2023": 0.0,
+        "2022": 0.0,
+    }
+
+
+def test_ratio_table_keeps_zero_rows_as_zero():
+    # Review regression (23/10): an all-zero row used to be rewritten to nulls.
+    frame = pd.DataFrame([{"item_id": "roe", "item": "ROE", "2025": 0.0, "2024": 0.0}])
+    periods, rows = vn_p._long_ratio_table(frame)
+    assert periods == ["2025", "2024"]
+    assert rows[0]["values"] == {"2025": 0.0, "2024": 0.0}
+
+
+def test_ratio_table_zero_variants_and_real_gaps():
+    frame = pd.DataFrame(
+        [
+            {"item_id": "a", "item": "A", "2025": "0", "2024": 0.0},  # "0" and 0.0 stay 0
+            {"item_id": "b", "item": "B", "2025": 0.0, "2024": None},  # zero next to a gap
+            {"item_id": "c", "item": "C", "2025": float("inf"), "2024": float("nan")},
+            {"item_id": "d", "item": "D", "2025": "n/a", "2024": 1.5},  # unparseable
+        ]
+    )
+    _, rows = vn_p._long_ratio_table(frame)
+    by_id = {r["item_id"]: r["values"] for r in rows}
+    assert by_id["a"] == {"2025": 0.0, "2024": 0.0}
+    assert by_id["b"] == {"2025": 0.0, "2024": None}
+    assert by_id["c"] == {"2025": None, "2024": None}  # non-finite is not a value
+    assert by_id["d"] == {"2025": None, "2024": 1.5}
+
+
+async def test_financial_ratios_cache_hit_keeps_zeros(monkeypatch):
+    from opentrading_mcp.providers import store
+
+    monkeypatch.setattr(store, "_memory", {})
+    calls: list[tuple[str, str]] = []
+    _install(monkeypatch, calls)
+    fn = _tool("financial_ratios")
+    env = await fn(symbol="FPT", set="roe", period="year")
+    assert env["data"]["ratios"][1]["values"]["2025"] == 0.0
+    env2 = await fn(symbol="FPT", set="roe", period="year")
+    assert env2["provenance"]["cached"] is True
+    assert calls == [("FPT", "year")]  # second call served from cache
+    assert env2["data"]["ratios"][1]["values"]["2025"] == 0.0  # zero survives the round-trip
 
 
 async def test_financial_ratios_peers_carry_the_newest_period(monkeypatch):
@@ -87,3 +133,27 @@ async def test_peer_compare_warns_on_a_metric_the_table_lacks(monkeypatch):
     env = await _tool("peer_compare")(symbol="FPT", peers=[], metrics=["pe", "market_cap"])
     assert env["data"]["rows"][0]["p_e"] == 15.91
     assert "metric 'market_cap' is not in the vnstock ratio table" in env["warnings"]
+
+
+async def test_peer_compare_keeps_zero_values(monkeypatch):
+    from opentrading_mcp.providers import store
+
+    monkeypatch.setattr(store, "_memory", {})
+
+    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        assert fn is vn_p.equity_ratios
+        symbol, period = args
+        return {
+            "symbol": symbol.upper(),
+            "period": period,
+            "periods": ["2025"],
+            "ratios": [{"item_id": "roe", "item": "ROE", "values": {"2025": 0.0}}],
+        }
+
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    fn = _tool("peer_compare")
+    env = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
+    assert env["data"]["rows"][1] == {"symbol": "HPG", "period_label": "2025", "roe": 0.0}
+    env2 = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
+    assert env2["provenance"]["cached"] is True
+    assert env2["data"]["rows"][1]["roe"] == 0.0  # zero survives the cache round-trip
