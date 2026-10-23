@@ -183,3 +183,36 @@ async def test_valuation_run_flags_missing_inputs(monkeypatch):
     env = await server._tool_manager.get_tool("valuation_run").fn(symbol="FPT")
     assert env["availability"] == "partial"
     assert "per" not in env["data"] and "pb" not in env["data"]
+
+
+async def test_valuation_run_cache_hit_shares_fingerprint(monkeypatch):
+    # Lookup and store must share one fingerprint: the second call returns the
+    # cached envelope without calling any provider again. The v2 bump once
+    # changed only the lookup, so every call recomputed and the cache was dead.
+    from opentrading_mcp.providers import store
+    from opentrading_mcp.server import create_server, register_preset
+    from opentrading_mcp.tools import compute_financial as comp_fin
+
+    calls: list[str] = []
+
+    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        calls.append(tool)
+        if fn is comp_fin.vs_p.overview_trading:
+            return {"data": [{"StockCode": "FPT", "ClosePrice": 57400}]}  # no EPS
+        if fn is comp_fin.vn_p.equity_quote_batch:
+            return [{"symbol": "FPT", "close_price": 57400}]
+        if fn is comp_fin.vn_p.equity_fundamentals:
+            return {"pe": 15.91, "eps": 6021.21, "bvps": 25679.55, "period_label": "2025"}
+        raise AssertionError(fn)
+
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    monkeypatch.setattr(store, "_memory", {})
+    server = create_server("scan")
+    register_preset(server, "scan")
+    tool = server._tool_manager.get_tool("valuation_run").fn
+    env = await tool(symbol="FPT")
+    assert env["data"]["per"] == round(57400 / 6021.21, 2)
+    env2 = await tool(symbol="FPT")
+    assert env2["provenance"].get("cached") is True
+    assert env2["data"] == env["data"]
+    assert len(calls) == 3  # 3 provider calls once; the cache serves the rest
