@@ -67,9 +67,19 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         PE/ROE chỉ được tra cho tối đa 30 mã đầu danh sách (screened trong kết quả); pe là
         P/E cuối kỳ báo cáo ghi ở fundamentals_period, không phải P/E theo giá hôm nay.
         technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
-        ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).
+        ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}); dict rỗng coi như None.
+
+        screened: số mã ĐÃ THỬ đánh giá ở bước lọc cuối đang hoạt động (local →
+            fundamentals → technical), không phải tổng số mã "nhìn qua".
+        coverage: mô tả bước lọc cuối đó — stage: 'local' | 'fundamentals' | 'technical';
+            eligible: số mã đủ điều kiện vào bước này trước khi áp giới hạn;
+            attempted: số mã đã thử đánh giá (bằng screened);
+            evaluated: số mã đủ dữ liệu để có kết luận pass/reject. Một mã history/compute
+            lỗi hoặc indicator bắt buộc là None thì unavailable: evaluated không tăng,
+            warning nêu mã và lý do, envelope mang partial; giới hạn chủ ý chỉ tạo warning.
         """
-        fp = f"{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
+        technical = technical or None  # {} means "no technical stage", not a rule set
+        fp = f"v2|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"  # v2: screened/coverage
         hit = await cache_lookup("stock_screener", fp)
         if hit is not None:
             return hit
@@ -102,6 +112,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         else:
             enrich_n = min(len(rows), 10)
         enriched = 0
+        enrich_failed: list[tuple[str, str]] = []
         sem = asyncio.Semaphore(blocking_slots())
 
         async def _enrich_one(entry: dict[str, Any]) -> bool:
@@ -115,7 +126,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "stock_screener",
                         timeout_secs=10.0,
                     )
-                except Exception:
+                except Exception as exc:
+                    enrich_failed.append((sym, f"upstream error: {str(exc)[:80]}"))
                     return False
             if isinstance(info, dict):
                 hit = False
@@ -126,7 +138,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 if hit and info.get("period_label"):
                     # the report period of pe/roe (e.g. '2025' = year-end 2025 PE)
                     entry["fundamentals_period"] = info["period_label"]
-                return hit
+                if hit:
+                    return True
+                enrich_failed.append((sym, "no pe/roe/market_cap in source"))
+                return False
+            enrich_failed.append((sym, "no fundamentals payload"))
             return False
 
         if enrich_n:
@@ -134,6 +150,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             enriched = sum(1 for r in results if r)
         if rows and enrich_n and enriched < enrich_n:
             warnings.append(f"fundamentals best-effort: {enriched}/{enrich_n} enriched")
+        if enrich_failed:
+            detail = "; ".join(f"{s} {r}" for s, r in enrich_failed[:5])
+            more = f" (+{len(enrich_failed) - 5} more)" if len(enrich_failed) > 5 else ""
+            warnings.append(f"fundamentals unavailable: {detail}{more}")
         partial = bool(warnings)
         if needs_valuation and len(rows) > enrich_n:
             # Only these symbols carry pe/roe; every other row fails the filter.
@@ -149,6 +169,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[f"filter error: {exc}"],
                 availability="unavailable",
             )
+        stage = "local"
+        eligible_n = len(rows)
+        attempted_n = len(rows)
+        evaluated_n = len(rows)
         if technical is not None:
             allowed = {"rsi_lt", "rsi_gt", "above_sma20", "below_sma20"}
             unknown = [k for k in technical if k not in allowed]
@@ -159,12 +183,20 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     warnings=[f"unknown technical rules: {unknown}"],
                     availability="unavailable",
                 )
+            stage = "technical"
+            eligible_n = len(candidates)  # survivors of the earlier filters, not the universe
             shortlisted = candidates[: max(limit, 1)]
 
-            async def _tech_ok(entry: dict[str, Any]) -> bool:
+            async def _tech_verdict(entry: dict[str, Any]) -> tuple[str, str]:
+                """Classify one candidate: 'pass', 'reject', or ('unavailable', reason).
+
+                A candidate that fails a rule is a reject; a candidate whose
+                history/compute fails, or whose required indicator is None, is
+                unavailable — the screener never turns a data gap into a verdict.
+                """
                 sym = str(entry.get("symbol", "")).upper()
                 if not sym:
-                    return False
+                    return "unavailable", "no symbol"
                 async with sem:
                     try:
                         candles = await run_blocking(
@@ -173,35 +205,81 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                             timeout_secs=10.0,
                         )
                         out = tech_p.compute(candles)
-                    except Exception:
-                        return False
+                    except Exception as exc:
+                        return "unavailable", f"history/compute failed ({str(exc)[:60]})"
+                row = out if isinstance(out, dict) else {}
                 try:
-                    if "rsi_lt" in technical and not (out["rsi14"] < float(technical["rsi_lt"])):
-                        return False
-                    if "rsi_gt" in technical and not (out["rsi14"] > float(technical["rsi_gt"])):
-                        return False
-                    if technical.get("above_sma20") and not (
-                        out["sma20"] is not None and out["last"] > out["sma20"]
-                    ):
-                        return False
-                    if technical.get("below_sma20") and not (
-                        out["sma20"] is not None and out["last"] < out["sma20"]
-                    ):
-                        return False
+                    rsi = row.get("rsi14")
+                    sma = row.get("sma20")
+                    last = row.get("last")
+                    if "rsi_lt" in technical:
+                        if rsi is None:
+                            return "unavailable", "rsi14 missing"
+                        if not (float(rsi) < float(technical["rsi_lt"])):
+                            return "reject", ""
+                    if "rsi_gt" in technical:
+                        if rsi is None:
+                            return "unavailable", "rsi14 missing"
+                        if not (float(rsi) > float(technical["rsi_gt"])):
+                            return "reject", ""
+                    if technical.get("above_sma20"):
+                        if sma is None or last is None:
+                            return "unavailable", "sma20/last missing"
+                        if not (last > sma):
+                            return "reject", ""
+                    if technical.get("below_sma20"):
+                        if sma is None or last is None:
+                            return "unavailable", "sma20/last missing"
+                        if not (last < sma):
+                            return "reject", ""
                 except (TypeError, ValueError):
-                    return False
-                return True
+                    return "unavailable", "indicator not numeric"
+                return "pass", ""
 
-            kept = await asyncio.gather(*(_tech_ok(e) for e in shortlisted))
-            candidates = [e for e, ok in zip(shortlisted, kept, strict=True) if ok]
-        partial = partial or (bool(enrich_n) and enriched < enrich_n)
+            verdicts = await asyncio.gather(*(_tech_verdict(e) for e in shortlisted))
+            candidates = [
+                e
+                for e, (verdict, _) in zip(shortlisted, verdicts, strict=True)
+                if verdict == "pass"
+            ]
+            unavailable = [
+                (str(e.get("symbol", "")).upper() or "?", reason)
+                for e, (verdict, reason) in zip(shortlisted, verdicts, strict=True)
+                if verdict == "unavailable"
+            ]
+            attempted_n = len(shortlisted)
+            evaluated_n = attempted_n - len(unavailable)
+            if unavailable:
+                detail = "; ".join(f"{s}: {r}" for s, r in unavailable[:5])
+                more = f" (+{len(unavailable) - 5} more)" if len(unavailable) > 5 else ""
+                warnings.append(
+                    "technical unavailable for "
+                    f"{len(unavailable)}/{attempted_n} attempted: {detail}{more}"
+                )
+            partial = partial or bool(unavailable)
+            if attempted_n < eligible_n:
+                warnings.append(
+                    "technical stage evaluated the "
+                    f"first {attempted_n} of {eligible_n} candidates only"
+                )
+        elif needs_valuation:
+            stage = "fundamentals"
+            eligible_n = len(rows)
+            attempted_n = enrich_n
+            evaluated_n = enriched
         return await cache_store(
             "stock_screener",
-            f"{filters}|{max_pe}|{min_roe}|{limit}|{technical}",
+            fp,
             TTL_SECONDS["overview"],
             {
                 "universe": len(rows),
-                "screened": enrich_n if needs_valuation else len(rows),
+                "screened": attempted_n,
+                "coverage": {
+                    "stage": stage,
+                    "eligible": eligible_n,
+                    "attempted": attempted_n,
+                    "evaluated": evaluated_n,
+                },
                 "filters": eff,
                 "candidates": candidates[: max(limit, 1)],
             },
