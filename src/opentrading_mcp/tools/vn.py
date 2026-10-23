@@ -129,16 +129,18 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 functools.partial(vn_p.equity_quote_batch, symbols),
                 "vn_equity_quote_batch",
             )
+            quotes, missing = vn_p.split_batch(quotes)
             if summary:
-                names = [
-                    q.get("symbol", s) if isinstance(q, dict) else s
-                    for q, s in zip(quotes, symbols, strict=False)
-                ]
+                # the `_missing` sentinel row is not a quote
                 return await cache_store(
                     "vn_equity_quote_batch", fp, price_ttl(),
-                    {"count": len(quotes), "symbols": names}, source="vnstock",
+                    {"count": len(quotes), "symbols": [q.get("symbol") for q in quotes],
+                     **({"missing": missing} if missing else {})},
+                    source="vnstock",
+                    warnings=(
+                        [f"batch partial: {len(missing)} symbols missing"] if missing else None
+                    ),
                 )
-            quotes, missing = vn_p.split_batch(quotes)
             return await cache_store(
                 "vn_equity_quote_batch",
                 fp,

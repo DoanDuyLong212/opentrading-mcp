@@ -108,18 +108,23 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         rets = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
         import statistics
 
-        window = closes[-20:]
-        peak = closes[0]
-        max_dd_full = 0.0
-        for price in closes:
-            peak = max(peak, price)
-            max_dd_full = max(max_dd_full, (peak - price) / peak if peak else 0.0)
+        def _max_dd(prices: list[float]) -> float:
+            """Largest peak-to-later-trough fall (0.08 = 8%); a rise is not a drawdown."""
+            peak, worst = prices[0], 0.0
+            for price in prices:
+                peak = max(peak, price)
+                worst = max(worst, (peak - price) / peak if peak else 0.0)
+            return worst
+
+        max_dd_full = _max_dd(closes)
         factors = {
             "symbol": symbol.upper(),
             "lookback": max(int(lookback), 30),
-            "momentum_20d_pct": round((closes[-1] - closes[-20]) / closes[-20] * 100, 2),
+            # 20 sessions back is closes[-21] (closes[-20] was 19 sessions)
+            "momentum_20d_pct": round((closes[-1] - closes[-21]) / closes[-21] * 100, 2),
             "vol_20d_ann_pct": round(statistics.pstdev(rets[-20:]) * (252**0.5) * 100, 2),
-            "max_dd_20d_pct": round((min(window) - max(window)) / max(window) * 100, 2),
+            # was (min - max) / max even when the low came before the high
+            "max_dd_20d_pct": round(-_max_dd(closes[-20:]) * 100, 2),
             "max_dd_full_pct": round(max_dd_full * 100, 2),
         }
         return await cache_store(

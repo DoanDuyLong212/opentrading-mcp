@@ -596,7 +596,8 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
 
     The /data detail-norms endpoint returns {} for LCTT, but BCTC_GetChiTieuForTable
     carries the full LCTT-GT section — load values via BCTC_LoadReportData_Async.
-    Returns {symbol, unit VNDbn, periods, rows: [{norm_id, name, values}]}.
+    Returns {symbol, unit VNDbn, periods, rows: [{norm_id, name, values}]}; periods are
+    Q1..Q4/yyyy, 6T/yyyy (first six months, cumulative), 9T/yyyy or NAM/yyyy.
     """
     norms = financial_norms(1)
     nl = norms if isinstance(norms, list) else norms.get("data", [])

@@ -138,8 +138,10 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
                 functools.partial(intel_p.fred_series, "DGS2", 5),
                 "yf_yield_curve_fred", timeout_secs=30.0,
             )
-            us10y = float((ten.get("points") or [{}])[-1].get("v", 0)) / 100
-            us2y = float((two.get("points") or [{}])[-1].get("v", 0)) / 100
+            # fred_series asks FRED for sort_order=desc: points[0] is the newest
+            # observation (points[-1] was the oldest of the 5, about a week stale).
+            us10y = float((ten.get("points") or [{}])[0].get("v", 0)) / 100
+            us2y = float((two.get("points") or [{}])[0].get("v", 0)) / 100
             return await cache_store(
                 "yf_yield_curve", "-", TTL_SECONDS["hour"],
                 {"us10y": us10y, "us2y": us2y, "inverted": us2y > us10y},

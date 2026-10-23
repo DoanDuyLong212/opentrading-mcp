@@ -534,7 +534,14 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Add symbols (deduped, uppercase) to a watchlist. Use to track more."""
         if ctx is not None:
             await ctx.log("info", f"watchlist_add {list_id} {symbols}")
-        known = {int(w["id"]) for w in await run_blocking(_load_lists, "watchlist_add")}
+        lists = await run_blocking(_load_lists, "watchlist_add")
+        known = {int(w["id"]) for w in lists}
+        before = {
+            str(s).upper()
+            for w in lists
+            if int(w["id"]) == int(list_id)
+            for s in w.get("symbols") or []
+        }
         if int(list_id) not in known:
             return make_envelope(
                 {"tool": "watchlist_add", "list_id": list_id},
@@ -544,7 +551,9 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         out = await run_blocking(lambda: _add_symbols(str(list_id), symbols), "watchlist_add")
         return make_envelope(
-            {"list_id": list_id, "added": len(out), "symbols": out},
+            # added = symbols new to the list (it was the list's total size)
+            {"list_id": list_id, "added": len([s for s in out if s not in before]),
+             "symbols": out},
             source="postgres" if _pg_configured() else "file",
         )
 

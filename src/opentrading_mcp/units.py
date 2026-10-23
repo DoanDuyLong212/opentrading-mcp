@@ -40,6 +40,24 @@ _BOARD = {
     "percent_change": "%",
 }
 
+# vn_quote_history / market_candles_batch also serve index symbols, whose candles are
+# index points, not thousand dong (VNINDEX 1760.63). Explicit list: stock codes such as
+# VNM or VND also start with "VN", and VNI is a listed stock (checked against the listing).
+INDEX_SYMBOLS = frozenset(
+    "VNINDEX VN30 VN100 VNMID VNSML VNALL VNXALL VNX50 VNDIAMOND VNFINLEAD VNFINSELECT "
+    "VNFIN VNMAT VNREAL VNUTI VNIT VNSI VNHEAL VNIND VNCONS VNCOND VNENE "
+    "HNXINDEX HNX30 HNXUPCOMINDEX UPCOMINDEX".split()
+)
+_INDEX_HISTORY = {"o, h, l, c, last, high, low": POINTS, "v": SHARES}
+_SCENARIO = {
+    "last_close, shocked_price": THOUSAND_DONG,
+    "pnl_per_1000_shares": "nghìn đồng cho 1000 cổ phiếu (-1062,5 = -1.062.500 đ)",
+}
+_INDEX_SCENARIO = {
+    "last_close, shocked_price": POINTS,
+    "pnl_per_1000_shares": "điểm x 1000 (chỉ số, không phải tiền)",
+}
+
 UNITS: dict[str, dict[str, str]] = {
     "vn_quote_history": _HISTORY,
     "market_candles_batch": _HISTORY,
@@ -49,13 +67,40 @@ UNITS: dict[str, dict[str, str]] = {
     "market_snapshot": _BOARD,
     "market_movers": _BOARD,
     "vn_company": {"target_price": "đồng/cổ phiếu"},
+    "scenario_simulate": _SCENARIO,
 }
+
+
+def _units_for(tool: str, result: dict[str, Any]) -> dict[str, str] | None:
+    """The tool's units, with index candles labelled as points."""
+    units = UNITS.get(tool)
+    data = result.get("data")
+    if not units or not isinstance(data, dict):
+        return units
+    if tool in ("vn_quote_history", "scenario_simulate"):
+        if str(data.get("symbol", "")).upper() in INDEX_SYMBOLS:
+            return _INDEX_HISTORY if tool == "vn_quote_history" else _INDEX_SCENARIO
+    elif tool == "market_candles_batch":
+        symbols = [
+            str(s.get("symbol", "")).upper()
+            for s in data.get("series") or []
+            if isinstance(s, dict)
+        ]
+        indices = [s for s in symbols if s in INDEX_SYMBOLS]
+        if indices and len(indices) == len(symbols):
+            return _INDEX_HISTORY
+        if indices:
+            price = f"{THOUSAND_DONG}; chỉ số ({', '.join(indices)}): {POINTS}"
+            return {**units, "o, h, l, c, last, high, low": price}
+    return units
 
 
 def with_units(tool: str, result: Any) -> Any:
     """`result` with its tool's units first, when it is an envelope and has none yet."""
-    units = UNITS.get(tool)
-    if not units or not isinstance(result, dict) or "data" not in result or UNITS_KEY in result:
+    if not isinstance(result, dict) or "data" not in result or UNITS_KEY in result:
+        return result
+    units = _units_for(tool, result)
+    if not units:
         return result
     return {UNITS_KEY: dict(units), **result}
 

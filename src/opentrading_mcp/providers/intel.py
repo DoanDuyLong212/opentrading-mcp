@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 import httpx
@@ -413,6 +414,20 @@ def fear_greed() -> dict[str, Any]:
 
 
 _GDELT_CACHE_TTL = 600
+_GDELT_SEENDATE = re.compile(r"^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$")
+
+
+def _gdelt_date(raw: Any) -> Any:
+    """GDELT seendate '20261023T101500Z' -> '2026-10-23T10:15:00Z'; anything else unchanged.
+
+    Readers cut [:10] for the day: on the compact form that gave '20261023T1', which
+    broke geo_intel(days=...) (string-compared with an ISO date) and split by_day.
+    """
+    match = _GDELT_SEENDATE.match(str(raw or ""))
+    if not match:
+        return raw
+    y, mo, d, h, mi, sec = match.groups()
+    return f"{y}-{mo}-{d}T{h}:{mi}:{sec}Z"
 # GDELT 429 responses set this (monotonic seconds); see gdelt_events.
 _GDELT_THROTTLED_UNTIL = 0.0
 _GDELT_THROTTLE_COOLDOWN = 300.0
@@ -435,7 +450,7 @@ def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str
     from opentrading_mcp.cache import cache_key
     from opentrading_mcp.providers.store import cache_get, cache_set
 
-    key = cache_key("gdelt_events", f"{query}|{max_records}")
+    key = cache_key("gdelt_events", f"v2|{query}|{max_records}")  # v2: ISO dates
     hit = cache_get(key)
     if hit is not None:
         import json
@@ -471,7 +486,7 @@ def gdelt_events(query: str = "stock market", max_records: int = 20) -> dict[str
                 "title": a.get("title"),
                 "url": a.get("url"),
                 "source": a.get("sourceCommonName"),
-                "date": a.get("seendate"),
+                "date": _gdelt_date(a.get("seendate")),
             }
             for a in articles
         ],
