@@ -133,6 +133,35 @@ async def test_screener_reports_scope_and_fundamentals_period(monkeypatch):
     assert env["availability"] != "partial"  # every looked-up symbol was enriched
 
 
+async def test_screener_evaluated_excludes_missing_required_metric(monkeypatch):
+    # A symbol carrying roe but not pe was "enriched", yet the pe filter can
+    # never conclude on it: evaluated must not count it, and the warning must
+    # name the symbol and the missing metric.
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    universe = [{"symbol": f"S{i:02d}", "name": f"Co {i}"} for i in range(40)]
+    monkeypatch.setattr(vn_p, "listing_symbols", lambda: [dict(r) for r in universe])
+    no_pe = {f"S{i:02d}" for i in range(5)}
+
+    def fake_fund(symbol: str, period: str = "year") -> dict[str, Any]:
+        if symbol in no_pe:
+            return {"symbol": symbol, "roe": 0.2, "period_label": "2025"}
+        return {"symbol": symbol, "pe": 8.0, "roe": 0.2, "period_label": "2025"}
+
+    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    env = await _tool("stock_screener")(max_pe=10, limit=5)
+    data = env["data"]
+    assert data["coverage"] == {
+        "stage": "fundamentals",
+        "eligible": 40,
+        "attempted": 20,
+        "evaluated": 15,  # S00-S04 lack pe, the exact metric the filter needs
+    }
+    assert any("S00" in w and "pe" in w for w in env["warnings"])
+    assert env["availability"] == "partial"
+    assert all(c["symbol"] not in no_pe for c in data["candidates"])
+
+
 def _rising_history_sync(days: int) -> list[dict[str, Any]]:
     return [
         {"t": f"2026-{(d // 28) % 12 + 1:02d}-{d % 28 + 1:02d}", "o": 10.0, "h": 10.5,

@@ -79,7 +79,9 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             warning nêu mã và lý do, envelope mang partial; giới hạn chủ ý chỉ tạo warning.
         """
         technical = technical or None  # {} means "no technical stage", not a rule set
-        fp = f"v2|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"  # v2: screened/coverage
+        # v3: evaluated counts only symbols carrying the filter's own metric;
+        # fundamentals zeros are kept as returned (PR #28).
+        fp = f"v3|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
         hit = await cache_lookup("stock_screener", fp)
         if hit is not None:
             return hit
@@ -113,12 +115,18 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             enrich_n = min(len(rows), 10)
         enriched = 0
         enrich_failed: list[tuple[str, str]] = []
+        results: list[set[str]] = []
+        # Metrics the active filter actually reads: a symbol missing one of
+        # these can never get a pass/reject conclusion, so it never counts as
+        # evaluated — whatever else the source did return for it.
+        required_metrics = {k for k in ("pe", "roe", "market_cap") if k in eff}
         sem = asyncio.Semaphore(blocking_slots())
 
-        async def _enrich_one(entry: dict[str, Any]) -> bool:
+        async def _enrich_one(entry: dict[str, Any]) -> set[str]:
+            """Attach fundamentals to the entry; return the metric names present."""
             sym = str(entry.get("symbol", "")).upper()
             if not sym:
-                return False
+                return set()
             async with sem:
                 try:
                     info = await run_blocking(
@@ -128,26 +136,31 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     )
                 except Exception as exc:
                     enrich_failed.append((sym, f"upstream error: {str(exc)[:80]}"))
-                    return False
+                    return set()
             if isinstance(info, dict):
-                hit = False
-                for key in ("pe", "roe", "market_cap"):
-                    if info.get(key) is not None:
-                        entry[key] = info[key]
-                        hit = True
-                if hit and info.get("period_label"):
-                    # the report period of pe/roe (e.g. '2025' = year-end 2025 PE)
-                    entry["fundamentals_period"] = info["period_label"]
-                if hit:
-                    return True
+                present = {k for k in ("pe", "roe", "market_cap") if info.get(k) is not None}
+                if present:
+                    entry.update({k: info[k] for k in present})
+                    if info.get("period_label"):
+                        # the report period of pe/roe (e.g. '2025' = year-end 2025 PE)
+                        entry["fundamentals_period"] = info["period_label"]
+                    return present
                 enrich_failed.append((sym, "no pe/roe/market_cap in source"))
-                return False
+                return set()
             enrich_failed.append((sym, "no fundamentals payload"))
-            return False
+            return set()
 
         if enrich_n:
-            results = await asyncio.gather(*(_enrich_one(entry) for entry in rows[:enrich_n]))
+            results = list(
+                await asyncio.gather(*(_enrich_one(entry) for entry in rows[:enrich_n]))
+            )
             enriched = sum(1 for r in results if r)
+            for entry, present in zip(rows[:enrich_n], results, strict=True):
+                lacking = sorted(required_metrics - present)
+                if present and lacking:
+                    enrich_failed.append(
+                        (str(entry.get("symbol", "")).upper(), "/".join(lacking) + " missing")
+                    )
         if rows and enrich_n and enriched < enrich_n:
             warnings.append(f"fundamentals best-effort: {enriched}/{enrich_n} enriched")
         if enrich_failed:
@@ -266,7 +279,9 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             stage = "fundamentals"
             eligible_n = len(rows)
             attempted_n = enrich_n
-            evaluated_n = enriched
+            evaluated_n = sum(
+                1 for present in results if required_metrics <= present
+            )
         return await cache_store(
             "stock_screener",
             fp,
