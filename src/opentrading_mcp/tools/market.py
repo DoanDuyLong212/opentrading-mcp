@@ -302,12 +302,33 @@ def _board_breadth(exchange: str, raw: Any) -> dict[str, Any] | None:
 
 
 def _breadth_totals(boards: list[dict[str, Any]]) -> dict[str, Any]:
-    totals: dict[str, Any] = {
-        name: sum(b.get(name) or 0 for b in boards) for name in _BREADTH_FIELDS
-    }
-    counted = totals["advancers"] + totals["decliners"] + totals["unchanged"]
+    totals: dict[str, Any] = {}
+    for name in _BREADTH_FIELDS:
+        values = [b.get(name) for b in boards]
+        # A total is only known when every board summed carries that count:
+        # summing a partial sample would publish a made-up number.
+        totals[name] = (
+            sum(values)  # type: ignore[arg-type]  # values are ints when complete
+            if boards and all(v is not None for v in values)
+            else None
+        )
+    counted = (
+        totals["advancers"] + totals["decliners"] + totals["unchanged"]
+        if None not in (totals["advancers"], totals["decliners"], totals["unchanged"])
+        else None
+    )
     totals["advancers_pct"] = round(totals["advancers"] / counted * 100, 1) if counted else None
     return totals
+
+
+def _breadth_gaps(boards: list[dict[str, Any]]) -> list[str]:
+    """Fields the source did not provide per board (they stay null upstream)."""
+    return [
+        f"{b.get('exchange', '?')} missing {name}"
+        for b in boards
+        for name in _BREADTH_FIELDS
+        if b.get(name) is None
+    ]
 
 
 async def _vnstock_quota() -> Any:
@@ -812,6 +833,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         exchange: HOSE/HNX/UPCOM; bỏ trống để lấy cả 3 sàn và tổng. Số đếm lấy từ bảng thông tin
             sàn của Vietstock: advancers/decliners/unchanged là số mã tăng/giảm/đứng giá,
             ceiling/floor là số mã trần/sàn; advancers_pct = advancers / (tăng + giảm + đứng).
+            Trường nguồn không cung cấp cho một sàn thì trả null (không đổi thành 0) và tổng của
+            trường đó cũng null; advancers_pct chỉ có khi cả ba tổng tăng/giảm/đứng đều biết.
         """
         venues = list(vs_p.EXCHANGE_TYPE_IDS)
         if exchange is not None and exchange.strip():
@@ -821,7 +844,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "breadth_scan", f"unknown exchange {exchange!r} (HOSE|HNX|UPCOM)"
                 )
             venues = [venue]
-        fp = "v2|" + ",".join(venues)  # v2: per-exchange marketinfo counts
+        fp = "v3|" + ",".join(venues)  # v3: missing counts stay null field-wise in totals
         hit = await cache_lookup("breadth_scan", fp)
         if hit is not None:
             return hit
@@ -868,6 +891,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 if b is not None and b["exchange"] in venues
             ]
             if stale:
+                gaps = _breadth_gaps(stale)
                 return make_envelope(
                     {
                         **_breadth_totals(stale),
@@ -876,18 +900,22 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "snapshot_date": stale_rows[0].get("date"),
                     },
                     source="cache-stale",
-                    warnings=[f"live unavailable, snapshot fallback: {'; '.join(failed)}"],
+                    warnings=[f"live unavailable, snapshot fallback: {'; '.join(failed)}"]
+                    + [f"missing count: {g}" for g in gaps],
                     availability="stale",
                 )
             return _unavailable("breadth_scan", "; ".join(failed) or "no breadth data")
+        gaps = _breadth_gaps(boards)
         return await cache_store(
             "breadth_scan",
             fp,
             price_ttl(),
             {**_breadth_totals(boards), "exchanges": boards},
             source="vietstock",
-            warnings=[f"exchange unavailable: {f}" for f in failed] or None,
-            availability="partial" if failed else None,
+            warnings=[f"exchange unavailable: {f}" for f in failed]
+            + [f"missing count: {g}" for g in gaps]
+            or None,
+            availability="partial" if (failed or gaps) else None,
         )
 
     @server.tool(annotations=READ_ONLY)

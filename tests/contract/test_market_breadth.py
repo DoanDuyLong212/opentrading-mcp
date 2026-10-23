@@ -147,3 +147,124 @@ async def test_breadth_missing_field_is_null_not_zero(monkeypatch):
     board = env["data"]["exchanges"][0]
     assert board["ceiling"] is None and board["floor"] is None
     assert board["advancers"] == 147
+    # Totals follow the same contract: a field the source did not provide for
+    # every board summed stays null, and the disclosed sample stays partial.
+    data = env["data"]
+    assert data["ceiling"] is None and data["floor"] is None
+    assert data["advancers"] == 147 and data["decliners"] == 164
+    assert data["advancers_pct"] == round(147 / (147 + 164 + 57) * 100, 1)
+    assert env["availability"] == "partial"
+    assert any("ceiling" in w for w in env["warnings"])
+
+
+async def test_breadth_missing_unchanged_leaves_pct_unknown(monkeypatch):
+    # advancers_pct needs advancers+decliners+unchanged; a missing unchanged
+    # count must not silently divide by a partial denominator.
+    bare = [{k: v for k, v in HOSE[0].items() if k != "st"}]
+    _fake_boards(monkeypatch, {"HOSE": bare})
+    env = await _tool_fn("breadth_scan")(exchange="HOSE")
+    data = env["data"]
+    assert data["unchanged"] is None
+    assert data["advancers"] == 147 and data["decliners"] == 164
+    assert data["advancers_pct"] is None
+    assert env["availability"] == "partial"
+    assert any("unchanged" in w for w in env["warnings"])
+
+
+async def test_breadth_totals_stay_partial_field_wise(monkeypatch):
+    # One exchange missing one field: only that field's total is unknown.
+    hose_missing_upc = [{k: v for k, v in HOSE[0].items() if k != "upc"}]
+    _fake_boards(monkeypatch, {"HOSE": hose_missing_upc, "HNX": HNX, "UPCOM": UPCOM})
+    env = await _tool_fn("breadth_scan")()
+    data = env["data"]
+    assert data["ceiling"] is None  # HOSE carries no upc
+    assert data["floor"] == 3 + 6 + 7
+    assert data["advancers"] == 147 + 50 + 96
+    assert data["advancers_pct"] == round(293 / (293 + 311 + 216) * 100, 1)
+    assert any("HOSE" in w and "ceiling" in w for w in env["warnings"])
+    assert env["availability"] == "partial"
+
+
+async def test_breadth_real_zero_and_unparseable_are_distinguished(monkeypatch):
+    from opentrading_mcp.providers import store
+
+    monkeypatch.setattr(store, "_memory", {})
+    zeroed = [dict(HOSE[0], upc=0)]
+    _fake_boards(monkeypatch, {"HOSE": zeroed})
+    env = await _tool_fn("breadth_scan")(exchange="HOSE")
+    assert env["data"]["ceiling"] == 0  # a real zero is data, not a gap
+    assert env["availability"] == "available"
+
+    monkeypatch.setattr(store, "_memory", {})  # same fp: isolate the second call
+    bad = [dict(HOSE[0], upc="n/a")]
+    _fake_boards(monkeypatch, {"HOSE": bad})
+    env = await _tool_fn("breadth_scan")(exchange="HOSE")
+    assert env["data"]["ceiling"] is None
+    assert env["availability"] == "partial"
+
+
+def test_breadth_totals_missing_count_stays_unknown():
+    from opentrading_mcp.tools.market import _board_breadth, _breadth_totals
+
+    board = _board_breadth("HOSE", [{"up": 147, "dn": 164, "st": 57}])
+    assert board is not None
+    assert board["ceiling"] is None
+    assert _breadth_totals([board])["ceiling"] is None
+
+
+def test_breadth_totals_all_zero_keeps_zero_and_null_pct():
+    from opentrading_mcp.tools.market import _breadth_totals
+
+    board = {
+        "exchange": "HOSE",
+        "advancers": 0,
+        "decliners": 0,
+        "unchanged": 0,
+        "ceiling": 0,
+        "floor": 0,
+    }
+    totals = _breadth_totals([board])
+    assert totals["advancers"] == 0 and totals["ceiling"] == 0
+    assert totals["advancers_pct"] is None  # a 0/0 ratio is unknown, not 0
+
+
+async def test_breadth_snapshot_missing_field_same_contract(monkeypatch):
+    import opentrading_mcp.tools.market as market_mod
+    from opentrading_mcp import snapshots
+    from opentrading_mcp.providers.errors import ProviderUnavailable
+
+    hose_no_st = [{k: v for k, v in HOSE[0].items() if k != "st"}]
+
+    async def fake_rb(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        if getattr(fn, "func", None) is snapshots.load:
+            payload = [hose_no_st, HNX, UPCOM]
+            return [{"date": "2026-10-22", "kind": "breadth_3ex", "payload": payload}]
+        raise ProviderUnavailable("vietstock down")
+
+    monkeypatch.setattr(market_mod, "run_blocking", fake_rb)
+    env = await _tool_fn("breadth_scan")()
+    assert env["availability"] == "stale"
+    data = env["data"]
+    assert data["unchanged"] is None
+    assert data["advancers_pct"] is None
+    assert data["ceiling"] == 2 + 7 + 15
+    assert any("unchanged" in w for w in env["warnings"])
+
+
+async def test_breadth_cache_v3_preserves_nulls_and_warnings(monkeypatch):
+    from opentrading_mcp.providers import store
+
+    monkeypatch.setattr(store, "_memory", {})
+    bare = [{k: v for k, v in HOSE[0].items() if k not in ("upc", "dnf")}]
+    calls: list[str] = []
+    _fake_boards(monkeypatch, {"HOSE": bare}, calls)
+    first = await _tool_fn("breadth_scan")(exchange="HOSE")
+    assert first["data"]["ceiling"] is None
+    assert calls == ["HOSE"]  # the stale v2| fingerprint is not served
+    assert "mcp:breadth_scan:v3_HOSE" in store._memory
+    assert "mcp:breadth_scan:v2_HOSE" not in store._memory
+    calls.clear()
+    second = await _tool_fn("breadth_scan")(exchange="HOSE")
+    assert calls == []  # cache hit
+    assert second["data"]["ceiling"] is None  # null survives the round-trip
+    assert any("ceiling" in w for w in second["warnings"])
