@@ -902,6 +902,121 @@ def financeinfo(symbol: str, period: str = "quarter") -> dict[str, Any]:
     return {"symbol": symbol, "period": period, "pages": sections}
 
 
+# Statement keys models pass (financial_detail's codes) → financeinfo section names.
+_FINANCEINFO_ALIASES = {
+    "kqkd": "Kết quả kinh doanh",
+    "cdkt": "Báo cáo tình hình tài chính",
+    "cstc": "Chỉ số tài chính",
+    "ratios": "Chỉ số tài chính",
+}
+
+
+def _financeinfo_label(header: dict[str, Any]) -> str:
+    term = str(header.get("TermCode") or "")
+    year = header.get("YearPeriod")
+    return f"{term}/{year}" if re.fullmatch(r"Q[1-4]", term) else str(year)
+
+
+def align_financeinfo(
+    raw: Any, statement: str = "all", periods_n: int | None = None
+) -> tuple[dict[str, Any], list[str]]:
+    """financeinfo pages → {periods, statements{name: [{..., values{period: v}}]}}.
+
+    Each page holds period headers oldest→newest, but row ValueN belongs to the
+    header whose ID is N, and ID counts down from the newest (Value1 = newest
+    period). Read in list order the values run backwards, which made models
+    swap quarters; keying every value by its period label removes the guess.
+    IDs restart on each page (Row does not), so the mapping is per page.
+    Returns (data, warnings); a page whose headers can't be mapped is skipped,
+    and ProviderBadData when no page could be mapped.
+    """
+    raw = raw if isinstance(raw, dict) else {}
+    warnings: list[str] = []
+    labels: dict[str, tuple[int, int]] = {}  # label → sort key (year, term)
+    sections: dict[str, dict[Any, dict[str, Any]]] = {}
+    for n, page in enumerate(raw.get("pages") or [], start=1):
+        parts = page if isinstance(page, list) else []
+        headers = next(
+            (
+                p
+                for p in parts
+                if isinstance(p, list) and p and all(
+                    isinstance(h, dict) and "YearPeriod" in h for h in p
+                )
+            ),
+            None,
+        )
+        stmts = next((p for p in parts if isinstance(p, dict)), None)
+        if not headers or stmts is None:
+            continue
+        ids = [h.get("ID") for h in headers]
+        if not all(isinstance(i, int) for i in ids) or len(set(ids)) != len(ids):
+            warnings.append(f"page {n}: period headers without unique IDs, skipped")
+            continue
+        by_id = {h["ID"]: _financeinfo_label(h) for h in headers}
+        page_labels = list(by_id.values())
+        dupes = sorted({lbl for lbl in page_labels if page_labels.count(lbl) > 1})
+        if dupes:
+            # e.g. a consolidated and a parent-only report for one quarter: both map to
+            # one label and only the first header's values are kept.
+            warnings.append(f"page {n}: headers share period label {', '.join(dupes)}")
+        for h in headers:
+            labels[_financeinfo_label(h)] = (
+                int(h.get("YearPeriod") or 0),
+                int(h.get("ReportTermID") or 0),
+            )
+        for name, rows in stmts.items():
+            out = sections.setdefault(str(name), {})
+            for row in rows if isinstance(rows, list) else []:
+                if not isinstance(row, dict):
+                    continue
+                key = row.get("ReportNormID") or row.get("Name")
+                entry = out.setdefault(
+                    key,
+                    {
+                        "norm_id": row.get("ReportNormID"),
+                        "name": str(row.get("Name") or "").strip(),
+                        "name_en": str(row.get("NameEn") or "").strip(),
+                        "unit": row.get("Unit") or "VND",
+                        "values": {},
+                    },
+                )
+                for hid, label in by_id.items():
+                    # earlier pages are newer — keep their value on overlap
+                    entry["values"].setdefault(label, row.get(f"Value{hid}"))
+    periods = sorted(labels, key=labels.__getitem__)
+    if not periods:
+        raise ProviderBadData(
+            f"vietstock financeinfo: no usable period headers for {raw.get('symbol')}"
+            + (f" ({'; '.join(warnings)})" if warnings else "")
+        )
+    if periods_n is not None:
+        periods = periods[-max(int(periods_n), 1):]
+    wanted = statement.strip()
+    if wanted.lower() != "all":
+        target = _FINANCEINFO_ALIASES.get(wanted.lower(), wanted).lower()
+        picked = {k: v for k, v in sections.items() if target in k.lower()}
+        if picked:
+            sections = picked
+        else:
+            warnings.append(
+                f"statement {statement!r} not found (have: {', '.join(sections)}), "
+                "returning all"
+            )
+    return {
+        "symbol": str(raw.get("symbol") or "").upper(),
+        "period": raw.get("period"),
+        "periods": periods,
+        "statements": {
+            name: [
+                {**r, "values": {p: r["values"].get(p) for p in periods}}
+                for r in rows.values()
+            ]
+            for name, rows in sections.items()
+        },
+    }, warnings
+
+
 def market_price(board_type: int = 2) -> Any:
     return _post("/data/getmarketprice", {"type": board_type})
 

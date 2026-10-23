@@ -83,19 +83,23 @@ def register_vs_tools(server: FastMCP) -> list[dict[str, Any]]:
         Không dùng khi: đã có JWT (dùng financial_detail — đầy đủ từng dòng); chỉ cần đọc nhanh gọn
             (dùng financial_statements — cùng nguồn mirror, gọn hơn).
 
-        period: 'quarter' (12 quý) hoặc 'year' (năm).
+        period: 'quarter' (12 quý) hoặc 'year' (năm). Trả {periods: [kỳ cũ→mới],
+        statements: {tên mục: [{name, unit, values: {"Q2/2026": số, ...}}]}}; đơn vị theo unit
+        của dòng (đồng khi nguồn để trống).
         """
-        fp = f"{symbol}|{period}"
+        # v2: values keyed by period (v1 cached the raw pages with reversed Value1..5)
+        fp = f"v2|{symbol}|{period}"
         hit = await cache_lookup("vs_financeinfo", fp)
         if hit is not None:
             return hit
         if ctx is not None:
             await ctx.log("info", f"vs_financeinfo {symbol} {period}")
         try:
-            data = await _call("vs_financeinfo", vs_p.financeinfo, symbol, period)
+            raw = await _call("vs_financeinfo", vs_p.financeinfo, symbol, period)
+            data, warnings = vs_p.align_financeinfo(raw)
             return await cache_store(
                 "vs_financeinfo", fp, TTL_SECONDS["financeinfo"],
-                data, source="vietstock",
+                data, source="vietstock", warnings=warnings or None,
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_financeinfo", str(exc))
