@@ -367,9 +367,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             độ chi tiết khác nhau: tổng hợp vs từng lệnh).
 
         symbols: kênh WS cần đọc (mặc định ["VNINDEX"]); cache lạnh thì rơi về
-        biểu đồ NN của Vietstock.
+        biểu đồ NN của Vietstock. Lưu ý (issue #38): nhánh DNSE WS chỉ chứa
+        foreign flow của các kênh đã subscribe (VN30F1M — futures), trường
+        `foreign_scope` khai báo rõ; dòng ngoại toàn thị trường xem vs_nn_flow.
         """
-        fp = f"{symbols}"
+        fp = f"v2|{symbols}"
         hit = await cache_lookup("money_flow", fp)
         if hit is not None:
             return hit
@@ -379,7 +381,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             ws = dnse_mod.ws_snapshot(symbols or ["VNINDEX"])
             return await cache_store(
                 "money_flow", fp, price_ttl(),
-                {"primary": "dnse-ws", "snapshot": ws}, source="dnse-ws",
+                {
+                    "primary": "dnse-ws",
+                    "snapshot": ws,
+                    "foreign_scope": dnse_mod.WS_FOREIGN_SCOPE,
+                    "note": (
+                        "WS foreign chỉ phủ các kênh đã subscribe (VN30F1M — futures);"
+                        " dòng ngoại toàn thị trường: vs_nn_flow"
+                    ),
+                },
+                source="dnse-ws",
             )
         except ProviderUnavailable:
             pass

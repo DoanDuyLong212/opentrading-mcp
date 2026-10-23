@@ -81,7 +81,7 @@ HINTS: dict[str, str] = {
     # dnse
     "dnse_ohlc_history": "lich su nen phai sinh VN30F1M chi so | futures index bars",
     "dnse_latest_trade": "gia khop moi nhat realtime | last trade price",
-    "dnse_foreign_flow": "khoi ngoai mua ban rong trong phien | foreign net flow live",
+    "dnse_foreign_flow": "khoi ngoai vn30f1m futures mua ban rong | foreign net flow futures scope",
     "dnse_ws_snapshot": "du lieu thoi gian thuc tho kiem tra | realtime raw debug",
     "dnse_orderbook": "so lenh du mua du ban | order book depth bid ask",
     "dnse_indices": "chi so trong phien VNINDEX VN30 | live index levels",
