@@ -1,0 +1,143 @@
+{
+ "_source": "Live deployed MCP 2026-10-23: vs_market_info HOSE/HNX/UPCOM rows (Vietstock /data/marketinfo) and market_overview quotes (vnstock board, trimmed to price/volume fields).",
+ "marketinfo_hose": [
+  {
+   "exId": 1,
+   "c": "VN-Index",
+   "n": "Chỉ số VN Index",
+   "e": "HOSE",
+   "p": 1760.63,
+   "ch": 21.96,
+   "pch": 1.26,
+   "vol": 672074209,
+   "val": 15299757922040,
+   "up": 147,
+   "upc": 2,
+   "st": 57,
+   "dn": 164,
+   "dnf": 3,
+   "putvol": 100121247,
+   "putval": 1999142691010,
+   "fbvol": 2115695324000,
+   "fsvol": 1702171627000,
+   "bvol": 8561802771,
+   "svol": 7880356808,
+   "volny": 239301258881,
+   "vollh": 239597466043,
+   "mc": 8433423744942840,
+   "s": 1
+  }
+ ],
+ "board_quotes": [
+  {
+   "symbol": "VCB",
+   "exchange": "HOSE",
+   "reference_price": 56400,
+   "close_price": 56300,
+   "price_change": -100,
+   "percent_change": -0.1773049645390071,
+   "volume_accumulated": 3290100
+  },
+  {
+   "symbol": "HPG",
+   "exchange": "HOSE",
+   "reference_price": 21150,
+   "close_price": 21250,
+   "price_change": 100,
+   "percent_change": 0.4728132387706856,
+   "volume_accumulated": 14551200
+  },
+  {
+   "symbol": "SSI",
+   "exchange": "HOSE",
+   "reference_price": 20400,
+   "close_price": 20150,
+   "price_change": -250,
+   "percent_change": -1.2254901960784315,
+   "volume_accumulated": 19083400
+  },
+  {
+   "symbol": "VIC",
+   "exchange": "HOSE",
+   "reference_price": 223600,
+   "close_price": 232900,
+   "price_change": 9300,
+   "percent_change": 4.159212880143113,
+   "volume_accumulated": 2592200
+  },
+  {
+   "symbol": "VHM",
+   "exchange": "HOSE",
+   "reference_price": 61800,
+   "close_price": 64000,
+   "price_change": 2200,
+   "percent_change": 3.559870550161812,
+   "volume_accumulated": 13819600
+  },
+  {
+   "symbol": "MSN",
+   "exchange": "HOSE",
+   "reference_price": 73700,
+   "close_price": 73900,
+   "price_change": 200,
+   "percent_change": 0.27137042062415195,
+   "volume_accumulated": 5501900
+  }
+ ],
+ "marketinfo_hnx": [
+  {
+   "exId": 2,
+   "c": "HNX-Index",
+   "n": "Chỉ số HNX Index",
+   "e": "HNX",
+   "p": 261.08,
+   "ch": -0.59,
+   "pch": -0.23,
+   "vol": 55913787,
+   "val": 870818692400,
+   "up": 50,
+   "upc": 7,
+   "st": 66,
+   "dn": 68,
+   "dnf": 6,
+   "putvol": 4787440,
+   "putval": 107552600000,
+   "fbvol": 27682210000,
+   "fsvol": 37188410000,
+   "bvol": 68305300,
+   "svol": 76111300,
+   "volny": 20939034991,
+   "vollh": 21111078468,
+   "mc": 454619937532800,
+   "s": 0
+  }
+ ],
+ "marketinfo_upcom": [
+  {
+   "exId": 3,
+   "c": "UPCOM-Index",
+   "n": "Chỉ số UPCoM Index",
+   "e": "UPCOM",
+   "p": 126.91,
+   "ch": 0.67,
+   "pch": 0.53,
+   "vol": 23064694,
+   "val": 397628720400,
+   "up": 96,
+   "upc": 15,
+   "st": 93,
+   "dn": 79,
+   "dnf": 7,
+   "putvol": 1074337,
+   "putval": 11075276100,
+   "fbvol": 9744250000,
+   "fsvol": 6785300000,
+   "bvol": 45628600,
+   "svol": 43069200,
+   "volny": 48604242458,
+   "vollh": 50928955825,
+   "mc": 1314536349297100,
+   "s": 0
+  }
+ ]
+}

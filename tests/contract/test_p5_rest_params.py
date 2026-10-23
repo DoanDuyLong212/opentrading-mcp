@@ -50,25 +50,6 @@ async def test_symbol_lookup_limit(monkeypatch):
     assert len(env["data"]["hits"]) == 4
 
 
-async def test_breadth_scan_exchange_filter(monkeypatch):
-    import opentrading_mcp.tools.market as market_mod
-
-    rows = [
-        {"code": "VCB", "change": 1.0, "exchange": "HOSE"},
-        {"code": "ABC", "change": -1.0, "exchange": "HNX"},
-    ]
-
-    async def fake_rb(fn: Any, tool: str, timeout_secs: float = 60.0):
-        return rows
-
-    monkeypatch.setattr(market_mod, "run_blocking", fake_rb)
-    fn = _tool_fn("breadth_scan", "market")
-    env = await fn(exchange="HOSE")
-    _check_envelope(env, "breadth_scan")
-    assert env["data"]["advancers"] == 1
-    assert env["data"]["decliners"] == 0
-
-
 async def test_dnse_indices_accepts_symbols(monkeypatch):
     from opentrading_mcp.providers import dnse as dnse_mod
 

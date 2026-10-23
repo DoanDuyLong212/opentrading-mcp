@@ -249,6 +249,88 @@ def _project_rows(rows: list[dict[str, Any]], columns: list[str] | None) -> list
     return project_rows(rows, columns)
 
 
+def _num(row: dict[str, Any], keys: tuple[str, ...]) -> float:
+    """First finite numeric value among keys, else 0.0."""
+    import math
+
+    for k in keys:
+        try:
+            v = row.get(k)
+            if v is not None:
+                f = float(v)
+                if not math.isnan(f) and not math.isinf(f):
+                    return f
+        except (TypeError, ValueError):
+            continue
+    return 0.0
+
+
+# vnstock board rows carry percent_change/price_change (there is no `change` key);
+# the trailing spellings keep older upstream shapes working.
+_CHG_KEYS = ("percent_change", "pct_change", "price_change", "change", "Change", "CHANGE")
+
+
+def _chg(row: dict[str, Any]) -> float:
+    return _num(row, _CHG_KEYS)
+
+
+# Vietstock /data/marketinfo row fields (one row per exchange index).
+_BREADTH_FIELDS = {
+    "advancers": "up",
+    "decliners": "dn",
+    "unchanged": "st",
+    "ceiling": "upc",
+    "floor": "dnf",
+}
+
+
+def _board_breadth(exchange: str, raw: Any) -> dict[str, Any] | None:
+    """Advance/decline counts from a marketinfo board; None when it carries none."""
+    rows = (raw.get("rows") or raw.get("data")) if isinstance(raw, dict) else raw
+    for row in rows if isinstance(rows, list) else []:
+        if not (isinstance(row, dict) and "up" in row and "dn" in row):
+            continue
+        out: dict[str, Any] = {"exchange": exchange.upper()}
+        for name, key in _BREADTH_FIELDS.items():
+            # A missing count stays null: 0 would read as "no stock at ceiling".
+            try:
+                out[name] = int(row[key]) if row.get(key) is not None else None
+            except (TypeError, ValueError):
+                out[name] = None
+        return out
+    return None
+
+
+def _breadth_totals(boards: list[dict[str, Any]]) -> dict[str, Any]:
+    totals: dict[str, Any] = {}
+    for name in _BREADTH_FIELDS:
+        values = [b.get(name) for b in boards]
+        # A total is only known when every board summed carries that count:
+        # summing a partial sample would publish a made-up number.
+        totals[name] = (
+            sum(values)  # type: ignore[arg-type]  # values are ints when complete
+            if boards and all(v is not None for v in values)
+            else None
+        )
+    counted = (
+        totals["advancers"] + totals["decliners"] + totals["unchanged"]
+        if None not in (totals["advancers"], totals["decliners"], totals["unchanged"])
+        else None
+    )
+    totals["advancers_pct"] = round(totals["advancers"] / counted * 100, 1) if counted else None
+    return totals
+
+
+def _breadth_gaps(boards: list[dict[str, Any]]) -> list[str]:
+    """Fields the source did not provide per board (they stay null upstream)."""
+    return [
+        f"{b.get('exchange', '?')} missing {name}"
+        for b in boards
+        for name in _BREADTH_FIELDS
+        if b.get(name) is None
+    ]
+
+
 async def _vnstock_quota() -> Any:
     """Quota info for source_status; a quota hit (vnai sys.exit) is reported, not raised."""
     try:
@@ -708,25 +790,6 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _unavailable("market_movers", str(exc))
         rows = [q for q in quotes if isinstance(q, dict)]
 
-        def _num(r: dict[str, Any], keys: tuple[str, ...]) -> float:
-            import math
-
-            for k in keys:
-                try:
-                    v = r.get(k)
-                    if v is not None:
-                        f = float(v)
-                        if not math.isnan(f) and not math.isinf(f):
-                            return f
-                except (TypeError, ValueError):
-                    continue
-            return 0.0
-
-        _CHG_KEYS = ("percent_change", "pct_change", "price_change", "change", "Change", "CHANGE")
-
-        def _chg(r: dict[str, Any]) -> float:
-            return _num(r, _CHG_KEYS)
-
         def _vol(r: dict[str, Any]) -> float:
             return _num(r, ("volume_accumulated", "volume", "Volume", "VOLUME", "vol"))
 
@@ -760,76 +823,99 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def breadth_scan(exchange: str | None = None) -> dict[str, Any]:
-        """Đếm mã tăng/giảm/trần/sàn toàn bảng. Dùng khi đánh giá sức khỏe đợt tăng (tăng có lan tỏa
-            hay chỉ vài trụ kéo).
+        """Đếm mã tăng/giảm/đứng/trần/sàn theo từng sàn. Dùng khi đánh giá sức khỏe đợt tăng (tăng
+            có lan tỏa hay chỉ vài trụ kéo).
 
         Dùng khi: hỏi "độ rộng thị trường", "đợt tăng này có chắc không".
         Không dùng khi: chỉ cần top 3-5 mã tăng/giảm (dùng market_movers — nhẹ hơn); cần context gộp
             cho bản tin (dùng market_overview).
 
-        exchange: lọc theo sàn (HOSE/HNX/UPCOM); bị bỏ qua kèm cảnh báo khi dòng dữ liệu không mang
-            thông tin sàn.
+        exchange: HOSE/HNX/UPCOM; bỏ trống để lấy cả 3 sàn và tổng. Số đếm lấy từ bảng thông tin
+            sàn của Vietstock: advancers/decliners/unchanged là số mã tăng/giảm/đứng giá,
+            ceiling/floor là số mã trần/sàn; advancers_pct = advancers / (tăng + giảm + đứng).
+            Trường nguồn không cung cấp cho một sàn thì trả null (không đổi thành 0) và tổng của
+            trường đó cũng null; advancers_pct chỉ có khi cả ba tổng tăng/giảm/đứng đều biết.
         """
-        fp = f"{exchange}"
+        venues = list(vs_p.EXCHANGE_TYPE_IDS)
+        if exchange is not None and exchange.strip():
+            venue = exchange.strip().upper()
+            if venue not in vs_p.EXCHANGE_TYPE_IDS:
+                return _unavailable(
+                    "breadth_scan", f"unknown exchange {exchange!r} (HOSE|HNX|UPCOM)"
+                )
+            venues = [venue]
+        fp = "v3|" + ",".join(venues)  # v3: missing counts stay null field-wise in totals
         hit = await cache_lookup("breadth_scan", fp)
         if hit is not None:
             return hit
-        try:
-            prices = await run_blocking(vs_p.market_price, "breadth_scan", timeout_secs=30.0)
-        except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+        boards: list[dict[str, Any]] = []
+        failed: list[str] = []
+        for venue in venues:
+            try:
+                raw = await run_blocking(
+                    functools.partial(vs_p.market_info_board, venue),
+                    "breadth_scan",
+                    timeout_secs=30.0,
+                )
+            except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+                failed.append(f"{venue}: {exc}")
+                continue
+            board = _board_breadth(venue, raw)
+            if board is None:
+                failed.append(f"{venue}: board carries no advance/decline counts")
+                continue
+            boards.append(board)
+        if not boards:
             from opentrading_mcp import snapshots
 
-            stale_rows = await run_blocking(
-                functools.partial(snapshots.load, "breadth_3ex", 1),
-                "breadth_scan",
-                timeout_secs=10.0,
-            )
-            if stale_rows:
-                payload = stale_rows[0].get("payload") or {}
-                boards = payload.get("rows", payload) if not isinstance(payload, list) else payload
+            try:
+                stale_rows = await run_blocking(
+                    functools.partial(snapshots.load, "breadth_3ex", 1),
+                    "breadth_scan",
+                    timeout_secs=10.0,
+                )
+            except ProviderUnavailable:
+                stale_rows = []
+            payload = stale_rows[0].get("payload") if stale_rows else None
+            # The worker saves [HOSE, HNX, UPCOM] boards in this order.
+            stale = [
+                b
+                for b in (
+                    _board_breadth(v, raw)
+                    for v, raw in zip(
+                        vs_p.EXCHANGE_TYPE_IDS,
+                        payload if isinstance(payload, list) else [],
+                        strict=False,
+                    )
+                )
+                if b is not None and b["exchange"] in venues
+            ]
+            if stale:
+                gaps = _breadth_gaps(stale)
                 return make_envelope(
-                    {"from_snapshot": True, "exchanges": boards},
+                    {
+                        **_breadth_totals(stale),
+                        "exchanges": stale,
+                        "from_snapshot": True,
+                        "snapshot_date": stale_rows[0].get("date"),
+                    },
                     source="cache-stale",
-                    warnings=[f"live unavailable, snapshot fallback: {exc}"],
+                    warnings=[f"live unavailable, snapshot fallback: {'; '.join(failed)}"]
+                    + [f"missing count: {g}" for g in gaps],
                     availability="stale",
                 )
-            return _unavailable("breadth_scan", str(exc))
-        rows = prices if isinstance(prices, list) else []
-        warnings: list[str] = []
-        if exchange is not None:
-            venue_rows = [
-                r
-                for r in rows
-                if isinstance(r, dict)
-                and str(
-                    pick_value(r, ("exchange", "Exchange", "floor", "Floor", "market", "Market"))
-                    or ""
-                ).upper()
-                == exchange.upper()
-            ]
-            if venue_rows or not rows:
-                rows = venue_rows
-            else:
-                warnings.append(f"no venue info in board rows; exchange {exchange!r} ignored")
-        def _bchg(row: dict[str, Any]) -> float:
-            try:
-                return float(pick_value(row, ("change", "Change", "CHANGE")) or 0)
-            except (TypeError, ValueError):
-                return 0.0
-
-        adv = sum(1 for r in rows if isinstance(r, dict) and _bchg(r) > 0)
-        dec = sum(
-            1
-            for r in rows
-            if isinstance(r, dict) and _bchg(r) < 0
-        )
+            return _unavailable("breadth_scan", "; ".join(failed) or "no breadth data")
+        gaps = _breadth_gaps(boards)
         return await cache_store(
             "breadth_scan",
             fp,
             price_ttl(),
-            {"advancers": adv, "decliners": dec, "rows": len(rows)},
+            {**_breadth_totals(boards), "exchanges": boards},
             source="vietstock",
-            warnings=warnings,
+            warnings=[f"exchange unavailable: {f}" for f in failed]
+            + [f"missing count: {g}" for g in gaps]
+            or None,
+            availability="partial" if (failed or gaps) else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -862,14 +948,9 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             warnings.append(f"quotes unavailable: {exc}")
-        rows = [q for q in (quotes or []) if isinstance(q, dict)]
-
-        def _chg(row: dict[str, Any]) -> float:
-            try:
-                return float(row.get("change", 0) or 0)
-            except (TypeError, ValueError):
-                return 0.0
-
+        rows, missing = vn_p.split_batch([q for q in (quotes or []) if isinstance(q, dict)])
+        if missing:
+            warnings.append(f"batch partial: {len(missing)} symbols missing")
         ranked = sorted(rows, key=_chg, reverse=True)
         keep = max(int(top_n), 1)
         movers = ranked[:keep]
