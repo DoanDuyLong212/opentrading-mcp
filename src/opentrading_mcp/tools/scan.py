@@ -35,6 +35,15 @@ ALERT_STATE_KEY = "mcp:scan:alert_state"
 # covers normal scheduler gaps; a fresh state only costs one seeded first
 # observation.
 ALERT_STATE_TTL = 3600
+# Same candle count as signals_technical 1D, so alert_check and the screener's
+# technical filter give the same rsi14 as signals_technical.
+RSI_DAILY_BARS = 250
+# Op spellings accepted by alert_check -> canonical op.
+_ALERT_OP_ALIASES = {
+    ">": ">", "gt": ">", ">=": ">=", "gte": ">=",
+    "<": "<", "lt": "<", "<=": "<=", "lte": "<=",
+    "cross_up": "cross_up", "cross_down": "cross_down",
+}
 
 
 def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
@@ -55,10 +64,24 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         filters: {trường: [min, max]} (None là không chặn) hoặc chuỗi cho khớp mã/sàn;
         dùng signals_screener_columns để biết trường hợp lệ. max_pe/min_roe là phím tắt.
+        PE/ROE chỉ được tra cho tối đa 30 mã đầu danh sách (screened trong kết quả); pe là
+        P/E cuối kỳ báo cáo ghi ở fundamentals_period, không phải P/E theo giá hôm nay.
         technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
-        ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}).
+        ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}); dict rỗng coi như None.
+
+        screened: số mã ĐÃ THỬ đánh giá ở bước lọc cuối đang hoạt động (local →
+            fundamentals → technical), không phải tổng số mã "nhìn qua".
+        coverage: mô tả bước lọc cuối đó — stage: 'local' | 'fundamentals' | 'technical';
+            eligible: số mã đủ điều kiện vào bước này trước khi áp giới hạn;
+            attempted: số mã đã thử đánh giá (bằng screened);
+            evaluated: số mã đủ dữ liệu để có kết luận pass/reject. Một mã history/compute
+            lỗi hoặc indicator bắt buộc là None thì unavailable: evaluated không tăng,
+            warning nêu mã và lý do, envelope mang partial; giới hạn chủ ý chỉ tạo warning.
         """
-        fp = f"{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
+        technical = technical or None  # {} means "no technical stage", not a rule set
+        # v3: evaluated counts only symbols carrying the filter's own metric;
+        # fundamentals zeros are kept as returned (PR #28).
+        fp = f"v3|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
         hit = await cache_lookup("stock_screener", fp)
         if hit is not None:
             return hit
@@ -91,12 +114,19 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         else:
             enrich_n = min(len(rows), 10)
         enriched = 0
+        enrich_failed: list[tuple[str, str]] = []
+        results: list[set[str]] = []
+        # Metrics the active filter actually reads: a symbol missing one of
+        # these can never get a pass/reject conclusion, so it never counts as
+        # evaluated — whatever else the source did return for it.
+        required_metrics = {k for k in ("pe", "roe", "market_cap") if k in eff}
         sem = asyncio.Semaphore(blocking_slots())
 
-        async def _enrich_one(entry: dict[str, Any]) -> bool:
+        async def _enrich_one(entry: dict[str, Any]) -> set[str]:
+            """Attach fundamentals to the entry; return the metric names present."""
             sym = str(entry.get("symbol", "")).upper()
             if not sym:
-                return False
+                return set()
             async with sem:
                 try:
                     info = await run_blocking(
@@ -104,22 +134,45 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "stock_screener",
                         timeout_secs=10.0,
                     )
-                except Exception:
-                    return False
+                except Exception as exc:
+                    enrich_failed.append((sym, f"upstream error: {str(exc)[:80]}"))
+                    return set()
             if isinstance(info, dict):
-                hit = False
-                for key in ("pe", "roe", "market_cap"):
-                    if info.get(key) is not None:
-                        entry[key] = info[key]
-                        hit = True
-                return hit
-            return False
+                present = {k for k in ("pe", "roe", "market_cap") if info.get(k) is not None}
+                if present:
+                    entry.update({k: info[k] for k in present})
+                    if info.get("period_label"):
+                        # the report period of pe/roe (e.g. '2025' = year-end 2025 PE)
+                        entry["fundamentals_period"] = info["period_label"]
+                    return present
+                enrich_failed.append((sym, "no pe/roe/market_cap in source"))
+                return set()
+            enrich_failed.append((sym, "no fundamentals payload"))
+            return set()
 
         if enrich_n:
-            results = await asyncio.gather(*(_enrich_one(entry) for entry in rows[:enrich_n]))
+            results = list(
+                await asyncio.gather(*(_enrich_one(entry) for entry in rows[:enrich_n]))
+            )
             enriched = sum(1 for r in results if r)
+            for entry, present in zip(rows[:enrich_n], results, strict=True):
+                lacking = sorted(required_metrics - present)
+                if present and lacking:
+                    enrich_failed.append(
+                        (str(entry.get("symbol", "")).upper(), "/".join(lacking) + " missing")
+                    )
         if rows and enrich_n and enriched < enrich_n:
             warnings.append(f"fundamentals best-effort: {enriched}/{enrich_n} enriched")
+        if enrich_failed:
+            detail = "; ".join(f"{s} {r}" for s, r in enrich_failed[:5])
+            more = f" (+{len(enrich_failed) - 5} more)" if len(enrich_failed) > 5 else ""
+            warnings.append(f"fundamentals unavailable: {detail}{more}")
+        partial = bool(warnings)
+        if needs_valuation and len(rows) > enrich_n:
+            # Only these symbols carry pe/roe; every other row fails the filter.
+            warnings.append(
+                f"PE/ROE checked for the first {enrich_n} of {len(rows)} listed symbols only"
+            )
         try:
             candidates = sc_p.apply_filters(rows, eff)
         except Exception as exc:
@@ -129,6 +182,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[f"filter error: {exc}"],
                 availability="unavailable",
             )
+        stage = "local"
+        eligible_n = len(rows)
+        attempted_n = len(rows)
+        evaluated_n = len(rows)
         if technical is not None:
             allowed = {"rsi_lt", "rsi_gt", "above_sma20", "below_sma20"}
             unknown = [k for k in technical if k not in allowed]
@@ -139,48 +196,105 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     warnings=[f"unknown technical rules: {unknown}"],
                     availability="unavailable",
                 )
+            stage = "technical"
+            eligible_n = len(candidates)  # survivors of the earlier filters, not the universe
             shortlisted = candidates[: max(limit, 1)]
 
-            async def _tech_ok(entry: dict[str, Any]) -> bool:
+            async def _tech_verdict(entry: dict[str, Any]) -> tuple[str, str]:
+                """Classify one candidate: 'pass', 'reject', or ('unavailable', reason).
+
+                A candidate that fails a rule is a reject; a candidate whose
+                history/compute fails, or whose required indicator is None, is
+                unavailable — the screener never turns a data gap into a verdict.
+                """
                 sym = str(entry.get("symbol", "")).upper()
                 if not sym:
-                    return False
+                    return "unavailable", "no symbol"
                 async with sem:
                     try:
                         candles = await run_blocking(
-                            functools.partial(vn_p.quote_history, sym, 80),
+                            functools.partial(vn_p.quote_history, sym, RSI_DAILY_BARS),
                             "stock_screener",
                             timeout_secs=10.0,
                         )
                         out = tech_p.compute(candles)
-                    except Exception:
-                        return False
+                    except Exception as exc:
+                        return "unavailable", f"history/compute failed ({str(exc)[:60]})"
+                row = out if isinstance(out, dict) else {}
                 try:
-                    if "rsi_lt" in technical and not (out["rsi14"] < float(technical["rsi_lt"])):
-                        return False
-                    if "rsi_gt" in technical and not (out["rsi14"] > float(technical["rsi_gt"])):
-                        return False
-                    if technical.get("above_sma20") and not (
-                        out["sma20"] is not None and out["last"] > out["sma20"]
-                    ):
-                        return False
-                    if technical.get("below_sma20") and not (
-                        out["sma20"] is not None and out["last"] < out["sma20"]
-                    ):
-                        return False
+                    rsi = row.get("rsi14")
+                    sma = row.get("sma20")
+                    last = row.get("last")
+                    if "rsi_lt" in technical:
+                        if rsi is None:
+                            return "unavailable", "rsi14 missing"
+                        if not (float(rsi) < float(technical["rsi_lt"])):
+                            return "reject", ""
+                    if "rsi_gt" in technical:
+                        if rsi is None:
+                            return "unavailable", "rsi14 missing"
+                        if not (float(rsi) > float(technical["rsi_gt"])):
+                            return "reject", ""
+                    if technical.get("above_sma20"):
+                        if sma is None or last is None:
+                            return "unavailable", "sma20/last missing"
+                        if not (last > sma):
+                            return "reject", ""
+                    if technical.get("below_sma20"):
+                        if sma is None or last is None:
+                            return "unavailable", "sma20/last missing"
+                        if not (last < sma):
+                            return "reject", ""
                 except (TypeError, ValueError):
-                    return False
-                return True
+                    return "unavailable", "indicator not numeric"
+                return "pass", ""
 
-            kept = await asyncio.gather(*(_tech_ok(e) for e in shortlisted))
-            candidates = [e for e, ok in zip(shortlisted, kept, strict=True) if ok]
-        partial = bool(warnings) or (bool(enrich_n) and enriched < enrich_n)
+            verdicts = await asyncio.gather(*(_tech_verdict(e) for e in shortlisted))
+            candidates = [
+                e
+                for e, (verdict, _) in zip(shortlisted, verdicts, strict=True)
+                if verdict == "pass"
+            ]
+            unavailable = [
+                (str(e.get("symbol", "")).upper() or "?", reason)
+                for e, (verdict, reason) in zip(shortlisted, verdicts, strict=True)
+                if verdict == "unavailable"
+            ]
+            attempted_n = len(shortlisted)
+            evaluated_n = attempted_n - len(unavailable)
+            if unavailable:
+                detail = "; ".join(f"{s}: {r}" for s, r in unavailable[:5])
+                more = f" (+{len(unavailable) - 5} more)" if len(unavailable) > 5 else ""
+                warnings.append(
+                    "technical unavailable for "
+                    f"{len(unavailable)}/{attempted_n} attempted: {detail}{more}"
+                )
+            partial = partial or bool(unavailable)
+            if attempted_n < eligible_n:
+                warnings.append(
+                    "technical stage evaluated the "
+                    f"first {attempted_n} of {eligible_n} candidates only"
+                )
+        elif needs_valuation:
+            stage = "fundamentals"
+            eligible_n = len(rows)
+            attempted_n = enrich_n
+            evaluated_n = sum(
+                1 for present in results if required_metrics <= present
+            )
         return await cache_store(
             "stock_screener",
-            f"{filters}|{max_pe}|{min_roe}|{limit}|{technical}",
+            fp,
             TTL_SECONDS["overview"],
             {
                 "universe": len(rows),
+                "screened": attempted_n,
+                "coverage": {
+                    "stage": stage,
+                    "eligible": eligible_n,
+                    "attempted": attempted_n,
+                    "evaluated": evaluated_n,
+                },
                 "filters": eff,
                 "candidates": candidates[: max(limit, 1)],
             },
@@ -422,28 +536,56 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Evaluate price/RSI rules against live quotes. Use for live watch.
 
         Each rule: {symbol, threshold, metric ('price'|'rsi14'), op ('>'|'gt'|'>='|'gte'|
-        '<'|'lt'|'<='|'lte'|'cross_up'|'cross_down')}.
+        '<'|'lt'|'<='|'lte'|'cross_up'|'cross_down')}. Every rule is evaluated, several per
+        symbol included; a rule with an unknown op or metric is skipped with a warning.
+        price is the board close_price in dong (57400 = 57,4 nghìn đồng); rsi14 uses the
+        same 250 daily candles as signals_technical.
         """
-        wanted: dict[str, dict[str, Any]] = {}
-        for entry in rules:
-            if (
+        valid: list[dict[str, Any]] = []
+        warnings_list: list[str] = []
+        for i, entry in enumerate(rules):
+            if not (
                 isinstance(entry, dict)
                 and entry.get("symbol")
                 and entry.get("threshold") is not None
             ):
-                wanted[str(entry["symbol"]).upper()] = entry
-        if not wanted:
+                warnings_list.append(f"rule {i}: needs symbol and threshold")
+                continue
+            op = _ALERT_OP_ALIASES.get(str(entry.get("op", ">")).strip().lower())
+            metric = str(entry.get("metric", "price")).strip().lower()
+            try:
+                threshold = float(entry["threshold"])
+            except (TypeError, ValueError):
+                warnings_list.append(f"rule {i}: threshold {entry['threshold']!r} is not a number")
+                continue
+            if op is None:
+                ops = ", ".join(sorted(set(_ALERT_OP_ALIASES.values())))
+                warnings_list.append(f"rule {i}: unknown op {entry.get('op')!r} (use one of {ops})")
+                continue
+            if metric not in ("price", "rsi14"):
+                warnings_list.append(f"rule {i}: unknown metric {metric!r} (price|rsi14)")
+                continue
+            valid.append(
+                {
+                    "symbol": str(entry["symbol"]).strip().upper(),
+                    "metric": metric,
+                    "op": op,
+                    "threshold": threshold,
+                }
+            )
+        if not valid:
             return make_envelope(
                 {"rules": len(rules), "triggered": [], "note": "rules need symbol+threshold"},
                 source="local",
+                warnings=warnings_list,
                 availability="empty",
             )
-        needs_history = any(
-            str(e.get("metric", "price")) == "rsi14" for e in wanted.values()
-        ) or any(str(e.get("op", ">")) in ("cross_up", "cross_down") for e in wanted.values())
+        symbols = sorted({r["symbol"] for r in valid})
+        needs_history = any(r["metric"] == "rsi14" for r in valid)
+        needs_state = any(r["op"] in ("cross_up", "cross_down") for r in valid)
         try:
             quotes = await run_blocking(
-                functools.partial(vn_p.equity_quote_batch, list(wanted)),
+                functools.partial(vn_p.equity_quote_batch, symbols),
                 "alert_check",
             )
             quotes, _batch_missing = vn_p.split_batch(quotes)
@@ -454,13 +596,54 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        # rsi14 metric needs candle history; cross ops need previous values
-        history: dict[str, list[dict[str, Any]]] = {}
-        prev_state: dict[str, Any] = {}
-        warnings_list: list[str] = []
         if _batch_missing:
             warnings_list.append(f"batch partial: {len(_batch_missing)} symbols missing")
+        by_symbol = {str(q.get("symbol", "")).upper(): q for q in quotes if q.get("symbol")}
+        values: dict[str, float] = {}  # "SYM:metric" -> current value
+        for sym, quote in by_symbol.items():
+            try:
+                values[f"{sym}:price"] = float(quote.get("close_price") or quote.get("close"))
+            except (TypeError, ValueError):
+                pass
         if needs_history:
+            # Bound concurrency to the blocking slots: run_blocking timeouts count
+            # queue time, so an unbounded gather over many symbols serializes into
+            # mass timeouts on a 2-slot executor.
+            alert_sem = asyncio.Semaphore(blocking_slots())
+            rsi_syms = sorted(
+                {r["symbol"] for r in valid if r["metric"] == "rsi14"} & set(by_symbol)
+            )
+
+            async def _rsi_history(sym: str) -> Any:
+                async with alert_sem:
+                    return await run_blocking(
+                        functools.partial(vn_p.quote_history, sym, RSI_DAILY_BARS),
+                        "alert_check_rsi",
+                        timeout_secs=20.0,
+                    )
+
+            results = await asyncio.gather(
+                *(_rsi_history(sym) for sym in rsi_syms),
+                return_exceptions=True,
+            )
+            for sym, res in zip(rsi_syms, results, strict=True):
+                if isinstance(res, BaseException):
+                    warnings_list.append(f"{sym}: history fetch failed: {res}")
+                    continue
+                if not (isinstance(res, list) and res):
+                    continue
+                try:
+                    rsi = tech_p.compute(res)["rsi14"]
+                except Exception as exc:
+                    warnings_list.append(f"{sym}: rsi14 compute failed: {exc}")
+                    continue
+                if rsi is None:
+                    warnings_list.append(f"{sym}: too little history for rsi14")
+                else:
+                    values[f"{sym}:rsi14"] = float(rsi)
+
+        prev_state: dict[str, Any] = {}
+        if needs_state:
             from opentrading_mcp.providers import store as st_p
 
             raw_state = await st_p.acache_get(ALERT_STATE_KEY)
@@ -472,64 +655,24 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     prev_state = {}
             elif isinstance(raw_state, dict):
                 prev_state = raw_state
-            symbol_list = sorted(
-                {str(q.get("symbol", "")).upper() for q in quotes if q.get("symbol")}
-            )
-            # Bound concurrency to the blocking slots: run_blocking timeouts count
-            # queue time, so an unbounded gather over many symbols serializes into
-            # mass timeouts on a 2-slot executor.
-            alert_sem = asyncio.Semaphore(blocking_slots())
-
-            async def _rsi_history(sym: str) -> Any:
-                async with alert_sem:
-                    return await run_blocking(
-                        functools.partial(vn_p.quote_history, sym, 30),
-                        "alert_check_rsi",
-                        timeout_secs=20.0,
-                    )
-
-            results = await asyncio.gather(
-                *(_rsi_history(sym) for sym in symbol_list),
-                return_exceptions=True,
-            )
-            for sym, res in zip(symbol_list, results, strict=True):
-                if isinstance(res, BaseException):
-                    warnings_list.append(f"{sym}: history fetch failed: {res}")
-                elif isinstance(res, list) and res:
-                    history[sym] = res
-
+        # Cross rules compare against the state from before this call; it is written
+        # back once at the end, so two cross rules on one symbol both see it.
+        before = dict(prev_state)
         triggered: list[dict[str, Any]] = []
-        for quote in quotes:
-            symbol = str(quote.get("symbol", "")).upper()
-            rule: dict[str, Any] | None = wanted.get(symbol)
-            if rule is None:
-                continue
-            metric = str(rule.get("metric", "price"))
-            if metric == "rsi14":
-                candles = history.get(symbol)
-                if not candles:
-                    warnings_list.append(f"{symbol}: no history for rsi14")
-                    continue
-                try:
-                    out = tech_p.compute(candles)
-                    value = float(out["rsi14"])
-                except Exception as exc:
-                    warnings_list.append(f"{symbol}: rsi14 compute failed: {exc}")
-                    continue
-            else:
-                price = quote.get("close_price") or quote.get("close") or 0
-                try:
-                    value = float(price)
-                except (TypeError, ValueError):
-                    continue
-            try:
-                threshold = float(rule["threshold"])
-            except (TypeError, ValueError):
-                continue
-            op = str(rule.get("op", ">"))
+        evaluated = 0
+        for rule in valid:
+            symbol, metric, op = rule["symbol"], rule["metric"], rule["op"]
+            threshold = rule["threshold"]
             state_key = f"{symbol}:{metric}"
-            if op.startswith("cross"):
-                prev = prev_state.get(state_key)
+            value = values.get(state_key)
+            if value is None:
+                if symbol in by_symbol:
+                    what = "price" if metric == "price" else "rsi14"
+                    warnings_list.append(f"{symbol}: no {what} to evaluate")
+                continue
+            evaluated += 1
+            if op in ("cross_up", "cross_down"):
+                prev = before.get(state_key)
                 if prev is None:
                     # first observation: standing beyond threshold fires and seeds
                     hit = value > threshold if op == "cross_up" else value < threshold
@@ -545,30 +688,36 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     else:
                         hit = prev_f >= threshold and value < threshold
                 prev_state[state_key] = value
-            elif op in (">", "gt"):
+            elif op == ">":
                 hit = value > threshold
-            elif op in (">=", "gte"):
+            elif op == ">=":
                 hit = value >= threshold
-            elif op in ("<", "lt"):
+            elif op == "<":
                 hit = value < threshold
-            elif op in ("<=", "lte"):
+            else:  # "<=" (ops were validated above)
                 hit = value <= threshold
-            else:
-                hit = value < threshold
             if hit:
-                triggered.append(
-                    {
-                        "symbol": symbol,
-                        "metric": metric,
-                        "price": value,
-                        "op": op,
-                        "threshold": threshold,
-                    }
-                )
-        if needs_history and prev_state:
+                fired: dict[str, Any] = {
+                    "symbol": symbol,
+                    "metric": metric,
+                    "value": value,
+                    "op": op,
+                    "threshold": threshold,
+                }
+                if metric == "price":
+                    fired["price"] = value
+                triggered.append(fired)
+        if needs_state and prev_state:
+            from opentrading_mcp.providers import store as st_p
+
             await st_p.acache_set(ALERT_STATE_KEY, prev_state, ttl_seconds=ALERT_STATE_TTL)
         return make_envelope(
-            {"rules": len(rules), "evaluated": len(quotes), "triggered": triggered},
+            {
+                "rules": len(rules),
+                "evaluated": len(quotes),
+                "rules_evaluated": evaluated,
+                "triggered": triggered,
+            },
             source="computed-local",
             warnings=warnings_list,
         )
