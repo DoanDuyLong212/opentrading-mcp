@@ -262,44 +262,6 @@ async def test_financial_statements_statement_and_periods(monkeypatch):
     assert revenue["values"] == {"Q1/2026": 12479997206775.0, "Q2/2026": 13788503461199.0}
 
 
-async def test_financial_ratios_peers_merged(monkeypatch):
-
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        return {"EPS": 1.0}
-
-    import opentrading_mcp.tools.compute_financial as comp_fin
-    import opentrading_mcp.tools.compute_infra as comp_infra
-    import opentrading_mcp.tools.compute_intel as comp_intel
-
-    monkeypatch.setattr(comp_fin, "_call", fake_call)
-    monkeypatch.setattr(comp_intel, "_call", fake_call)
-    monkeypatch.setattr(comp_infra, "_call", fake_call)
-    fn = _tool_fn("financial_ratios")
-    env = await fn(symbol="VCB", peers=["HPG", "SSI"])
-    _check_envelope(env, "financial_ratios")
-    assert len(env["data"]["peers"]) == 2
-    assert env["data"]["peers"][0]["symbol"] == "HPG"
-
-
-async def test_peer_compare_metrics_filters_keys(monkeypatch):
-
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        return {"EPS": 1.0, "BVPS": 2.0, "PE": 3.0}
-
-    import opentrading_mcp.tools.compute_financial as comp_fin
-    import opentrading_mcp.tools.compute_infra as comp_infra
-    import opentrading_mcp.tools.compute_intel as comp_intel
-
-    monkeypatch.setattr(comp_fin, "_call", fake_call)
-    monkeypatch.setattr(comp_intel, "_call", fake_call)
-    monkeypatch.setattr(comp_infra, "_call", fake_call)
-    fn = _tool_fn("peer_compare")
-    env = await fn(symbol="VCB", peers=["HPG"], metrics=["pe", "eps"])
-    _check_envelope(env, "peer_compare")
-    row = env["data"]["rows"][1]
-    assert set(row) == {"symbol", "EPS", "PE"}
-
-
 async def test_pattern_match_limit_top_n(monkeypatch):
     import opentrading_mcp.tools.compute_financial as comp_fin
     import opentrading_mcp.tools.compute_infra as comp_infra

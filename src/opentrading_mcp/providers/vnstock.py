@@ -634,6 +634,71 @@ def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
         return None
 
 
+def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | None:
+    """Every clean period of a long-format ratio frame, newest first, and its rows.
+
+    Returns (periods, [{item_id, item, values: {period: value or None}}]); None when
+    the frame is not in the item/item_id + period-column layout. Cells that do not
+    parse, or are NaN/±Infinity, come back as None; every finite number the source
+    returns is kept as-is — a 0 is data (vnstock does write 0.0 rows, e.g. FPT
+    roe_trailling), and a zero alone does not prove the source has nothing.
+    """
+    try:
+        if "item_id" not in [str(c) for c in frame.columns]:
+            return None
+        cols = []
+        for col in frame.columns:
+            match = _RATIO_PERIOD.match(str(col))
+            if match:
+                cols.append(((int(match.group(1)), int(match.group(2) or 0)), col))
+        if not cols:
+            return None
+        cols.sort(reverse=True)
+        periods = [str(col) for _, col in cols]
+        rows: list[dict[str, Any]] = []
+        for _, row in frame.iterrows():
+            key = str(row.get("item_id") or "").strip()
+            if not key:
+                continue
+            values: dict[str, float | None] = {}
+            for (_, col), label in zip(cols, periods, strict=True):
+                try:
+                    num = float(row[col])
+                except (TypeError, ValueError):
+                    num = float("nan")
+                values[label] = num if math.isfinite(num) else None
+            rows.append({"item_id": key, "item": str(row.get("item") or "").strip(),
+                         "values": values})
+        return periods, rows
+    except Exception:
+        return None
+
+
+@guarded("vnstock")
+def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
+    """Full vnstock ratio table: {symbol, period, periods (newest first), ratios}.
+
+    Ratios are rows {item_id, item, values: {period: value}}: margins, returns and
+    growth in percent (roe 28.3 = 28.3%), EPS/BVPS/CPS in dong, multiples as plain
+    numbers. Finite values the source returns are kept as-is (0 stays 0); cells
+    that do not parse or are NaN/±Infinity are None. Raises ProviderBadData when
+    vnstock returns another layout.
+    """
+    try:
+        from vnstock import Fundamental
+    except ImportError as exc:
+        raise ProviderUnavailable("vnstock not installed") from exc
+    try:
+        data = Fundamental().equity(symbol.upper()).ratio(period=period)
+    except Exception as exc:
+        raise ProviderUnavailable(f"vnstock ratios failed: {symbol}") from exc
+    table = _long_ratio_table(data) if hasattr(data, "columns") else None
+    if table is None:
+        raise ProviderBadData(f"vnstock ratios for {symbol} are not in the item/period layout")
+    periods, rows = table
+    return {"symbol": symbol.upper(), "period": period, "periods": periods, "ratios": rows}
+
+
 @guarded("vnstock")
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     """Per-symbol PE/ROE/market-cap (+ trailing EPS/BVPS) via vnstock Fundamental ratio.
