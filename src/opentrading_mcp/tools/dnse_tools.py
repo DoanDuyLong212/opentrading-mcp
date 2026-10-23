@@ -140,20 +140,32 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def dnse_foreign_flow() -> dict[str, Any]:
-        """Mua/bán ròng khối ngoại từ cache WS. Dùng làm nguồn đọc smart-money chính, theo thời gian
-            thực.
+        """Mua/bán ròng khối ngoại TRÊN HỢP ĐỒNG TƯƠNG LAI VN30F1M từ cache WS.
 
-        Dùng khi: trong phiên, cần con số khối ngoại mới nhất.
-        Không dùng khi: cần chuỗi theo ngày để đối chiếu (dùng vs_nn_flow); cần tổng hợp nhiều nguồn
-            (dùng money_flow — fallback có sẵn).
+        Scope là VN30F1M (futures), KHÔNG phải dòng ngoại toàn thị trường —
+        DNSE WS chỉ subscribe kênh foreign cho symbol này (issue #38).
+
+        Dùng khi: trong phiên, cần con số khối ngoại trên VN30F1M mới nhất.
+        Không dùng khi: cần dòng ngoại toàn thị trường (dùng vs_nn_flow); cần
+            chuỗi theo ngày để đối chiếu (dùng vs_nn_flow); cần tổng hợp nhiều
+            nguồn (dùng money_flow — fallback có sẵn).
         """
-        hit = await cache_lookup("dnse_foreign_flow", "-")
+        hit = await cache_lookup("dnse_foreign_flow", "v2")
         if hit is not None:
             return hit
         try:
+            snap = dnse_p.ws_foreign_snapshot()
             return await cache_store(
-                "dnse_foreign_flow", "-", price_ttl(),
-                dnse_p.ws_snapshot(["VNINDEX"]), source="dnse-ws",
+                "dnse_foreign_flow", "v2", price_ttl(),
+                {
+                    "scope": snap.get("scope", dnse_p.WS_FOREIGN_SCOPE),
+                    "flow": snap.get("flow", {}),
+                    "note": (
+                        "DNSE WS foreign chỉ phủ hợp đồng tương lai VN30F1M —"
+                        " không phải dòng ngoại toàn thị trường; chuỗi ngày: vs_nn_flow"
+                    ),
+                },
+                source="dnse-ws",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_foreign_flow", str(exc))

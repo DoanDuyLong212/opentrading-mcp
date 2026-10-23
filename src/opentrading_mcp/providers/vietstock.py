@@ -531,6 +531,10 @@ _DETAIL_FILTER = {
     "SortTimeType": "Time_ASC",
 }
 
+# Term → label dùng chung cho financial_detail + báo kỳ bị loại trong warnings.
+# 1 = cả năm, 9 = 6 tháng, 12 = 9 tháng (đồng bộ với financial_lctt, issue #37).
+_DETAIL_TERM_LABELS = {1: "NAM", 2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4", 9: "6T", 12: "9T"}
+
 
 def _detail_session_post(path: str, data: dict[str, Any]) -> Any:
     """POST the /data detail chain via the browser-session when seeded,
@@ -621,7 +625,7 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
             names[str(nid)] = nm
     if not ids:
         raise ProviderBadData("vietstock LCTT norms empty")
-    params = build_list_params(symbol, max(int(years), 1))
+    params = build_list_params(symbol, max(int(years), 1), full=True)
     body = _post_json(
         "/FinancialStatement/BCTC_LoadReportData_Async",
         {"ReportNormIds": ",".join(ids), "ListParams": params},
@@ -632,7 +636,13 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
     rows = body.get("data", body) if isinstance(body, dict) else body
     if not isinstance(rows, list) or not rows:
         raise ProviderBadData(f"vietstock no LCTT values for {symbol}")
-    _TERM_LABELS = {2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4", 9: "NAM"}
+    # Term → label. 1 = cả năm, 9 = 6 tháng, 12 = 9 tháng (issue #37: term 9
+    # từng bị gắn nhãn "NAM" sai, và term 1/12 không bao giờ được request).
+    _TERM_LABELS = {1: "NAM", 2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4", 9: "6T", 12: "9T"}
+    # Thứ tự thời gian thực của kỳ kết thúc: (tháng, phụ). Q2 và 6T cùng kết
+    # thúc tháng 6 (6T sau Q2), Q3/9T cùng tháng 9, Q4/NAM cùng tháng 12.
+    # Sort theo term id sẽ xếp 6T/9T/NAM sai chỗ (issue #37).
+    _TERM_ORDER = {2: (3, 0), 3: (6, 0), 9: (6, 1), 4: (9, 0), 12: (9, 1), 5: (12, 0), 1: (12, 1)}
     # periods from ACTUAL response terms (endpoint may lack latest quarters)
     seen_terms: list[tuple] = []
     for r in rows:
@@ -641,7 +651,7 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
         key = (r.get("YearPeriod"), r.get("ReportTermID"))
         if key not in seen_terms:
             seen_terms.append(key)
-    seen_terms.sort(key=lambda k: (k[0] or 0, k[1] or 0))
+    seen_terms.sort(key=lambda k: (k[0] or 0, *_TERM_ORDER.get(k[1] or 0, (k[1] or 0, 0))))
     periods = [
         f"{_TERM_LABELS.get(tid, tid)}/{yr}" for yr, tid in seen_terms
     ]
@@ -669,6 +679,23 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
 
 
 
+def _report_scope(allowed: list[dict[str, Any]]) -> tuple[Any, bool]:
+    """Chọn MỘT loại báo cáo cho cả chuỗi kỳ (issue #36).
+
+    Ưu tiên hợp nhất (nhận qua ``UnitedName`` chứa "hợp nhất"); nếu không có tên
+    thì dùng loại của kỳ mới nhất. Trả về ``(UnitedId, is_consolidated)``.
+    """
+    for p in reversed(allowed):
+        if isinstance(p, dict) and "hợp nhất" in str(p.get("UnitedName", "")).lower():
+            return p.get("UnitedId"), True
+    return (allowed[-1].get("UnitedId") if allowed else None), False
+
+
+def _period_label(year: Any, term_id: Any) -> str:
+    label = _DETAIL_TERM_LABELS.get(int(term_id or 0), str(term_id or "?"))
+    return f"{label}/{year}"
+
+
 def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -> dict[str, Any]:
     """Full detailed statements via /data/* chain — REAL values on Standard pack (P15).
 
@@ -693,7 +720,25 @@ def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -
     allowed = [
         p for p in periods if isinstance(p, dict) and p.get("IsShowData_Permission") is not False
     ]
-    kept = allowed[-max(int(periods_n), 1) :]
+    # Issue #36: upstream trả cả báo cáo hợp nhất lẫn công ty mẹ (UnitedId khác
+    # nhau). Trộn hai loại làm QoQ sai (BVH: Q1 hợp nhất 307k tỷ vs Q2 mẹ 19k tỷ).
+    # Giữ MỘT loại cho cả chuỗi kỳ và gắn metadata + warning cho phần bị loại.
+    scope, consolidated = _report_scope(allowed)
+    scoped = (
+        [p for p in allowed if p.get("UnitedId") == scope] if scope is not None else allowed
+    )
+    warnings: list[str] = []
+    dropped = [p for p in allowed if p.get("UnitedId") != scope]
+    if dropped:
+        dropped_labels = ", ".join(
+            _period_label(p.get("YearPeriod"), p.get("ReportTermID")) for p in dropped[:6]
+        )
+        kind = "consolidated" if consolidated else "newest"
+        warnings.append(
+            f"vietstock mixed report types (UnitedId) — kept UnitedId={scope} ({kind});"
+            f" dropped {len(dropped)} period(s): {dropped_labels}"
+        )
+    kept = scoped[-max(int(periods_n), 1) :]
     if not kept:
         raise ProviderAuthMissing(f"vietstock no permitted periods for {symbol} {code}")
     batch = [
@@ -705,7 +750,7 @@ def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -
         }
         for idx, p in enumerate(kept)
     ]
-    _TERM_LABELS = {2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4"}
+    _TERM_LABELS = _DETAIL_TERM_LABELS
     period_labels = [
         _TERM_LABELS.get(int(p.get("ReportTermID") or 0), str(p.get("ReportTermID")))
         + f"/{p.get('YearPeriod')}"
@@ -744,6 +789,9 @@ def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -
         "unit": "VNDbn",
         "periods": period_labels,
         "rows": series,
+        # Issue #36: khai báo rõ loại báo cáo của chuỗi kỳ này.
+        "report_type": {"UnitedId": scope, "consolidated": consolidated},
+        **({"warnings": warnings} if warnings else {}),
     }
 
 
