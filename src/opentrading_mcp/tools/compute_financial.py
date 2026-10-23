@@ -343,7 +343,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
-        fp = f"{symbol}|{btype}|{method}"
+        fp = f"v2|{symbol}|{btype}|{method}"  # v2: finite zeros kept in fundamentals
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit

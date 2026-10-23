@@ -80,6 +80,23 @@ def test_equity_fundamentals_small_roe_is_still_percent(monkeypatch):
     assert vn.equity_fundamentals("X")["roe"] == pytest.approx(0.009)
 
 
+def test_equity_fundamentals_keeps_valid_zeros(monkeypatch):
+    # A finite 0 from the source is a value, not missing data (a break-even
+    # company reports EPS/ROE 0). Only an absent row or a non-finite cell is None.
+    rows = [dict(r) for r in RATIOS["year"]]
+    for r in rows:
+        if r["item_id"] in ("p_e", "roe"):
+            r["2025"] = 0
+        elif r["item_id"] == "book_value_per_share_bvps":
+            r["2025"] = "0"  # string zero still parses to a finite 0
+    _fake_fundamental(monkeypatch, pd.DataFrame(rows))
+    out = vn.equity_fundamentals("FPT")
+    assert out["pe"] == 0
+    assert out["roe"] == 0
+    assert out["bvps"] == 0
+    assert out["eps"] == 6021.21  # untouched fields keep their values
+
+
 def _fake_quote(monkeypatch, frame: pd.DataFrame, seen: dict[str, Any]) -> None:
     class Quote:
         def __init__(self, symbol: str, source: str) -> None:

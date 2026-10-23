@@ -658,15 +658,17 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     long = _long_ratio_values(data) if hasattr(data, "columns") else None
     if long is not None:
         values, period_label = long
-        # Long-format ratios are in percent (ROE 28.3 = 28.3%) and use 0 for "no value".
+        # Long-format ratios are in percent (ROE 28.3 = 28.3%). A finite 0 is
+        # kept as returned — it is a source value, not evidence of missing data;
+        # a metric the source does not report is simply absent from `values`.
         roe_pct = values.get("roe")
         return {
             "symbol": symbol.upper(),
-            "pe": values.get("p_e") or None,
-            "roe": roe_pct / 100.0 if roe_pct else None,
+            "pe": values.get("p_e"),
+            "roe": roe_pct / 100.0 if roe_pct is not None else None,
             "market_cap": None,
-            "eps": values.get("trailing_eps") or None,
-            "bvps": values.get("book_value_per_share_bvps") or None,
+            "eps": values.get("trailing_eps"),
+            "bvps": values.get("book_value_per_share_bvps"),
             "period_label": period_label,
         }
     try:
