@@ -115,6 +115,12 @@ def _fd_first(detail: dict[str, Any], *needles: str) -> list[float]:
 # Beneish (1999) 8-variable model without DEPI (depreciation is not exposed upstream).
 # SGAI enters with a negative weight; -1.78 is the 8-variable cut-off, so with DEPI
 # dropped the threshold is approximate.
+# peer_compare metric spellings -> vnstock ratio item_id.
+_PEER_METRIC_ALIASES = {
+    "pe": "p_e", "p/e": "p_e", "pb": "p_b", "p/b": "p_b", "ps": "p_s",
+    "eps": "trailing_eps", "bvps": "book_value_per_share_bvps",
+}
+
 BENEISH_INTERCEPT = -4.84
 BENEISH_COEF = {
     "dsri": 0.920,
@@ -471,95 +477,118 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         period: str = "year",
         peers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Overview gộp ratios của vnstock. Dùng khi lọc/soi chỉ số tài chính của 1 mã (kèm peers
-            tuỳ chọn).
+        """Bảng chỉ số tài chính theo kỳ của vnstock. Dùng khi soi chỉ số tài chính của 1 mã qua
+            các năm/quý (kèm peers tuỳ chọn).
 
         Dùng khi: "ROE các năm của VCB", so chỉ số 1 mã với vài peers.
         Không dùng khi: so dạng bảng head-to-head nhiều mã (dùng peer_compare — gọn hơn); cần bội số
             snapshot (dùng vs_overview_trading); cần vùng giá trị (dùng valuation_run).
 
-        set: chỉ giữ key ratios chứa chuỗi này ('all' giữ hết).
-        period: kỳ BCTC ('year'); peers: thêm mã vào danh sách.
-        Rơi về vnstock fundamentals khi overview Vietstock trống.
+        period: 'year' (mặc định) hoặc 'quarter'. set: chỉ giữ chỉ số có item_id hoặc tên chứa
+        chuỗi này ('all' giữ hết; ví dụ 'roe', 'p_e', 'margin'). Trả periods (mới→cũ) và
+        ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng % (roe 28.3 =
+        28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ. peers: thêm chỉ số kỳ mới
+        nhất của từng mã.
         """
-        fp = f"{symbol}|{set}|{period}|{peers}"
+        fp = f"v3|{symbol}|{set}|{period}|{peers}"  # v3: zeros are kept as returned
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
+        want = set.strip().lower()
+
+        def _keep(row: dict[str, Any]) -> bool:
+            if want in ("", "all"):
+                return True
+            return want in row["item_id"].lower() or want in row["item"].lower()
+
         try:
-            overview = await _call("r", vs_p.overview_trading, symbol)
-            if not overview:
-                try:
-                    fb = await _call("r", vn_p.equity_fundamentals, symbol, secs=45.0)
-                    out_fb: dict[str, Any] = {
-                        "symbol": symbol.upper(),
-                        "period": period,
-                        "ratios": fb,
-                    }
-                    return await cache_store(
-                        "financial_ratios", fp, TTL_SECONDS["overview"],
-                        out_fb, source="vnstock",
-                    )
-                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
-                    pass
-            ratios = overview if isinstance(overview, dict) else {"overview": overview}
-            if set != "all":
-                ratios = {k: v for k, v in ratios.items() if set.lower() in str(k).lower()}
-            out: dict[str, Any] = {"symbol": symbol.upper(), "period": period, "ratios": ratios}
-            if peers:
-                out["peers"] = []
-                for peer in peers:
-                    try:
-                        peer_data = await _call("r", vs_p.overview_trading, peer)
-                    except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-                        peer_data = {"symbol": peer.upper(), "error": str(exc)}
-                    if isinstance(peer_data, dict) and "symbol" not in peer_data:
-                        peer_data = {"symbol": peer.upper(), **peer_data}
-                    out["peers"].append(peer_data)
-            return await cache_store(
-                "financial_ratios", fp, TTL_SECONDS["overview"],
-                out, source="vietstock",
-            )
+            table = await _call("r", vn_p.equity_ratios, symbol, period, secs=45.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_ratios", str(exc))
+        out: dict[str, Any] = {
+            "symbol": symbol.upper(),
+            "period": period,
+            "periods": table["periods"],
+            "ratios": [r for r in table["ratios"] if _keep(r)],
+        }
+        warnings: list[str] = []
+        if peers:
+            out["peers"] = []
+            for peer in peers:
+                try:
+                    peer_table = await _call("r", vn_p.equity_ratios, peer, period, secs=45.0)
+                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+                    out["peers"].append({"symbol": peer.upper(), "error": str(exc)})
+                    warnings.append(f"{peer.upper()}: {exc}")
+                    continue
+                newest = peer_table["periods"][0]
+                out["peers"].append(
+                    {
+                        "symbol": peer.upper(),
+                        "period_label": newest,
+                        "values": {
+                            r["item_id"]: r["values"].get(newest)
+                            for r in peer_table["ratios"]
+                            if _keep(r)
+                        },
+                    }
+                )
+        return await cache_store(
+            "financial_ratios", fp, TTL_SECONDS["overview"],
+            out, source="vnstock", warnings=warnings or None,
+            availability="partial" if warnings else None,
+        )
 
     @server.tool(annotations=READ_ONLY)
     async def peer_compare(
         symbol: str, peers: list[str], metrics: list[str] | None = None
     ) -> dict[str, Any]:
-        """So sánh head-to-head các dòng overview giữa các mã. Dùng khi chọn giữa vài ticker cùng
+        """So sánh head-to-head chỉ số tài chính giữa các mã. Dùng khi chọn giữa vài ticker cùng
             ngành.
 
         Dùng khi: "so VCB với TCB với MBB", bảng so sánh trực diện.
         Không dùng khi: sàng cả thị trường theo điều kiện (dùng stock_screener); cần chuỗi thời gian
             của 1 mã (dùng financial_ratios period).
 
-        peers: tối đa 5 mã khác. metrics: chỉ giữ key ratios khớp
-        (cột symbol luôn giữ).
+        peers: tối đa 5 mã khác. metrics: chỉ giữ các item_id nêu tên (pe, pb, roe, roa, eps,
+        bvps là tên tắt của p_e, p_b, roe, roa, trailing_eps, book_value_per_share_bvps).
+        Mỗi dòng là chỉ số năm báo cáo mới nhất của mã (period_label): % cho tỷ suất, đồng cho
+        EPS/BVPS, bội số cuối kỳ cho P/E, P/B.
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
-        fp = f"{symbol}|{peers}|{metrics}"
+        fp = f"v3|{symbol}|{peers}|{metrics}"  # v3: zeros are kept as returned
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit
-        wanted = {m.lower() for m in metrics} if metrics else None
+        wanted = (
+            {_PEER_METRIC_ALIASES.get(m.strip().lower(), m.strip().lower()) for m in metrics}
+            if metrics
+            else None
+        )
         rows: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        seen_ids: set[str] = set()
         for name in [symbol, *peers][:6]:
             try:
-                data = await _call("p", vs_p.overview_trading, name)
+                table = await _call("p", vn_p.equity_ratios, name, "year", secs=45.0)
             except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
                 rows.append({"symbol": name.upper(), "error": str(exc)})
+                warnings.append(f"{name.upper()}: {exc}")
                 continue
-            if wanted is not None and isinstance(data, dict):
-                data = {"symbol": name.upper()} | {
-                    k: v for k, v in data.items() if str(k).lower() in wanted
-                }
-            elif isinstance(data, dict) and "symbol" not in data:
-                data = {"symbol": name.upper(), **data}
-            rows.append(data if isinstance(data, dict) else {"symbol": name.upper(), "data": data})
+            newest = table["periods"][0]
+            row: dict[str, Any] = {"symbol": name.upper(), "period_label": newest}
+            seen_ids.update(r["item_id"].lower() for r in table["ratios"])
+            for ratio in table["ratios"]:
+                if wanted is None or ratio["item_id"].lower() in wanted:
+                    row[ratio["item_id"]] = ratio["values"].get(newest)
+            rows.append(row)
+        if wanted is not None and seen_ids:
+            for metric in sorted(wanted - seen_ids):
+                warnings.append(f"metric {metric!r} is not in the vnstock ratio table")
         return await cache_store(
             "peer_compare", fp, TTL_SECONDS["overview"],
-            {"rows": rows}, source="vietstock",
+            {"rows": rows}, source="vnstock", warnings=warnings or None,
+            availability="partial" if warnings else None,
         )
 
     @server.tool(annotations=READ_ONLY)

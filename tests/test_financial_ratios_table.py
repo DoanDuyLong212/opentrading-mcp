@@ -1,0 +1,159 @@
+"""financial_ratios / peer_compare return real ratios from the vnstock table.
+
+Live on 2026-10-23 both tools returned Vietstock overview_trading rows (daily
+close, volume, foreign value) under "ratios", with no PE, PB or ROE, and the
+`period` argument was echoed but never used. Fixture: the live vnstock ratio
+frames for FPT (annual and quarterly).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.server import create_server, register_preset
+from opentrading_mcp.tools import compute_financial as comp_fin
+
+RATIOS = json.loads(
+    (Path(__file__).parent / "fixtures" / "vnstock_ratio_fpt_20261023.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+def _tool(name: str):
+    server = create_server("scan")
+    register_preset(server, "scan")
+    return server._tool_manager.get_tool(name).fn
+
+
+def _install(monkeypatch, calls: list[tuple[str, str]]) -> None:
+    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        assert fn is vn_p.equity_ratios
+        symbol, period = args
+        calls.append((symbol, period))
+        periods, rows = vn_p._long_ratio_table(pd.DataFrame(RATIOS[period]))
+        return {"symbol": symbol.upper(), "period": period, "periods": periods, "ratios": rows}
+
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+
+
+def test_ratio_table_keeps_clean_periods_newest_first():
+    periods, rows = vn_p._long_ratio_table(pd.DataFrame(RATIOS["quarter"]))
+    assert periods == ["2026-Q2", "2026-Q1", "2025-Q4"]  # '2025-Q4_1' dropped
+    pe = next(r for r in rows if r["item_id"] == "p_e")
+    assert pe["values"] == {"2026-Q2": 15.53, "2026-Q1": 15.92, "2025-Q4": 20.96}
+
+
+async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
+    calls: list[tuple[str, str]] = []
+    _install(monkeypatch, calls)
+    env = await _tool("financial_ratios")(symbol="FPT", set="roe", period="year")
+    data = env["data"]
+    assert calls == [("FPT", "year")]
+    assert data["periods"] == ["2025", "2024", "2023", "2022"]
+    assert [r["item_id"] for r in data["ratios"]] == ["roe", "roe_trailling"]
+    assert data["ratios"][0]["values"]["2025"] == 28.3
+    # vnstock's annual roe_trailling reads 0.0 in the source: the observed zero
+    # is kept (a 0 cannot be inferred to mean "missing" from the number alone).
+    assert data["ratios"][1]["values"] == {
+        "2025": 0.0,
+        "2024": 0.0,
+        "2023": 0.0,
+        "2022": 0.0,
+    }
+
+
+def test_ratio_table_keeps_zero_rows_as_zero():
+    # Review regression (23/10): an all-zero row used to be rewritten to nulls.
+    frame = pd.DataFrame([{"item_id": "roe", "item": "ROE", "2025": 0.0, "2024": 0.0}])
+    periods, rows = vn_p._long_ratio_table(frame)
+    assert periods == ["2025", "2024"]
+    assert rows[0]["values"] == {"2025": 0.0, "2024": 0.0}
+
+
+def test_ratio_table_zero_variants_and_real_gaps():
+    frame = pd.DataFrame(
+        [
+            {"item_id": "a", "item": "A", "2025": "0", "2024": 0.0},  # "0" and 0.0 stay 0
+            {"item_id": "b", "item": "B", "2025": 0.0, "2024": None},  # zero next to a gap
+            {"item_id": "c", "item": "C", "2025": float("inf"), "2024": float("nan")},
+            {"item_id": "d", "item": "D", "2025": "n/a", "2024": 1.5},  # unparseable
+        ]
+    )
+    _, rows = vn_p._long_ratio_table(frame)
+    by_id = {r["item_id"]: r["values"] for r in rows}
+    assert by_id["a"] == {"2025": 0.0, "2024": 0.0}
+    assert by_id["b"] == {"2025": 0.0, "2024": None}
+    assert by_id["c"] == {"2025": None, "2024": None}  # non-finite is not a value
+    assert by_id["d"] == {"2025": None, "2024": 1.5}
+
+
+async def test_financial_ratios_cache_hit_keeps_zeros(monkeypatch):
+    from opentrading_mcp.providers import store
+
+    monkeypatch.setattr(store, "_memory", {})
+    calls: list[tuple[str, str]] = []
+    _install(monkeypatch, calls)
+    fn = _tool("financial_ratios")
+    env = await fn(symbol="FPT", set="roe", period="year")
+    assert env["data"]["ratios"][1]["values"]["2025"] == 0.0
+    env2 = await fn(symbol="FPT", set="roe", period="year")
+    assert env2["provenance"]["cached"] is True
+    assert calls == [("FPT", "year")]  # second call served from cache
+    assert env2["data"]["ratios"][1]["values"]["2025"] == 0.0  # zero survives the round-trip
+
+
+async def test_financial_ratios_peers_carry_the_newest_period(monkeypatch):
+    _install(monkeypatch, [])
+    env = await _tool("financial_ratios")(symbol="FPT", set="p_e", peers=["HPG"])
+    peer = env["data"]["peers"][0]
+    assert peer == {"symbol": "HPG", "period_label": "2025", "values": {"p_e": 15.91}}
+
+
+async def test_peer_compare_metric_aliases(monkeypatch):
+    _install(monkeypatch, [])
+    env = await _tool("peer_compare")(symbol="FPT", peers=["HPG"], metrics=["pe", "eps", "roe"])
+    row = env["data"]["rows"][1]
+    assert row == {
+        "symbol": "HPG",
+        "period_label": "2025",
+        "p_e": 15.91,
+        "trailing_eps": 6021.21,
+        "roe": 28.3,
+    }
+
+
+async def test_peer_compare_warns_on_a_metric_the_table_lacks(monkeypatch):
+    _install(monkeypatch, [])
+    env = await _tool("peer_compare")(symbol="FPT", peers=[], metrics=["pe", "market_cap"])
+    assert env["data"]["rows"][0]["p_e"] == 15.91
+    assert "metric 'market_cap' is not in the vnstock ratio table" in env["warnings"]
+
+
+async def test_peer_compare_keeps_zero_values(monkeypatch):
+    from opentrading_mcp.providers import store
+
+    monkeypatch.setattr(store, "_memory", {})
+
+    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        assert fn is vn_p.equity_ratios
+        symbol, period = args
+        return {
+            "symbol": symbol.upper(),
+            "period": period,
+            "periods": ["2025"],
+            "ratios": [{"item_id": "roe", "item": "ROE", "values": {"2025": 0.0}}],
+        }
+
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    fn = _tool("peer_compare")
+    env = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
+    assert env["data"]["rows"][1] == {"symbol": "HPG", "period_label": "2025", "roe": 0.0}
+    env2 = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
+    assert env2["provenance"]["cached"] is True
+    assert env2["data"]["rows"][1]["roe"] == 0.0  # zero survives the cache round-trip
