@@ -453,7 +453,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             warnings.append("no EPS/BVPS from either source — PER/PB not computed")
         return await cache_store(
             "valuation_run",
-            f"{symbol}|{btype}|{method}",
+            fp,
             TTL_SECONDS["overview"],
             out, source="computed-local", warnings=warnings or None,
             availability="partial" if missing else None,
