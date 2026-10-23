@@ -343,7 +343,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
-        fp = f"{symbol}|{btype}|{method}"
+        fp = f"v2|{symbol}|{btype}|{method}"  # v2: finite zeros kept in fundamentals
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -362,16 +362,27 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         bvps = info.get("BVPS") or info.get("bvps")
         out: dict[str, Any] = {"symbol": symbol.upper(), "price": price, "method": "per_pb"}
         warnings: list[str] = []
-        if not eps and price:
-            # overview lacks EPS — derive from vnstock PE (price/pe), best-effort
+        if price and (not eps or not bvps):
+            # The trading overview carries no EPS/BVPS: take the trailing EPS and BVPS
+            # vnstock reports for its newest period. Not price / PE: that PE is priced at
+            # the period end, so it would give a wrong EPS for today's price.
             try:
                 fund = await _call("f", vn_p.equity_fundamentals, symbol.upper(), secs=45.0)
-                pe = (fund or {}).get("pe") if isinstance(fund, dict) else None
-                if pe and float(pe) > 0:
-                    eps = round(price / float(pe), 0)
-                    warnings.append("EPS derived from vnstock PE (overview lacks EPS)")
-            except Exception:
-                pass
+            except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+                fund = None
+                warnings.append(f"vnstock fundamentals unavailable: {exc}")
+            if isinstance(fund, dict):
+                label = fund.get("period_label")
+                if not eps and fund.get("eps"):
+                    eps = fund["eps"]
+                    out["eps_source"] = f"vnstock trailing EPS, period {label}"
+                if not bvps and fund.get("bvps"):
+                    bvps = fund["bvps"]
+                    out["bvps_source"] = f"vnstock BVPS, period {label}"
+        if eps:
+            out["eps"] = eps
+        if bvps:
+            out["bvps"] = bvps
         try:
             if price and eps and float(eps) > 0:
                 out["per"] = round(price / float(eps), 2)
@@ -389,11 +400,15 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 out["method"] = "per_pb"
         except (TypeError, ValueError):
             pass
+        missing = "per" not in out and "pb" not in out
+        if missing:
+            warnings.append("no EPS/BVPS from either source — PER/PB not computed")
         return await cache_store(
             "valuation_run",
             f"{symbol}|{btype}|{method}",
             TTL_SECONDS["overview"],
             out, source="computed-local", warnings=warnings or None,
+            availability="partial" if missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)

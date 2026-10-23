@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import threading
 import time
@@ -90,7 +91,11 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
     if iv not in ("1D", "1W", "1M"):
         raise ProviderBadData(f"unknown interval {interval!r} (1D|1W|1M)")
     span = max(days, 5) + 30
-    if iv == "1W":
+    if iv == "1D":
+        # `days` counts candles. A year has ~250 sessions in ~365 calendar days, plus Tet
+        # and other holidays, so 1.5x calendar days + 30 always covers the count.
+        span = int(max(days, 5) * 1.5) + 30
+    elif iv == "1W":
         span = span * 7 + 40
     elif iv == "1M":
         span = span * 31 + 60
@@ -110,20 +115,24 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
     if frame is None or len(frame) == 0:
         raise ProviderUnavailable(f"no candles for {symbol}")
     try:
-        tail = frame.tail(max(days, 1))
         rows: list[dict[str, Any]] = []
-        for ts, row in tail.iterrows():
+        for ts, row in frame.iterrows():
+            close = float(row.get("close", 0))
+            if not math.isfinite(close) or close <= 0:
+                # A period with no session (the Tet week on 1W) comes back as a NaN row;
+                # one NaN poisons every rolling indicator for the next N bars.
+                continue
             rows.append(
                 {
                     "t": _candle_day(row.get("time", ts)),
                     "o": float(row.get("open", 0)),
                     "h": float(row.get("high", 0)),
                     "l": float(row.get("low", 0)),
-                    "c": float(row.get("close", 0)),
+                    "c": close,
                     "v": float(row.get("volume", 0)),
                 }
             )
-        return rows
+        return rows[-max(days, 1) :]
     except Exception as exc:
         raise ProviderBadData(f"malformed vnstock frame for {symbol}") from exc
 
@@ -588,13 +597,52 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
         raise ProviderBadData(f"malformed vnstock cashflow for {symbol}: {exc}") from exc
 
 
+_RATIO_PERIOD = re.compile(r"^(\d{4})(?:-Q([1-4]))?$")
+
+
+def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
+    """{item_id: value} at the newest period of a long-format ratio frame, plus that period.
+
+    vnstock now returns ratios as rows: columns item, item_id, then one column per
+    period ('2025', '2024', ... or '2026-Q2', ...). Every value comes from the same
+    newest period so a PE and an EPS never mix years. Columns that are not a clean
+    period label (the quarterly frame also carries '2025-Q4_1') are ignored.
+    None when the frame is not in this layout.
+    """
+    try:
+        if "item_id" not in [str(c) for c in frame.columns]:
+            return None
+        periods = []
+        for col in frame.columns:
+            match = _RATIO_PERIOD.match(str(col))
+            if match:
+                periods.append(((int(match.group(1)), int(match.group(2) or 0)), col))
+        if not periods:
+            return None
+        newest = max(periods)[1]
+        values: dict[str, float] = {}
+        for _, row in frame.iterrows():
+            key = str(row.get("item_id") or "").strip()
+            try:
+                num = float(row[newest])
+            except (TypeError, ValueError):
+                continue
+            if key and math.isfinite(num):
+                values[key] = num
+        return values, str(newest)
+    except Exception:
+        return None
+
+
 @guarded("vnstock")
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
-    """Per-symbol PE/ROE/market-cap via vnstock Fundamental ratio.
+    """Per-symbol PE/ROE/market-cap (+ trailing EPS/BVPS) via vnstock Fundamental ratio.
 
     Best-effort parse: missing metrics come back as None, never raises
     for malformed frames (raises ProviderUnavailable only when the
-    upstream call itself fails or vnstock is missing).
+    upstream call itself fails or vnstock is missing). `period_label` names
+    the report period the numbers belong to ('2025' = year-end 2025), so a
+    year-end PE is never mistaken for today's PE.
     """
     try:
         from vnstock import Fundamental
@@ -607,6 +655,22 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     pe: float | None = None
     roe: float | None = None
     market_cap: float | None = None
+    long = _long_ratio_values(data) if hasattr(data, "columns") else None
+    if long is not None:
+        values, period_label = long
+        # Long-format ratios are in percent (ROE 28.3 = 28.3%). A finite 0 is
+        # kept as returned — it is a source value, not evidence of missing data;
+        # a metric the source does not report is simply absent from `values`.
+        roe_pct = values.get("roe")
+        return {
+            "symbol": symbol.upper(),
+            "pe": values.get("p_e"),
+            "roe": roe_pct / 100.0 if roe_pct is not None else None,
+            "market_cap": None,
+            "eps": values.get("trailing_eps"),
+            "bvps": values.get("book_value_per_share_bvps"),
+            "period_label": period_label,
+        }
     try:
         import pandas as pd
 
