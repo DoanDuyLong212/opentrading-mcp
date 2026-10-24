@@ -640,7 +640,7 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
         raise ProviderBadData(f"vietstock no LCTT values for {symbol}")
     # Term → label. 1 = cả năm, 9 = 6 tháng, 12 = 9 tháng (issue #37: term 9
     # từng bị gắn nhãn "NAM" sai, và term 1/12 không bao giờ được request).
-    _TERM_LABELS = {1: "NAM", 2: "Q1", 3: "Q2", 4: "Q3", 5: "Q4", 9: "6T", 12: "9T"}
+    _TERM_LABELS = _DETAIL_TERM_LABELS  # một bảng nhãn kỳ duy nhất cho cả module
     # Thứ tự thời gian thực của kỳ kết thúc: (tháng, phụ). Q2 và 6T cùng kết
     # thúc tháng 6 (6T sau Q2), Q3/9T cùng tháng 9, Q4/NAM cùng tháng 12.
     # Sort theo term id sẽ xếp 6T/9T/NAM sai chỗ (issue #37).
