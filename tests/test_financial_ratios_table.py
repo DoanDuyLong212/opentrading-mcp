@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import pytest
 
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.server import create_server, register_preset
@@ -47,6 +48,13 @@ def test_ratio_table_keeps_clean_periods_newest_first():
     assert periods == ["2026-Q2", "2026-Q1", "2025-Q4"]  # '2025-Q4_1' dropped
     pe = next(r for r in rows if r["item_id"] == "p_e")
     assert pe["values"] == {"2026-Q2": 15.53, "2026-Q1": 15.92, "2025-Q4": 20.96}
+    assert vn_p._discarded_ratio_period_labels(pd.DataFrame(RATIOS["quarter"])) == [
+        "2025-Q4_1"
+    ]
+    by_id = {row["item_id"]: row for row in rows}
+    assert by_id["trailing_eps"]["basis"] == "trailing_four_quarters"
+    assert by_id["roe"]["basis"] == "reported_period_ratio"
+    assert by_id["roe"]["values"]["2026-Q2"] == 5.89  # no quarterly ROE annualization
 
 
 async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
@@ -58,23 +66,25 @@ async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
     assert data["periods"] == ["2025", "2024", "2023", "2022"]
     assert [r["item_id"] for r in data["ratios"]] == ["roe", "roe_trailling"]
     assert data["ratios"][0]["values"]["2025"] == 28.3
-    # roe_trailling is 0.0 in every year for every symbol checked live (FPT, NVL,
-    # HVN) next to a real ROE: a vendor placeholder, reported as such, not ROE 0%.
-    assert data["ratios"][1]["values"] == dict.fromkeys(["2025", "2024", "2023", "2022"])
-    assert data["ratios"][1]["placeholder"] is True
-    assert "placeholder" not in data["ratios"][0]
+    # The fixture documents zeros, but does not prove missing-data semantics.
+    assert data["ratios"][1]["values"] == dict.fromkeys(data["periods"], 0.0)
+    assert data["ratios"][1]["suspected_placeholder"] is True
+    assert "placeholder" not in data["ratios"][1]
+    assert "suspected_placeholder" not in data["ratios"][0]
 
 
-def test_ratio_table_zero_in_every_period_is_a_placeholder():
-    # A zero in every period (>= 2) is the vendor's placeholder; a single-period
-    # zero, or a zero next to other values, stays data.
-    frame = pd.DataFrame([{"item_id": "roe", "item": "ROE", "2025": 0.0, "2024": 0.0}])
+def test_ratio_table_keeps_genuine_all_zero_metrics():
+    frame = pd.DataFrame([
+        {"item_id": key, "item": key, "2025": 0.0, "2024": 0.0}
+        for key in ("roe", "trailing_eps", "debt_to_equity")
+    ])
     periods, rows = vn_p._long_ratio_table(frame)
     assert periods == ["2025", "2024"]
-    assert rows[0]["values"] == {"2025": None, "2024": None}
-    assert rows[0]["placeholder"] is True
-    one = pd.DataFrame([{"item_id": "roe", "item": "ROE", "2025": 0.0}])
-    assert vn_p._long_ratio_table(one)[1][0]["values"] == {"2025": 0.0}
+    assert all(row["values"] == {"2025": 0.0, "2024": 0.0} for row in rows)
+    assert all("suspected_placeholder" not in row for row in rows)
+    values, newest = vn_p._long_ratio_values(frame)
+    assert newest == "2025"
+    assert values == {"roe": 0.0, "trailing_eps": 0.0, "debt_to_equity": 0.0}
 
 
 def test_ratio_table_zero_variants_and_real_gaps():
@@ -102,36 +112,45 @@ async def test_financial_ratios_cache_hit_keeps_zeros(monkeypatch):
     _install(monkeypatch, calls)
     fn = _tool("financial_ratios")
     env = await fn(symbol="FPT", set="roe", period="year")
-    assert env["data"]["ratios"][1]["placeholder"] is True
+    assert env["data"]["ratios"][1]["suspected_placeholder"] is True
     env2 = await fn(symbol="FPT", set="roe", period="year")
     assert env2["provenance"]["cached"] is True
     assert calls == [("FPT", "year")]  # second call served from cache
-    assert env2["data"]["ratios"][1]["placeholder"] is True  # survives the round-trip
+    assert env2["data"]["ratios"][1]["suspected_placeholder"] is True  # survives the round-trip
 
 
 async def test_financial_ratios_peers_carry_the_newest_period(monkeypatch):
     _install(monkeypatch, [])
     env = await _tool("financial_ratios")(symbol="FPT", set="p_e", peers=["HPG"])
     peer = env["data"]["peers"][0]
-    assert peer == {
+    assert {key: peer[key] for key in (
+        "symbol", "period_label", "values", "valuation_as_of"
+    )} == {
         "symbol": "HPG",
         "period_label": "2025",
         "values": {"p_e": 15.91},
         "valuation_as_of": "cuối kỳ 2025 (không phải hiện tại)",
     }
+    assert peer["frequency"] == "annual"
+    assert peer["discarded_period_labels"] == []
 
 
 async def test_peer_compare_metric_aliases(monkeypatch):
     _install(monkeypatch, [])
     env = await _tool("peer_compare")(symbol="FPT", peers=["HPG"], metrics=["pe", "eps", "roe"])
     row = env["data"]["rows"][1]
-    assert row == {
+    assert {key: row[key] for key in (
+        "symbol", "period_label", "p_e", "trailing_eps", "roe", "valuation_as_of"
+    )} == {
         "symbol": "HPG",
         "period_label": "2025",
         "p_e": 15.91,
         "trailing_eps": 6021.21,
         "roe": 28.3,
         "valuation_as_of": "cuối kỳ 2025 (không phải hiện tại)",
+    }
+    assert row["metric_basis"] == {
+        "trailing_eps": "trailing_four_quarters", "roe": "reported_period_ratio"
     }
 
 
@@ -160,7 +179,32 @@ async def test_peer_compare_keeps_zero_values(monkeypatch):
     monkeypatch.setattr(comp_fin, "_call", fake_call)
     fn = _tool("peer_compare")
     env = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
-    assert env["data"]["rows"][1] == {"symbol": "HPG", "period_label": "2025", "roe": 0.0}
+    assert env["data"]["rows"][1]["roe"] == 0.0
     env2 = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
     assert env2["provenance"]["cached"] is True
     assert env2["data"]["rows"][1]["roe"] == 0.0  # zero survives the cache round-trip
+
+
+@pytest.mark.parametrize("tool", ["financial_ratios", "peer_compare"])
+async def test_suspected_metric_quality_survives_peer_projection_and_cache(monkeypatch, tool):
+    calls: list[tuple[str, str]] = []
+    _install(monkeypatch, calls)
+    fn = _tool(tool)
+    kwargs = {"set": "roe", "period": "year"} if tool == "financial_ratios" else {
+        "metrics": ["roe_trailling"]
+    }
+    cold = await fn(symbol="FPT", peers=["AAA"], **kwargs)
+    warm = await fn(symbol="FPT", peers=["AAA"], **kwargs)
+    assert calls == [("FPT", "year"), ("AAA", "year")]
+    assert warm["provenance"]["cached"] is True
+    for env in (cold, warm):
+        projected = env["data"]["peers"] if tool == "financial_ratios" else env["data"]["rows"]
+        assert len(projected) == (1 if tool == "financial_ratios" else 2)
+        for row in projected:
+            values = row["values"] if tool == "financial_ratios" else row
+            assert values["roe_trailling"] == 0.0
+            quality = row["metric_quality"]
+            assert list(quality) == ["roe_trailling"]
+            assert quality["roe_trailling"]["suspected_placeholder"] is True
+            note = quality["roe_trailling"]["quality_note"]
+            assert "FPT fixture 2026-10-23" in note and "unverified" in note

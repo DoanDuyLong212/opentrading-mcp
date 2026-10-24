@@ -1,0 +1,36 @@
+{
+  "aqi": {
+    "actual": 1.0625,
+    "formula_with_ppe_30_35": 1.2500000000000002
+  },
+  "lvgi": {
+    "actual": 0.9,
+    "ltd_plus_cl_over_assets_with_ltd_20_each_year": 0.9375
+  },
+  "period_alignment": {
+    "output_unchanged_after_cdkt_shifted_two_quarters": true
+  },
+  "missing_depi": {
+    "m_score_still_number": -2.3235,
+    "m_partial": null
+  },
+  "up_day_new_low": {
+    "state": "rally_attempt",
+    "day1_date": "2026-10-05",
+    "day1_low": 98,
+    "ftd_date": null,
+    "ftd_gain_pct": null,
+    "days_since_day1": 1
+  },
+  "intraday_break_closes_above_old_low": {
+    "state": "rally_attempt",
+    "day1_date": "2026-10-04",
+    "day1_low": 99,
+    "ftd_date": null,
+    "ftd_gain_pct": null,
+    "days_since_day1": 2
+  },
+  "rebound_21_25pct_below_old_peak": {
+    "events": []
+  }
+}

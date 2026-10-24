@@ -1,0 +1,11 @@
+{
+  "sha": "2260f4857fcfb8077ca99760519df478c927b8fb",
+  "original_issue44": {"fixed": [1,2,3,4,5]},
+  "focused_tests": {"passed": 61, "failed": 0, "seconds": 22.59, "exit_code": 0},
+  "reproductions": {
+    "all_zero": {"input": {"roe": {"2025":0,"2024":0},"trailing_eps":{"2025":0,"2024":0},"book_value_per_share_bvps":{"2025":8000,"2024":7000}},"long_ratio_values_result":[{"book_value_per_share_bvps":8000},"2025"]},
+    "nan_filter": {"filter":{"pe":[1,10]},"upstream_pe":"NaN","candidate":"AAA","evaluated":1,"availability":"available","warnings":[]},
+    "noop_null": {"filter":{"pe":null},"candidate":"AAA","evaluated":0,"availability":"partial","warnings":["fundamentals unavailable: AAA pe missing"]},
+    "noop_range": {"filter":{"pe":[null,null]},"effective_filters":{},"candidate":"AAA","evaluated":1,"availability":"available","warnings":[]}
+  }
+}

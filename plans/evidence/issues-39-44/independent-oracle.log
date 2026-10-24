@@ -1,0 +1,6 @@
+PASS independent Fraction oracle: 8 indices, M-score -1.7144583333333334 9 mixed signals, F-score 3/9
+PASS financial scope gating: bank/securities/insurance
+PASS invalid newest does not silently score old annual data
+PASS two vs three annual balances
+PASS missing each of 13 current Beneish input fields blocks complete score
+PASS zero data preserved and correctly scores failed positive signals

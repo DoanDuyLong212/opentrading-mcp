@@ -55,8 +55,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         limit: int = 20,
         technical: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Sàng lọc toàn thị trường theo định giá và chất lượng. Dùng khi săn ứng viên theo tiêu
-            chí.
+        """Sàng danh sách mã theo định giá và chất lượng; metric cơ bản chỉ tra tối đa 30 mã.
 
         Dùng khi: "lọc cổ phiếu PE<10 ROE>15%", tìm mã theo điều kiện.
         Không dùng khi: đã biết mã cần phân tích (đi thẳng tool của mã đó); cần so vài mã cụ thể
@@ -66,6 +65,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         dùng signals_screener_columns để biết trường hợp lệ. max_pe/min_roe là phím tắt.
         PE/ROE chỉ được tra cho tối đa 30 mã đầu danh sách (screened trong kết quả); pe là
         P/E cuối kỳ báo cáo ghi ở fundamentals_period, không phải P/E theo giá hôm nay.
+        market_cap chưa có nguồn xác minh đơn vị VND/thời điểm/cơ sở số cổ phiếu;
+        lọc vốn hóa trả coverage bằng 0 thay vì kết luận không có mã phù hợp.
         Bộ lọc pe chỉ có cận trên giữ pe > 0 (P/E âm là doanh nghiệp lỗ, không phải rẻ);
         muốn giữ mã lỗ thì đặt cận dưới rõ ràng, ví dụ {"pe": [-5, 10]}.
         technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
@@ -78,29 +79,37 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             attempted: số mã đã thử đánh giá (bằng screened);
             evaluated: số mã đủ dữ liệu để có kết luận pass/reject. Một mã history/compute
             lỗi hoặc indicator bắt buộc là None thì unavailable: evaluated không tăng,
-            warning nêu mã và lý do, envelope mang partial; giới hạn chủ ý chỉ tạo warning.
+            warning nêu mã và lý do, envelope mang partial. Khi số mã vượt giới hạn
+            enrichment 30, kết quả cũng mang partial và chỉ kết luận trên số mã đã thử.
+            coverage.fundamentals cho biết giới hạn, số mã thử và số mã có từng metric.
         """
         technical = technical or None  # {} means "no technical stage", not a rule set
-        # v4: P/E âm không qua cận trên của pe; khoảng [None, None] không còn là metric
-        # bắt buộc (v3: evaluated chỉ đếm mã có đủ metric của bộ lọc).
-        fp = f"v4|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
-        hit = await cache_lookup("stock_screener", fp)
-        if hit is not None:
-            return hit
         from opentrading_mcp.providers import screener as sc_p
         from opentrading_mcp.providers import technicals as tech_p
 
-        # [None, None] lọc không chặn gì (apply_filters bỏ qua), nên không được coi là
-        # metric bắt buộc: bỏ trước khi tính needs_valuation / required_metrics (#44 mục 1).
-        eff: dict[str, Any] = {
-            k: v
-            for k, v in (filters or {}).items()
-            if not (isinstance(v, (list, tuple)) and len(v) == 2 and v[0] is None and v[1] is None)
-        }
-        if max_pe is not None and "pe" not in eff:
-            eff["pe"] = [None, max_pe]
-        if min_roe is not None and "roe" not in eff:
-            eff["roe"] = [min_roe, None]
+        try:
+            # Validate shortcuts even when an explicit field filter overrides them.
+            pe_cap = (
+                None if max_pe is None else sc_p.finite_filter_number(max_pe, "max_pe", "value")
+            )
+            roe_floor = (
+                None if min_roe is None else sc_p.finite_filter_number(min_roe, "min_roe", "value")
+            )
+            eff = sc_p.normalize_filters(filters)
+            if pe_cap is not None and "pe" not in eff:
+                eff["pe"] = [None, pe_cap]
+            if roe_floor is not None and "roe" not in eff:
+                eff["roe"] = [roe_floor, None]
+        except ValueError as exc:
+            return make_envelope(
+                {"tool": "stock_screener"}, source="unavailable",
+                warnings=[f"filter error: {exc}"], availability="unavailable",
+            )
+        # v6: reject malformed bounds before cache/upstream; expose metric coverage.
+        fp = f"v6|{eff}|{limit}|{technical}"
+        hit = await cache_lookup("stock_screener", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await run_blocking(vn_p.listing_symbols, "stock_screener")
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -146,14 +155,20 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     enrich_failed.append((sym, f"upstream error: {str(exc)[:80]}"))
                     return set()
             if isinstance(info, dict):
-                present = {k for k in ("pe", "roe", "market_cap") if info.get(k) is not None}
+                # The provider's long layout omits market cap; its legacy
+                # numeric field lacks a verified VND unit, date and share basis.
+                # Neither is comparable to a VND screen threshold.
+                present = {
+                    k for k in ("pe", "roe")
+                    if sc_p._as_number(info.get(k)) is not None
+                }
                 if present:
                     entry.update({k: info[k] for k in present})
                     if info.get("period_label"):
                         # the report period of pe/roe (e.g. '2025' = year-end 2025 PE)
                         entry["fundamentals_period"] = info["period_label"]
                     return present
-                enrich_failed.append((sym, "no pe/roe/market_cap in source"))
+                enrich_failed.append((sym, "no verified pe/roe in source"))
                 return set()
             enrich_failed.append((sym, "no fundamentals payload"))
             return set()
@@ -169,18 +184,33 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     enrich_failed.append(
                         (str(entry.get("symbol", "")).upper(), "/".join(lacking) + " missing")
                     )
+        metric_counts = {
+            metric: sum(metric in present for present in results)
+            for metric in sorted(required_metrics)
+        }
+        for metric, available in metric_counts.items():
+            if enrich_n and available == 0:
+                reason = (
+                    " (source unit/as-of/shares basis unverified)"
+                    if metric == "market_cap" else ""
+                )
+                warnings.append(
+                    f"{metric} unavailable{reason} for all {enrich_n} enriched symbols; "
+                    "the filter has no evaluated conclusion"
+                )
         if rows and enrich_n and enriched < enrich_n:
             warnings.append(f"fundamentals best-effort: {enriched}/{enrich_n} enriched")
         if enrich_failed:
             detail = "; ".join(f"{s} {r}" for s, r in enrich_failed[:5])
             more = f" (+{len(enrich_failed) - 5} more)" if len(enrich_failed) > 5 else ""
             warnings.append(f"fundamentals unavailable: {detail}{more}")
-        partial = bool(warnings)
         if needs_valuation and len(rows) > enrich_n:
             # Only these symbols carry pe/roe; every other row fails the filter.
             warnings.append(
-                f"PE/ROE checked for the first {enrich_n} of {len(rows)} listed symbols only"
+                f"Fundamentals checked for the first {enrich_n} of {len(rows)} "
+                "listed symbols only (enrichment cap 30)"
             )
+        partial = bool(warnings)
         try:
             candidates = sc_p.apply_filters(rows, eff)
         except Exception as exc:
@@ -302,6 +332,12 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "eligible": eligible_n,
                     "attempted": attempted_n,
                     "evaluated": evaluated_n,
+                    "fundamentals": {
+                        "limit": 30,
+                        "attempted": enrich_n,
+                        "metric_available": metric_counts,
+                        "unsupported_metrics": ["market_cap"] if "market_cap" in eff else [],
+                    } if needs_valuation else None,
                 },
                 "filters": eff,
                 "candidates": candidates[: max(limit, 1)],
@@ -362,14 +398,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         patterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,
         swings, swing_trend, fib); bỏ qua để lấy full. interval: 1D (250 nến),
         1W (dài, tối thiểu 30 nến) hoặc 1M (tối thiểu 24 nến); chỉ báo nào chưa đủ
-        nến thì null (không điền 50/0). ichimoku (displacement 26 như TradingView, lệch 25
-        nến): senkou_a/senkou_b là mây dưới giá hiện tại (tính từ 25 nến trước),
-        senkou_*_ahead là mây chiếu tới; chikou là giá đóng cửa 25 nến trước.
+        nến thì null (không điền 50/0). ichimoku trả offset_bars=25 và convention:
+        senkou_a/senkou_b là mây tại nến hiện tại từ phép tính 25 nến trước;
+        senkou_*_ahead là span tính hôm nay; chikou là giá đóng cửa 25 nến trước
+        để so với close hiện tại theo quy ước này. Chưa xác nhận parity với
+        TradingView built-in; chưa hỗ trợ lựa chọn offset 26.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
-        # v2: null for uncomputable indicators, Ichimoku cloud under today's price
-        fp = f"v2|{symbol}|{interval}|{indicators}"
+        # v3: publish the Ichimoku alignment convention.
+        fp = f"v3|{symbol}|{interval}|{indicators}"
         hit = await cache_lookup("signals_technical", fp)
         if hit is not None:
             return hit

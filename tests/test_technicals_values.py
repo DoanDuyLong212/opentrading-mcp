@@ -33,12 +33,29 @@ def test_ichimoku_lines_are_high_low_midpoints():
 
 
 def test_ichimoku_cloud_under_price_is_the_spans_from_25_bars_ago():
-    # TradingView built-in: plot(leadLine, offset = displacement - 1), displacement 26.
+    # Verify this implementation's index convention against its own source series.
     full = tech.compute(CANDLES)["ichimoku"]
     earlier = tech.compute(CANDLES[:-25])["ichimoku"]
+    assert full["offset_bars"] == 25
+    assert full["convention"] == "current_cloud_from_spans_25_bars_prior"
+    assert full["chikou_reference"] == "close_25_bars_ago_for_current_close_comparison"
     assert full["senkou_a"] == earlier["senkou_a_ahead"]
     assert full["senkou_b"] == earlier["senkou_b_ahead"]
     assert full["chikou"] == round(CANDLES[-26]["c"], 2)
+
+
+def test_ichimoku_offset_25_differs_from_26_on_nonflat_series():
+    candles = [
+        {"o": 100 + i, "h": 102 + i, "l": 99 + i, "c": 101 + i, "v": 1000 + i}
+        for i in range(90)
+    ]
+    full = tech.compute(candles)["ichimoku"]
+    at_25 = tech.compute(candles[:-25])["ichimoku"]
+    at_26 = tech.compute(candles[:-26])["ichimoku"]
+    assert full["senkou_a"] == at_25["senkou_a_ahead"]
+    assert full["senkou_b"] == at_25["senkou_b_ahead"]
+    assert full["senkou_a"] != at_26["senkou_a_ahead"]
+    assert full["senkou_b"] != at_26["senkou_b_ahead"]
 
 
 def test_ichimoku_without_a_cloud_has_no_signal():
