@@ -19,6 +19,7 @@ import pandas as pd
 import pytest
 
 from opentrading_mcp.providers import vnstock as vn
+from opentrading_mcp.providers.errors import ProviderBadData
 
 RATIOS = json.loads(
     (Path(__file__).parent / "fixtures" / "vnstock_ratio_fpt_20261023.json").read_text(
@@ -46,11 +47,11 @@ def test_long_ratio_picks_the_newest_year():
     assert values["trailing_eps"] == 6021.21
 
 
-def test_long_ratio_quarter_ignores_non_period_columns():
-    # columns: 2026-Q2, 2025-Q4, 2026-Q1, 2025-Q4_1 (as returned)
-    values, label = vn._long_ratio_values(pd.DataFrame(RATIOS["quarter"]))
-    assert label == "2026-Q2"
-    assert values["p_e"] == 15.53
+def test_long_ratio_quarter_mislabelled_frame_is_refused():
+    # columns: 2026-Q2, 2025-Q4, 2026-Q1, 2025-Q4_1 (as returned). The 15.53 this
+    # used to read as the 2026-Q2 P/E belongs to another quarter.
+    with pytest.raises(ProviderBadData):
+        vn._check_ratio_periods(pd.DataFrame(RATIOS["quarter"]))
 
 
 def test_long_ratio_returns_none_for_other_layouts():
