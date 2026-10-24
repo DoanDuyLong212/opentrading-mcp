@@ -28,7 +28,7 @@ BARS: list[dict[str, Any]] = json.loads(
 
 
 def test_new_attempt_after_a_failure_is_the_latest_state():
-    closes, volumes, lows, dates = mt._series(BARS)
+    closes, volumes, lows, _highs, dates = mt._series(BARS)
     out = mt._follow_through(closes, volumes, lows, dates)
     assert out["state"] == "rally_attempt"
     assert out["day1_date"] == "2026-10-21"
@@ -49,7 +49,8 @@ def test_confirmed_attempt_stays_confirmed_on_later_up_days():
     closes = [100, 98, 96, 94, 95, 95.5, 96, 97.6, 98, 98.5, 99]
     volumes = [10, 10, 10, 10, 10, 9, 9, 20, 9, 9, 9]
     rows = [_row(i + 1, c, v) for i, (c, v) in enumerate(zip(closes, volumes, strict=True))]
-    out = mt._follow_through(*mt._series(rows))
+    closes_, volumes_, lows_, highs_, dates_ = mt._series(rows)
+    out = mt._follow_through(closes_, volumes_, lows_, dates_, highs=highs_)
     assert out["state"] == "confirmed"
     assert out["day1_date"] == "2026-03-05"
     assert out["ftd_date"] == "2026-03-08"  # Day 4, +1.67% on higher volume
@@ -57,7 +58,7 @@ def test_confirmed_attempt_stays_confirmed_on_later_up_days():
 
 
 def test_failure_without_a_new_attempt_stays_failed():
-    closes, volumes, lows, dates = mt._series(BARS[:-2])  # up to 20/10
+    closes, volumes, lows, _highs, dates = mt._series(BARS[:-2])  # up to 20/10
     out = mt._follow_through(closes, volumes, lows, dates)
     assert out["state"] == "failed"
     assert out["day1_date"] == "2026-10-16"
@@ -130,7 +131,8 @@ async def test_first_ftd_date_is_permanent_reset_anchor(monkeypatch):
     rows = [_row(i + 1, c, v) for i, (c, v) in enumerate(zip(closes, volumes, strict=True))]
     parsed = mt._series(rows)
     assert parsed is not None
-    ftd = mt._follow_through(*parsed)
+    closes, volumes, lows, highs, dates = parsed
+    ftd = mt._follow_through(closes, volumes, lows, dates, highs=highs)
     assert ftd["state"] == "confirmed"
     assert ftd["ftd_date"] == "2026-03-08"
     assert ftd["days_since_day1"] == 6
@@ -203,3 +205,47 @@ async def test_tool_excludes_current_session_bar(monkeypatch):
     env = await server._tool_manager.get_tool("distribution_count").fn(symbol="VNINDEX")
     assert env["provenance"]["data_time"] == "2026-10-22"
     assert "bỏ nến hôm nay vì phiên chưa đóng cửa" in env["warnings"]
+
+
+def _march2009() -> tuple[list[float], list[float], list[float], list[float], list[str]]:
+    """The documented March-2009 S&P shape: 6 Mar fresh closing low, 9 Mar undercuts
+    intraday and closes near the high of the day (Day 1 under strict IBD), 12 Mar
+    +4% on heavier volume is the earliest possible FTD."""
+    closes = [683.38, 676.53, 719.65, 731.0, 760.9, 762.0]
+    lows = [681.0, 666.79, 715.0, 728.0, 745.0, 750.0]
+    highs = [688.0, 678.0, 722.0, 738.0, 763.0, 765.0]
+    volumes = [10.0, 12.0, 11.0, 10.0, 11.0, 10.0]
+    dates = ["2009-03-06", "2009-03-09", "2009-03-10", "2009-03-11", "2009-03-12", "2009-03-13"]
+    return closes, volumes, lows, highs, dates
+
+
+def test_undercut_reverse_bar_becomes_day1_when_option_enabled():
+    closes, volumes, lows, highs, dates = _march2009()
+    out = mt._follow_through(
+        closes, volumes, lows, dates, highs=highs, undercut_reverse_day1=True
+    )
+    assert out["state"] == "confirmed"
+    assert out["day1_date"] == "2009-03-09"  # the undercut-reverse session itself
+    assert out["day1_low"] == 666.79
+    assert out["ftd_date"] == "2009-03-12"  # day 4 of the attempt; never the same bar
+    assert out["days_since_day1"] == 4
+
+
+def test_undercut_reverse_needs_a_strong_close():
+    # The undercut bar closes in the LOWER half of its range: strict IBD does not
+    # count it as Day 1 either; the next up close starts the attempt instead.
+    closes, volumes, lows, highs, dates = _march2009()
+    highs[1] = 700.0  # 676.53 is now below the 693.4 midrange
+    out = mt._follow_through(
+        closes, volumes, lows, dates, highs=highs, undercut_reverse_day1=True
+    )
+    assert out["day1_date"] != "2009-03-09"
+    assert out["day1_date"] == "2009-03-10"  # the first up close after the undercut
+
+
+def test_default_policy_ignores_the_option_branch():
+    # Default (option off): the 9 Mar undercut bar is not Day 1 even though it
+    # closes in the upper half — the close-up policy stays the shipped contract.
+    closes, volumes, lows, highs, dates = _march2009()
+    out = mt._follow_through(closes, volumes, lows, dates, highs=highs)
+    assert out["day1_date"] != "2009-03-09"
