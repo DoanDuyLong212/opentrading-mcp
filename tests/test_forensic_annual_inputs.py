@@ -7,7 +7,9 @@ financial_detail fixture. Tests do not assert annual upstream data availability.
 from __future__ import annotations
 
 import copy
+import json
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -68,6 +70,65 @@ def raw_annual():
 
 def parsed(raw=None):
     return f.normalize_annual(raw or raw_annual(), as_of=AS_OF)
+
+
+def recorded_annual_sources():
+    base = Path(__file__).parent / "fixtures"
+    annual = json.loads((base / "financeinfo_fpt_annual_20261024.json").read_text())
+    detail = json.loads((base / "vietstock_fpt_bctc_annual_20261024.json").read_text())
+    return annual, detail
+
+
+def test_recorded_fpt_annual_detail_matches_report_and_stays_partial():
+    annual, detail = recorded_annual_sources()
+    out = f.enrich_annual(f.normalize_annual(annual, as_of=AS_OF), detail)
+    assert out["rejected"] == []
+    now = out["records"][-1]
+    before = out["records"][-2]
+    # 2025 FPT annual report, consolidated balance/income/cash-flow pp. 164-170.
+    assert now["values"]["revenue"] == 70112825100710
+    assert now["values"]["cfo"] == 10136043915911
+    assert now["values"]["net_tangible_ppe"] == 15359168484059
+    assert now["values"]["long_term_debt"] == 1903789988184
+    assert before["values"]["cfo"] == 11703777188868
+    assert now["values"]["net_ppe"] == 15359168484059 + 1277212606
+    assert now["input_provenance"]["cfo"]["published_on"] == "2026-03-20"
+    assert "receivables" not in now["values"]  # 3005 is not proven equal to Compustat [2].
+    assert "depreciation" not in now["values"]
+    assert "current_portion_long_term_debt" not in now["values"]
+    assert "equity_issued" not in now["values"]
+
+
+@pytest.mark.parametrize("mutation", ["scope", "anchor", "publication", "duplicate", "unit"])
+def test_bctc_enrichment_rejects_unproven_report_identity(mutation):
+    annual, detail = recorded_annual_sources()
+    detail = copy.deepcopy(detail)
+    target = [r for r in detail["rows"] if r["YearPeriod"] == 2025]
+    if mutation == "scope":
+        for row in target:
+            row["UnitedName"] = "Riêng"
+    elif mutation == "anchor":
+        next(r for r in target if r["ReportNormId"] == 2216)["Value"] += 1
+    elif mutation == "publication":
+        for row in target:
+            row["NgayCongboBC"] = "/Date(1800000000000)/"
+    elif mutation == "duplicate":
+        detail["rows"].append(copy.deepcopy(target[0]))
+    else:
+        detail["unit_request"] = 1000000000
+    out = f.enrich_annual(f.normalize_annual(annual, as_of=AS_OF), detail)
+    assert "cfo" not in out["records"][-1]["values"]
+    if mutation != "unit":
+        assert any(r["year"] == 2025 and r["source"] == f.BCTC_SOURCE for r in out["rejected"])
+
+
+def test_bctc_annual_publication_date_is_local_and_as_of_gated():
+    annual, detail = recorded_annual_sources()
+    out = f.enrich_annual(
+        f.normalize_annual(annual, as_of=date(2026, 3, 19)), detail
+    )
+    assert "cfo" not in out["records"][-1]["values"]
+    assert any("publication" in r["reason"] for r in out["rejected"])
 
 
 def test_header_id_mapping_precision_zero_and_ppe():
@@ -211,10 +272,70 @@ def test_provider_uses_supported_year_path_without_output_lookback_limit(monkeyp
         return raw_annual()
 
     monkeypatch.setattr(f.vietstock, "financeinfo", fetch)
+    def annual_lines(symbol, *, years):
+        calls.append((symbol, years))
+        return {"symbol": symbol, "unit_request": 1, "rows": []}
+
+    monkeypatch.setattr(f.vietstock, "annual_forensic_lines", annual_lines)
     bundle = f.annual_inputs("fpt", as_of=AS_OF)
-    assert calls == [("FPT", "year")]
+    assert calls == [("FPT", "year"), ("FPT", (2025, 2024))]
     assert len(bundle["records"]) == 3
     assert f.select_annual_window(bundle)["missing_inputs"] == []
+
+
+def test_annual_detail_request_anchors_to_financeinfo_year_across_wall_clock(monkeypatch):
+    import time
+
+    annual, detail = recorded_annual_sources()
+    captured = []
+
+    monkeypatch.setattr(f.vietstock, "financeinfo", lambda symbol, period: annual)
+    monkeypatch.setattr(
+        f.vietstock, "annual_forensic_lines",
+        lambda symbol, *, years: captured.append(years) or detail,
+    )
+    monkeypatch.setattr(time, "gmtime", lambda: time.struct_time((2027, 2, 15, 0, 0, 0, 0, 46, 0)))
+    out = f.annual_inputs("FPT", as_of=date(2027, 2, 15))
+    assert captured == [(2025, 2024)]
+    assert out["records"][-1]["values"]["cfo"] == 10136043915911
+    assert out["records"][-2]["values"]["cfo"] == 11703777188868
+
+
+def test_bctc_request_uses_explicit_fiscal_years_at_calendar_rollover(monkeypatch):
+    import time
+
+    from opentrading_mcp.providers import vietstock
+
+    captured = []
+
+    def post(path, payload, **kwargs):
+        captured.append((path, payload))
+        return {"data": []}
+
+    monkeypatch.setattr(vietstock, "_post_json", post)
+    monkeypatch.setattr(time, "gmtime", lambda: time.struct_time((2027, 2, 15, 0, 0, 0, 0, 46, 0)))
+    assert vietstock.annual_forensic_lines("FPT", years=(2025, 2024))["rows"] == []
+    assert captured[0][0] == "/FinancialStatement/BCTC_LoadReportData_Async"
+    assert [p["YearPeriod"] for p in captured[0][1]["ListParams"]] == [2025, 2024]
+    assert all(p["ReportTermId"] == 1 and p["Unit"] == "1" for p in captured[0][1]["ListParams"])
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "StockCode", "ReportTermID", "UnitedName", "AuditedStatusDescription",
+        "NgayCongboBC", "ReportNormId", "YearPeriod",
+    ],
+)
+@pytest.mark.parametrize("bad", [[], {}])
+def test_bctc_unhashable_fields_yield_diagnostics_and_partial(field, bad):
+    annual, detail = recorded_annual_sources()
+    detail = copy.deepcopy(detail)
+    row = next(r for r in detail["rows"] if r["YearPeriod"] == 2025)
+    row[field] = bad
+    out = f.enrich_annual(f.normalize_annual(annual, as_of=AS_OF), detail)
+    assert "cfo" not in out["records"][-1]["values"]
+    assert any(r.get("source") == f.BCTC_SOURCE for r in out["rejected"])
 
 
 def ytd(term, value):

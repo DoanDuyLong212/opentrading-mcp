@@ -7,6 +7,7 @@ The endpoint does not promise revision ordering: reject conflicting duplicates.
 from __future__ import annotations
 
 import calendar
+import copy
 import math
 import re
 from datetime import date, datetime
@@ -14,6 +15,11 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from opentrading_mcp.providers import vietstock
+from opentrading_mcp.providers.errors import (
+    ProviderAuthMissing,
+    ProviderBadData,
+    ProviderUnavailable,
+)
 
 SOURCE = "vietstock.financeinfo"
 STATEMENTS = {
@@ -39,7 +45,9 @@ GENERAL_LINES = {
         2996: "assets",
         3000: "current_assets",
         3014: "current_liabilities",
-        3005: "receivables",
+        # 3005 includes seller prepayments and loans. Beneish (2013) uses
+        # Compustat Receivables Total [2], whose definition excludes advances
+        # on material purchases. Do not silently equate these line items.
         3003: "cash",
         2997: "liabilities",
         2998: "equity",
@@ -50,6 +58,16 @@ GENERAL_LINES = {
     "LCTT": {2234: "cfo"},
 }
 BUSINESS_TYPES = {1: "general", 2: "securities", 3: "bank", 5: "insurance"}
+BCTC_SOURCE = "vietstock.BCTC_LoadReportData_Async"
+BCTC_ANCHORS = {2216: "revenue", 2212: "net_income", 2996: "assets", 2998: "equity"}
+BCTC_FIELDS = {
+    2224: "admin",
+    2227: "selling",
+    2234: "cfo",
+    3035: "net_tangible_ppe",
+    3036: "net_leased_ppe",
+    3078: "long_term_debt",
+}
 
 
 def finite_number(value: Any) -> bool:
@@ -247,14 +265,177 @@ def normalize_annual(raw: dict[str, Any], *, as_of: date | None = None) -> dict[
             "revision not reported by verified financeinfo header schema",
             "recorded annual FPT/VCB headers verified 2026-10-24; "
             "missing model fields remain unavailable",
-            "report publication date unavailable; not a point-in-time historical dataset",
+            "financeinfo publication date unavailable; BCTC enrichment does not form "
+            "a point-in-time historical dataset",
+            "Vietnam 3005 current receivables not proven equivalent to "
+            "Compustat Receivables Total [2] for Beneish DSR",
         ],
     }
 
 
+def _bctc_publication(value: Any) -> date | None:
+    match = re.fullmatch(r"/Date\((\d+)\)/", str(value or ""))
+    if not match:
+        return None
+    try:
+        return datetime.fromtimestamp(
+            int(match.group(1)) / 1000, ZoneInfo("Asia/Ho_Chi_Minh")
+        ).date()
+    except (OverflowError, ValueError, OSError):
+        return None
+
+
+def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
+    """Use source-backed BCTC lines only after exact annual identity checks.
+
+    FPT 2025 audited report pp. 164-170 matches 2216, 2212, 2996, 2998,
+    2234, 3035 and 3078 from this endpoint. The endpoint has no fiscal
+    boundaries, so all four amounts must match the same annual financeinfo
+    column; UnitedName, stock, year, term and publication must also agree.
+    Audited status does not supply revision ordering or point-in-time history.
+    """
+    out = copy.deepcopy(bundle)
+    rows = raw.get("rows") if isinstance(raw, dict) else None
+    if (
+        not isinstance(rows, list)
+        or isinstance(raw.get("unit_request"), bool)
+        or raw.get("unit_request") != 1
+    ):
+        out["limitations"].append("annual BCTC raw VND rows unavailable or unit unverified")
+        return out
+    symbol = out["symbol"]
+    through = date.fromisoformat(out["as_of"])
+    by_year: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            out["rejected"].append({
+                "source": BCTC_SOURCE,
+                "reason": "annual BCTC row is not an object",
+            })
+            continue
+        year = row.get("YearPeriod")
+        if isinstance(year, int) and not isinstance(year, bool):
+            by_year.setdefault(year, []).append(row)
+        else:
+            out["rejected"].append({"source": BCTC_SOURCE, "reason": "annual BCTC year malformed"})
+    for record in out["records"]:
+        if record["business_type"] != "general":
+            continue
+        year = record["year"]
+        observed = by_year.get(year, [])
+        if not observed:
+            continue
+        def reject(reason: str, year: int = year) -> None:
+            out["rejected"].append({"year": year, "source": BCTC_SOURCE, "reason": reason})
+        if record["scope"] != "consolidated" or raw.get("symbol") != symbol:
+            reject("annual BCTC symbol or consolidated scope mismatch")
+            continue
+        if any(
+            not isinstance(row.get("StockCode"), str)
+            or not isinstance(row.get("ReportTermID"), int)
+            or isinstance(row.get("ReportTermID"), bool)
+            or not isinstance(row.get("UnitedName"), str)
+            or not isinstance(row.get("AuditedStatusDescription"), str)
+            or not isinstance(row.get("NgayCongboBC"), str)
+            or not isinstance(row.get("ReportNormId"), int)
+            or isinstance(row.get("ReportNormId"), bool)
+            for row in observed
+        ):
+            reject("annual BCTC malformed report identity or norm ID")
+            continue
+        identities = {
+            (
+                row.get("StockCode"), row.get("ReportTermID"),
+                 row.get("UnitedName"), row.get("AuditedStatusDescription"),
+                 row.get("NgayCongboBC"))
+            for row in observed
+        }
+        if len(identities) != 1:
+            reject("annual BCTC row identity or revision ambiguous")
+            continue
+        code, term, scope_name, audit, publication = next(iter(identities))
+        published = _bctc_publication(publication)
+        if (
+            code != symbol or isinstance(term, bool) or term != 1 or scope_name != "Hợp nhất"
+            or not audit or published is None
+            or not date.fromisoformat(record["period_end"]) < published <= through
+        ):
+            reject("annual BCTC report scope, term or publication invalid")
+            continue
+        lines: dict[int, Any] = {}
+        for row in observed:
+            norm = row.get("ReportNormId")
+            if norm in lines:
+                reject("annual BCTC duplicate line without revision order")
+                break
+            lines[norm] = row.get("Value")
+        else:
+            if any(
+                not finite_number(lines.get(norm))
+                or lines[norm] != record["values"].get(field)
+                for norm, field in BCTC_ANCHORS.items()
+            ):
+                reject("annual BCTC and financeinfo anchor values disagree")
+                continue
+            added: dict[str, Any] = {}
+            for norm, field in BCTC_FIELDS.items():
+                value = lines.get(norm)
+                if not finite_number(value):
+                    continue
+                if field in record["values"] and record["values"][field] != value:
+                    reject(f"annual BCTC {field} conflicts with financeinfo")
+                    added = {}
+                    break
+                added[field] = value
+            if not added:
+                continue
+            ppe = (added.get("net_tangible_ppe"), added.get("net_leased_ppe"))
+            if all(finite_number(v) for v in ppe):
+                total = ppe[0] + ppe[1]
+                if finite_number(total):
+                    if "net_ppe" in record["values"] and record["values"]["net_ppe"] != total:
+                        reject("annual BCTC net PPE conflicts with financeinfo")
+                        continue
+                    added["net_ppe"] = total
+            record["values"].update(added)
+            if "cfo" in added:
+                record["statements"] = sorted(set(record["statements"]) | {"LCTT"})
+            record["input_provenance"] = {
+                field: {
+                    "source": BCTC_SOURCE,
+                    "norm_id": norm,
+                    "published_on": published.isoformat(),
+                    "audit_status": audit,
+                    "anchor_match": list(BCTC_ANCHORS),
+                    "revision_status": "not_reported",
+                    "unit": "VND (request Unit=1; four exact anchors)",
+                }
+                for norm, field in BCTC_FIELDS.items() if field in added
+            }
+            if "net_ppe" in added:
+                record["input_provenance"]["net_ppe"] = {
+                    "source": BCTC_SOURCE,
+                    "components": [3035, 3036],
+                    "published_on": published.isoformat(),
+                    "unit": "VND",
+                }
+    return out
+
+
 def annual_inputs(symbol: str, *, as_of: date | None = None) -> dict[str, Any]:
     """Fetch annual source columns regardless of a tool's display periods_n."""
-    return normalize_annual(vietstock.financeinfo(symbol.upper(), period="year"), as_of=as_of)
+    bundle = normalize_annual(vietstock.financeinfo(symbol.upper(), period="year"), as_of=as_of)
+    latest = bundle.get("latest_observed_year")
+    if not isinstance(latest, int) or latest <= 1900 or not any(
+        r["business_type"] == "general" for r in bundle["records"]
+    ):
+        return bundle
+    try:
+        details = vietstock.annual_forensic_lines(symbol.upper(), years=(latest, latest - 1))
+    except (ProviderAuthMissing, ProviderBadData, ProviderUnavailable) as exc:
+        bundle["limitations"].append(f"annual BCTC detail unavailable: {type(exc).__name__}")
+        return bundle
+    return enrich_annual(bundle, details)
 
 
 def derive_quarter_cfo(current: dict[str, Any], previous: dict[str, Any] | None = None) -> Any:

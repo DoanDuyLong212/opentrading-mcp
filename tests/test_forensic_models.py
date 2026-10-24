@@ -188,6 +188,10 @@ async def test_tool_actual_annual_parser_partial_display_and_versioned_cache(mon
         return env
 
     monkeypatch.setattr(source.vietstock, "financeinfo", fake_financeinfo)
+    monkeypatch.setattr(
+        source.vietstock, "annual_forensic_lines",
+        lambda symbol, *, years: {"symbol": symbol, "unit_request": 1, "rows": []},
+    )
     monkeypatch.setattr(tools, "_call", fake_call)
     monkeypatch.setattr(tools, "cache_lookup", lookup)
     monkeypatch.setattr(tools, "cache_store", store)
@@ -203,14 +207,14 @@ async def test_tool_actual_annual_parser_partial_display_and_versioned_cache(mon
     assert env["data"]["data_time"] == "2025-12-31"
     assert env == await fn("FPT", detail=True, periods_n=1)
     assert fetched == [("FPT", "year")]
-    assert calls == ["v4|FPT|True|1"] * 2
+    assert calls == ["v5|FPT|True|1"] * 2
     assert "current.depreciation" in env["data"]["m_partial"]
     assert "current.equity_issued" in env["data"]["f_missing"]
 
 
 @pytest.mark.parametrize("symbol", ["FPT", "VCB"])
 async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
-    """Captured 2026-10-24 live financeinfo(year), sanitized; no synthetic enrichment."""
+    """Captured public annual sources preserve partial score after safe enrichment."""
     import json
     from pathlib import Path
 
@@ -221,6 +225,14 @@ async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
             / f"financeinfo_{symbol.lower()}_annual_20261024.json"
         ).read_text()
     )
+    detail = (
+        json.loads(
+            (Path(__file__).parent / "fixtures" / "vietstock_fpt_bctc_annual_20261024.json")
+            .read_text()
+        )
+        if symbol == "FPT"
+        else {"symbol": symbol, "unit_request": 1, "rows": []}
+    )
 
     def financeinfo(sym, *, period):
         assert sym == symbol and period == "year"
@@ -229,8 +241,22 @@ async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
     async def call(tool, fn, *args, **kwargs):
         return fn(*args)
 
+    async def lookup(tool, fp):
+        return None
+
+    async def store(tool, fp, ttl, data, **kwargs):
+        from opentrading_mcp.schemas import make_envelope
+
+        return make_envelope(data, **kwargs)
+
     monkeypatch.setattr(source.vietstock, "financeinfo", financeinfo)
+    monkeypatch.setattr(
+        source.vietstock, "annual_forensic_lines",
+        lambda sym, *, years: copy.deepcopy(detail),
+    )
     monkeypatch.setattr(tools, "_call", call)
+    monkeypatch.setattr(tools, "cache_lookup", lookup)
+    monkeypatch.setattr(tools, "cache_store", store)
     server = create_server("scan")
     register_preset(server, "scan")
     env = await server._tool_manager.get_tool("stock_forensic").fn(symbol, detail=True)
@@ -242,9 +268,12 @@ async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
         assert d["data_time"] == "2025-12-31"
         assert d["beneish"]["status"] == d["piotroski"]["status"] == "partial"
         assert d["gmi"] is not None and d["sgi"] is not None
-        assert d["f_evaluated"] == 5
+        assert d["f_evaluated"] == 7
         assert "current.depreciation" in d["m_partial"]
-        assert "current.cfo" in d["f_missing"]
+        assert "current.receivables" in d["m_partial"]
+        assert "current.cfo" not in d["f_missing"]
+        assert d["piotroski"]["input_sources"]["current.cfo"]["source"] == source.BCTC_SOURCE
+        assert d["piotroski"]["input_sources"]["current.cfo"]["unit"].startswith("VND")
         assert len(source.normalize_annual(raw)["records"]) == 5
         wider = await server._tool_manager.get_tool("stock_forensic").fn(
             symbol, detail=True, periods_n=5

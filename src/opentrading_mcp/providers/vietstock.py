@@ -680,6 +680,44 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
     return {"symbol": symbol.upper(), "unit": "VNDbn", "periods": periods, "rows": series}
 
 
+def annual_forensic_lines(symbol: str, *, years: tuple[int, int]) -> dict[str, Any]:
+    """Raw annual VND lines from the existing BCTC endpoint, with report metadata.
+
+    The response observed for FPT on 2026-10-24 has StockCode, YearPeriod,
+    ReportTermID, UnitedName, audit and publication metadata on each line.
+    It has no fiscal boundaries or revision order; the forensic adapter must
+    verify a same-scope financeinfo annual report and matching anchor values
+    before using any line. Never use ``financial_lctt`` here: it rounds to VNDbn
+    and drops report identity.
+    """
+    # 3005 is fetched for source diagnostics only; the forensic adapter does
+    # not treat Vietnam aggregate receivables as Compustat item [2].
+    ids = (2212, 2216, 2224, 2227, 2234, 2996, 2998, 3005, 3035, 3036, 3078)
+    if (
+        len(years) != 2
+        or any(not isinstance(y, int) or isinstance(y, bool) or y < 1900 for y in years)
+        or years[0] - years[1] != 1
+    ):
+        raise ProviderBadData("annual BCTC requires two consecutive fiscal years")
+    # Keep the verified BCTC request shape but anchor its years to the actual
+    # financeinfo window. In early 2027, a still-current FY2025 report needs
+    # FY2024 comparison; wall-clock build_list_params(years=3) would lose it.
+    templates = [
+        p for p in build_list_params(symbol, years=2, full=True)
+        if p["ReportTermId"] == 1
+    ]
+    params = [{**p, "YearPeriod": year} for p, year in zip(templates, years, strict=True)]
+    raw = _post_json(
+        "/FinancialStatement/BCTC_LoadReportData_Async",
+        {"ReportNormIds": ",".join(map(str, ids)), "ListParams": params},
+        timeout=60,
+    )
+    rows = raw.get("data", raw) if isinstance(raw, dict) else raw
+    if not isinstance(rows, list):
+        raise ProviderBadData("vietstock annual BCTC lines malformed")
+    return {"symbol": symbol.upper(), "unit_request": 1, "rows": rows}
+
+
 
 def _united_id(period: dict[str, Any]) -> Any:
     return period.get("UnitedId", period.get("UnitedID"))

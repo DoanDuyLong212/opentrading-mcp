@@ -66,6 +66,7 @@ class _Inputs:
             "scope": record["scope"],
             "company_id": record["company_id"],
             "revision": record.get("revision"),
+            **record.get("input_provenance", {}).get(key, {}),
         }
         return value
 
