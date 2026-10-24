@@ -189,6 +189,18 @@ _DDL = {
 # CREATE TABLE IF NOT EXISTS never alters an existing table: new columns ride here.
 _MIGRATIONS = (
     "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS vin DOUBLE PRECISION",
+    # trough provenance (issues #39/#44): when the event became knowable and how
+    # much of the 3M forward window actually existed when the table was built.
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS confirmation DATE",
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS window_start DATE",
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS window_end DATE",
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS window_days INT",
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS window_observations INT",
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS window_complete BOOLEAN",
+    "ALTER TABLE cycle_trough_events ADD COLUMN IF NOT EXISTS basket_observations TEXT",
+    "ALTER TABLE cycle_yearly ADD COLUMN IF NOT EXISTS is_partial_year BOOLEAN",
+    "ALTER TABLE cycle_yearly ADD COLUMN IF NOT EXISTS data_through DATE",
+    "ALTER TABLE cycle_yearly ADD COLUMN IF NOT EXISTS period_basis TEXT",
 )
 
 

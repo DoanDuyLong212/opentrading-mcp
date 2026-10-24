@@ -279,3 +279,96 @@ def test_trough_events_vin_column_migration(db: Any) -> None:
     out = asyncio.run(_fn("cycle_trough_events")())
     row = out["data"]["rows"][0]
     assert row["vin"] == 42.0
+
+
+def _seed_yearly_cycle(conn: Any) -> None:
+    """VNINDEX + one vin member (VIC): full 2024 + a partial current year."""
+    frames = []
+    for year, end in ((2024, f"{2024}-12-31"), (2026, "2026-10-20")):
+        days = pd.date_range(f"{year}-01-01", end, freq="D")
+        for sym in ("VNINDEX", "VIC"):
+            frames.append(
+                pd.DataFrame(
+                    {"symbol": sym, "t": days.date, "c": 100.0}
+                )
+            )
+    rows = pd.concat(frames)
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO cycle_ohlcv(symbol,t,o,h,l,c,v)"
+            " VALUES(%s,%s,100,100,100,%s,0) ON CONFLICT DO NOTHING",
+            list(rows.itertuples(index=False, name=None)),
+        )
+
+
+@needs_db
+def test_trough_events_carry_confirmation_and_window_metadata(db: Any) -> None:
+    from opentrading_mcp.tools import cycle_stats
+
+    _seed_trough_cycle(db)
+    cycle_stats._finalize_compute(db, [])
+    with db.cursor() as cur:
+        cur.execute(
+            "SELECT trough, confirmation, window_start, window_end, window_days,"
+            " window_observations, window_complete, basket_observations"
+            " FROM cycle_trough_events ORDER BY trough"
+        )
+        rows = cur.fetchall()
+    assert rows, "the seeded -20%/+25% cycle must produce one event"
+    trough, confirmation, w_start, w_end, w_days, w_obs, w_complete, basket_obs = rows[0]
+    assert confirmation is not None and confirmation > trough
+    assert w_days == 95  # the "3M" window is pinned as 95 calendar days
+    assert w_start is not None
+    assert w_start == (pd.Timestamp(trough) + pd.Timedelta(days=1)).date()
+    assert w_end is not None
+    # The seeded frame ends 2020-04-04, before trough + 95 days: the window is
+    # incomplete and must say so instead of posing as a finished 3M study.
+    assert w_complete is False
+    assert 60 <= w_obs <= 80
+    assert basket_obs and "bank" in basket_obs
+    # rule provenance rides in cycle_meta, stamped in the same rebuild
+    with db.cursor() as cur:
+        cur.execute("SELECT key, value FROM cycle_meta WHERE key LIKE 'trough\\_%'")
+        meta = dict(cur.fetchall())
+    assert meta["trough_rule_version"] == "1"
+    assert "drawdown_from_peak" in meta["trough_rule_thresholds"]
+    assert meta["trough_window_days"] == "95"
+    assert meta["trough_requires_future_data"] == "true"
+    # the read tool exposes the metadata, rule context and per-basket counts
+    out = asyncio.run(_fn("cycle_trough_events")())
+    row = out["data"]["rows"][0]
+    assert row["confirmation"] == str(confirmation)
+    assert row["window_complete"] is False
+    assert isinstance(row["basket_observations"], dict)
+    assert out["data"]["rule"]["trough_rule_version"] == "1"
+    assert out["data"]["rule"]["trough_requires_future_data"] == "true"
+
+
+@needs_db
+def test_cycle_yearly_rows_carry_period_metadata(db: Any) -> None:
+    from opentrading_mcp.tools import cycle_stats
+
+    _seed_yearly_cycle(db)
+    cycle_stats._finalize_compute(db, [])
+    with db.cursor() as cur:
+        cur.execute(
+            "SELECT basket, year, ret, is_partial_year, data_through, period_basis"
+            " FROM cycle_yearly ORDER BY year"
+        )
+        rows = cur.fetchall()
+    by_year = {r[1]: r for r in rows if r[0] == "vin"}
+    assert 2024 in by_year and 2026 in by_year
+    _, _, ret24, partial24, through24, basis24 = by_year[2024]
+    assert ret24 == 0.0
+    assert partial24 is False
+    assert basis24 == "calendar_year"
+    assert str(through24) == "2024-12-31"
+    _, _, ret26, partial26, through26, basis26 = by_year[2026]
+    assert ret26 == 0.0
+    assert partial26 is True
+    assert basis26 == "year_to_date"
+    assert str(through26) == "2026-10-20"
+    out = asyncio.run(_fn("cycle_yearly")(basket="vin", year=2026))
+    row = out["data"]["rows"][0]
+    assert row["is_partial_year"] is True
+    assert row["period_basis"] == "year_to_date"

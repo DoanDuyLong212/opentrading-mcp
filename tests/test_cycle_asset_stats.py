@@ -23,12 +23,29 @@ def test_trough_after_a_shallow_rebound_is_the_new_one():
     # 100 -> 84 (-16%) -> 100.5 (new peak, only +19.6%: no event)
     #     -> 85 (-15.4% from 100.5) -> 110 (+29%: event at the 85 low)
     s = _series([100, 92, 84, 90, 100.5, 95, 85, 95, 110])
-    assert _major_troughs(s) == [s.index[6]]  # the old code dated it at the 84 low
+    assert _major_troughs(s) == [(s.index[6], s.index[8])]  # confirmed at the new peak
 
 
 def test_a_single_deep_drawdown_is_one_trough():
     s = _series([100, 90, 80, 85, 99, 121])
-    assert _major_troughs(s) == [s.index[2]]
+    assert _major_troughs(s) == [(s.index[2], s.index[5])]
+
+
+def test_no_event_until_a_new_peak():
+    # 100 -> 80 -> 97: +21.25% off the trough but never a new peak — the current
+    # rule keeps the drawdown open, so no event and no confirmation date.
+    s = _series([100, 90, 80, 85, 97])
+    assert _major_troughs(s) == []
+
+
+def test_confirmation_date_is_the_first_new_peak_above_the_rebound_bar():
+    # 100 -> 80 -> 96 (+20.0% off the trough, still below the old peak)
+    #     -> 101 (new peak: the event is first knowable here).
+    s = _series([100, 90, 80, 90, 96, 88, 101])
+    trough, confirmed = _major_troughs(s)[0]
+    assert s[trough] == 80
+    assert confirmed == s.index[6]
+    assert confirmed > trough
 
 
 def test_running_month_is_dropped_but_past_months_stay():
