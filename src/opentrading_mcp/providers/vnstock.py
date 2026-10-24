@@ -606,32 +606,21 @@ def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
     vnstock now returns ratios as rows: columns item, item_id, then one column per
     period ('2025', '2024', ... or '2026-Q2', ...). Every value comes from the same
     newest period so a PE and an EPS never mix years. Columns that are not a clean
-    period label (the quarterly frame also carries '2025-Q4_1') are ignored.
-    None when the frame is not in this layout.
+    period label (the quarterly frame also carries '2025-Q4_1') are ignored, and so
+    are placeholder rows (see _long_ratio_table). None when the frame is not in this
+    layout.
     """
-    try:
-        if "item_id" not in [str(c) for c in frame.columns]:
-            return None
-        periods = []
-        for col in frame.columns:
-            match = _RATIO_PERIOD.match(str(col))
-            if match:
-                periods.append(((int(match.group(1)), int(match.group(2) or 0)), col))
-        if not periods:
-            return None
-        newest = max(periods)[1]
-        values: dict[str, float] = {}
-        for _, row in frame.iterrows():
-            key = str(row.get("item_id") or "").strip()
-            try:
-                num = float(row[newest])
-            except (TypeError, ValueError):
-                continue
-            if key and math.isfinite(num):
-                values[key] = num
-        return values, str(newest)
-    except Exception:
+    table = _long_ratio_table(frame)
+    if table is None:
         return None
+    periods, rows = table
+    newest = periods[0]
+    values = {
+        r["item_id"]: r["values"][newest]
+        for r in rows
+        if r["values"].get(newest) is not None
+    }
+    return values, newest
 
 
 def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | None:
@@ -639,9 +628,14 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
 
     Returns (periods, [{item_id, item, values: {period: value or None}}]); None when
     the frame is not in the item/item_id + period-column layout. Cells that do not
-    parse, or are NaN/±Infinity, come back as None; every finite number the source
-    returns is kept as-is — a 0 is data (vnstock does write 0.0 rows, e.g. FPT
-    roe_trailling), and a zero alone does not prove the source has nothing.
+    parse, or are NaN/±Infinity, come back as None; a finite number is kept as-is,
+    0 included (a single 0, or a 0 next to other values, is data).
+
+    One exception: a row that is exactly 0 in EVERY period (at least 2) is a vendor
+    placeholder, not a ratio. Live 24/10/2026: roe_trailling, roa_trailling and both
+    accrual ratios are 0.0 in all four years for FPT, NVL and HVN, next to real ROEs
+    of 28.3 / 4.48 / -352.65. Such a row keeps its periods with None values and
+    carries ``placeholder: True`` so a reader sees why it is empty.
     """
     try:
         if "item_id" not in [str(c) for c in frame.columns]:
@@ -667,8 +661,13 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
                 except (TypeError, ValueError):
                     num = float("nan")
                 values[label] = num if math.isfinite(num) else None
-            rows.append({"item_id": key, "item": str(row.get("item") or "").strip(),
-                         "values": values})
+            entry: dict[str, Any] = {
+                "item_id": key, "item": str(row.get("item") or "").strip(), "values": values,
+            }
+            if len(values) >= 2 and all(v == 0.0 for v in values.values()):
+                entry["values"] = dict.fromkeys(values)
+                entry["placeholder"] = True
+            rows.append(entry)
         return periods, rows
     except Exception:
         return None
