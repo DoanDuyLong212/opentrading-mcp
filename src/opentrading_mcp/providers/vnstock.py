@@ -511,9 +511,11 @@ def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
                 continue
             if len(series):
                 try:
-                    return float(series.iloc[-1])
+                    num = float(series.iloc[-1])
                 except (TypeError, ValueError):
                     continue
+                if math.isfinite(num):  # ±inf passes dropna() and every range bound
+                    return num
         try:
             norm_idx = {_norm_label(i): i for i in frame.index}
         except Exception:
@@ -528,9 +530,11 @@ def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
                 continue
             if len(row):
                 try:
-                    return float(row.iloc[-1])
+                    num = float(row.iloc[-1])
                 except (TypeError, ValueError):
                     continue
+                if math.isfinite(num):
+                    return num
     except Exception:
         return None
     return None
@@ -749,6 +753,8 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
             try:
                 num = float(val)
             except (TypeError, ValueError):
+                continue
+            if not math.isfinite(num):  # NaN passes every range bound in apply_filters
                 continue
             norm = _norm_label(raw_key)
             if pe is None and norm in PE_ALIASES:
