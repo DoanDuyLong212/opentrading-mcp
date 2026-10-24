@@ -112,27 +112,18 @@ def test_periods_n_counts_after_dropping_other_report_types(monkeypatch):
     assert out["periods"] == ["Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026"]
 
 
-async def test_stock_forensic_forwards_detail_warnings(monkeypatch):
-    from opentrading_mcp.providers.errors import ProviderBadData
+async def test_stock_forensic_forwards_annual_scope_diagnostics(monkeypatch):
     from opentrading_mcp.server import create_server, register_preset
     from opentrading_mcp.tools import compute_financial as comp_fin
 
-    detail = {
-        "KQKD": {"periods": ["Q1/2026", "Q2/2026"], "warnings": ["dropped 1 period(s): Q3/2026"],
-                 "rows": [{"norm_id": 2216, "name": "Doanh thu thuần", "values": [10.0, 11.0]}]},
-        "CDKT": {"periods": ["Q1/2026", "Q2/2026"],
-                 "rows": [{"norm_id": 2996, "name": "TỔNG CỘNG TÀI SẢN",
-                           "values": [100.0, 110.0]}]},
-    }
-
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        if args[1] == "LCTT":
-            raise ProviderBadData("no norms")
-        return detail[args[1]]
+    async def fake_call(tool, fn, *args, **kwargs):
+        return {"symbol": "BVH", "records": [], "diagnostics": [{"scope": "unknown"}],
+                "rejected": [{"reason": "unknown report scope"}]}
 
     monkeypatch.setattr(comp_fin, "_call", fake_call)
     server = create_server("scan")
     register_preset(server, "scan")
-    env = await server._tool_manager.get_tool("stock_forensic").fn(symbol="BVH")
-    assert "KQKD: dropped 1 period(s): Q3/2026" in env["warnings"]
-
+    env = await server._tool_manager.get_tool("stock_forensic").fn(symbol="BVH", detail=True)
+    assert "unknown report scope" in env["warnings"]
+    assert env["availability"] == "partial"
+    assert env["data"]["diagnostics"] == [{"scope": "unknown"}]

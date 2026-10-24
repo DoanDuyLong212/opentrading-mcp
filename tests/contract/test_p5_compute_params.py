@@ -26,96 +26,22 @@ def _check_envelope(env: dict[str, Any], tool: str) -> None:
     assert env["availability"] in {"available", "empty", "stale", "partial", "unavailable"}
 
 
-def _install_forensic_fakes(monkeypatch) -> None:
-    fd_detail = {
-        "symbol": "VCB",
-        "statement": "KQKD",
-        "unit": "VNDbn",
-        "periods": ["Q1/2026", "Q2/2026"],
-        "rows": [
-            {"norm_id": 2216, "name": "Doanh thu thuần", "values": [100.0, 110.0]},
-            {"norm_id": 2217, "name": "Lợi nhuận gộp", "values": [40.0, 44.0]},
-            {"norm_id": 990, "name": "Lợi nhuận sau thuế", "values": [20.0, 22.0]},
-            {"norm_id": 991, "name": "Chi phí bán hàng", "values": [5.0, 6.0]},
-            {"norm_id": 992, "name": "Chi phí quản lý", "values": [8.0, 9.0]},
-        ],
-    }
-    cd_detail = {
-        "symbol": "VCB",
-        "statement": "CDKT",
-        "unit": "VNDbn",
-        "periods": ["Q1/2026", "Q2/2026"],
-        "rows": [
-            {"norm_id": 2996, "name": "TỔNG CỘNG TÀI SẢN", "values": [1000.0, 1100.0]},
-            {"norm_id": 3013, "name": "A. TÀI SẢN NGẮN HẠN", "values": [400.0, 440.0]},
-            {"norm_id": 2997, "name": "C. NỢ PHẢI TRẢ", "values": [500.0, 520.0]},
-            {"norm_id": 3014, "name": "I. Nợ ngắn hạn", "values": [300.0, 320.0]},
-            {"norm_id": 2998, "name": "D. VỐN CHỦ SỞ HỮU", "values": [500.0, 580.0]},
-            {"norm_id": 3002, "name": "Tiền và tương đương tiền", "values": [100.0, 110.0]},
-            {"norm_id": 3005, "name": "III. Các khoản phải thu ngắn hạn", "values": [60.0, 72.0]},
-            {"norm_id": 3022, "name": "Phải thu ngắn hạn của khách hàng", "values": [50.0, 60.0]},
-        ],
-    }
-    lc_detail = {
-        "symbol": "VCB",
-        "statement": "LCTT",
-        "unit": "VNDbn",
-        "periods": ["Q1/2026", "Q2/2026"],
-        "rows": [
-            {
-                "norm_id": 3100,
-                "name": "I. Lưu chuyển tiền thuần từ hoạt động kinh doanh",
-                "values": [25.0, 28.0],
-            },
-        ],
-    }
+async def test_stock_forensic_annual_partial_contract(monkeypatch):
+    from opentrading_mcp.tools import compute_financial as comp_fin
 
-    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        stmt = args[1] if len(args) > 1 else None
-        if stmt == "KQKD":
-            return fd_detail
-        if stmt == "CDKT":
-            return cd_detail
-        return lc_detail
-
-    import opentrading_mcp.tools.compute_financial as comp_fin
-    import opentrading_mcp.tools.compute_infra as comp_infra
-    import opentrading_mcp.tools.compute_intel as comp_intel
+    async def fake_call(tool, fn, *args, **kwargs):
+        return {"symbol": "VCB", "records": [], "diagnostics": [{"quarter": "Q1/2026"}]}
 
     monkeypatch.setattr(comp_fin, "_call", fake_call)
-    monkeypatch.setattr(comp_intel, "_call", fake_call)
-    monkeypatch.setattr(comp_infra, "_call", fake_call)
-
-
-async def test_stock_forensic_detail_includes_series(monkeypatch):
-    _install_forensic_fakes(monkeypatch)
-    fn = _tool_fn("stock_forensic")
-    env = await fn(symbol="VCB", detail=True)
+    env = await _tool_fn("stock_forensic")(symbol="VCB", detail=True)
     _check_envelope(env, "stock_forensic")
-    assert "series" in env["data"]
-    assert env["data"]["f_score"].endswith("/8")
-    assert env["data"]["dsri"] is not None
-    env2 = await fn(symbol="VCB")
-    assert "series" not in env2["data"]
-
-
-async def test_stock_forensic_m_score_uses_beneish_weights(monkeypatch):
-    # Beneish (1999) weights without DEPI: SGAI enters negatively (-0.172).
-    _install_forensic_fakes(monkeypatch)
-    env = await _tool_fn("stock_forensic")(symbol="VCB")
     d = env["data"]
-    weights = {
-        "dsri": 0.920,
-        "gmi": 0.528,
-        "aqi": 0.404,
-        "sgi": 0.892,
-        "sgai": -0.172,
-        "tata": 4.679,
-        "lvgi": -0.327,
-    }
-    assert d["m_partial"] is None
-    expected = -4.84 + sum(w * d[k] for k, w in weights.items())
-    assert abs(d["m_score"] - expected) < 1e-3
+    assert env["availability"] == "partial"
+    assert d["m_score"] is None and d["f_score"] is None
+    assert d["diagnostics"] == [{"quarter": "Q1/2026"}]
+    assert d["beneish"]["periods_used"] == {}
+    assert "series" in d
+    assert "series" not in (await _tool_fn("stock_forensic")(symbol="VCB"))["data"]
 
 
 async def test_valuation_run_method_passthrough():

@@ -61,7 +61,9 @@ def test_long_ratio_returns_none_for_other_layouts():
 def test_equity_fundamentals_reads_long_format(monkeypatch):
     _fake_fundamental(monkeypatch, pd.DataFrame(RATIOS["year"]))
     out = vn.equity_fundamentals("fpt")
-    assert out == {
+    assert {key: out[key] for key in (
+        "symbol", "pe", "roe", "market_cap", "eps", "bvps", "period_label"
+    )} == {
         "symbol": "FPT",
         "pe": 15.91,
         "roe": pytest.approx(0.283),
@@ -70,6 +72,10 @@ def test_equity_fundamentals_reads_long_format(monkeypatch):
         "bvps": 25679.55,
         "period_label": "2025",
     }
+    assert out["frequency"] == "annual"
+    assert out["eps_basis"] == "trailing_four_quarters"
+    assert out["discarded_period_labels"] == []
+    assert out["market_cap_status"] == "missing_from_ratio_table"
 
 
 def test_equity_fundamentals_small_roe_is_still_percent(monkeypatch):
@@ -153,7 +159,11 @@ async def test_valuation_run_uses_trailing_eps_not_price_over_pe(monkeypatch):
         if fn is comp_fin.vn_p.equity_quote_batch:
             return [{"symbol": "FPT", "close_price": 57400}]
         if fn is comp_fin.vn_p.equity_fundamentals:
-            return {"pe": 15.91, "eps": 6021.21, "bvps": 25679.55, "period_label": "2025"}
+            return {
+                "pe": 15.91, "eps": 6021.21, "bvps": 25679.55,
+                "period_label": "2025", "frequency": "annual",
+                "eps_basis": "trailing_four_quarters",
+            }
         raise AssertionError(fn)
 
     monkeypatch.setattr(comp_fin, "_call", fake_call)
@@ -164,6 +174,13 @@ async def test_valuation_run_uses_trailing_eps_not_price_over_pe(monkeypatch):
     assert data["per"] == round(57400 / 6021.21, 2)  # 9.53, not 57400 / (57400 / 15.91)
     assert data["pb"] == round(57400 / 25679.55, 2)
     assert "2025" in data["eps_source"]
+    assert data["eps_period"] == "2025"
+    assert data["eps_frequency"] == "annual"
+    assert data["eps_basis"] == "trailing_four_quarters"
+    assert data["price_as_of"] is None
+    assert data["price_unit"] == "unverified"
+    assert data["price_adjustment_basis"] == "unverified"
+    assert data["per_basis"] == "quote_price_over_reported_eps"
     assert env["availability"] == "available"
 
 
