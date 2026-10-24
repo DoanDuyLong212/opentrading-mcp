@@ -628,7 +628,8 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         # v2 (issues #36/#37): output thêm report_type + warnings, LCTT đủ term
         # 1/12 — cache cũ thiếu các trường này nên phải bỏ.
-        fp = f"v2|{symbol}|{statement}|{periods_n}"
+        # v3: loại báo cáo theo UnitedName, report_type theo từng kỳ (sửa lại #36)
+        fp = f"v3|{symbol}|{statement}|{periods_n}"
         hit = await cache_lookup("financial_detail", fp)
         if hit is not None:
             return hit

@@ -66,6 +66,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         dùng signals_screener_columns để biết trường hợp lệ. max_pe/min_roe là phím tắt.
         PE/ROE chỉ được tra cho tối đa 30 mã đầu danh sách (screened trong kết quả); pe là
         P/E cuối kỳ báo cáo ghi ở fundamentals_period, không phải P/E theo giá hôm nay.
+        Bộ lọc pe chỉ có cận trên giữ pe > 0 (P/E âm là doanh nghiệp lỗ, không phải rẻ);
+        muốn giữ mã lỗ thì đặt cận dưới rõ ràng, ví dụ {"pe": [-5, 10]}.
         technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
         ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}); dict rỗng coi như None.
 
@@ -79,16 +81,22 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             warning nêu mã và lý do, envelope mang partial; giới hạn chủ ý chỉ tạo warning.
         """
         technical = technical or None  # {} means "no technical stage", not a rule set
-        # v3: evaluated counts only symbols carrying the filter's own metric;
-        # fundamentals zeros are kept as returned (PR #28).
-        fp = f"v3|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
+        # v4: P/E âm không qua cận trên của pe; khoảng [None, None] không còn là metric
+        # bắt buộc (v3: evaluated chỉ đếm mã có đủ metric của bộ lọc).
+        fp = f"v4|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
         hit = await cache_lookup("stock_screener", fp)
         if hit is not None:
             return hit
         from opentrading_mcp.providers import screener as sc_p
         from opentrading_mcp.providers import technicals as tech_p
 
-        eff: dict[str, Any] = dict(filters or {})
+        # [None, None] lọc không chặn gì (apply_filters bỏ qua), nên không được coi là
+        # metric bắt buộc: bỏ trước khi tính needs_valuation / required_metrics (#44 mục 1).
+        eff: dict[str, Any] = {
+            k: v
+            for k, v in (filters or {}).items()
+            if not (isinstance(v, (list, tuple)) and len(v) == 2 and v[0] is None and v[1] is None)
+        }
         if max_pe is not None and "pe" not in eff:
             eff["pe"] = [None, max_pe]
         if min_roe is not None and "roe" not in eff:

@@ -195,7 +195,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         mục số cổ phiếu không có); 8/9 khi BCTC trả phí mở LCTT.
         detail=true thêm chuỗi input thô.
         """
-        fp = f"v2|{symbol}|{detail}|{periods_n}"  # v2: single-line inputs, no CFO-as-0
+        # v3: chuyển tiếp cảnh báo loại báo cáo của financial_detail (sửa lại #36)
+        fp = f"v3|{symbol}|{detail}|{periods_n}"
         hit = await cache_lookup("stock_forensic", fp)
         if hit is not None:
             return hit
@@ -217,6 +218,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 lc = {}
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("stock_forensic", str(exc))
+        # financial_detail báo kỳ bị loại / nghi trộn loại báo cáo trong "warnings"; các
+        # chỉ số dưới đây dựng trên đúng chuỗi kỳ đó nên người đọc phải thấy cảnh báo.
+        detail_warnings = [
+            f"{name}: {w}"
+            for name, statement in (("KQKD", kq), ("CDKT", cd), ("LCTT", lc))
+            if isinstance(statement, dict)
+            for w in statement.get("warnings") or []
+        ]
         rev = _fd_line(kq, "revenue")
         gross = _fd_line(kq, "gross")
         ni = _fd_line(kq, "net_income")
@@ -374,7 +383,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("info", f"stock_forensic {sym} f={counted}")
         return await cache_store(
             "stock_forensic", fp, TTL_SECONDS["financeinfo"],
-            out, source="computed-local",
+            out, source="computed-local", warnings=detail_warnings or None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -391,7 +400,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
-        fp = f"v2|{symbol}|{btype}|{method}"  # v2: finite zeros kept in fundamentals
+        # v3: EPS/BVPS bằng 0 vẫn được hiển thị (v2: giữ số 0 hữu hạn của nguồn)
+        fp = f"v3|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -406,11 +416,12 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             price = float(quotes[0].get("close_price") or quotes[0].get("close") or 0) or None
         except (IndexError, TypeError, ValueError):
             price = None
-        eps = info.get("EPS") or info.get("eps")
-        bvps = info.get("BVPS") or info.get("bvps")
+        # Một số 0 nguồn trả là giá trị (#28), nên chỉ coi None là thiếu (#44 mục 5).
+        eps = info.get("EPS") if info.get("EPS") is not None else info.get("eps")
+        bvps = info.get("BVPS") if info.get("BVPS") is not None else info.get("bvps")
         out: dict[str, Any] = {"symbol": symbol.upper(), "price": price, "method": "per_pb"}
         warnings: list[str] = []
-        if price and (not eps or not bvps):
+        if price and (eps is None or bvps is None):
             # The trading overview carries no EPS/BVPS: take the trailing EPS and BVPS
             # vnstock reports for its newest period. Not price / PE: that PE is priced at
             # the period end, so it would give a wrong EPS for today's price.
@@ -421,20 +432,21 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings.append(f"vnstock fundamentals unavailable: {exc}")
             if isinstance(fund, dict):
                 label = fund.get("period_label")
-                if not eps and fund.get("eps"):
+                if eps is None and fund.get("eps") is not None:
                     eps = fund["eps"]
                     out["eps_source"] = f"vnstock trailing EPS, period {label}"
-                if not bvps and fund.get("bvps"):
+                if bvps is None and fund.get("bvps") is not None:
                     bvps = fund["bvps"]
                     out["bvps_source"] = f"vnstock BVPS, period {label}"
-        if eps:
+        if eps is not None:
             out["eps"] = eps
-        if bvps:
+        if bvps is not None:
             out["bvps"] = bvps
         try:
-            if price and eps and float(eps) > 0:
+            # PER/PB chỉ có nghĩa khi EPS/BVPS dương: 0 hay âm vẫn được hiển thị ở trên
+            if price and eps is not None and float(eps) > 0:
                 out["per"] = round(price / float(eps), 2)
-            if price and bvps and float(bvps) > 0:
+            if price and bvps is not None and float(bvps) > 0:
                 out["pb"] = round(price / float(bvps), 2)
             if method != "auto":
                 out["method"] = method
@@ -510,7 +522,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ. peers: thêm chỉ số kỳ mới
         nhất của từng mã.
         """
-        fp = f"v3|{symbol}|{set}|{period}|{peers}"  # v3: zeros are kept as returned
+        # v4: hàng toàn 0 ở mọi kỳ là giá trị giữ chỗ (placeholder), không phải số liệu
+        fp = f"v4|{symbol}|{set}|{period}|{peers}"
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -576,7 +589,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         EPS/BVPS, bội số cuối kỳ cho P/E, P/B.
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
-        fp = f"v3|{symbol}|{peers}|{metrics}"  # v3: zeros are kept as returned
+        # v4: hàng toàn 0 ở mọi kỳ là giá trị giữ chỗ (placeholder), không phải số liệu
+        fp = f"v4|{symbol}|{peers}|{metrics}"
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit
