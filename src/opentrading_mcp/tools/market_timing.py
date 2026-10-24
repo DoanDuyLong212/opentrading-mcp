@@ -65,9 +65,9 @@ def _bar_day(row: Any) -> str:
 
 def _series(
     rows: list[dict[str, Any]],
-) -> tuple[list[float], list[float], list[float], list[str]] | None:
-    """Extract parallel close/volume/low/date series; None when unusable."""
-    closes, volumes, lows, dates = [], [], [], []
+) -> tuple[list[float], list[float], list[float], list[float], list[str]] | None:
+    """Extract parallel close/volume/low/high/date series; None when unusable."""
+    closes, volumes, lows, highs, dates = [], [], [], [], []
     for r in rows:
         if not isinstance(r, dict):
             return None
@@ -94,12 +94,13 @@ def _series(
         closes.append(c)
         volumes.append(v)
         lows.append(lo)
+        highs.append(hi)
         # ISO date ("2026-10-22"), not the upstream "2026-10-22 00:00:00"; every
         # reader (distribution days, FTD state, the FTD cut) uses this same list.
         dates.append(_bar_day(r))
     if len(closes) < 6:
         return None
-    return closes, volumes, lows, dates
+    return closes, volumes, lows, highs, dates
 
 
 def _distribution_days(
@@ -136,13 +137,30 @@ def _follow_through(
     lows: list[float],
     dates: list[str],
     lookback: int = FTD_LOOKBACK,
+    highs: list[float | None] | None = None,
+    undercut_reverse_day1: bool = False,
 ) -> dict[str, Any]:
     """State machine for the latest rally attempt: none/rally_attempt/confirmed/failed/stale.
 
     A failed attempt stays the answer only until the next Day 1: once a new attempt
     starts, it is reported, and the failed one moves to `last_failed`.
+
+    undercut_reverse_day1 (strict-IBD reading, default off): a session that undercuts
+    the attempt low and closes in the upper half of its range becomes the new Day 1
+    itself; that session is never also the FTD (day 4 still applies). Needs highs;
+    without them the shipped close-up policy runs.
     """
     n = len(closes)
+
+    def strong_close(i: int) -> bool:
+        return (
+            undercut_reverse_day1
+            and highs is not None
+            and i < len(highs)
+            and highs[i] is not None
+            and closes[i] >= (highs[i] + lows[i]) / 2
+        )
+
     none: dict[str, Any] = {
         "state": "none",
         "day1_date": None,
@@ -188,6 +206,10 @@ def _follow_through(
             }
             day1, ftd = None, None
             rolling_low = lows[j]
+            if strong_close(j):
+                # strict-IBD: the undercut-and-reverse session is the new Day 1
+                day1, day1_low = j, lows[j]
+                outcome = dict(none)
             j += 1
             continue
         if day1 is None:
@@ -195,6 +217,10 @@ def _follow_through(
             # do not also start a new attempt on its recovering close.
             if lows[j] < rolling_low:
                 rolling_low = lows[j]
+                if strong_close(j):
+                    day1, day1_low, ftd = j, lows[j], None
+                    if outcome["state"] == "failed":
+                        outcome = dict(none)
             elif closes[j] > closes[j - 1]:
                 day1, day1_low, ftd = j, rolling_low, None
                 if outcome["state"] == "failed":
@@ -265,7 +291,10 @@ def _na(tool: str, reason: str) -> dict[str, Any]:
 def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def distribution_count(
-        symbol: str = "VNINDEX", days: int = 40, ctx: AnyContext | None = None
+        symbol: str = "VNINDEX",
+        days: int = 40,
+        undercut_reverse_day1: bool = False,
+        ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Đếm phiên phân phối O'Neil + trạng thái follow-through. Dùng khi đánh giá
         rủi ro chung của thị trường theo O'Neil.
@@ -280,6 +309,10 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         Mức theo số phiên: 0-2 binh_thuong; 3 quan_sat; 4 canh_bao; 5 canh_bao_cao;
         trên 5 nguy_hiem. Đây là đọc trạng thái thị trường, không phải lệnh mua/bán.
         Có FTD xác nhận thì đếm lại phiên phân phối từ đầu (rally mới xóa đếm cũ).
+        undercut_reverse_day1 (mặc định False, đọc strict-IBD): phiên thủng đáy attempt
+        mà đóng ở nửa trên biên độ trở thành Day 1 của attempt mới ngay trong phiên đó
+        (phiên đó không bao giờ đồng thời là FTD); False giữ chính sách Day 1 = phiên
+        tăng-close kế tiếp.
         Ví dụ: {"symbol": "VNINDEX", "days": 40}.
         """
         from datetime import datetime
@@ -289,7 +322,9 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         want = max(30, min(int(days or 40), 90))
         # Date in fp (VN calendar, not the server's): a new session must recompute.
         today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
-        fp = f"v4|{sym}|{want}|{today}"  # v4: finite OHLC, first FTD stays the reset anchor
+        fp = (
+            f"v5|{sym}|{want}|{today}|{bool(undercut_reverse_day1)}"
+        )  # v5: optional undercut-reverse Day 1 policy
         hit = await cache_lookup("distribution_count", fp)
         if hit is not None:
             return hit
@@ -311,9 +346,11 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         parsed = _series(rows)
         if parsed is None:
             return _na("distribution_count", "nến thiếu close/volume/low")
-        closes, volumes, lows, dates = parsed
+        closes, volumes, lows, highs, dates = parsed
 
-        ftd = _follow_through(closes, volumes, lows, dates)
+        ftd = _follow_through(
+            closes, volumes, lows, dates, highs=highs, undercut_reverse_day1=undercut_reverse_day1
+        )
         reset = False
         if ftd["state"] == "confirmed" and ftd["ftd_date"]:
             try:
