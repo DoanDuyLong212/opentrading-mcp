@@ -64,6 +64,8 @@ BCTC_FIELDS = {
     2224: "admin",
     2227: "selling",
     2234: "cfo",
+    2242: "depreciation",
+    3022: "receivables",
     3035: "net_tangible_ppe",
     3036: "net_leased_ppe",
     3078: "long_term_debt",

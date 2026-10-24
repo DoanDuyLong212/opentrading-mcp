@@ -262,15 +262,18 @@ async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
     env = await server._tool_manager.get_tool("stock_forensic").fn(symbol, detail=True)
     d = env["data"]
     assert env["availability"] == "partial"
-    assert d["m_score"] is None and d["f_score"] is None
+    assert d["f_score"] is None  # equity issuance stays unsourced on live data
     assert d["diagnostics"]
     if symbol == "FPT":
+        # 25/10: 3022 trade receivables + 2242 depreciation expense complete the
+        # eight Beneish inputs, so the strict M-score is now computable.
+        assert d["m_score"] == -2.2808
         assert d["data_time"] == "2025-12-31"
-        assert d["beneish"]["status"] == d["piotroski"]["status"] == "partial"
+        assert d["beneish"]["status"] == "complete"
+        assert d["piotroski"]["status"] == "partial"
         assert d["gmi"] is not None and d["sgi"] is not None
         assert d["f_evaluated"] == 7
-        assert "current.depreciation" in d["m_partial"]
-        assert "current.receivables" in d["m_partial"]
+        assert not d["m_partial"]  # all eight inputs are sourced and anchored
         assert "current.cfo" not in d["f_missing"]
         assert d["piotroski"]["input_sources"]["current.cfo"]["source"] == source.BCTC_SOURCE
         assert d["piotroski"]["input_sources"]["current.cfo"]["unit"].startswith("VND")
