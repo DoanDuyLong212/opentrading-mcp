@@ -151,6 +151,27 @@ def _fd_line(detail: dict[str, Any], line: str) -> list[float | None]:
     return _fd_row(detail, norm_ids, names)
 
 
+# vnstock ratio items computed from the price on the period's closing date. A model
+# asked for "P/E hiện tại" read FY2025 p_e 15.91 as today's multiple (live ~9.5), so
+# these rows are labelled as period-end values in every response that carries them.
+_PERIOD_END_PRICE_ITEMS = frozenset(
+    {"p_e", "p_b", "p_s", "ev_ebit", "ev_ebitda", "dividend_yield"}
+)
+_PERIOD_END_SUFFIX = " — tại ngày kết thúc kỳ, không phải giá trị hiện tại"
+_PERIOD_END_NOTE = (
+    "P/E, P/B, P/S, EV/EBIT, EV/EBITDA, tỷ suất cổ tức ở đây tính theo giá ngày kết thúc"
+    " từng kỳ báo cáo, KHÔNG phải bội số hiện tại. Bội số theo giá hôm nay: stock_overview"
+    " (PE, PB) hoặc valuation_run (per, pb)."
+)
+
+
+def _label_period_end(row: dict[str, Any]) -> dict[str, Any]:
+    """Mark a price-based ratio row as a period-end value; other rows pass unchanged."""
+    if row.get("item_id", "").lower() not in _PERIOD_END_PRICE_ITEMS:
+        return row
+    return {**row, "item": f"{row['item']}{_PERIOD_END_SUFFIX}", "as_of": "period_end"}
+
+
 # Beneish (1999) 8-variable model without DEPI (depreciation is not exposed upstream).
 # SGAI enters with a negative weight; -1.78 is the 8-variable cut-off, so with DEPI
 # dropped the threshold is approximate.
@@ -391,7 +412,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Ensemble PER/PB. Dùng khi cần vùng giá trị hợp lý của 1 mã.
 
         Dùng khi: "FPT đáng giá bao nhiêu", vùng mua an toàn.
-        Không dùng khi: chỉ cần bội số hiện tại (dùng vs_overview_trading — nhẹ hơn); cần đọc BCTC
+        Không dùng khi: chỉ cần bội số hiện tại (dùng stock_overview — nhẹ hơn); cần đọc BCTC
             chi tiết (dùng financial_detail). Không có tool nào tên valuation_band — dùng output
             vùng per_pb/pb của tool này. DCF/EV CHƯA có.
 
@@ -512,18 +533,19 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Bảng chỉ số tài chính theo kỳ của vnstock. Dùng khi soi chỉ số tài chính của 1 mã qua
             các năm/quý (kèm peers tuỳ chọn).
 
-        Dùng khi: "ROE các năm của VCB", so chỉ số 1 mã với vài peers.
-        Không dùng khi: so dạng bảng head-to-head nhiều mã (dùng peer_compare — gọn hơn); cần bội số
-            snapshot (dùng vs_overview_trading); cần vùng giá trị (dùng valuation_run).
+        Dùng khi: "ROE các năm của VCB", so chỉ số 1 mã với vài peers, P/E các năm trước.
+        Không dùng khi: cần P/E, P/B HIỆN TẠI (bảng này là bội số tại ngày kết thúc từng kỳ —
+            dùng stock_overview hoặc valuation_run); so dạng bảng head-to-head nhiều mã (dùng
+            peer_compare — gọn hơn); cần vùng giá trị (dùng valuation_run).
 
         period: 'year' (mặc định) hoặc 'quarter'. set: chỉ giữ chỉ số có item_id hoặc tên chứa
         chuỗi này ('all' giữ hết; ví dụ 'roe', 'p_e', 'margin'). Trả periods (mới→cũ) và
         ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng % (roe 28.3 =
-        28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ. peers: thêm chỉ số kỳ mới
-        nhất của từng mã.
+        28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ (dòng có as_of
+        "period_end", kèm note). peers: thêm chỉ số kỳ mới nhất của từng mã.
         """
         # v4: hàng toàn 0 ở mọi kỳ là giá trị giữ chỗ (placeholder), không phải số liệu
-        fp = f"v4|{symbol}|{set}|{period}|{peers}"
+        fp = f"v5|{symbol}|{set}|{period}|{peers}"  # v5: period-end multiples labelled
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -538,12 +560,12 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             table = await _call("r", vn_p.equity_ratios, symbol, period, secs=45.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_ratios", str(exc))
-        out: dict[str, Any] = {
-            "symbol": symbol.upper(),
-            "period": period,
-            "periods": table["periods"],
-            "ratios": [r for r in table["ratios"] if _keep(r)],
-        }
+        kept = [r for r in table["ratios"] if _keep(r)]
+        out: dict[str, Any] = {"symbol": symbol.upper(), "period": period}
+        if any(r["item_id"].lower() in _PERIOD_END_PRICE_ITEMS for r in kept):
+            out["note"] = _PERIOD_END_NOTE  # first in the payload, before the numbers
+        out["periods"] = table["periods"]
+        out["ratios"] = [_label_period_end(r) for r in kept]
         warnings: list[str] = []
         if peers:
             out["peers"] = []
@@ -555,17 +577,18 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                     warnings.append(f"{peer.upper()}: {exc}")
                     continue
                 newest = peer_table["periods"][0]
-                out["peers"].append(
-                    {
-                        "symbol": peer.upper(),
-                        "period_label": newest,
-                        "values": {
-                            r["item_id"]: r["values"].get(newest)
-                            for r in peer_table["ratios"]
-                            if _keep(r)
-                        },
-                    }
-                )
+                peer_row: dict[str, Any] = {
+                    "symbol": peer.upper(),
+                    "period_label": newest,
+                    "values": {
+                        r["item_id"]: r["values"].get(newest)
+                        for r in peer_table["ratios"]
+                        if _keep(r)
+                    },
+                }
+                if any(k.lower() in _PERIOD_END_PRICE_ITEMS for k in peer_row["values"]):
+                    peer_row["valuation_as_of"] = f"cuối kỳ {newest} (không phải hiện tại)"
+                out["peers"].append(peer_row)
         return await cache_store(
             "financial_ratios", fp, TTL_SECONDS["overview"],
             out, source="vnstock", warnings=warnings or None,
@@ -580,17 +603,18 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             ngành.
 
         Dùng khi: "so VCB với TCB với MBB", bảng so sánh trực diện.
-        Không dùng khi: sàng cả thị trường theo điều kiện (dùng stock_screener); cần chuỗi thời gian
-            của 1 mã (dùng financial_ratios period).
+        Không dùng khi: cần P/E, P/B HIỆN TẠI (pe/pb ở đây là bội số tại ngày kết thúc năm báo
+            cáo — dùng stock_overview cho từng mã); sàng cả thị trường theo điều kiện (dùng
+            stock_screener); cần chuỗi thời gian của 1 mã (dùng financial_ratios period).
 
         peers: tối đa 5 mã khác. metrics: chỉ giữ các item_id nêu tên (pe, pb, roe, roa, eps,
         bvps là tên tắt của p_e, p_b, roe, roa, trailing_eps, book_value_per_share_bvps).
         Mỗi dòng là chỉ số năm báo cáo mới nhất của mã (period_label): % cho tỷ suất, đồng cho
-        EPS/BVPS, bội số cuối kỳ cho P/E, P/B.
+        EPS/BVPS, bội số cuối kỳ cho P/E, P/B (dòng có valuation_as_of, kèm note).
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
         # v4: hàng toàn 0 ở mọi kỳ là giá trị giữ chỗ (placeholder), không phải số liệu
-        fp = f"v4|{symbol}|{peers}|{metrics}"
+        fp = f"v5|{symbol}|{peers}|{metrics}"  # v5: period-end multiples labelled
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit
@@ -615,13 +639,18 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             for ratio in table["ratios"]:
                 if wanted is None or ratio["item_id"].lower() in wanted:
                     row[ratio["item_id"]] = ratio["values"].get(newest)
+            if any(key.lower() in _PERIOD_END_PRICE_ITEMS for key in row):
+                row["valuation_as_of"] = f"cuối kỳ {newest} (không phải hiện tại)"
             rows.append(row)
         if wanted is not None and seen_ids:
             for metric in sorted(wanted - seen_ids):
                 warnings.append(f"metric {metric!r} is not in the vnstock ratio table")
+        result: dict[str, Any] = {"rows": rows}
+        if any("valuation_as_of" in r for r in rows):
+            result = {"note": _PERIOD_END_NOTE, "rows": rows}
         return await cache_store(
             "peer_compare", fp, TTL_SECONDS["overview"],
-            {"rows": rows}, source="vnstock", warnings=warnings or None,
+            result, source="vnstock", warnings=warnings or None,
             availability="partial" if warnings else None,
         )
 

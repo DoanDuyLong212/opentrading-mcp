@@ -113,7 +113,12 @@ async def test_financial_ratios_peers_carry_the_newest_period(monkeypatch):
     _install(monkeypatch, [])
     env = await _tool("financial_ratios")(symbol="FPT", set="p_e", peers=["HPG"])
     peer = env["data"]["peers"][0]
-    assert peer == {"symbol": "HPG", "period_label": "2025", "values": {"p_e": 15.91}}
+    assert peer == {
+        "symbol": "HPG",
+        "period_label": "2025",
+        "values": {"p_e": 15.91},
+        "valuation_as_of": "cuối kỳ 2025 (không phải hiện tại)",
+    }
 
 
 async def test_peer_compare_metric_aliases(monkeypatch):
@@ -126,6 +131,7 @@ async def test_peer_compare_metric_aliases(monkeypatch):
         "p_e": 15.91,
         "trailing_eps": 6021.21,
         "roe": 28.3,
+        "valuation_as_of": "cuối kỳ 2025 (không phải hiện tại)",
     }
 
 
