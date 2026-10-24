@@ -400,7 +400,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
-        fp = f"v2|{symbol}|{btype}|{method}"  # v2: finite zeros kept in fundamentals
+        # v3: EPS/BVPS bằng 0 vẫn được hiển thị (v2: giữ số 0 hữu hạn của nguồn)
+        fp = f"v3|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -415,11 +416,12 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             price = float(quotes[0].get("close_price") or quotes[0].get("close") or 0) or None
         except (IndexError, TypeError, ValueError):
             price = None
-        eps = info.get("EPS") or info.get("eps")
-        bvps = info.get("BVPS") or info.get("bvps")
+        # Một số 0 nguồn trả là giá trị (#28), nên chỉ coi None là thiếu (#44 mục 5).
+        eps = info.get("EPS") if info.get("EPS") is not None else info.get("eps")
+        bvps = info.get("BVPS") if info.get("BVPS") is not None else info.get("bvps")
         out: dict[str, Any] = {"symbol": symbol.upper(), "price": price, "method": "per_pb"}
         warnings: list[str] = []
-        if price and (not eps or not bvps):
+        if price and (eps is None or bvps is None):
             # The trading overview carries no EPS/BVPS: take the trailing EPS and BVPS
             # vnstock reports for its newest period. Not price / PE: that PE is priced at
             # the period end, so it would give a wrong EPS for today's price.
@@ -430,20 +432,21 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings.append(f"vnstock fundamentals unavailable: {exc}")
             if isinstance(fund, dict):
                 label = fund.get("period_label")
-                if not eps and fund.get("eps"):
+                if eps is None and fund.get("eps") is not None:
                     eps = fund["eps"]
                     out["eps_source"] = f"vnstock trailing EPS, period {label}"
-                if not bvps and fund.get("bvps"):
+                if bvps is None and fund.get("bvps") is not None:
                     bvps = fund["bvps"]
                     out["bvps_source"] = f"vnstock BVPS, period {label}"
-        if eps:
+        if eps is not None:
             out["eps"] = eps
-        if bvps:
+        if bvps is not None:
             out["bvps"] = bvps
         try:
-            if price and eps and float(eps) > 0:
+            # PER/PB chỉ có nghĩa khi EPS/BVPS dương: 0 hay âm vẫn được hiển thị ở trên
+            if price and eps is not None and float(eps) > 0:
                 out["per"] = round(price / float(eps), 2)
-            if price and bvps and float(bvps) > 0:
+            if price and bvps is not None and float(bvps) > 0:
                 out["pb"] = round(price / float(bvps), 2)
             if method != "auto":
                 out["method"] = method
