@@ -11,6 +11,8 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.cache import TTL_SECONDS
+from opentrading_mcp.forensic_models import calculate_forensic
+from opentrading_mcp.providers import forensic as forensic_p
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import (
@@ -172,25 +174,12 @@ def _label_period_end(row: dict[str, Any]) -> dict[str, Any]:
     return {**row, "item": f"{row['item']}{_PERIOD_END_SUFFIX}", "as_of": "period_end"}
 
 
-# Beneish (1999) 8-variable model without DEPI (depreciation is not exposed upstream).
-# SGAI enters with a negative weight; -1.78 is the 8-variable cut-off, so with DEPI
-# dropped the threshold is approximate.
 # peer_compare metric spellings -> vnstock ratio item_id.
 _PEER_METRIC_ALIASES = {
     "pe": "p_e", "p/e": "p_e", "pb": "p_b", "p/b": "p_b", "ps": "p_s",
     "eps": "trailing_eps", "bvps": "book_value_per_share_bvps",
 }
 
-BENEISH_INTERCEPT = -4.84
-BENEISH_COEF = {
-    "dsri": 0.920,
-    "gmi": 0.528,
-    "aqi": 0.404,
-    "sgi": 0.892,
-    "sgai": -0.172,
-    "tata": 4.679,
-    "lvgi": -0.327,
-}
 
 
 def _ratio_quality(ratios: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -213,210 +202,50 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         periods_n: int = 4,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Điểm gian lận Beneish M-Score + chất lượng lợi nhuận Piotroski F-Score từ BCTC chi tiết
-            đầy đủ. Dùng khi kiểm tra chất lượng lợi nhuận trước khi định giá.
+        """Kiểm tra chất lượng lợi nhuận từ các báo cáo năm cùng kỳ và cùng pháp nhân.
 
-        Dùng khi: "lợi nhuận FPT có ảo không", chấm điểm trước BCTC.
-        Không dùng khi: chỉ cần đọc BCTC (dùng financial_detail); chỉ cần bội số nhanh (dùng
-            vn_fundamentals).
-
-        Nguồn: chi tiết KQKD/CDKT/LCTT (dòng thật theo quý: phải thu,
-        tiền, CFO). M-Score 7 chỉ số (thiếu DEPI — nguồn không có, nên
-        ngưỡng -1.78 chỉ là gần đúng); chỉ đủ công thức khi đủ input,
-        thiếu thì trả partial kèm danh sách thiếu.
-        F-Score: 6/9 mục trên gói Standard (CFO từ LCTT trống phía nguồn;
-        mục số cổ phiếu không có); 8/9 khi BCTC trả phí mở LCTT.
-        detail=true thêm chuỗi input thô.
+        Beneish 8 biến theo bản CFO 2013; Piotroski 9 tín hiệu, turnover dùng
+        assets đầu năm (§2.3.3). Chỉ có điểm chuẩn khi đủ input hợp lệ;
+        thiếu thì score=null cùng coverage, nguồn, kỳ và danh sách thiếu.
+        Ngành tài chính: Beneish không áp dụng, Piotroski chưa được hỗ trợ.
+        Đây là tín hiệu cần kiểm tra thêm, không phải kết luận gian lận.
+        detail=true giữ input và chẩn đoán nguồn; periods_n chỉ giới hạn hiển thị,
+        không cắt lịch sử cần cho phép tính annual.
         """
-        # v3: chuyển tiếp cảnh báo loại báo cáo của financial_detail (sửa lại #36)
-        fp = f"v3|{symbol}|{detail}|{periods_n}"
+        sym = symbol.strip().upper()
+        display_n = max(1, int(periods_n))
+        fp = f"v4|{sym}|{detail}|{display_n}"
         hit = await cache_lookup("stock_forensic", fp)
         if hit is not None:
             return hit
-        sym = symbol.strip().upper()
         try:
-            kq = await _call(
-                "fk", vs_p.financial_detail, sym, "KQKD", max(int(periods_n), 2), secs=60.0
-            )
-            cd = await _call(
-                "fc", vs_p.financial_detail, sym, "CDKT", max(int(periods_n), 2), secs=60.0
-            )
-            # LCTT detail is empty upstream on Standard pack (norms {} + values 0) —
-            # CFO items are only counted when BCTC paid unlocks LCTT later.
-            try:
-                lc = await _call(
-                    "fl", vs_p.financial_detail, sym, "LCTT", max(int(periods_n), 2), secs=60.0
-                )
-            except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
-                lc = {}
+            bundle = await _call("forensic-annual", forensic_p.annual_inputs, sym, secs=60.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("stock_forensic", str(exc))
-        # financial_detail báo kỳ bị loại / nghi trộn loại báo cáo trong "warnings"; các
-        # chỉ số dưới đây dựng trên đúng chuỗi kỳ đó nên người đọc phải thấy cảnh báo.
-        detail_warnings = [
-            f"{name}: {w}"
-            for name, statement in (("KQKD", kq), ("CDKT", cd), ("LCTT", lc))
-            if isinstance(statement, dict)
-            for w in statement.get("warnings") or []
-        ]
-        rev = _fd_line(kq, "revenue")
-        gross = _fd_line(kq, "gross")
-        ni = _fd_line(kq, "net_income")
-        recv = _fd_line(cd, "receivables")
-        assets = _fd_line(cd, "assets")
-        cash = _fd_line(cd, "cash")
-        curr_assets = _fd_line(cd, "current_assets")
-        curr_liab = _fd_line(cd, "current_liabilities")
-        debt = _fd_line(cd, "liabilities")
-        equity = _fd_line(cd, "equity")
-        cfo = _fd_line(lc, "cfo")
-        selling = _fd_line(kq, "selling")
-        admin = _fd_line(kq, "admin")
-        if len(rev) < 2 or not assets:
-            return make_envelope(
-                {"symbol": sym, "note": "insufficient detail fields", "missing": True},
-                source="vietstock",
-                availability="empty",
+        out = calculate_forensic(bundle)
+        warnings = list(bundle.get("limitations") or [])
+        warnings.extend(str(r.get("reason")) for r in bundle.get("rejected", []))
+        complete = all(out[model]["status"] == "complete" for model in ("beneish", "piotroski"))
+        if not complete:
+            warnings.append(
+                "Annual forensic models incomplete or inapplicable; "
+                "inspect model status and missing_inputs"
             )
-
-        def _g(seq: list[float], back: int) -> float | None:
-            """Value back positions from newest end; None when absent/empty."""
-            if not seq or len(seq) <= back:
-                return None
-            return seq[len(seq) - 1 - back]
-
-        def _safe_div(num: Any, den: Any) -> float | None:
-            if num is None or den is None or den == 0:
-                return None
-            return float(num) / float(den)
-
-        rev_t, rev_p = _g(rev, 0), _g(rev, 1)
-        recv_t, recv_p = _g(recv, 0), _g(recv, 1)
-        assets_t, assets_p = _g(assets, 0), _g(assets, 1)
-        dsri = _safe_div(_safe_div(recv_t, rev_t), _safe_div(recv_p, rev_p))
-        gross_t, gross_p = _g(gross, 0), _g(gross, 1)
-        ni_t, ni_p = _g(ni, 0), _g(ni, 1)
-        if gross_t is None and ni_t is not None:
-            gross_t = rev_t - ni_t if rev_t is not None else None
-        if gross_p is None and ni_p is not None:
-            gross_p = rev_p - ni_p if rev_p is not None else None
-        gmi = _safe_div(
-            _safe_div(gross_p, rev_p) or _safe_div((rev_p or 0) - (ni_p or 0), rev_p),
-            _safe_div(gross_t, rev_t) or _safe_div((rev_t or 0) - (ni_t or 0), rev_t),
-        )
-        cash_t, cash_p = _g(cash, 0) or 0.0, _g(cash, 1) or 0.0
-        ca_t, ca_p = _g(curr_assets, 0), _g(curr_assets, 1)
-        cl_t, cl_p = _g(curr_liab, 0), _g(curr_liab, 1)
-        aqi = None
-        # No current assets/liabilities line (bank template): AQI is not computable,
-        # not 1.0 from zeros.
-        if None not in (ca_t, ca_p, cl_t, cl_p) and assets_t and assets_p:
-            aqi_num_t = 1 - (_safe_div(ca_t - cl_t - cash_t, assets_t) or 0)
-            aqi_num_p = 1 - (_safe_div(ca_p - cl_p - cash_p, assets_p) or 0)
-            aqi = _safe_div(aqi_num_t, aqi_num_p)
-        sgi = _safe_div(rev_t, rev_p)
-        selling_t, selling_p = _g(selling, 0), _g(selling, 1)
-        admin_t, admin_p = _g(admin, 0), _g(admin, 1)
-        sgai = _safe_div(
-            _safe_div((selling_t or 0) + (admin_t or 0), rev_t),
-            _safe_div((selling_p or 0) + (admin_p or 0), rev_p),
-        )
-        debt_t, debt_p = _g(debt, 0), _g(debt, 1)
-        eq_t, eq_p = _g(equity, 0), _g(equity, 1)
-        lvgi = _safe_div(_safe_div(debt_t, eq_t), _safe_div(debt_p, eq_p))
-        cfo_t = _g(cfo, 0)
-        # TATA needs CFO: without the cash-flow line it stays missing (the M-Score is
-        # then partial), instead of NI/TA as if CFO were 0.
-        tata = (
-            _safe_div(ni_t - cfo_t, assets_t)
-            if ni_t is not None and cfo_t is not None and assets_t
-            else None
-        )
-        missing = [
-            k
-            for k, v in (
-                ("dsri", dsri),
-                ("gmi", gmi),
-                ("aqi", aqi),
-                ("sgai", sgai),
-                ("lvgi", lvgi),
-                ("tata", tata),
-            )
-            if v is None
-        ]
-        indexes = {
-            "dsri": dsri,
-            "gmi": gmi,
-            "aqi": aqi,
-            "sgi": sgi,
-            "sgai": sgai,
-            "tata": tata,
-            "lvgi": lvgi,
-        }
-        parts = [BENEISH_COEF[k] * v for k, v in indexes.items() if v is not None]
-        m_score = round(BENEISH_INTERCEPT + sum(parts), 4) if not missing else None
-        flags: list[str] = []
-        if dsri and dsri > 1.2:
-            flags.append("receivables growing faster than sales (DSRI>1.2)")
-        if sgi and sgi > 1.3:
-            flags.append("unusually fast sales growth (SGI>1.3)")
-        if m_score is not None and m_score > -1.78:
-            flags.append(f"M-Score {m_score} above -1.78 (manipulation evidence)")
-        # Piotroski: up to 6 items from KQKD/CDKT, +2 CFO items when LCTT exists. An item
-        # whose inputs are missing (no current-asset line on a bank) is left out of the
-        # score instead of counting as failed.
-        def _up(now: float | None, before: float | None) -> bool | None:
-            return None if now is None or before is None else now > before
-
-        items: list[tuple[str, bool | None]] = []
-        if ni_t is not None and assets_t:
-            roa_t, roa_p = _safe_div(ni_t, assets_t), _safe_div(ni_p, assets_p)
-            items.append(("ROA>0", roa_t > 0 if roa_t is not None else None))
-            items.append(("dROA>0", _up(roa_t, roa_p)))
-            lev_t, lev_p = _safe_div(debt_t, eq_t), _safe_div(debt_p, eq_p)
-            items.append(("leverage down", _up(lev_p, lev_t)))
-            cr_t, cr_p = _safe_div(ca_t, cl_t), _safe_div(ca_p, cl_p)
-            items.append(("current ratio up", _up(cr_t, cr_p)))
-            gm_t, gm_p = _safe_div(gross_t, rev_t), _safe_div(gross_p, rev_p)
-            items.append(("gross margin up", _up(gm_t, gm_p)))
-            to_t, to_p = _safe_div(rev_t, assets_t), _safe_div(rev_p, assets_p)
-            items.append(("turnover up", _up(to_t, to_p)))
-            if cfo_t is not None:
-                items.append(("CFO>0", cfo_t > 0))
-                items.append(("CFO>NI", cfo_t > ni_t))
-        f_missing = [name for name, ok in items if ok is None]
-        items = [(name, ok) for name, ok in items if ok is not None]
-        counted = sum(1 for _, ok in items if ok is True)
-        out: dict[str, Any] = {
-            "symbol": sym,
-            "dsri": round(dsri, 4) if dsri else None,
-            "gmi": round(gmi, 4) if gmi else None,
-            "aqi": round(aqi, 4) if aqi else None,
-            "sgi": round(sgi, 4) if sgi else None,
-            "sgai": round(sgai, 4) if sgai else None,
-            "lvgi": round(lvgi, 4) if lvgi else None,
-            "tata": round(tata, 4) if tata is not None else None,
-            "m_score": m_score,
-            "m_partial": missing or None,
-            "f_score": f"{counted}/{len(items)}",
-            "f_missing": f_missing or None,
-            "flags": flags,
-        }
         if detail:
+            records = (bundle.get("records") or [])[-display_n:]
             out["series"] = {
-                "revenue": rev,
-                "gross": gross,
-                "net_income": ni,
-                "receivables": recv,
-                "assets": assets,
-                "cash": cash,
-                "cfo": cfo,
+                key: [r.get("values", {}).get(key) for r in records]
+                for key in sorted({k for r in records for k in r.get("values", {})})
             }
+            out["annual_inputs"] = records
+            out["diagnostics"] = bundle.get("diagnostics", [])
+            out["rejected"] = bundle.get("rejected", [])
         if ctx is not None:
-            await ctx.log("info", f"stock_forensic {sym} f={counted}")
+            await ctx.log("info", f"stock_forensic {sym} annual f={out['f_evaluated']}/9 evaluated")
         return await cache_store(
-            "stock_forensic", fp, TTL_SECONDS["financeinfo"],
-            out, source="computed-local", warnings=detail_warnings or None,
+            "stock_forensic", fp, TTL_SECONDS["financeinfo"], out, source="computed-local",
+            warnings=warnings or None, availability="available" if complete else "partial",
+            data_time=out["data_time"],
         )
 
     @server.tool(annotations=READ_ONLY)

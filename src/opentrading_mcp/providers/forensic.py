@@ -119,7 +119,13 @@ def normalize_annual(raw: dict[str, Any], *, as_of: date | None = None) -> dict[
                 and not isinstance(term_hint, bool)
             ):
                 try:
-                    known_future = _month(header.get("PeriodEnd"), end=True) > through
+                    hint_start = _month(header.get("PeriodBegin"))
+                    hint_end = _month(header.get("PeriodEnd"), end=True)
+                    coherent_year = hint_end.year == year_hint
+                    twelve_months = (
+                        hint_end.year - hint_start.year
+                    ) * 12 + hint_end.month - hint_start.month == 11
+                    known_future = coherent_year and twelve_months and hint_end > through
                 except (ValueError, TypeError):
                     known_future = False
                 if not known_future:
@@ -239,14 +245,15 @@ def normalize_annual(raw: dict[str, Any], *, as_of: date | None = None) -> dict[
         "diagnostics": diagnostics,
         "limitations": [
             "revision not reported by verified financeinfo header schema",
-            "annual live payload coverage not yet verified",
+            "recorded annual FPT/VCB headers verified 2026-10-24; "
+            "missing model fields remain unavailable",
             "report publication date unavailable; not a point-in-time historical dataset",
         ],
     }
 
 
 def annual_inputs(symbol: str, *, as_of: date | None = None) -> dict[str, Any]:
-    """Fetch four annual source columns regardless of a tool's display periods_n."""
+    """Fetch annual source columns regardless of a tool's display periods_n."""
     return normalize_annual(vietstock.financeinfo(symbol.upper(), period="year"), as_of=as_of)
 
 

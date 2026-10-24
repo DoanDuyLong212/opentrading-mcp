@@ -253,7 +253,7 @@ Run 2 calls in parallel: `financial_detail` (statement=KQKD, periods_n=4) + `sto
 
 **Step 3: Validate before locking the verdict.**
 
-Any leg that comes back empty → partial verdict + state clearly which source is missing; never fabricate numbers to fill gaps. If M is partial for banks (SGAI null because the cash-flow statement is empty — VCB live), write "M inconclusive"; never assign M=0. If `financial_detail` periods exceed the package → empty rows + warning → degrade to `vs_financeinfo` exactly once, state the fallback clearly. `vn_company` is slow ~30s when throttled so schedule it last; if missing, record as missing.
+Any leg that comes back empty → partial verdict + state clearly which source is missing; never fabricate numbers to fill gaps. For each annual forensic model, inspect status and applicability: null/partial means insufficient evidence; Beneish is not applicable to financial firms and Piotroski is unsupported for them. Never turn missing, not_applicable or unsupported into M=0, a clean verdict or a fraud conclusion. If `financial_detail` periods exceed the package → empty rows + warning → degrade to `vs_financeinfo` exactly once, state the fallback clearly. `vn_company` is slow ~30s when throttled so schedule it last; if missing, record as missing.
 
 ## Template
 
@@ -261,26 +261,27 @@ ALWAYS use this exact verdict structure, each item with numbers + trend + proven
 
 1. Growth quality: Revenue/Profit 4 quarters + QoQ/YoY trend + margins (`provenance: financial_detail`).
 2. Key ratios (`provenance: financial_ratios` / `vn_fundamentals`).
-3. M-Score + F-score + red flags (`provenance: stock_forensic`).
+3. Annual M-Score + F-score, model status, coverage and review flags (`provenance: stock_forensic`); keep these separate from the quarterly growth trends in item 1.
 4. Vs plan: beat/miss % (`provenance: planned_targets`).
 5. Ownership structure + insider changes (`provenance: holders` / `insider_trading`).
 6. Dividend policy (`provenance: dividends_splits`).
 7. 1-sentence conclusion: CƠ BẢN TỐT/TRUNG BÌNH/YẾU + top 3 risks.
 
 **Explaining forensic numbers (mandatory when leg 3 exists):** don't just list numbers — explain what each variable means and why it leads to the conclusion:
-- M-Score per variable: DSRI (revenue quality — >1.03 suggests revenue window-dressing), GMI (gross margin deteriorating), AQI (asset quality), SGI (growth), SGAI (selling expenses), LVGI (leverage), TATA (accruals). M < −1.78 = few manipulation signs; M > −1.78 = suspicious.
-- F-score per point lost/kept (ROA, CF>ROA, dROA, leverage, margin, turnover) — why each point was lost (which period, which line).
-- The "clean/red" conclusion must cite every number as basis; never conclude bare.
+- Interpret scores only when that model is complete and applicable, using annual reports with matching company, fiscal periods and report scope. null/partial/not_applicable/unsupported means insufficient evidence for a standard score; show missing inputs and coverage instead of treating missing signals as failures.
+- M-Score has eight variables: DSRI (receivables relative to sales), GMI (gross margin), AQI (asset quality using net PPE), SGI (sales growth), DEPI (depreciation rate), SGAI (selling and administration expenses), LVGI (long-term debt plus current liabilities relative to assets), TATA (CFO-based accruals). Only a complete applicable score may be compared with −1.78; exceeding the cutoff warrants further review and does not establish fraud. A lower score does not prove clean accounts.
+- F-score has nine signals: positive ROA, positive CFO, rising ROA, CFO above ROA, falling leverage, rising current ratio, no equity issuance, rising gross margin and rising turnover. Explain each evaluated signal using its annual periods and source lines. Report the standard x/9 only for all nine valid inputs; otherwise score=null with passed/evaluated coverage.
+- Any forensic interpretation must cite its inputs, periods and model status; never label missing data as clean or fraudulent.
 
 ## Examples
 
 **Example 1:**
 Input: BCTC FPT có gì lạ
-Output (Wave 1 enough, 2 calls): M-Score/F-score + 4 quarters of Revenue/Profit + 7-item verdict, don't open Waves 3–4.
+Output (Wave 1 enough, 2 calls): annual M-Score/F-score with model status and missing inputs, plus a separate 4-quarter Revenue/Profit trend and 7-item verdict; don't open Waves 3–4.
 
 **Example 2 (live 02-10-2026, don't fabricate new numbers):**
 Input: cơ bản FPT
-Output: FPT detail 25 norms × 138 numbers · M **−2.06**, F 2/6 · KH DT 61,850/75,400/58,580 · VCB holders SBV 74.8% · VCB dividend 450đ · insider empty is correct data.
+Output: FPT detail 25 norms × 138 numbers · historical M −2.06/F 2/6 used an obsolete model and must not be interpreted as current standard scores; request annual stock_forensic status/coverage · KH DT 61,850/75,400/58,580 · VCB holders SBV 74.8% · VCB dividend 450đ · insider empty is correct data.
 ---
 
 ## 3 · danh-gia-tinh-hinh-chinh-tri-toan-cau
@@ -493,7 +494,7 @@ LOAD `dinh-gia-chuyen-sau` + run `scenario_simulate` (−5%) to get a suggested 
 
 ALWAYS use this exact verdict structure:
 
-1. Grade **A/B/C** (rubric: A = ≥5 green legs + clean M-Score + clear plan; B = 4–5 legs; C = <4 legs or red M-Score > −1.78).
+1. Grade **A/B/C** (rubric: A = ≥5 green legs + complete applicable annual M-Score below −1.78 + clear plan; B = 4–5 legs; C = <4 legs or complete applicable annual M-Score above −1.78). A cutoff is a review signal, not proof of clean accounts or fraud. For null/partial/not_applicable/unsupported forensic status, mark the forensic leg unknown and the grade provisional; do not call it green or red, and do not use a partial F-score as a standard /9 score.
 2. 1 evidence line/leg (6 lines, each with numbers + trend + provenance).
 3. Suggested size (from `scenario_simulate` −5%).
 4. Explicit unknowns (list what is still unknown).
