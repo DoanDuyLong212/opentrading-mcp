@@ -93,8 +93,12 @@ def test_recorded_fpt_annual_detail_matches_report_and_stays_partial():
     assert before["values"]["cfo"] == 11703777188868
     assert now["values"]["net_ppe"] == 15359168484059 + 1277212606
     assert now["input_provenance"]["cfo"]["published_on"] == "2026-03-20"
-    assert "receivables" not in now["values"]  # 3005 is not proven equal to Compustat [2].
-    assert "depreciation" not in now["values"]
+    # 25/10: trade receivables (3022) and depreciation expense (2242) join the
+    # enriched fields — DSRI and DEPI become computable on live general data.
+    assert now["values"]["receivables"] == 12734600596550
+    assert now["values"]["depreciation"] == 2914178360732
+    assert now["input_provenance"]["receivables"]["norm_id"] == 3022
+    assert now["input_provenance"]["depreciation"]["published_on"] == "2026-03-20"
     assert "current_portion_long_term_debt" not in now["values"]
     assert "equity_issued" not in now["values"]
 

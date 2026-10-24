@@ -690,9 +690,10 @@ def annual_forensic_lines(symbol: str, *, years: tuple[int, int]) -> dict[str, A
     before using any line. Never use ``financial_lctt`` here: it rounds to VNDbn
     and drops report identity.
     """
-    # 3005 is fetched for source diagnostics only; the forensic adapter does
-    # not treat Vietnam aggregate receivables as Compustat item [2].
-    ids = (2212, 2216, 2224, 2227, 2234, 2996, 2998, 3005, 3035, 3036, 3078)
+    # 3005 stays source diagnostics only: Vietnam aggregate receivables mix
+    # trade, inter-company and other receivables, so DSRI reads the customer
+    # trade line (3022) instead. 2242 is the LCTT depreciation expense (DEPI).
+    ids = (2212, 2216, 2224, 2227, 2234, 2242, 2996, 2998, 3005, 3022, 3035, 3036, 3078)
     if (
         len(years) != 2
         or any(not isinstance(y, int) or isinstance(y, bool) or y < 1900 for y in years)
