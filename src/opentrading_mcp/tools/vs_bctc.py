@@ -89,11 +89,12 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vs_overview_trading(symbol: str) -> dict[str, Any]:
-        """Snapshot EPS, BVPS, PE, PB, ROEA/ROAA. Dùng làm input định giá nhanh.
+        """Giao dịch theo ngày gần đây của 1 mã từ Vietstock: giá đóng cửa, khối lượng, giá trị,
+            mua/bán của khối ngoại và tự doanh.
 
-        Dùng khi: cần bội số hiện tại của 1 mã để so sánh.
-        Không dùng khi: cần vùng giá trị hợp lý (dùng valuation_run); cần so nhiều mã cùng lúc (dùng
-            peer_compare hoặc financial_ratios với peers).
+        Dùng khi: xem dòng tiền khối ngoại/tự doanh vài phiên gần nhất của 1 mã.
+        Không dùng khi: cần P/E, P/B hiện tại (output KHÔNG có bội số — dùng stock_overview); cần
+            vùng giá trị hợp lý (dùng valuation_run); cần so nhiều mã (dùng peer_compare).
         """
         fp = f"{symbol}"
         hit = await cache_lookup("vs_overview_trading", fp)
