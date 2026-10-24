@@ -1,0 +1,23 @@
+Snapshot: 2260f4857fcfb8077ca99760519df478c927b8fb (main, PR46 merge).
+No production edits, no GitHub mutations; snapshot git status clean after tests.
+
+Original issue #44 five items: fixed on current main.
+1 scan.py:95-99 drops [None,None] before needs_valuation/required_metrics. Dedicated regression tests/test_screener_followups.py:16.
+2 vietstock.py:760-769 computes dropped from identity difference of actual scoped list; scope=None returns list(allowed) at :719 so no false dropped claim. Existing scope tests cover unknown/no names and same types; no dedicated assertion replicating older-id/newest-no-id old scenario because latest _report_scope now chooses newest known ID at :715-718.
+3 vietstock.py:643 aliases module-level _DETAIL_TERM_LABELS, no duplicate literal. Term-label regressions in tests/test_issues_36_37_38.py:20/28/65, tests/test_small_data_fixes.py:27.
+4 vnstock.py:517 and :536 check math.isfinite in dataframe columns/index fallback; dict fallback :757 also checks isfinite. Dedicated regression tests/test_screener_followups.py:38.
+5 compute_financial.py:441-465 uses explicit None for overview EPS/BVPS, fallback, and echo; PER/PB remain >0 guards :468-471. Dedicated regression tests/test_screener_followups.py:64.
+
+Focused offline regression command (run outside sandbox after sandbox async thread wakeup stalled):
+env -i PATH=/usr/bin:/bin PYTHONPATH=/tmp/opentrading-issues-39-44-review/src timeout 60s /home/doanlong/MCP-server/.venv/bin/python -m pytest -q tests/test_screener_followups.py tests/test_report_type_scope.py tests/test_financial_ratios_table.py tests/test_small_data_fixes.py tests/test_vnstock_fundamentals_candles.py tests/test_issues_36_37_38.py tests/test_period_end_multiples.py
+Result: 61 passed in 22.59s, exit 0.
+These selected tests use monkeypatched provider transports/functions/fake vnstock modules or pure functions. Environment cleared incl credentials/DATABASE_URL/REDIS_URL, cwd temporary snapshot. No intentional live provider calls.
+
+Follow-ups DISTINCT from original 5:
+A. Broad all-zero->placeholder policy (vnstock.py:671-673) deletes legitimate finite data for ANY item_id. Fixture with ROE=0, trailing_eps=0 in 2025 AND 2024 yields absent roe/eps from _long_ratio_values; BVPS 8000 survives. Test test_financial_ratios_table.py:68 explicitly encodes this overbroad policy, so suite passing does not prove correctness. Recommend preserve finite zeros and only apply placeholder handling on verified item IDs/schema metadata with visible reason, never infer absence solely from 2 zeros. Need distinguish actual source placeholders, optional heuristic suspect metadata instead of erasing data. Downstream original #44.5 valuation zero fix cannot preserve EPS which provider already deleted. Cache fingerprints for consumers need revision when policy changes.
+B. Residual NaN boundary-hardening gap: screener.py:85-92 float accepts NaN; scan.py:149 considers non-None NaN present. Offline mocked end-to-end upstream pe=nan, pe filter [1,10] returns AAA pe=NaN, coverage evaluated=1, availability=available, no warnings. This does NOT mean original #44.4 still fails: actual vnstock legacy and long-format paths now sanitize. Recommend finite parsing at filter/scan boundary, consistent required metric counting; parameter tests nan/+inf/-inf/string nan and zero.
+C. Related no-op condition: filters={pe:None} remains in scan eff, while apply_filters:112-113 ignores it. Mocked upstream roe only => candidate AAA, evaluated=0, availability=partial, pe missing warning. Same input [None,None] => filters={}, local evaluated=1 available. Recommend common filter normalization that strips cond None and empty ranges before shortcuts/counting; explicit case test. This is adjacent gap, not unresolved original case.
+
+Reproductions: repro44.py (A/B), repro44_noop.py (C), use same env/PYTHONPATH/python as focused command. They only monkeypatch provider data; no external calls.
+
+Limits: offline fixture/unit verification; no live provider or deployed endpoint checks; all-zero legitimate case proves data contract risk with synthetic accepted data, not a verified currently affected real stock. NaN end-to-end mock bypasses sanitized provider and demonstrates missing defense at consumer.
