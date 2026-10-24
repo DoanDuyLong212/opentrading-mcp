@@ -48,6 +48,13 @@ def test_ratio_table_keeps_clean_periods_newest_first():
     assert periods == ["2026-Q2", "2026-Q1", "2025-Q4"]  # '2025-Q4_1' dropped
     pe = next(r for r in rows if r["item_id"] == "p_e")
     assert pe["values"] == {"2026-Q2": 15.53, "2026-Q1": 15.92, "2025-Q4": 20.96}
+    assert vn_p._discarded_ratio_period_labels(pd.DataFrame(RATIOS["quarter"])) == [
+        "2025-Q4_1"
+    ]
+    by_id = {row["item_id"]: row for row in rows}
+    assert by_id["trailing_eps"]["basis"] == "trailing_four_quarters"
+    assert by_id["roe"]["basis"] == "reported_period_ratio"
+    assert by_id["roe"]["values"]["2026-Q2"] == 5.89  # no quarterly ROE annualization
 
 
 async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
@@ -116,25 +123,34 @@ async def test_financial_ratios_peers_carry_the_newest_period(monkeypatch):
     _install(monkeypatch, [])
     env = await _tool("financial_ratios")(symbol="FPT", set="p_e", peers=["HPG"])
     peer = env["data"]["peers"][0]
-    assert peer == {
+    assert {key: peer[key] for key in (
+        "symbol", "period_label", "values", "valuation_as_of"
+    )} == {
         "symbol": "HPG",
         "period_label": "2025",
         "values": {"p_e": 15.91},
         "valuation_as_of": "cuối kỳ 2025 (không phải hiện tại)",
     }
+    assert peer["frequency"] == "annual"
+    assert peer["discarded_period_labels"] == []
 
 
 async def test_peer_compare_metric_aliases(monkeypatch):
     _install(monkeypatch, [])
     env = await _tool("peer_compare")(symbol="FPT", peers=["HPG"], metrics=["pe", "eps", "roe"])
     row = env["data"]["rows"][1]
-    assert row == {
+    assert {key: row[key] for key in (
+        "symbol", "period_label", "p_e", "trailing_eps", "roe", "valuation_as_of"
+    )} == {
         "symbol": "HPG",
         "period_label": "2025",
         "p_e": 15.91,
         "trailing_eps": 6021.21,
         "roe": 28.3,
         "valuation_as_of": "cuối kỳ 2025 (không phải hiện tại)",
+    }
+    assert row["metric_basis"] == {
+        "trailing_eps": "trailing_four_quarters", "roe": "reported_period_ratio"
     }
 
 
@@ -163,7 +179,7 @@ async def test_peer_compare_keeps_zero_values(monkeypatch):
     monkeypatch.setattr(comp_fin, "_call", fake_call)
     fn = _tool("peer_compare")
     env = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
-    assert env["data"]["rows"][1] == {"symbol": "HPG", "period_label": "2025", "roe": 0.0}
+    assert env["data"]["rows"][1]["roe"] == 0.0
     env2 = await fn(symbol="FPT", peers=["HPG"], metrics=["roe"])
     assert env2["provenance"]["cached"] is True
     assert env2["data"]["rows"][1]["roe"] == 0.0  # zero survives the cache round-trip

@@ -615,6 +615,11 @@ _SUSPECT_ZERO_RATIO_ITEMS = {
     "roe_trailling": "all-zero source row; FPT fixture 2026-10-23; missing semantics unverified",
 }
 _RATIO_PERIOD = re.compile(r"^(\d{4})(?:-Q([1-4]))?$")
+_RATIO_METRIC_BASIS = {
+    "trailing_eps": "trailing_four_quarters",
+    "roe_trailling": "trailing_four_quarters",
+    "roe": "reported_period_ratio",
+}
 
 
 def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
@@ -681,6 +686,8 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
             entry: dict[str, Any] = {
                 "item_id": key, "item": str(row.get("item") or "").strip(), "values": values,
             }
+            if key in _RATIO_METRIC_BASIS:
+                entry["basis"] = _RATIO_METRIC_BASIS[key]
             if (
                 key in _SUSPECT_ZERO_RATIO_ITEMS and len(values) >= 2
                 and all(v == 0.0 for v in values.values())
@@ -691,6 +698,22 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
         return periods, rows
     except Exception:
         return None
+
+
+def _discarded_ratio_period_labels(frame: Any) -> list[str]:
+    """Period-like columns excluded by the strict ratio period parser.
+
+    Duplicate pandas suffixes such as ``2025-Q4_1`` have no verified period
+    meaning, so expose them as diagnostics without treating them as quarters.
+    """
+    try:
+        return [
+            str(col) for col in frame.columns
+            if re.match(r"^\d{4}(?:-Q[1-4])?_\d+$", str(col))
+            and _RATIO_PERIOD.fullmatch(str(col)) is None
+        ]
+    except (AttributeError, TypeError):
+        return []
 
 
 @guarded("vnstock")
@@ -715,7 +738,13 @@ def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
     if table is None:
         raise ProviderBadData(f"vnstock ratios for {symbol} are not in the item/period layout")
     periods, rows = table
-    return {"symbol": symbol.upper(), "period": period, "periods": periods, "ratios": rows}
+    return {
+        "symbol": symbol.upper(), "period": period,
+        "frequency": "annual" if period == "year" else "quarterly" if period == "quarter" else None,
+        "period_basis": "reported_period_label",
+        "periods": periods, "ratios": rows,
+        "discarded_period_labels": _discarded_ratio_period_labels(data),
+    }
 
 
 @guarded("vnstock")
@@ -755,6 +784,11 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
             "eps": values.get("trailing_eps"),
             "bvps": values.get("book_value_per_share_bvps"),
             "period_label": period_label,
+            "frequency": (
+                "annual" if period == "year" else "quarterly" if period == "quarter" else None
+            ),
+            "eps_basis": "trailing_four_quarters",
+            "discarded_period_labels": _discarded_ratio_period_labels(data),
         }
     try:
         import pandas as pd

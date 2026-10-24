@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import functools
 import json
+import math
 import os
 import re
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from pandas.api.types import is_bool
 
 from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.forensic_models import calculate_forensic
@@ -35,6 +37,17 @@ def _na(tool: str, reason: str) -> dict[str, Any]:
     return make_envelope(
         {"tool": tool}, source="unavailable", warnings=[reason], availability="unavailable"
     )
+
+
+def _finite_metric(value: Any) -> float | None:
+    """Reject booleans and non-finite provider values before financial division."""
+    if value is None or is_bool(value):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 async def _call(tool: str, fn: Any, *args: Any, secs: float = 45.0) -> Any:
@@ -262,8 +275,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
-        # v4: preserve all-zero fundamentals and distinguish nonpositive from missing.
-        fp = f"v4|{symbol}|{btype}|{method}"
+        # v5: expose observation and measurement limits alongside raw values.
+        fp = f"v5|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -275,14 +288,39 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         info = overview if isinstance(overview, dict) else {}
         price = None
         try:
-            price = float(quotes[0].get("close_price") or quotes[0].get("close") or 0) or None
-        except (IndexError, TypeError, ValueError):
+            quote = quotes[0]
+            price = _finite_metric(quote.get("close_price") or quote.get("close"))
+            if price is not None and price <= 0:
+                price = None
+        except (IndexError, AttributeError, TypeError):
             price = None
         # Một số 0 nguồn trả là giá trị (#28), nên chỉ coi None là thiếu (#44 mục 5).
-        eps = info.get("EPS") if info.get("EPS") is not None else info.get("eps")
-        bvps = info.get("BVPS") if info.get("BVPS") is not None else info.get("bvps")
-        out: dict[str, Any] = {"symbol": symbol.upper(), "price": price, "method": "per_pb"}
+        raw_eps = info.get("EPS") if info.get("EPS") is not None else info.get("eps")
+        raw_bvps = info.get("BVPS") if info.get("BVPS") is not None else info.get("bvps")
+        eps = _finite_metric(raw_eps)
+        bvps = _finite_metric(raw_bvps)
+        out: dict[str, Any] = {
+            "symbol": symbol.upper(), "price": price, "method": "per_pb",
+            "price_source": "vnstock.equity_quote_batch",
+            "price_as_of": None,  # recorded batch-quote fixture has no observation timestamp
+            "price_unit": "unverified",
+            "price_adjustment_basis": "unverified",
+            "eps_period": None,
+            "eps_frequency": None,
+            "eps_basis": "unverified",
+            "eps_unit": "unverified",
+            "eps_adjustment_basis": "unverified",
+            "multiple_comparability": "price/EPS units and adjustment bases unverified",
+        }
+        if eps is not None:
+            out["eps_source"] = "vietstock.overview_trading"
+        if bvps is not None:
+            out["bvps_source"] = "vietstock.overview_trading"
         warnings: list[str] = []
+        if raw_eps is not None and eps is None:
+            warnings.append("EPS invalid in Vietstock overview")
+        if raw_bvps is not None and bvps is None:
+            warnings.append("BVPS invalid in Vietstock overview")
         if price and (eps is None or bvps is None):
             # The trading overview carries no EPS/BVPS: take the trailing EPS and BVPS
             # vnstock reports for its newest period. Not price / PE: that PE is priced at
@@ -295,21 +333,44 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             if isinstance(fund, dict):
                 label = fund.get("period_label")
                 if eps is None and fund.get("eps") is not None:
-                    eps = fund["eps"]
-                    out["eps_source"] = f"vnstock trailing EPS, period {label}"
+                    eps = _finite_metric(fund["eps"])
+                    if eps is None:
+                        warnings.append("EPS invalid in vnstock fundamentals")
+                    else:
+                        basis = fund.get("eps_basis") or "unverified"
+                        suffix = f", period {label}" if label else ""
+                        name = "trailing EPS" if basis == "trailing_four_quarters" else "EPS"
+                        out["eps_source"] = f"vnstock {name}{suffix}"
+                        out["eps_period"] = label
+                        out["eps_frequency"] = fund.get("frequency") or "unverified"
+                        out["eps_basis"] = basis
                 if bvps is None and fund.get("bvps") is not None:
-                    bvps = fund["bvps"]
-                    out["bvps_source"] = f"vnstock BVPS, period {label}"
+                    bvps = _finite_metric(fund["bvps"])
+                    if bvps is None:
+                        warnings.append("BVPS invalid in vnstock fundamentals")
+                    else:
+                        suffix = f", period {label}" if label else ""
+                        out["bvps_source"] = f"vnstock BVPS{suffix}"
+                        out["bvps_period"] = label
+                        out["bvps_frequency"] = fund.get("frequency") or "unverified"
+                if fund.get("discarded_period_labels"):
+                    out["discarded_period_labels"] = fund["discarded_period_labels"]
         if eps is not None:
             out["eps"] = eps
         if bvps is not None:
             out["bvps"] = bvps
         try:
             # PER/PB chỉ có nghĩa khi EPS/BVPS dương: 0 hay âm vẫn được hiển thị ở trên
-            if price and eps is not None and float(eps) > 0:
-                out["per"] = round(price / float(eps), 2)
-            if price and bvps is not None and float(bvps) > 0:
-                out["pb"] = round(price / float(bvps), 2)
+            if price and eps is not None and eps > 0:
+                per = _finite_metric(price / eps)
+                if per is not None:
+                    out["per"] = round(per, 2)
+                    out["per_basis"] = "quote_price_over_reported_eps"
+            if price and bvps is not None and bvps > 0:
+                pb = _finite_metric(price / bvps)
+                if pb is not None:
+                    out["pb"] = round(pb, 2)
+                    out["pb_basis"] = "quote_price_over_reported_bvps"
             if method != "auto":
                 out["method"] = method
             elif btype in (2, 3):
@@ -329,9 +390,12 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                     reason = "missing from both sources"
                 else:
                     try:
-                        reason = (
-                            "nonpositive" if float(value) <= 0 else "price unavailable or invalid"
-                        )
+                        if float(value) <= 0:
+                            reason = "nonpositive"
+                        elif price is None:
+                            reason = "price unavailable or invalid"
+                        else:
+                            reason = "positive but quotient is not finite"
                     except (TypeError, ValueError):
                         reason = "invalid"
                 multiple = "PER" if label == "EPS" else "PB"
@@ -397,8 +461,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         "period_end", kèm note). peers: thêm chỉ số kỳ mới nhất của từng mã.
         metric_quality trên peer giữ cờ nghi vấn và ghi chú nguồn theo từng item_id.
         """
-        # v6: retain all-zero source rows, with evidence-based suspicion metadata.
-        fp = f"v6|{symbol}|{set}|{period}|{peers}"
+        # v7: disclose rejected period columns and known ratio bases.
+        fp = f"v7|{symbol}|{set}|{period}|{peers}"
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -418,6 +482,9 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         if any(r["item_id"].lower() in _PERIOD_END_PRICE_ITEMS for r in kept):
             out["note"] = _PERIOD_END_NOTE  # first in the payload, before the numbers
         out["periods"] = table["periods"]
+        out["frequency"] = table.get("frequency", "annual" if period == "year" else "quarterly")
+        out["period_basis"] = table.get("period_basis", "reported_period_label")
+        out["discarded_period_labels"] = table.get("discarded_period_labels", [])
         out["ratios"] = [_label_period_end(r) for r in kept]
         warnings: list[str] = []
         if peers:
@@ -442,6 +509,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 quality = _ratio_quality([r for r in peer_table["ratios"] if _keep(r)])
                 if quality:
                     peer_row["metric_quality"] = quality
+                bases = {
+                    r["item_id"]: r["basis"] for r in peer_table["ratios"]
+                    if _keep(r) and "basis" in r
+                }
+                if bases:
+                    peer_row["metric_basis"] = bases
+                peer_row["frequency"] = peer_table.get("frequency", out["frequency"])
+                peer_row["discarded_period_labels"] = peer_table.get("discarded_period_labels", [])
                 if any(k.lower() in _PERIOD_END_PRICE_ITEMS for k in peer_row["values"]):
                     peer_row["valuation_as_of"] = f"cuối kỳ {newest} (không phải hiện tại)"
                 out["peers"].append(peer_row)
@@ -470,8 +545,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         metric_quality giữ cờ nghi vấn và ghi chú nguồn theo từng item_id được chọn.
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
-        # v6: retain all-zero source rows (v5: period-end multiples labelled).
-        fp = f"v6|{symbol}|{peers}|{metrics}"
+        # v7: retain reported frequency, metric basis and rejected period labels.
+        fp = f"v7|{symbol}|{peers}|{metrics}"
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit
@@ -502,6 +577,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             ])
             if quality:
                 row["metric_quality"] = quality
+            bases = {
+                r["item_id"]: r["basis"] for r in table["ratios"]
+                if (wanted is None or r["item_id"].lower() in wanted) and "basis" in r
+            }
+            if bases:
+                row["metric_basis"] = bases
+            row["frequency"] = table.get("frequency", "annual")
+            row["discarded_period_labels"] = table.get("discarded_period_labels", [])
             if any(key.lower() in _PERIOD_END_PRICE_ITEMS for key in row):
                 row["valuation_as_of"] = f"cuối kỳ {newest} (không phải hiện tại)"
             rows.append(row)
