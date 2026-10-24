@@ -20,7 +20,12 @@ COLUMNS: dict[str, dict[str, str]] = {
         "an explicit lower bound (e.g. [-5, 10]) to include losses.",
     },
     "roe": {"group": "quality", "desc": "Return on equity, ratio 0..1 (e.g. 0.18 = 18%)."},
-    "market_cap": {"group": "valuation", "desc": "Market capitalization in VND."},
+    "market_cap": {
+        "group": "valuation",
+        "desc": "Market capitalization filter expects VND. Current vnstock ratios do not "
+        "provide verified unit, as-of date and share basis; stock_screener reports "
+        "no coverage until a source with that basis is verified.",
+    },
     "sector": {
         "group": "universe",
         "desc": "Sector / ICB industry group name. Non-filterable "
@@ -90,9 +95,45 @@ def _as_number(value: Any) -> float | None:
         return None
     try:
         num = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return num if math.isfinite(num) else None
+
+
+def finite_filter_number(value: Any, field: str, bound: str) -> float:
+    """Parse an explicit filter value; only None can mean an open bound."""
+    number = _as_number(value)
+    if number is None:
+        raise ValueError(f"{field} {bound} must be a finite number (not bool): {value!r}")
+    return number
+
+
+def normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
+    """Validate known numeric conditions independently of the source rows."""
+    normalized: dict[str, Any] = {}
+    for field, condition in (filters or {}).items():
+        if field in NON_FILTERABLE_FIELDS or condition is None or (
+            isinstance(condition, (list, tuple)) and len(condition) == 2
+            and condition[0] is None and condition[1] is None
+        ):
+            continue
+        if field not in RANGE_FIELDS:
+            normalized[field] = condition
+            continue
+        if isinstance(condition, (list, tuple)):
+            if len(condition) != 2:
+                raise ValueError(f"{field} range must have exactly [min, max]")
+            lower, upper = condition
+            if lower is None and upper is None:
+                continue
+            lo = None if lower is None else finite_filter_number(lower, field, "min")
+            hi = None if upper is None else finite_filter_number(upper, field, "max")
+            if lo is not None and hi is not None and lo > hi:
+                raise ValueError(f"{field} min must be <= max")
+            normalized[field] = [lo, hi]
+        else:
+            normalized[field] = finite_filter_number(condition, field, "value")
+    return normalized
 
 
 def apply_filters(
@@ -106,6 +147,7 @@ def apply_filters(
     sector/industry/index not yet present in universe rows) are ignored. Rows
     missing a filtered numeric value are excluded.
     """
+    filters = normalize_filters(filters)
     if not filters:
         return list(rows)
     out: list[dict[str, Any]] = []

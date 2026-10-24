@@ -751,6 +751,7 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
             "pe": values.get("p_e"),
             "roe": roe_pct / 100.0 if roe_pct is not None else None,
             "market_cap": None,
+            "market_cap_status": "missing_from_ratio_table",
             "eps": values.get("trailing_eps"),
             "bvps": values.get("book_value_per_share_bvps"),
             "period_label": period_label,
@@ -783,7 +784,13 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
                 market_cap = num
     if roe is not None and abs(roe) > 1:
         roe = roe / 100.0
-    return {"symbol": symbol.upper(), "pe": pe, "roe": roe, "market_cap": market_cap}
+    return {
+        "symbol": symbol.upper(), "pe": pe, "roe": roe,
+        "market_cap": market_cap,
+        # The legacy layout can expose a numeric field but has no verified
+        # VND unit, observation date, or shares basis for screening.
+        "market_cap_status": "unverified_unit_time_basis" if market_cap is not None else "missing",
+    }
 
 
 _EXCHANGE_KEYS = ("exchange", "san", "floor", "exchangecode", "exchange_code")
