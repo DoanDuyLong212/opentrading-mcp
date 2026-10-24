@@ -10,7 +10,11 @@ from typing import Any
 
 COLUMNS: dict[str, dict[str, str]] = {
     "symbol": {"group": "universe", "desc": "Ticker symbol (HOSE/HNX/UPCoM)."},
-    "pe": {"group": "valuation", "desc": "Price / trailing earnings (P/E). Lower is cheaper."},
+    "pe": {
+        "group": "valuation",
+        "desc": "Price / trailing earnings (P/E). Lower is cheaper. A filter with an upper "
+        "bound only keeps pe > 0: a negative P/E (a loss) is not a cheap valuation.",
+    },
     "roe": {"group": "quality", "desc": "Return on equity, ratio 0..1 (e.g. 0.18 = 18%)."},
     "market_cap": {"group": "valuation", "desc": "Market capitalization in VND."},
     "sector": {
@@ -43,6 +47,11 @@ COLUMNS: dict[str, dict[str, str]] = {
 EQUALITY_FIELDS = {"sector", "industry", "index", "symbol", "exchange"}
 
 RANGE_FIELDS = {"pe", "roe", "market_cap", "close", "change_pct"}
+
+# Fields where an upper bound also requires a positive value. A negative P/E means
+# the company made a loss (NVL 2024: -3.1), so "pe <= 10" must not read it as cheap.
+# This mirrors common screener practice; drop "pe" here to let losses through.
+POSITIVE_WHEN_CAPPED = {"pe"}
 
 # Price group is catalog-only (no live quote enrichment in stock_screener),
 # so price filters would be dead-filters. Equality fields sector/industry/index
@@ -113,6 +122,9 @@ def apply_filters(
                     keep = False
                     break
                 if lo is not None and num < float(lo):
+                    keep = False
+                    break
+                if hi is not None and field in POSITIVE_WHEN_CAPPED and num <= 0:
                     keep = False
                     break
                 if hi is not None and num > float(hi):

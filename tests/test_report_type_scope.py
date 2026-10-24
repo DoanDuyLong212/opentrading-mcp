@@ -117,3 +117,4 @@ async def test_stock_forensic_forwards_detail_warnings(monkeypatch):
     register_preset(server, "scan")
     env = await server._tool_manager.get_tool("stock_forensic").fn(symbol="BVH")
     assert "KQKD: dropped 1 period(s): Q3/2026" in env["warnings"]
+
