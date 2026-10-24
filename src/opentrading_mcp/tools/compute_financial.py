@@ -193,6 +193,18 @@ BENEISH_COEF = {
 }
 
 
+def _ratio_quality(ratios: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Keep source quality flags when a ratio series is projected to one value."""
+    return {
+        ratio["item_id"]: {
+            key: ratio[key]
+            for key in ("suspected_placeholder", "quality_note") if key in ratio
+        }
+        for ratio in ratios
+        if "suspected_placeholder" in ratio or "quality_note" in ratio
+    }
+
+
 def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def stock_forensic(
@@ -421,8 +433,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
-        # v3: EPS/BVPS bằng 0 vẫn được hiển thị (v2: giữ số 0 hữu hạn của nguồn)
-        fp = f"v3|{symbol}|{btype}|{method}"
+        # v4: preserve all-zero fundamentals and distinguish nonpositive from missing.
+        fp = f"v4|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -483,7 +495,18 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             pass
         missing = "per" not in out and "pb" not in out
         if missing:
-            warnings.append("no EPS/BVPS from either source — PER/PB not computed")
+            for label, value in (("EPS", eps), ("BVPS", bvps)):
+                if value is None:
+                    reason = "missing from both sources"
+                else:
+                    try:
+                        reason = (
+                            "nonpositive" if float(value) <= 0 else "price unavailable or invalid"
+                        )
+                    except (TypeError, ValueError):
+                        reason = "invalid"
+                multiple = "PER" if label == "EPS" else "PB"
+                warnings.append(f"{label} {reason} — {multiple} not computed")
         return await cache_store(
             "valuation_run",
             fp,
@@ -543,9 +566,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng % (roe 28.3 =
         28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ (dòng có as_of
         "period_end", kèm note). peers: thêm chỉ số kỳ mới nhất của từng mã.
+        metric_quality trên peer giữ cờ nghi vấn và ghi chú nguồn theo từng item_id.
         """
-        # v4: hàng toàn 0 ở mọi kỳ là giá trị giữ chỗ (placeholder), không phải số liệu
-        fp = f"v5|{symbol}|{set}|{period}|{peers}"  # v5: period-end multiples labelled
+        # v6: retain all-zero source rows, with evidence-based suspicion metadata.
+        fp = f"v6|{symbol}|{set}|{period}|{peers}"
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -586,6 +610,9 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                         if _keep(r)
                     },
                 }
+                quality = _ratio_quality([r for r in peer_table["ratios"] if _keep(r)])
+                if quality:
+                    peer_row["metric_quality"] = quality
                 if any(k.lower() in _PERIOD_END_PRICE_ITEMS for k in peer_row["values"]):
                     peer_row["valuation_as_of"] = f"cuối kỳ {newest} (không phải hiện tại)"
                 out["peers"].append(peer_row)
@@ -611,10 +638,11 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         bvps là tên tắt của p_e, p_b, roe, roa, trailing_eps, book_value_per_share_bvps).
         Mỗi dòng là chỉ số năm báo cáo mới nhất của mã (period_label): % cho tỷ suất, đồng cho
         EPS/BVPS, bội số cuối kỳ cho P/E, P/B (dòng có valuation_as_of, kèm note).
+        metric_quality giữ cờ nghi vấn và ghi chú nguồn theo từng item_id được chọn.
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
-        # v4: hàng toàn 0 ở mọi kỳ là giá trị giữ chỗ (placeholder), không phải số liệu
-        fp = f"v5|{symbol}|{peers}|{metrics}"  # v5: period-end multiples labelled
+        # v6: retain all-zero source rows (v5: period-end multiples labelled).
+        fp = f"v6|{symbol}|{peers}|{metrics}"
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit
@@ -639,6 +667,12 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             for ratio in table["ratios"]:
                 if wanted is None or ratio["item_id"].lower() in wanted:
                     row[ratio["item_id"]] = ratio["values"].get(newest)
+            quality = _ratio_quality([
+                r for r in table["ratios"]
+                if wanted is None or r["item_id"].lower() in wanted
+            ])
+            if quality:
+                row["metric_quality"] = quality
             if any(key.lower() in _PERIOD_END_PRICE_ITEMS for key in row):
                 row["valuation_as_of"] = f"cuối kỳ {newest} (không phải hiện tại)"
             rows.append(row)

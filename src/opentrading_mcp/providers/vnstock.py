@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from pandas.api.types import is_bool
+
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
@@ -511,7 +513,10 @@ def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
                 continue
             if len(series):
                 try:
-                    num = float(series.iloc[-1])
+                    value = series.iloc[-1]
+                    if is_bool(value):
+                        continue
+                    num = float(value)
                 except (TypeError, ValueError):
                     continue
                 if math.isfinite(num):  # ±inf passes dropna() and every range bound
@@ -530,7 +535,10 @@ def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
                 continue
             if len(row):
                 try:
-                    num = float(row.iloc[-1])
+                    value = row.iloc[-1]
+                    if is_bool(value):
+                        continue
+                    num = float(value)
                 except (TypeError, ValueError):
                     continue
                 if math.isfinite(num):
@@ -601,6 +609,11 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
         raise ProviderBadData(f"malformed vnstock cashflow for {symbol}: {exc}") from exc
 
 
+# Evidence registry for the item/item_id + clean period-column schema only.
+# Observation is insufficient to replace values with None; keep zeros for auditing.
+_SUSPECT_ZERO_RATIO_ITEMS = {
+    "roe_trailling": "all-zero source row; FPT fixture 2026-10-23; missing semantics unverified",
+}
 _RATIO_PERIOD = re.compile(r"^(\d{4})(?:-Q([1-4]))?$")
 
 
@@ -611,8 +624,8 @@ def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
     period ('2025', '2024', ... or '2026-Q2', ...). Every value comes from the same
     newest period so a PE and an EPS never mix years. Columns that are not a clean
     period label (the quarterly frame also carries '2025-Q4_1') are ignored, and so
-    are placeholder rows (see _long_ratio_table). None when the frame is not in this
-    layout.
+    are non-finite cells. Suspected zero rows retain their source values. None when
+    the frame is not in this layout.
     """
     table = _long_ratio_table(frame)
     if table is None:
@@ -635,11 +648,10 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
     parse, or are NaN/±Infinity, come back as None; a finite number is kept as-is,
     0 included (a single 0, or a 0 next to other values, is data).
 
-    One exception: a row that is exactly 0 in EVERY period (at least 2) is a vendor
-    placeholder, not a ratio. Live 24/10/2026: roe_trailling, roa_trailling and both
-    accrual ratios are 0.0 in all four years for FPT, NVL and HVN, next to real ROEs
-    of 28.3 / 4.48 / -352.65. Such a row keeps its periods with None values and
-    carries ``placeholder: True`` so a reader sees why it is empty.
+    All-zero rows remain source data. The retained FPT fixture (2026-10-23,
+    vnstock_ratio_fpt_20261023.json) shows roe_trailling all-zero alongside
+    nonzero roe, but does not prove those cells mean missing. Flag that known
+    candidate as suspected only; never null it or infer other metric IDs.
     """
     try:
         if "item_id" not in [str(c) for c in frame.columns]:
@@ -661,16 +673,20 @@ def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | No
             values: dict[str, float | None] = {}
             for (_, col), label in zip(cols, periods, strict=True):
                 try:
-                    num = float(row[col])
+                    value = row[col]
+                    num = float("nan") if is_bool(value) else float(value)
                 except (TypeError, ValueError):
                     num = float("nan")
                 values[label] = num if math.isfinite(num) else None
             entry: dict[str, Any] = {
                 "item_id": key, "item": str(row.get("item") or "").strip(), "values": values,
             }
-            if len(values) >= 2 and all(v == 0.0 for v in values.values()):
-                entry["values"] = dict.fromkeys(values)
-                entry["placeholder"] = True
+            if (
+                key in _SUSPECT_ZERO_RATIO_ITEMS and len(values) >= 2
+                and all(v == 0.0 for v in values.values())
+            ):
+                entry["suspected_placeholder"] = True
+                entry["quality_note"] = _SUSPECT_ZERO_RATIO_ITEMS[key]
             rows.append(entry)
         return periods, rows
     except Exception:
@@ -750,6 +766,8 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
         pass
     if isinstance(data, dict):
         for raw_key, val in data.items():
+            if is_bool(val):
+                continue
             try:
                 num = float(val)
             except (TypeError, ValueError):

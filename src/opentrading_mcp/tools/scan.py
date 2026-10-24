@@ -81,26 +81,26 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             warning nêu mã và lý do, envelope mang partial; giới hạn chủ ý chỉ tạo warning.
         """
         technical = technical or None  # {} means "no technical stage", not a rule set
-        # v4: P/E âm không qua cận trên của pe; khoảng [None, None] không còn là metric
-        # bắt buộc (v3: evaluated chỉ đếm mã có đủ metric của bộ lọc).
-        fp = f"v4|{filters}|{max_pe}|{min_roe}|{limit}|{technical}"
-        hit = await cache_lookup("stock_screener", fp)
-        if hit is not None:
-            return hit
         from opentrading_mcp.providers import screener as sc_p
         from opentrading_mcp.providers import technicals as tech_p
 
-        # [None, None] lọc không chặn gì (apply_filters bỏ qua), nên không được coi là
-        # metric bắt buộc: bỏ trước khi tính needs_valuation / required_metrics (#44 mục 1).
+        # Both no-op forms must disappear before shortcuts and coverage are derived.
         eff: dict[str, Any] = {
-            k: v
-            for k, v in (filters or {}).items()
-            if not (isinstance(v, (list, tuple)) and len(v) == 2 and v[0] is None and v[1] is None)
+            k: v for k, v in (filters or {}).items()
+            if v is not None and not (
+                isinstance(v, (list, tuple)) and len(v) == 2
+                and v[0] is None and v[1] is None
+            )
         }
         if max_pe is not None and "pe" not in eff:
             eff["pe"] = [None, max_pe]
         if min_roe is not None and "roe" not in eff:
             eff["roe"] = [min_roe, None]
+        # v5: finite metrics and normalized no-op filters, including shortcut precedence.
+        fp = f"v5|{eff}|{limit}|{technical}"
+        hit = await cache_lookup("stock_screener", fp)
+        if hit is not None:
+            return hit
         try:
             rows = await run_blocking(vn_p.listing_symbols, "stock_screener")
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -146,7 +146,10 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     enrich_failed.append((sym, f"upstream error: {str(exc)[:80]}"))
                     return set()
             if isinstance(info, dict):
-                present = {k for k in ("pe", "roe", "market_cap") if info.get(k) is not None}
+                present = {
+                    k for k in ("pe", "roe", "market_cap")
+                    if sc_p._as_number(info.get(k)) is not None
+                }
                 if present:
                     entry.update({k: info[k] for k in present})
                     if info.get("period_label"):

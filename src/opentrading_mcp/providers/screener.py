@@ -6,7 +6,10 @@ vn_fundamentals. Timezone handling lives in the tool envelope.
 
 from __future__ import annotations
 
+import math
 from typing import Any
+
+from pandas.api.types import is_bool
 
 COLUMNS: dict[str, dict[str, str]] = {
     "symbol": {"group": "universe", "desc": "Ticker symbol (HOSE/HNX/UPCoM)."},
@@ -83,13 +86,13 @@ def screener_columns(
 
 
 def _as_number(value: Any) -> float | None:
-    if value is None or isinstance(value, bool):
+    if value is None or is_bool(value):
         return None
     try:
         num = float(value)
     except (TypeError, ValueError):
         return None
-    return num
+    return num if math.isfinite(num) else None
 
 
 def apply_filters(
@@ -145,11 +148,8 @@ def apply_filters(
                         keep = False
                         break
                 else:
-                    try:
-                        if float(row.get(field)) != float(cond):  # type: ignore[arg-type]
-                            keep = False
-                            break
-                    except (TypeError, ValueError):
+                    num, target = _as_number(row.get(field)), _as_number(cond)
+                    if num is None or target is None or num != target:
                         keep = False
                         break
         if keep:
