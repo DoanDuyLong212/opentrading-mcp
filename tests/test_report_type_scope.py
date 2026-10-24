@@ -94,6 +94,24 @@ def test_duplicate_period_keeps_the_last_listed(monkeypatch):
     assert any("duplicate period" in w for w in out["warnings"])
 
 
+def test_same_period_in_two_report_types_keeps_consolidated(monkeypatch):
+    # scope by type BEFORE dedupe: a parent entry listed last must not win the period
+    periods = [_period(1, 2026, 2, HN), _period(2, 2026, 2, ME)]
+    out, seen = _detail(monkeypatch, periods)
+    assert seen["kept"] == [("2026", "2")]
+    assert out["report_type"]["periods"]["Q1/2026"] == HN
+    assert out["report_type"]["consolidated"] is True
+
+
+def test_periods_n_counts_after_dropping_other_report_types(monkeypatch):
+    # upstream lists every period (UnitedId -1, Time_ASC): truncating after the scope
+    # drop still returns periods_n comparable periods when older ones exist
+    periods = [_period(i, 2025, t, HN) for i, t in enumerate((2, 3, 4, 5), start=1)]
+    periods += [_period(5, 2026, 2, HN), _period(6, 2026, 3, ME)]
+    out, _ = _detail(monkeypatch, periods)
+    assert out["periods"] == ["Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026"]
+
+
 async def test_stock_forensic_forwards_detail_warnings(monkeypatch):
     from opentrading_mcp.providers.errors import ProviderBadData
     from opentrading_mcp.server import create_server, register_preset

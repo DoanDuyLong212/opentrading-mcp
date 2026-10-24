@@ -66,7 +66,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         dùng signals_screener_columns để biết trường hợp lệ. max_pe/min_roe là phím tắt.
         PE/ROE chỉ được tra cho tối đa 30 mã đầu danh sách (screened trong kết quả); pe là
         P/E cuối kỳ báo cáo ghi ở fundamentals_period, không phải P/E theo giá hôm nay.
-        Bộ lọc pe có cận trên chỉ giữ pe > 0 (P/E âm là doanh nghiệp lỗ, không phải rẻ).
+        Bộ lọc pe chỉ có cận trên giữ pe > 0 (P/E âm là doanh nghiệp lỗ, không phải rẻ);
+        muốn giữ mã lỗ thì đặt cận dưới rõ ràng, ví dụ {"pe": [-5, 10]}.
         technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
         ({rsi_lt, rsi_gt, above_sma20: true, below_sma20: true}); dict rỗng coi như None.
 

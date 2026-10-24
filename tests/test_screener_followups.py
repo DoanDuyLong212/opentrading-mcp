@@ -8,8 +8,9 @@ def test_negative_pe_does_not_pass_an_upper_bound():
 
     rows = [{"symbol": "NVL", "pe": -3.1}, {"symbol": "FPT", "pe": 9.5}, {"symbol": "X", "pe": 0.0}]
     assert [r["symbol"] for r in apply_filters(rows, {"pe": [None, 10]})] == ["FPT"]
-    # chỉ cận dưới: không thêm điều kiện dương (người dùng tự chọn khoảng)
+    # an explicit lower bound is the caller's choice: no positivity rule
     assert [r["symbol"] for r in apply_filters(rows, {"pe": [-5, None]})] == ["NVL", "FPT", "X"]
+    assert [r["symbol"] for r in apply_filters(rows, {"pe": [-5, 10]})] == ["NVL", "FPT", "X"]
 
 
 async def test_empty_range_is_not_a_required_metric(monkeypatch):

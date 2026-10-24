@@ -12,8 +12,9 @@ COLUMNS: dict[str, dict[str, str]] = {
     "symbol": {"group": "universe", "desc": "Ticker symbol (HOSE/HNX/UPCoM)."},
     "pe": {
         "group": "valuation",
-        "desc": "Price / trailing earnings (P/E). Lower is cheaper. A filter with an upper "
-        "bound only keeps pe > 0: a negative P/E (a loss) is not a cheap valuation.",
+        "desc": "Price / trailing earnings (P/E). Lower is cheaper. A filter with only an "
+        "upper bound keeps pe > 0: a negative P/E (a loss) is not a cheap valuation. Give "
+        "an explicit lower bound (e.g. [-5, 10]) to include losses.",
     },
     "roe": {"group": "quality", "desc": "Return on equity, ratio 0..1 (e.g. 0.18 = 18%)."},
     "market_cap": {"group": "valuation", "desc": "Market capitalization in VND."},
@@ -48,8 +49,9 @@ EQUALITY_FIELDS = {"sector", "industry", "index", "symbol", "exchange"}
 
 RANGE_FIELDS = {"pe", "roe", "market_cap", "close", "change_pct"}
 
-# Fields where an upper bound also requires a positive value. A negative P/E means
-# the company made a loss (NVL 2024: -3.1), so "pe <= 10" must not read it as cheap.
+# Fields where an upper bound without a lower bound also requires a positive value.
+# A negative P/E means the company made a loss (NVL 2024: -3.1), so "pe <= 10" must
+# not read it as cheap. An explicit lower bound is the caller's choice and is honoured.
 # This mirrors common screener practice; drop "pe" here to let losses through.
 POSITIVE_WHEN_CAPPED = {"pe"}
 
@@ -124,7 +126,10 @@ def apply_filters(
                 if lo is not None and num < float(lo):
                     keep = False
                     break
-                if hi is not None and field in POSITIVE_WHEN_CAPPED and num <= 0:
+                if (
+                    hi is not None and lo is None
+                    and field in POSITIVE_WHEN_CAPPED and num <= 0
+                ):
                     keep = False
                     break
                 if hi is not None and num > float(hi):
