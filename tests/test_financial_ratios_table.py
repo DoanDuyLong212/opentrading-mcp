@@ -44,17 +44,19 @@ def _install(monkeypatch, calls: list[tuple[str, str]]) -> None:
 
 
 def test_ratio_table_keeps_clean_periods_newest_first():
-    periods, rows = vn_p._long_ratio_table(pd.DataFrame(RATIOS["quarter"]))
-    assert periods == ["2026-Q2", "2026-Q1", "2025-Q4"]  # '2025-Q4_1' dropped
+    # The recorded quarterly frame is mislabelled upstream (test_ratio_quarter_labels);
+    # the annual one, shuffled, checks the newest-first order.
+    frame = pd.DataFrame(RATIOS["year"])[["item", "item_id", "2023", "2025", "2022", "2024"]]
+    periods, rows = vn_p._long_ratio_table(frame)
+    assert periods == ["2025", "2024", "2023", "2022"]
     pe = next(r for r in rows if r["item_id"] == "p_e")
-    assert pe["values"] == {"2026-Q2": 15.53, "2026-Q1": 15.92, "2025-Q4": 20.96}
+    assert pe["values"]["2025"] == 15.91
     assert vn_p._discarded_ratio_period_labels(pd.DataFrame(RATIOS["quarter"])) == [
         "2025-Q4_1"
     ]
     by_id = {row["item_id"]: row for row in rows}
     assert by_id["trailing_eps"]["basis"] == "trailing_four_quarters"
     assert by_id["roe"]["basis"] == "reported_period_ratio"
-    assert by_id["roe"]["values"]["2026-Q2"] == 5.89  # no quarterly ROE annualization
 
 
 async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):

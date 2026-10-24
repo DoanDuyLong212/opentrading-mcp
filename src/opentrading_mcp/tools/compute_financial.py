@@ -454,14 +454,17 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             dùng stock_overview hoặc valuation_run); so dạng bảng head-to-head nhiều mã (dùng
             peer_compare — gọn hơn); cần vùng giá trị (dùng valuation_run).
 
-        period: 'year' (mặc định) hoặc 'quarter'. set: chỉ giữ chỉ số có item_id hoặc tên chứa
+        period: 'year' (mặc định) hoặc 'quarter'. Hiện nguồn KBS trả bảng quý với kỳ trùng và
+        lệch giá trị nên 'quarter' trả unavailable; số liệu theo quý (doanh thu, lãi gộp...) lấy
+        từ financial_detail rồi tự tính. set: chỉ giữ chỉ số có item_id hoặc tên chứa
         chuỗi này ('all' giữ hết; ví dụ 'roe', 'p_e', 'margin'). Trả periods (mới→cũ) và
         ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng % (roe 28.3 =
         28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ (dòng có as_of
         "period_end", kèm note). peers: thêm chỉ số kỳ mới nhất của từng mã.
         metric_quality trên peer giữ cờ nghi vấn và ghi chú nguồn theo từng item_id.
         """
-        # v7: disclose rejected period columns and known ratio bases.
+        # v7: refuse mislabelled quarters (KBS quarterly frames, #47); disclose
+        # rejected period columns and known ratio bases.
         fp = f"v7|{symbol}|{set}|{period}|{peers}"
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:

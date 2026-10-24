@@ -8,6 +8,7 @@ Benchmark 2026-10: ~0.6s/symbol VCI delta -> batch 12/call (~10-15s).
 from __future__ import annotations
 
 import functools
+import json
 import math
 import time
 import unicodedata
@@ -36,6 +37,7 @@ async def run_blocking(fn, tool, timeout_secs=60.0):
 
 TOOL = "cycle_stats"
 MEMBERS_VERSION = "v2"
+TROUGH_RULE_VERSION = "1"
 OVERLAP_N = 10
 TOLERANCE = 0.005
 MAX_BATCH = 15
@@ -312,17 +314,48 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Yearly return % per VN sector basket (bank, securities, realestate, vin, steel, tech...); ranks sectors by year (current year = year to date). Omit args for full table.
 
         Basket names as in cycle_seasonality (Vietnamese names without diacritics accepted).
+        is_partial_year: the running year, or a basket whose data ends before the
+        market's last session of that year — its return is not a full-year figure.
+        data_through is the basket's own last session in that year.
         """
-        sql, args = _filters("SELECT basket, year, ret FROM cycle_yearly",
+        cols = ["basket", "year", "ret", "is_partial_year", "data_through", "period_basis"]
+        sql, args = _filters(f"SELECT {', '.join(cols)} FROM cycle_yearly",
                              [("basket", _canon_basket(basket)), ("year", year)], "basket, year")
-        return await db.read_rows("cycle_yearly", src, sql, args, ["basket", "year", "ret"], bool(args))
+        return await db.read_rows("cycle_yearly", src, sql, args, cols, bool(args))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_trough_events(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """3M forward returns per VN sector basket after major market troughs (which sectors lead recoveries)."""
-        cols = ["trough", "vnindex_3m", *TROUGH_BASKETS]
-        return await db.read_rows("cycle_trough_events", src,
-                                  f"SELECT {', '.join(cols)} FROM cycle_trough_events ORDER BY trough", [], cols)
+        """3M forward returns per VN sector basket after major market troughs (which sectors lead recoveries).
+
+        Each row names the day the event became knowable (confirmation, after the
+        trough) and how much of the 95-day window actually existed when the table
+        was built: window_complete=false rows are provisional, not finished 3M
+        studies. rule carries the thresholds and requires_future_data=true — a
+        trough event is never a signal known at the trough itself.
+        """
+        cols = ["trough", "confirmation", "window_start", "window_end", "window_days",
+                "window_observations", "window_complete", "basket_observations",
+                "vnindex_3m", *TROUGH_BASKETS]
+        out = await db.read_rows("cycle_trough_events", src,
+                                 f"SELECT {', '.join(cols)} FROM cycle_trough_events ORDER BY trough",
+                                 [], cols)
+        rule: dict[str, Any] = {}
+        try:
+            meta = await db.in_thread(
+                functools.partial(db._select, "SELECT key, value FROM cycle_meta", []))
+            rule = {k: v for k, v in meta if k.startswith("trough_")}
+        except Exception:
+            rule = {}
+        for row in out.get("data", {}).get("rows", []):
+            raw = row.get("basket_observations")
+            if isinstance(raw, str) and raw:
+                try:
+                    row["basket_observations"] = json.loads(raw)
+                except ValueError:
+                    pass
+        if rule and out.get("data") is not None:
+            out["data"]["rule"] = rule
+        return out
 
     tools = [
         {"name": "cycle_stats_check"},
@@ -436,30 +469,35 @@ def _complete_months(monthly: Any, today: date | None = None) -> Any:
 
 
 def _major_troughs(closes: Any) -> list[Any]:
-    """Dates of major troughs: a fall of more than 15% from the running peak, followed
-    by a recovery to a new peak at least 20% above the trough.
+    """(trough date, confirmation date) pairs for major troughs: a fall of more
+    than 15% from the running peak, followed by a recovery to a new peak at
+    least 20% above the trough.
+
+    The confirmation date is the day the recovery makes that new peak — the
+    first day the event is knowable; it always lies after the trough (the rule
+    reads future data, see cycle_meta.trough_requires_future_data).
 
     A new peak always closes the drawdown. Before, a new peak reached with less than a
     20% rebound kept the old trough, so a later, higher trough was never recorded and
     the event was dated at the stale one.
     """
-    troughs: list[Any] = []
+    events: list[Any] = []
     if len(closes) == 0:
-        return troughs
+        return events
     peak = closes.iloc[0]
     state, t_px, t_date = "up", None, None
     for d, v in closes.items():
         if v > peak:
             peak = v
             if state == "down" and t_px is not None and v / t_px - 1 >= 0.20:
-                troughs.append(t_date)
+                events.append((t_date, d))
             t_px, t_date = None, None
             state = "up"
         elif v < peak * 0.85 and state == "up":
             state = "down"
         if state == "down" and (t_px is None or v < t_px):
             t_px, t_date = v, d
-    return troughs
+    return events
 
 
 def _finalize_compute(conn: Any, extra_tet: list[str]) -> dict[str, Any]:
@@ -577,31 +615,64 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
     # yearly
     yr = (1 + bdf).resample("YE").prod(min_count=1) - 1
     yr.index = yr.index.year
+    current_year = date.today().year
     with conn.cursor() as cur:
         cur.execute("DELETE FROM cycle_yearly")
         for c in yr.columns:
+            s = bdf[c].dropna()
             for y, v in yr[c].items():
                 if v == v:
+                    through = s[s.index.year == int(y)].index.max()
+                    market_end = px.index[px.index.year == int(y)].max()
+                    partial = (
+                        int(y) == current_year
+                        or pd.isna(through)
+                        or (not pd.isna(market_end) and through < market_end)
+                    )
+                    basis = (
+                        "year_to_date" if int(y) == current_year
+                        else ("calendar_year" if not partial else "calendar_year_partial")
+                    )
                     cur.execute(
-                        "INSERT INTO cycle_yearly(basket,year,ret) VALUES(%s,%s,%s)"
-                        " ON CONFLICT DO NOTHING", (c, int(y), round(float(v) * 100, 1)))
-    # trough events: drawdown >15% then recovery >20% -> 3M forward per basket
+                        "INSERT INTO cycle_yearly(basket,year,ret,is_partial_year,"
+                        " data_through,period_basis) VALUES(%s,%s,%s,%s,%s,%s)"
+                        " ON CONFLICT DO NOTHING",
+                        (c, int(y), round(float(v) * 100, 1), partial,
+                         str(through.date()) if not pd.isna(through) else None, basis))
+    # trough events: drawdown >15% then recovery >=20% to a new peak -> 3M forward per basket.
+    # "3M" is pinned as 95 calendar days. A window whose end is beyond the stored data
+    # is provisional: it keeps its row, flagged window_complete=false.
     vi_full = px["VNINDEX"].dropna()
-    troughs_ev = _major_troughs(vi_full)
+    events = _major_troughs(vi_full)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM cycle_trough_events")
-        for t in troughs_ev:
+        for t, confirmed in events:
             if t < pd.Timestamp("2018-10-01"):
                 continue
             base = vi_full.loc[:t].iloc[-1]
             fwd = bdf.loc[t + pd.Timedelta(days=1): t + pd.Timedelta(days=95)]
-            if len(fwd) < 20:
-                continue
-            vals = {"trough": str(t.date()),
-                    "vnindex_3m": round(float(vi_full.loc[fwd.index[-1]] / base - 1) * 100, 1)}
-            for c in TROUGH_BASKETS:
-                vals[c] = round(float((1 + fwd[c].dropna()).prod() - 1) * 100, 1)
-            cols = ["trough", "vnindex_3m", *TROUGH_BASKETS]
+            complete = bool(len(fwd)) and vi_full.index.max() >= t + pd.Timedelta(days=95)
+            basket_obs = {c: int(fwd[c].notna().sum()) for c in TROUGH_BASKETS}
+            if len(fwd):
+                vals = {"trough": str(t.date()),
+                        "confirmation": str(confirmed.date()),
+                        "vnindex_3m": round(float(vi_full.loc[fwd.index[-1]] / base - 1) * 100, 1)}
+                for c in TROUGH_BASKETS:
+                    vals[c] = round(float((1 + fwd[c].dropna()).prod() - 1) * 100, 1)
+            else:
+                vals = {"trough": str(t.date()), "confirmation": str(confirmed.date()),
+                        "vnindex_3m": None, **{c: None for c in TROUGH_BASKETS}}
+            cols = ["trough", "confirmation", "window_start", "window_end", "window_days",
+                    "window_observations", "window_complete", "basket_observations",
+                    "vnindex_3m", *TROUGH_BASKETS]
+            vals.update({
+                "window_start": str((t + pd.Timedelta(days=1)).date()) if len(fwd) else None,
+                "window_end": str(fwd.index.max().date()) if len(fwd) else None,
+                "window_days": 95,
+                "window_observations": len(fwd),
+                "window_complete": complete,
+                "basket_observations": json.dumps(basket_obs),
+            })
             cur.execute(
                 f"INSERT INTO cycle_trough_events({', '.join(cols)})"
                 f" VALUES({', '.join(['%s'] * len(cols))}) ON CONFLICT DO NOTHING",
@@ -609,7 +680,12 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
     # meta
     today = date.today().isoformat()
     with conn.cursor() as cur:
-        for k, v in [("as_of", today), ("members_version", MEMBERS_VERSION)]:
+        for k, v in [("as_of", today), ("members_version", MEMBERS_VERSION),
+                     ("trough_rule_version", TROUGH_RULE_VERSION),
+                     ("trough_rule_thresholds",
+                      '{"drawdown_from_peak": 0.15, "rebound_to_new_peak": 0.20}'),
+                     ("trough_window_days", "95"),
+                     ("trough_requires_future_data", "true")]:
             cur.execute(
                 "INSERT INTO cycle_meta(key,value) VALUES(%s,%s)"
                 " ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", (k, v))

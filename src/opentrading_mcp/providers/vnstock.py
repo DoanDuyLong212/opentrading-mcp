@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 import re
 import threading
@@ -620,6 +621,35 @@ _RATIO_METRIC_BASIS = {
     "roe_trailling": "trailing_four_quarters",
     "roe": "reported_period_ratio",
 }
+# vnstock appends _1, _2 ... when two upstream periods share one label.
+_RATIO_DUP_PERIOD = re.compile(r"^\d{4}(?:-Q[1-4])?_\d+$")
+
+
+def _check_ratio_periods(frame: Any) -> None:
+    """Raise ProviderBadData when a ratio frame's period columns cannot be trusted.
+
+    Live 24/10/2026 (FPT, VCB, HPG), the KBS quarterly CSTC header restarts its ID
+    every year and lists "2025 Quý 4" two or three times, and its ValueN columns
+    do not follow the header (FPT Value1 = 37.89 is Vietstock's Q3/2025 gross
+    margin, labelled 2026-Q2). vnstock then sorts the header by that ID, so the
+    frame comes back as 2026-Q2, 2025-Q4, 2026-Q1, 2025-Q4_1. No column can be
+    matched to its real quarter, so the whole frame is refused: a duplicated
+    label (the _N suffix) or period columns that are not strictly ordered in
+    either direction. Frames without the item_id layout are left to the callers.
+    """
+    names = [str(c) for c in getattr(frame, "columns", [])]
+    if "item_id" not in names:
+        return
+    keys = []
+    for name in names:
+        if _RATIO_DUP_PERIOD.match(name):
+            raise ProviderBadData(f"vnstock ratios repeat period {name.rsplit('_', 1)[0]}")
+        match = _RATIO_PERIOD.match(name)
+        if match:
+            keys.append((int(match.group(1)), int(match.group(2) or 0)))
+    pairs = list(itertools.pairwise(keys))
+    if not (all(a > b for a, b in pairs) or all(a < b for a, b in pairs)):
+        raise ProviderBadData("vnstock ratio periods are out of order")
 
 
 def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
@@ -627,10 +657,11 @@ def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
 
     vnstock now returns ratios as rows: columns item, item_id, then one column per
     period ('2025', '2024', ... or '2026-Q2', ...). Every value comes from the same
-    newest period so a PE and an EPS never mix years. Columns that are not a clean
-    period label (the quarterly frame also carries '2025-Q4_1') are ignored, and so
-    are non-finite cells. Suspected zero rows retain their source values. None when
-    the frame is not in this layout.
+    vnstock now returns ratios as rows: columns item, item_id, then one column per
+    period ('2025', '2024', ... or '2026-Q2', ...). Every value comes from the same
+    newest period so a PE and an EPS never mix years. Placeholder rows are ignored
+    (see _long_ratio_table), and non-finite cells come back None. None when the
+    frame is not in this layout; callers run _check_ratio_periods first.
     """
     table = _long_ratio_table(frame)
     if table is None:
@@ -724,7 +755,8 @@ def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
     growth in percent (roe 28.3 = 28.3%), EPS/BVPS/CPS in dong, multiples as plain
     numbers. Finite values the source returns are kept as-is (0 stays 0); cells
     that do not parse or are NaN/±Infinity are None. Raises ProviderBadData when
-    vnstock returns another layout.
+    vnstock returns another layout, or periods that cannot be matched to their
+    values (see _check_ratio_periods; today every KBS quarterly table).
     """
     try:
         from vnstock import Fundamental
@@ -734,6 +766,13 @@ def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
         data = Fundamental().equity(symbol.upper()).ratio(period=period)
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock ratios failed: {symbol}") from exc
+    try:
+        _check_ratio_periods(data)
+    except ProviderBadData as exc:
+        raise ProviderBadData(
+            f"{exc} ({symbol.upper()}, {period}): values cannot be matched to their period;"
+            " use period='year', or financial_detail for quarterly figures"
+        ) from exc
     table = _long_ratio_table(data) if hasattr(data, "columns") else None
     if table is None:
         raise ProviderBadData(f"vnstock ratios for {symbol} are not in the item/period layout")
@@ -751,9 +790,10 @@ def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     """Per-symbol PE/ROE/market-cap (+ trailing EPS/BVPS) via vnstock Fundamental ratio.
 
-    Best-effort parse: missing metrics come back as None, never raises
-    for malformed frames (raises ProviderUnavailable only when the
-    upstream call itself fails or vnstock is missing). `period_label` names
+    Best-effort parse: missing metrics come back as None. Raises
+    ProviderUnavailable when the upstream call itself fails or vnstock is
+    missing, and ProviderBadData when the period columns cannot be matched to
+    their values (see _check_ratio_periods). `period_label` names
     the report period the numbers belong to ('2025' = year-end 2025), so a
     year-end PE is never mistaken for today's PE.
     """
@@ -765,6 +805,7 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
         data = Fundamental().equity(symbol.upper()).ratio(period=period)
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock fundamentals failed: {symbol}") from exc
+    _check_ratio_periods(data)  # never pick numbers out of a mislabelled frame
     pe: float | None = None
     roe: float | None = None
     market_cap: float | None = None

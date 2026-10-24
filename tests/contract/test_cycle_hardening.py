@@ -104,6 +104,8 @@ def test_a_failed_rebuild_rolls_back_and_keeps_the_previous_rows(db: Any) -> Non
     with db.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM cycle_month_stats")
         assert cur.fetchone()[0] == 1
+        cur.execute("SELECT COUNT(*) FROM cycle_meta WHERE key LIKE 'trough\\_%'")
+        assert cur.fetchone()[0] == 0  # rule provenance rides the same transaction
 
 
 def test_unconfigured_and_unreachable_databases_say_different_things(
