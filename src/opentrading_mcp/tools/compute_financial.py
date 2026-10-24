@@ -195,7 +195,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         mục số cổ phiếu không có); 8/9 khi BCTC trả phí mở LCTT.
         detail=true thêm chuỗi input thô.
         """
-        fp = f"v2|{symbol}|{detail}|{periods_n}"  # v2: single-line inputs, no CFO-as-0
+        # v3: chuyển tiếp cảnh báo loại báo cáo của financial_detail (sửa lại #36)
+        fp = f"v3|{symbol}|{detail}|{periods_n}"
         hit = await cache_lookup("stock_forensic", fp)
         if hit is not None:
             return hit
@@ -217,6 +218,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 lc = {}
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("stock_forensic", str(exc))
+        # financial_detail báo kỳ bị loại / nghi trộn loại báo cáo trong "warnings"; các
+        # chỉ số dưới đây dựng trên đúng chuỗi kỳ đó nên người đọc phải thấy cảnh báo.
+        detail_warnings = [
+            f"{name}: {w}"
+            for name, statement in (("KQKD", kq), ("CDKT", cd), ("LCTT", lc))
+            if isinstance(statement, dict)
+            for w in statement.get("warnings") or []
+        ]
         rev = _fd_line(kq, "revenue")
         gross = _fd_line(kq, "gross")
         ni = _fd_line(kq, "net_income")
@@ -374,7 +383,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("info", f"stock_forensic {sym} f={counted}")
         return await cache_store(
             "stock_forensic", fp, TTL_SECONDS["financeinfo"],
-            out, source="computed-local",
+            out, source="computed-local", warnings=detail_warnings or None,
         )
 
     @server.tool(annotations=READ_ONLY)

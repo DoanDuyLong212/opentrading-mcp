@@ -15,6 +15,7 @@ import json
 import os
 import re
 import time
+import unicodedata
 from typing import Any
 
 import httpx
@@ -680,16 +681,48 @@ def financial_lctt(symbol: str, years: int = 2) -> dict[str, Any]:
 
 
 
-def _report_scope(allowed: list[dict[str, Any]]) -> tuple[Any, bool]:
-    """Chọn MỘT loại báo cáo cho cả chuỗi kỳ (issue #36).
+def _united_id(period: dict[str, Any]) -> Any:
+    return period.get("UnitedId", period.get("UnitedID"))
 
-    Ưu tiên hợp nhất (nhận qua ``UnitedName`` chứa "hợp nhất"); nếu không có tên
-    thì dùng loại của kỳ mới nhất. Trả về ``(UnitedId, is_consolidated)``.
+
+def _report_class(period: dict[str, Any]) -> str:
+    """'consolidated' | 'parent' | 'unknown', đọc từ ``UnitedName`` (NFC, chữ thường).
+
+    Dữ liệu thật (BVH, FPT 24/10/2026) có ``UnitedName`` nhưng KHÔNG có khóa
+    ``UnitedId``, nên phân loại theo tên chứ không theo id.
     """
-    for p in reversed(allowed):
-        if isinstance(p, dict) and "hợp nhất" in str(p.get("UnitedName", "")).lower():
-            return p.get("UnitedId"), True
-    return (allowed[-1].get("UnitedId") if allowed else None), False
+    name = unicodedata.normalize("NFC", str(period.get("UnitedName") or "")).lower()
+    if "hợp nhất" in name:
+        return "consolidated"
+    if any(marker in name for marker in ("công ty mẹ", "riêng", "đơn lẻ")):
+        return "parent"
+    return "unknown"
+
+
+def _report_scope(allowed: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str | None]:
+    """Giữ MỘT loại báo cáo cho cả chuỗi kỳ (issue #36); trả (kỳ giữ lại, căn cứ).
+
+    - Có kỳ phân loại được theo tên: ưu tiên hợp nhất, không có thì lấy loại của kỳ
+      mới nhất phân loại được; kỳ khác loại hoặc không rõ loại bị loại bỏ.
+    - Không kỳ nào có tên nhưng có id: giữ id của kỳ mới nhất (hành vi của #40).
+    - Không có cả hai: giữ nguyên (căn cứ None) — người gọi phải cảnh báo.
+    """
+    classes = [_report_class(p) for p in allowed]
+    known = [c for c in classes if c != "unknown"]
+    if known:
+        target = "consolidated" if "consolidated" in known else known[-1]
+        return [p for p, c in zip(allowed, classes, strict=True) if c == target], "UnitedName"
+    ids = [_united_id(p) for p in allowed]
+    if any(i is not None for i in ids):
+        newest = next(i for i in reversed(ids) if i is not None)
+        return [p for p, i in zip(allowed, ids, strict=True) if i == newest], "UnitedId"
+    return list(allowed), None
+
+
+# Dòng "TỔNG CỘNG TÀI SẢN" của các mẫu thường / ngân hàng / chứng khoán / bảo hiểm.
+_TOTAL_ASSETS_NORMS = (2996, 4375, 4476, 3095)
+# Tổng tài sản đổi quá hệ số này giữa hai kỳ liền kề: nghi trộn loại báo cáo.
+_ASSET_JUMP = 3.0
 
 
 def _period_label(year: Any, term_id: Any) -> str:
@@ -721,24 +754,34 @@ def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -
     allowed = [
         p for p in periods if isinstance(p, dict) and p.get("IsShowData_Permission") is not False
     ]
-    # Issue #36: upstream trả cả báo cáo hợp nhất lẫn công ty mẹ (UnitedId khác
-    # nhau). Trộn hai loại làm QoQ sai (BVH: Q1 hợp nhất 307k tỷ vs Q2 mẹ 19k tỷ).
-    # Giữ MỘT loại cho cả chuỗi kỳ và gắn metadata + warning cho phần bị loại.
-    scope, consolidated = _report_scope(allowed)
-    scoped = (
-        [p for p in allowed if p.get("UnitedId") == scope] if scope is not None else allowed
-    )
+    # Issue #36: upstream trả cả báo cáo hợp nhất lẫn công ty mẹ. Trộn hai loại làm
+    # QoQ sai (BVH: Q1 hợp nhất 307k tỷ vs Q2 công ty mẹ 19k tỷ). Giữ MỘT loại cho cả
+    # chuỗi kỳ, báo rõ kỳ bị loại, và không bao giờ khẳng định "hợp nhất" khi không biết.
+    scoped, basis = _report_scope(allowed)
     warnings: list[str] = []
-    dropped = [p for p in allowed if p.get("UnitedId") != scope]
+    dropped = [p for p in allowed if not any(p is q for q in scoped)]
     if dropped:
         dropped_labels = ", ".join(
             _period_label(p.get("YearPeriod"), p.get("ReportTermID")) for p in dropped[:6]
         )
-        kind = "consolidated" if consolidated else "newest"
         warnings.append(
-            f"vietstock mixed report types (UnitedId) — kept UnitedId={scope} ({kind});"
+            f"vietstock mixed report types ({basis}) — kept one report type;"
             f" dropped {len(dropped)} period(s): {dropped_labels}"
         )
+    if basis is None:
+        warnings.append(
+            "vietstock period list carries no report type (UnitedName/UnitedId):"
+            " consolidated and parent-only periods may be mixed"
+        )
+    # Hai bản cùng kỳ (ví dụ soát xét và kiểm toán): giữ bản đứng sau trong danh sách.
+    by_period: dict[tuple[Any, Any], dict[str, Any]] = {}
+    for p in scoped:
+        by_period[(p.get("YearPeriod"), p.get("ReportTermID"))] = p
+    if len(by_period) < len(scoped):
+        warnings.append(
+            f"vietstock lists {len(scoped) - len(by_period)} duplicate period(s); kept the last"
+        )
+    scoped = [p for p in scoped if any(p is q for q in by_period.values())]
     kept = scoped[-max(int(periods_n), 1) :]
     if not kept:
         raise ProviderAuthMissing(f"vietstock no permitted periods for {symbol} {code}")
@@ -784,14 +827,40 @@ def financial_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -
             for i in range(1, len(kept) + 1)
         ]
         series.append({"norm_id": nid, "name": name_by_id.get(nid), "values": values})
+        if nid in _TOTAL_ASSETS_NORMS:
+            # Phòng thủ thêm khi tên loại báo cáo sai/thiếu: tổng tài sản không nhảy
+            # hàng chục lần giữa hai quý liền kề nếu cùng một pháp nhân.
+            for i in range(1, len(values)):
+                a, b = values[i - 1], values[i]
+                if isinstance(a, (int, float)) and isinstance(b, (int, float)) and a > 0 < b:
+                    if max(a, b) / min(a, b) > _ASSET_JUMP:
+                        warnings.append(
+                            f"total assets change x{max(a, b) / min(a, b):.1f} between"
+                            f" {period_labels[i - 1]} and {period_labels[i]}:"
+                            " possible consolidated/parent-only mix"
+                        )
+    classes = [_report_class(p) for p in kept]
+    ids = {_united_id(p) for p in kept}
     return {
         "symbol": symbol.upper(),
         "statement": code,
         "unit": "VNDbn",
         "periods": period_labels,
         "rows": series,
-        # Issue #36: khai báo rõ loại báo cáo của chuỗi kỳ này.
-        "report_type": {"UnitedId": scope, "consolidated": consolidated},
+        # Issue #36: loại báo cáo của chuỗi kỳ. consolidated chỉ True/False khi MỌI kỳ
+        # giữ lại cùng một loại đã biết; còn lại là None (không khẳng định điều không biết).
+        "report_type": {
+            "UnitedId": next(iter(ids)) if len(ids) == 1 else None,
+            "consolidated": (
+                True if classes and all(c == "consolidated" for c in classes)
+                else False if classes and all(c == "parent" for c in classes)
+                else None
+            ),
+            "basis": basis,
+            "periods": {
+                label: p.get("UnitedName") for label, p in zip(period_labels, kept, strict=True)
+            },
+        },
         **({"warnings": warnings} if warnings else {}),
     }
 
