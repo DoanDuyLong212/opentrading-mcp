@@ -398,14 +398,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         patterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,
         swings, swing_trend, fib); bỏ qua để lấy full. interval: 1D (250 nến),
         1W (dài, tối thiểu 30 nến) hoặc 1M (tối thiểu 24 nến); chỉ báo nào chưa đủ
-        nến thì null (không điền 50/0). ichimoku (displacement 26 như TradingView, lệch 25
-        nến): senkou_a/senkou_b là mây dưới giá hiện tại (tính từ 25 nến trước),
-        senkou_*_ahead là mây chiếu tới; chikou là giá đóng cửa 25 nến trước.
+        nến thì null (không điền 50/0). ichimoku trả offset_bars=25 và convention:
+        senkou_a/senkou_b là mây tại nến hiện tại từ phép tính 25 nến trước;
+        senkou_*_ahead là span tính hôm nay; chikou là giá đóng cửa 25 nến trước
+        để so với close hiện tại theo quy ước này. Chưa xác nhận parity với
+        TradingView built-in; chưa hỗ trợ lựa chọn offset 26.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
-        # v2: null for uncomputable indicators, Ichimoku cloud under today's price
-        fp = f"v2|{symbol}|{interval}|{indicators}"
+        # v3: publish the Ichimoku alignment convention.
+        fp = f"v3|{symbol}|{interval}|{indicators}"
         hit = await cache_lookup("signals_technical", fp)
         if hit is not None:
             return hit

@@ -8,14 +8,16 @@ Counting rules ported from Trading_Agents/wyckoff/timing.py
   hơn phiên trước. Chỉ tính cửa sổ 25 phiên gần nhất; phiên rớt khi quá
   25 phiên hoặc giá hồi +5% trên giá đóng của nó.
 - Follow-through: sau nhịp giảm, Day 1 là phiên tăng đầu tiên từ đáy; FTD nổ
-  từ Day 4 với tăng >= 1.25% + volume cao hơn (>= 1.0% cho xác nhận lần 2);
-  gãy khi thủng đáy Day 1; không bao giờ Day 2-3.
+  từ Day 4 với tăng >= 1.25% + volume cao hơn; giữ ngày FTD đầu tiên để
+  làm mốc đếm phiên phân phối;
+  gãy khi low trong phiên thủng đáy Day 1; không bao giờ Day 2-3.
 - Có FTD xác nhận thì đếm lại phiên phân phối từ đầu (rally mới xóa đếm cũ).
 """
 
 from __future__ import annotations
 
 import functools
+import math
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -42,12 +44,12 @@ DD_WINDOW = 25
 DD_RALLY_RESET = 0.05
 
 FTD_FIRST_GAIN = 0.0125
-FTD_CONFIRM_GAIN = 0.01
 FTD_MIN_DAY = 4
 FTD_MAX_DAY = 25
 FTD_LOOKBACK = 60
 
 _CLOSE_KEYS = ("c", "close", "Close", "CLOSE")
+_OPEN_KEYS = ("o", "open", "Open", "OPEN")
 _HIGH_KEYS = ("h", "high", "High", "HIGH")
 _LOW_KEYS = ("l", "low", "Low", "LOW")
 _VOL_KEYS = ("v", "volume", "Volume", "VOLUME", "vol")
@@ -73,9 +75,21 @@ def _series(
             c = float(pick_value(r, _CLOSE_KEYS))
             v = float(pick_value(r, _VOL_KEYS))
             lo = float(pick_value(r, _LOW_KEYS))
+            raw_high = pick_value(r, _HIGH_KEYS)
+            raw_open = pick_value(r, _OPEN_KEYS)
+            hi = float(raw_high) if raw_high is not None else None
+            op = float(raw_open) if raw_open is not None else None
         except (TypeError, ValueError):
             return None
-        if c <= 0 or v < 0:
+        if not all(math.isfinite(x) for x in (c, v, lo)):
+            return None
+        if c <= 0 or v < 0 or lo <= 0 or lo > c:
+            return None
+        if hi is not None and (not math.isfinite(hi) or hi < max(c, lo)):
+            return None
+        if op is not None and (
+            not math.isfinite(op) or op < lo or (hi is not None and op > hi)
+        ):
             return None
         closes.append(c)
         volumes.append(v)
@@ -163,17 +177,9 @@ def _follow_through(
     last_failed: dict[str, Any] | None = None
     j = start + 1
     while j < n:
-        if day1 is None:
-            if lows[j] < rolling_low:
-                rolling_low = lows[j]
-            elif closes[j] > closes[j - 1]:
-                day1, day1_low, ftd = j, rolling_low, None
-                if outcome["state"] == "failed":
-                    # a new attempt replaces the failed one as the latest
-                    outcome = dict(none)
-            j += 1
-            continue
-        if closes[j] < day1_low:
+        # Apply each closed bar in order. A break of an existing attempt takes
+        # precedence over any close-based recovery or FTD on that same bar.
+        if day1 is not None and lows[j] < day1_low:
             outcome = pack("failed", day1, day1_low, ftd)
             last_failed = {
                 "day1_date": dates[day1],
@@ -184,16 +190,31 @@ def _follow_through(
             rolling_low = lows[j]
             j += 1
             continue
-        if j - day1 + 1 >= FTD_MIN_DAY:
+        if day1 is None:
+            # Keep the existing close-up Day 1 policy. If a bar makes a new low,
+            # do not also start a new attempt on its recovering close.
+            if lows[j] < rolling_low:
+                rolling_low = lows[j]
+            elif closes[j] > closes[j - 1]:
+                day1, day1_low, ftd = j, rolling_low, None
+                if outcome["state"] == "failed":
+                    # a new attempt replaces the failed one as the latest
+                    outcome = dict(none)
+            j += 1
+            continue
+        if ftd is None and j - day1 + 1 >= FTD_MIN_DAY:
             gain = closes[j] / closes[j - 1] - 1.0
-            thresh = FTD_FIRST_GAIN if ftd is None else FTD_CONFIRM_GAIN
-            if gain >= thresh and volumes[j] > volumes[j - 1]:
+            if gain >= FTD_FIRST_GAIN and volumes[j] > volumes[j - 1]:
                 ftd = j
                 outcome = pack("confirmed", day1, day1_low, ftd)
         j += 1
-    if day1 is not None and outcome["state"] == "none":
-        age = n - 1 - day1
-        outcome = pack("stale" if age > FTD_MAX_DAY else "rally_attempt", day1, day1_low, ftd)
+    if day1 is not None:
+        if ftd is not None:
+            # Retain the first FTD anchor while refreshing the attempt's age.
+            outcome = pack("confirmed", day1, day1_low, ftd)
+        elif outcome["state"] == "none":
+            age = n - 1 - day1
+            outcome = pack("stale" if age > FTD_MAX_DAY else "rally_attempt", day1, day1_low, ftd)
     if last_failed is not None and outcome["state"] != "failed":
         outcome["last_failed"] = last_failed
     return outcome
@@ -268,7 +289,7 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         want = max(30, min(int(days or 40), 90))
         # Date in fp (VN calendar, not the server's): a new session must recompute.
         today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
-        fp = f"v2|{sym}|{want}|{today}"  # v2: ISO dates, new attempt after a failure
+        fp = f"v4|{sym}|{want}|{today}"  # v4: finite OHLC, first FTD stays the reset anchor
         hit = await cache_lookup("distribution_count", fp)
         if hit is not None:
             return hit

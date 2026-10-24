@@ -217,12 +217,10 @@ def compute(
     boll_upper = _last_float(mid + 2 * std)
     boll_lower = _last_float(mid - 2 * std)
 
-    # Ichimoku (9/26/52, displacement 26). Each line is the midpoint of the highest high
-    # and the lowest low over its window. As in TradingView's built-in (offset =
-    # displacement - 1, the current bar counts as the first), the spans are plotted 25
-    # bars ahead, so the cloud under today's price is the spans computed 25 bars ago:
-    # senkou_a/senkou_b report that cloud (what the signal compares against), *_ahead
-    # the spans just computed.
+    # Ichimoku (9/26/52). This implementation aligns the current cloud with spans
+    # computed 25 completed bars earlier; a 26-bar convention is also published.
+    # We retain the established 25-bar contract until a reference series proves
+    # which chart convention consumers need. *_ahead are the spans computed now.
     def _midpoint(period: int) -> Any:
         return (
             high.rolling(period, min_periods=period).max()
@@ -257,6 +255,9 @@ def compute(
         else:
             ichi_signal = "neutral"
     ichimoku = {
+        "offset_bars": 25,
+        "convention": "current_cloud_from_spans_25_bars_prior",
+        "chikou_reference": "close_25_bars_ago_for_current_close_comparison",
         "tenkan": tenkan,
         "kijun": kijun,
         "senkou_a": senkou_a,
