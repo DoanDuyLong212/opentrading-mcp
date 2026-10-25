@@ -74,6 +74,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         closes = [c["c"] for c in candles if c["c"]]
+        opens = [c.get("o") for c in candles if c["c"]]
         if len(closes) < 2:
             return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
         gross = closes[-1] / closes[0] - 1
@@ -216,6 +217,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         dates, closes, _walked = _dated_closes(candles)
+        opens = [c.get("o") for c in candles if c["c"]]
         cond_ok: list[bool] | None = None
         cond_warn: list[str] = []
         if condition_symbol:
@@ -268,6 +270,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             months=months,
             quarters=quarters,
             cond_ok=cond_ok,
+            opens=opens,
         )
         out: dict[str, Any] = {
             "symbol": symbol.upper(),
@@ -345,6 +348,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         closes = [c["c"] for c in candles if c["c"]]
+        opens = [c.get("o") for c in candles if c["c"]]
         dates, _, _ = _dated_closes(candles)
         ranked = []
         for f, s in combos:
@@ -357,6 +361,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 dates=dates,
                 months=months,
                 quarters=quarters,
+                opens=opens,
             )
             ranked.append({"fast": f, "slow": s, **res})
         ranked.sort(key=lambda r: r["net_return"], reverse=True)

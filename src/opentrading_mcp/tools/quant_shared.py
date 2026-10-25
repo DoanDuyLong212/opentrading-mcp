@@ -161,6 +161,7 @@ def _run_strategy(
     months: list[int] | None = None,
     quarters: list[int] | None = None,
     cond_ok: list[bool] | None = None,
+    opens: list[float] | None = None,
 ) -> dict[str, Any]:
     """Long-only engine: buy_hold | sma_cross | momentum | rsi_meanrev.
 
@@ -168,6 +169,13 @@ def _run_strategy(
     matching bars; off-window bars force flat (exits always allowed, so no stuck
     positions). rsi_meanrev: long when RSI14 < rsi_low, flat when RSI14 > rsi_high.
     cond_ok: optional per-bar entries-allowed flags from a condition asset.
+    Missing cond_ok data blocks entry (F05b: missing can never authorize a trade).
+
+    Fill convention (F05a, user-approved): a decision at close[i-1] fills at
+    open[i] (next-bar-open) and the position accrues open-to-open until its exit
+    fill. When `opens` is unavailable the engine falls back to next-bar-close
+    fills and marks `fill="next-bar-close-fallback"` in the output. The final
+    open position is marked to the last close.
     """
     import statistics
 
@@ -202,8 +210,12 @@ def _run_strategy(
                 base = False
             else:
                 base = True
-        if cond_ok is not None and i < len(cond_ok):
-            base = base and bool(cond_ok[i])
+        if cond_ok is not None:
+            # F05b: missing condition data can never authorize an entry.
+            if i >= len(cond_ok) or cond_ok[i] is None:
+                base = False
+            else:
+                base = base and bool(cond_ok[i])
         return base
 
     if strategy == "buy_hold":
@@ -246,36 +258,75 @@ def _run_strategy(
                 state = 0
             pos.append(state if _allowed(i) else 0)
     fee = max(float(cost_bps), 0.0) / 10000 * 2  # in+out per flip
+
+    # ---- F05a fill machinery -------------------------------------------------
+    # A decision at close[i-1] fills at px[i] where px = opens (next-bar-open,
+    # preferred) or closes (documented fallback). The position held during the
+    # leg px[i-1] -> px[i] is the state decided at close[i-2]; equity accrues
+    # px-to-px, fees apply at each fill, and a still-open position is marked to
+    # the last close.
+    if opens is not None and len(opens) == n:
+        px = [float(o) if o is not None else None for o in opens]
+        fill_mode = "next-bar-open"
+    else:
+        px = list(closes)
+        fill_mode = "next-bar-close-fallback"
+    px_ok = all(p is not None and p > 0 for p in px)
+
+    state = 0  # position decided at close[i-1], filled at px[i]
+    in_pos = False
+    entry_eq = 1.0
+    trades = 0
+    pnls: list[float] = []
     equity = 1.0
     peak = 1.0
     max_dd = 0.0
-    trades = 0
-    pnls: list[float] = []
-    entry_eq = 0.0
-    in_pos = False
+    prev_px = px[0] if px_ok else (closes[0] if closes else None)
     for i in range(1, n):
-        if pos[i - 1] and not in_pos:
-            in_pos = True
-            trades += 1
-            entry_eq = equity
-            equity *= 1 - fee
-        if not pos[i - 1] and in_pos:
-            in_pos = False
-            pnls.append(equity - entry_eq)
-        ret = (closes[i] - closes[i - 1]) / closes[i - 1] if closes[i - 1] else 0.0
-        equity *= 1 + (pos[i - 1] * ret)
-        peak = max(peak, equity)
-        max_dd = max(max_dd, (peak - equity) / peak if peak else 0.0)
+        leg_px = px[i] if px_ok else closes[i]
+        if not leg_px or not prev_px:
+            prev_px = leg_px
+            continue
+        leg_ret = (leg_px - prev_px) / prev_px
+        if in_pos:
+            equity *= 1 + leg_ret
+            peak = max(peak, equity)
+            max_dd = max(max_dd, (peak - equity) / peak if peak else 0.0)
+        prev_px = leg_px
+        # decision made at close[i-1] fills at px[i]
+        want = pos[i - 1]
+        if want != state:
+            if want == 1 and not in_pos:
+                in_pos = True
+                state = 1
+                trades += 1
+                entry_eq = equity
+                equity *= 1 - fee
+            elif want == 0 and in_pos:
+                in_pos = False
+                state = 0
+                equity *= 1 - fee
+                pnls.append(equity - entry_eq)
     if in_pos:
+        # mark the final open position to the last close
+        last_close = closes[-1] if closes else prev_px
+        if prev_px:
+            equity *= last_close / prev_px
         pnls.append(equity - entry_eq)
+
     wins = sum(1 for p in pnls if p > 0)
+    stale = dates is None or len(dates) < n
     out: dict[str, Any] = {
         "trades": trades,
         "net_return": round(equity - 1, 4),
         "max_drawdown": round(max_dd, 4),
         "win_rate": round(wins / len(pnls), 4) if pnls else 0.0,
         "bars": n,
+        "stale": stale,
+        "fill": fill_mode,
     }
+    if stale:
+        out["stale_note"] = "some bars missing dates; signals may use stale observations (F05c)"
     if gated:
         out["month_filtered"] = True
         out["note"] = "entries only in selected months/quarters; exits always allowed"
