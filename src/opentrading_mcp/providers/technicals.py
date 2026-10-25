@@ -66,6 +66,7 @@ def _wma(series: pd.Series, n: int) -> pd.Series:
 def compute(
     candles: list[dict[str, Any]] | pd.DataFrame,
     benchmark: list[float] | None = None,
+    ichimoku_convention: str = "offset25",
 ) -> dict[str, Any]:
     """Compute full technicals from candles with columns t,o,h,l,c,v.
 
@@ -221,6 +222,11 @@ def compute(
     # computed 25 completed bars earlier; a 26-bar convention is also published.
     # We retain the established 25-bar contract until a reference series proves
     # which chart convention consumers need. *_ahead are the spans computed now.
+    if ichimoku_convention not in ("offset25", "classic26"):
+        raise ValueError(
+            f"unknown ichimoku_convention {ichimoku_convention!r} (offset25|classic26)"
+        )
+    offset = 26 if ichimoku_convention == "classic26" else 25
     def _midpoint(period: int) -> Any:
         return (
             high.rolling(period, min_periods=period).max()
@@ -232,11 +238,11 @@ def compute(
         kijun_s = _midpoint(26)
         senkou_a_s = (tenkan_s + kijun_s) / 2
         senkou_b_s = _midpoint(52)
-        chikou_s = close.shift(25)  # the close chikou is plotted against (offset -25)
+        chikou_s = close.shift(offset)  # the close chikou is plotted against (-offset)
         tenkan = _last_float(tenkan_s)
         kijun = _last_float(kijun_s)
-        senkou_a = _last_float(senkou_a_s.shift(25))
-        senkou_b = _last_float(senkou_b_s.shift(25))
+        senkou_a = _last_float(senkou_a_s.shift(offset))
+        senkou_b = _last_float(senkou_b_s.shift(offset))
         senkou_a_ahead = _last_float(senkou_a_s)
         senkou_b_ahead = _last_float(senkou_b_s)
         chikou = _last_float(chikou_s)
@@ -255,9 +261,15 @@ def compute(
         else:
             ichi_signal = "neutral"
     ichimoku = {
-        "offset_bars": 25,
-        "convention": "current_cloud_from_spans_25_bars_prior",
-        "chikou_reference": "close_25_bars_ago_for_current_close_comparison",
+        "offset_bars": offset,
+        "convention": (
+            "classic26_cloud_from_spans_26_bars_prior"
+            if offset == 26
+            else "current_cloud_from_spans_25_bars_prior"
+        ),
+        "chikou_reference": (
+            f"close_{offset}_bars_ago_for_current_close_comparison"
+        ),
         "tenkan": tenkan,
         "kijun": kijun,
         "senkou_a": senkou_a,

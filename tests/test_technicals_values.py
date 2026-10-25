@@ -88,3 +88,36 @@ def test_adx_is_not_averaged_over_warm_up_zeros():
     # DI needs 14 bars, ADX 14 more DX values: 20 bars is not enough.
     assert tech.compute(CANDLES[:20])["adx14"] is None
     assert tech.compute(CANDLES[:40])["adx14"] is not None
+
+
+def _naive_donchian(rows: list[dict[str, Any]], n: int, end_idx: int) -> float:
+    """Independent Donchian midpoint by plain loops (no pandas rolling)."""
+    window = rows[end_idx - n + 1 : end_idx + 1]
+    hi = max(r["h"] for r in window)
+    lo = min(r["l"] for r in window)
+    return (hi + lo) / 2
+
+
+def test_classic26_convention_shifts_the_cloud_one_more_bar():
+    candles = [
+        {"o": 100 + i, "h": 102 + i, "l": 99 + i, "c": 101 + i, "v": 1000 + i}
+        for i in range(90)
+    ]
+    ich = tech.compute(candles, ichimoku_convention="classic26")["ichimoku"]
+    assert ich["offset_bars"] == 26
+    assert ich["convention"] == "classic26_cloud_from_spans_26_bars_prior"
+    # Independent naive-loop Donchian oracle: cloud at the last bar comes from
+    # the 52-window ending 26 bars back; tenkan/kijun use the current window.
+    n = len(candles)
+    assert ich["senkou_b"] == pytest.approx(
+        _naive_donchian(candles, 52, n - 1 - 26), abs=0.01
+    )
+    assert ich["kijun"] == pytest.approx(_naive_donchian(candles, 26, n - 1), abs=0.01)
+    assert ich["tenkan"] == pytest.approx(_naive_donchian(candles, 9, n - 1), abs=0.01)
+    # chikou reads the close 26 bars back under this convention.
+    assert ich["chikou"] == round(candles[n - 1 - 26]["c"], 2)
+
+
+def test_unknown_ichimoku_convention_is_rejected():
+    with pytest.raises(ValueError):
+        tech.compute(CANDLES, ichimoku_convention="fast7")

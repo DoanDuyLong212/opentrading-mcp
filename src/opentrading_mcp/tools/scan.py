@@ -385,6 +385,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbol: str,
         interval: str = "1D",
         indicators: list[str] | None = None,
+        ichimoku_convention: str = "offset25",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Chấm kỹ thuật đầy đủ từ nến local trên 1D/1W/1M. Dùng khi chọn thời điểm vào lệnh cho 1
@@ -398,16 +399,19 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         patterns, support, resistance, rs_vs_bench, pos_52w, sma150, ichimoku,
         swings, swing_trend, fib); bỏ qua để lấy full. interval: 1D (250 nến),
         1W (dài, tối thiểu 30 nến) hoặc 1M (tối thiểu 24 nến); chỉ báo nào chưa đủ
-        nến thì null (không điền 50/0). ichimoku trả offset_bars=25 và convention:
-        senkou_a/senkou_b là mây tại nến hiện tại từ phép tính 25 nến trước;
-        senkou_*_ahead là span tính hôm nay; chikou là giá đóng cửa 25 nến trước
-        để so với close hiện tại theo quy ước này. Chưa xác nhận parity với
-        TradingView built-in; chưa hỗ trợ lựa chọn offset 26.
+        nến thì null (không điền 50/0). ichimoku trả offset_bars và convention:
+        senkou_a/senkou_b là mây tại nến hiện tại từ phép tính offset nến trước;
+        senkou_*_ahead là span tính hôm nay; chikou là giá đóng cửa offset nến trước
+        để so với close hiện tại. ichimoku_convention: 'offset25' (mặc định — mây
+        hiện tại từ 25 completed bars trước, quy ước đã phát hành) hoặc 'classic26'
+        (displacement 26 theo tài liệu TradingView). Chưa parity TradingView
+        built-in với cả hai; chọn convention đổi kết quả 1 bar neo và nằm trong
+        fingerprint cache.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
-        # v3: publish the Ichimoku alignment convention.
-        fp = f"v3|{symbol}|{interval}|{indicators}"
+        # v4: optional classic26 Ichimoku convention.
+        fp = f"v4|{symbol}|{interval}|{indicators}|{ichimoku_convention}"
         hit = await cache_lookup("signals_technical", fp)
         if hit is not None:
             return hit
@@ -420,6 +424,15 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 {"tool": "signals_technical"},
                 source="unavailable",
                 warnings=[f"unknown interval {interval!r} (1D|1W|1M)"],
+                availability="unavailable",
+            )
+        if ichimoku_convention not in ("offset25", "classic26"):
+            return make_envelope(
+                {"tool": "signals_technical"},
+                source="unavailable",
+                warnings=[
+                    f"unknown ichimoku_convention {ichimoku_convention!r} (offset25|classic26)"
+                ],
                 availability="unavailable",
             )
         days = {"1D": 250, "1W": 600, "1M": 1800}[iv]
@@ -458,7 +471,9 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             bench = []
             warnings_list.append(f"VNINDEX benchmark unavailable: {exc}")
         try:
-            out = tech_p.compute(candles, benchmark=bench or None)
+            out = tech_p.compute(
+                candles, benchmark=bench or None, ichimoku_convention=ichimoku_convention
+            )
         except Exception as exc:
             return make_envelope(
                 {"tool": "signals_technical"},
