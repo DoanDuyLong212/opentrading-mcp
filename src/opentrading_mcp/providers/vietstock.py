@@ -693,7 +693,12 @@ def annual_forensic_lines(symbol: str, *, years: tuple[int, int]) -> dict[str, A
     # 3005 stays source diagnostics only: Vietnam aggregate receivables mix
     # trade, inter-company and other receivables, so DSRI reads the customer
     # trade line (3022) instead. 2242 is the LCTT depreciation expense (DEPI).
-    ids = (2212, 2216, 2224, 2227, 2234, 2242, 2996, 2998, 3005, 3022, 3035, 3036, 3078)
+    # 3083-3086 carry gross PPE + accumulated depreciation (DEPI v2, Beneish
+    # 2013 Appendix A uses gross PP&E in the depreciation rate).
+    ids = (
+        2212, 2216, 2224, 2227, 2234, 2242, 2996, 2998, 3005, 3022,
+        3035, 3036, 3078, 3083, 3084, 3085, 3086,
+    )
     if (
         len(years) != 2
         or any(not isinstance(y, int) or isinstance(y, bool) or y < 1900 for y in years)

@@ -22,7 +22,7 @@ from opentrading_mcp.providers.forensic import (
 )
 
 SCHEMA_VERSION = "annual-forensic-v1"
-BENEISH_VERSION = "beneish-8-cfo-2013-v1"
+BENEISH_VERSION = "beneish-8-cfo-2013-v2"
 PIOTROSKI_VERSION = "piotroski-9-2000-beginning-assets-v1"
 BENEISH_INTERCEPT = -4.84
 BENEISH_COEF = {
@@ -123,6 +123,7 @@ def calculate_forensic(bundle: dict[str, Any]) -> dict[str, Any]:
     financial = business_type in {"bank", "securities", "insurance"}
     known = business_type == "general"
     inputs = _Inputs(window)
+    depi_basis = [None]  # denominator basis of the DEPI rate (gross_ppe preferred)
 
     def ratio(period: str, numerator: str, denominator: str, *, signed: bool = False):
         return inputs.div(
@@ -155,8 +156,18 @@ def calculate_forensic(bundle: dict[str, Any]) -> dict[str, Any]:
         return None if share is None else 1 - share
 
     def depreciation_rate(period: str):
-        dep, ppe = inputs.get(period, "depreciation"), inputs.get(period, "net_ppe")
-        return inputs.div(dep, inputs.add(dep, ppe), f"{period}.depreciation_rate")
+        dep = inputs.get(period, "depreciation")
+        # Beneish (2013) Appendix A uses gross PP&E in the depreciation rate;
+        # optional peek (not via inputs.get): a missing gross line must not
+        # poison the strict completeness set when net PPE carries the rate.
+        record = window.get(period) or {}
+        gross = record.get("values", {}).get("gross_ppe")
+        if finite_number(gross):
+            depi_basis[0] = "gross_ppe"
+        else:
+            gross = record.get("values", {}).get("net_ppe")
+            depi_basis[0] = "net_ppe" if finite_number(gross) else None
+        return inputs.div(dep, inputs.add(dep, gross), f"{period}.depreciation_rate")
 
     def beneish_leverage(period: str):
         debt = inputs.add(
@@ -305,6 +316,7 @@ def calculate_forensic(bundle: dict[str, Any]) -> dict[str, Any]:
         else "partial",
         "score": m_score,
         "indexes": indexes,
+        "depi_denominator": depi_basis[0],
         "missing_inputs": m_missing,
         "component_missing": component_missing,
         "input_sources": beneish_sources,
