@@ -10,6 +10,7 @@ import copy
 import json
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -233,10 +234,152 @@ def test_invalid_numeric_values_stay_missing(value):
     assert "revenue" not in parsed(raw)["records"][-1]["values"]
 
 
-def test_missing_ppe_component_is_not_zero():
-    raw = raw_annual()
-    raw["pages"][0][1]["Báo cáo tình hình tài chính"][2]["Value1"] = None
-    assert "net_ppe" not in parsed(raw)["records"][-1]["values"]
+def _annual_mirror_minimal():
+    """Realistic financeinfo annual mirror: 8 canonical values, NO PPE lines."""
+    headers = [
+        {
+            "ID": i,
+            "CompanyID": 191,
+            "YearPeriod": y,
+            "ReportTermID": 1,
+            "TermCode": "NAM",
+            "United": "HN",
+            "AuditedStatus": "KT",
+            "PeriodBegin": f"{y}01",
+            "PeriodEnd": f"{y}12",
+            "BusinessType": 1,
+        }
+        for i, y in [(3, 2023), (1, 2025), (2, 2024)]
+    ]
+
+    def row(norm, one, two, three):
+        return {
+            "ReportNormID": norm,
+            "Name": "synthetic",
+            "Unit": "",
+            "Value1": one,
+            "Value2": two,
+            "Value3": three,
+        }
+
+    return {
+        "symbol": "FPT",
+        "period": "year",
+        "pages": [
+            [
+                headers,
+                {
+                    "Kết quả kinh doanh": [
+                        # cột theo thứ tự header: Value1=2023, Value2=2025, Value3=2024
+                        # cột theo header ID: Value1=2025, Value2=2024, Value3=2023
+                        row(2216, 180000000000, 120000000000, 100000000000),
+                        row(2212, 18000000000, 8000000000, 4000000000),
+                    ],
+                    "Báo cáo tình hình tài chính": [
+                        row(2996, 140000000000, 100000000000, 200000000000),
+                        row(2998, 110000000000, 90000000000, 80000000000),
+                        row(3000, 70000000000, 40000000000, 60000000000),
+                        row(3014, 25000000000, 20000000000, 30000000000),
+                    ],
+                },
+            ]
+        ],
+    }
+
+
+def _bctc_rows(component_values: dict[int, tuple[Any, Any]]) -> list[dict[str, Any]]:
+    """Annual BCTC rows for 2024/2025 with the shared audited identity."""
+    rows = []
+    for norm, (v24, v25) in component_values.items():
+        for year, value in ((2024, v24), (2025, v25)):
+            rows.append(
+                {
+                    "StockCode": "FPT",
+                    "ReportTermID": 1,
+                    "UnitedName": "Hợp nhất",
+                    "AuditedStatusDescription": "Kiểm toán",
+                    "NgayCongboBC": "/Date(1773939600000)/",
+                    "ReportNormId": norm,
+                    "YearPeriod": year,
+                    "Value": value,
+                }
+            )
+    return rows
+
+
+def _no_lease_bctc() -> dict[str, Any]:
+    """HPG-shaped response: tangible PPE only — no finance-lease rows at all."""
+    return {
+        "symbol": "FPT",
+        "unit_request": 1,
+        "rows": _bctc_rows(
+            {
+                2212: (8000000000, 18000000000),
+                2216: (120000000000, 180000000000),
+                2224: (1000000000, 2000000000),
+                2227: (500000000, 900000000),
+                2234: (10000000000, 22000000000),
+                2242: (6000000000, 8000000000),
+                2996: (100000000000, 140000000000),
+                2998: (90000000000, 110000000000),
+                3022: (12000000000, 27000000000),
+                3035: (90000000000, 100000000000),
+                3078: (20000000000, 15000000000),
+                3083: (110000000000, 180000000000),
+                3084: (-20000000000, -80000000000),
+            }
+        ),
+    }
+
+
+def test_missing_ppe_component_is_excluded_and_disclosed():
+    # One PPE component missing from the response: the net line is the sum of
+    # the components actually returned (never faked as zero), and the absent
+    # component is disclosed in limitations + provenance.
+    out = f.enrich_annual(
+        f.normalize_annual(_annual_mirror_minimal(), as_of=AS_OF),
+        {
+            "symbol": "FPT",
+            "unit_request": 1,
+            "rows": _bctc_rows(
+                {
+                    2212: (8000000000, 18000000000),
+                    2216: (120000000000, 180000000000),
+                    2224: (1000000000, 2000000000),
+                    2227: (500000000, 900000000),
+                    2234: (10000000000, 22000000000),
+                    2242: (6000000000, 8000000000),
+                    2996: (100000000000, 140000000000),
+                    2998: (90000000000, 110000000000),
+                    3022: (12000000000, 27000000000),
+                    3036: (1000000000, 1000000000),  # leased present, tangible absent
+                    3078: (20000000000, 15000000000),
+                    3086: (-500000000, -1000000000),
+                }
+            ),
+        },
+    )
+    record = out["records"][-1]
+    assert record["values"]["net_ppe"] == 1000000000  # the leased component alone
+    assert any("net_tangible_ppe" in item for item in out["limitations"])
+    assert record["input_provenance"]["net_ppe"]["components"] == ["net_leased_ppe"]
+    assert record["input_provenance"]["net_ppe"]["components_absent"] == ["net_tangible_ppe"]
+
+
+def test_ppe_components_without_finance_leases_still_derive_gross():
+    # HPG-shaped template: no finance-lease rows at all — net/gross PPE come
+    # from the tangible components alone, and the gross/accum identity holds
+    # (110 - 20 == 90; 180 - 80 == 100).
+    out = f.enrich_annual(
+        f.normalize_annual(_annual_mirror_minimal(), as_of=AS_OF),
+        _no_lease_bctc(),
+    )
+    record = out["records"][-1]
+    assert record["values"]["net_ppe"] == 100000000000  # 3035 only
+    assert record["values"]["gross_ppe"] == 180000000000  # 3083 only
+    assert record["input_provenance"]["gross_ppe"]["components"] == ["gross_tangible_ppe"]
+    assert record["input_provenance"]["gross_ppe"]["components_absent"] == ["gross_leased_ppe"]
+    assert any("gross_leased_ppe" in item for item in out["limitations"])
 
 
 def test_window_needs_three_balances_and_two_flows():
