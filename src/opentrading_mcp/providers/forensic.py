@@ -64,8 +64,11 @@ BCTC_FIELDS = {
     2224: "admin",
     2227: "selling",
     2234: "cfo",
-    2242: "depreciation",
-    3022: "receivables",
+    # Observed source lines, but their accounting definitions are narrower or
+    # broader than the respective Beneish variables. Preserve for inspection;
+    # never promote them to canonical model inputs without a verified bridge.
+    2242: "depreciation_and_investment_property_observed",
+    3022: "trade_receivables_observed",
     3035: "net_tangible_ppe",
     3036: "net_leased_ppe",
     3078: "long_term_debt",
@@ -292,14 +295,9 @@ def _bctc_publication(value: Any) -> date | None:
 
 
 def _component_sum(
-    added: dict[str, Any], keys: tuple[int, ...]
-) -> tuple[Any, list[int], list[int]]:
-    """Sum the components the source actually returned; disclose absent ones.
-
-    A component absent from the standard-template response (e.g. no finance
-    leases) is excluded from the sum and disclosed — never faked as zero, and
-    never allowed to void the whole line.
-    """
+    added: dict[str, Any], keys: tuple[str, ...]
+) -> tuple[Any, list[str], list[str]]:
+    """Derive a canonical total only from a complete set of observed lines."""
     total, used, absent = None, [], []
     for k in keys:
         v = added.get(k)
@@ -308,7 +306,7 @@ def _component_sum(
             used.append(k)
         else:
             absent.append(k)
-    return total, used, absent
+    return (total if not absent else None), used, absent
 
 
 def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
@@ -418,7 +416,7 @@ def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]
             net_total, net_used, net_absent = _component_sum(
                 added, ("net_tangible_ppe", "net_leased_ppe")
             )
-            if net_used:
+            if net_total is not None:
                 if "net_ppe" in record["values"] and record["values"]["net_ppe"] != net_total:
                     reject("annual BCTC net PPE conflicts with financeinfo")
                     continue
@@ -426,23 +424,21 @@ def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]
             gross_total, gross_used, gross_absent = _component_sum(
                 added, ("gross_tangible_ppe", "gross_leased_ppe")
             )
-            accum_total, accum_used, accum_absent = _component_sum(
+            accum_total, _, accum_absent = _component_sum(
                 added, ("accum_dep_tangible_ppe", "accum_dep_leased_ppe")
             )
-            if gross_used and accum_used:
+            if gross_total is not None and accum_total is not None:
                 net_expected = added.get("net_ppe")
-                if (
-                    net_expected is not None
-                    and gross_total + accum_total != net_expected
-                ):
+                if net_expected is not None and gross_total + accum_total != net_expected:
                     reject("annual BCTC gross/accumulated PPE inconsistent with net PPE")
                     continue
-                added["gross_ppe"] = gross_total
+                if net_expected is not None:
+                    added["gross_ppe"] = gross_total
             absent_note = sorted(net_absent + gross_absent + accum_absent)
-            if net_used and absent_note:
+            if absent_note:
                 out["limitations"].append(
                     f"annual BCTC PPE component(s) {absent_note} absent for {year}"
-                    " — excluded from the sums, not treated as zero values"
+                    " — affected canonical total unavailable; observed components retained"
                 )
             record["values"].update(added)
             if "cfo" in added:

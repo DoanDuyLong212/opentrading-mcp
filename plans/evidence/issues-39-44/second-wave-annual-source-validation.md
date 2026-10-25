@@ -71,3 +71,36 @@ Specific gaps preserved:
 
 Verification: 100 focused annual/model tests pass; Ruff passes. Fixture
 tests reject wrong scope, anchor, publication, duplicate line and unit.
+
+## Strict-model correction (2026-10-25)
+
+The source retains norm 3022 as `trade_receivables_observed` and norm 2242
+as `depreciation_and_investment_property_observed`, each with its original
+publication and line provenance. Neither is silently promoted to the
+Compustat-style receivables total or pure depreciation expense. The captured
+FPT annual report therefore produces a partial Beneish result with
+`m_score=null`, no cutoff and no M-score flag. Model-complete synthetic tests
+still exercise all eight variables without claiming that live FPT inputs meet
+their definitions.
+
+Net and gross PPE require both tangible and finance-leased components to be
+present as measured values in each period. An absent row has unknown value;
+the adapter keeps observed components but does not infer that the missing
+component equals zero. DEPI v3 uses **net** PPE in both annual rates and
+identifies its denominator, following the explicit equation in [Exhibit A1,
+Appendix A](https://cpb-us-w2.wpmucdn.com/sites.udel.edu/dist/a/855/files/2020/07/Earnings-Manipulation-and-Expected-Returns.pdf):
+`Depreciation [14–65] / (Depreciation + PPE [8])`, where the same table
+labels PPE [8] as net. The article's later prose calls it gross PP&E; this
+internal inconsistency is documented rather than silently switching basis.
+A missing net component in either year leaves DEPI and the full score
+unavailable. The paper's −1.78 cutoff remains a published reference, not a
+threshold calibrated on Vietnam equities.
+
+This strict gate reduces coverage for HPG/MWG-style annual templates that omit
+the finance-lease PPE rows: a previously derived tangible-only PPE total may
+now be absent, leaving AQI and the complete M-score partial. The omitted row
+has not been proven to mean an audited zero. Restore a complete total only
+after a captured HPG/MWG annual report and its matching provider payload
+verify the subtotal and intangible-asset hierarchy, lease absence semantics,
+period/scope/revision identity, and gross-plus-accumulated-to-net
+reconciliation. Do not impute a zero finance-lease component from row absence.

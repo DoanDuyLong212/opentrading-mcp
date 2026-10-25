@@ -15,6 +15,7 @@ TOOL_CATALOG_URI = "opentrading://catalog/tools"
 TERM_TYPES_URI = "opentrading://reference/term-types"
 EXCHANGES_URI = "opentrading://reference/exchanges"
 GICS_URI = "opentrading://reference/gics"
+FINANCIAL_CONTRACTS_URI = "opentrading://reference/financial-contracts"
 
 _TERM_TYPES = {
     "termTypeID": {
@@ -106,4 +107,13 @@ def register_resources(server: FastMCP) -> list[str]:
     def gics() -> str:
         return json.dumps(_GICS)
 
-    return [TOOL_CATALOG_URI, TERM_TYPES_URI, EXCHANGES_URI, GICS_URI]
+    @server.resource(
+        FINANCIAL_CONTRACTS_URI,
+        description="Verified financial field mappings and explicit measurement gaps.",
+    )
+    def financial_contracts() -> str:
+        from opentrading_mcp.financial_contracts import financial_contract_reference
+
+        return json.dumps(financial_contract_reference())
+
+    return [TOOL_CATALOG_URI, TERM_TYPES_URI, EXCHANGES_URI, GICS_URI, FINANCIAL_CONTRACTS_URI]

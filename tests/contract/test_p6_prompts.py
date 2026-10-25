@@ -42,7 +42,7 @@ async def test_prompt_renders_tool_plan():
         assert tool in text
 
 
-async def test_register_resources_exposes_four_uris():
+async def test_register_resources_exposes_reference_uris():
     from opentrading_mcp.resources import register_resources
 
     server = _server_with_tools()
@@ -50,6 +50,7 @@ async def test_register_resources_exposes_four_uris():
     assert sorted(uris) == [
         "opentrading://catalog/tools",
         "opentrading://reference/exchanges",
+        "opentrading://reference/financial-contracts",
         "opentrading://reference/gics",
         "opentrading://reference/term-types",
     ]
