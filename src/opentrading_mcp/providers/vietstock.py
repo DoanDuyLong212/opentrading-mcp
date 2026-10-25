@@ -690,11 +690,12 @@ def annual_forensic_lines(symbol: str, *, years: tuple[int, int]) -> dict[str, A
     before using any line. Never use ``financial_lctt`` here: it rounds to VNDbn
     and drops report identity.
     """
-    # 3005 stays source diagnostics only: Vietnam aggregate receivables mix
-    # trade, inter-company and other receivables, so DSRI reads the customer
-    # trade line (3022) instead. 2242 is the LCTT depreciation expense (DEPI).
-    # 3083-3086 carry gross PPE + accumulated depreciation (DEPI v2, Beneish
-    # 2013 Appendix A uses gross PP&E in the depreciation rate).
+    # 3005 is an aggregate including seller advances; 3022 is customer trade
+    # receivables, narrower than Compustat Receivables Total [2]. Preserve both
+    # as observations; neither becomes canonical DSRI without a source bridge.
+    # 2242 combines fixed-asset and investment-property depreciation/amortization
+    # and cannot establish pure DEPI expense. 3083-3086 are observed gross and
+    # accumulated PPE lines; strict DEPI v3 follows Appendix A's net PPE [8].
     ids = (
         2212, 2216, 2224, 2227, 2234, 2242, 2996, 2998, 3005, 3022,
         3035, 3036, 3078, 3083, 3084, 3085, 3086,

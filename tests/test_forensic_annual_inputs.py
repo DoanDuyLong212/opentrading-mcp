@@ -94,12 +94,16 @@ def test_recorded_fpt_annual_detail_matches_report_and_stays_partial():
     assert before["values"]["cfo"] == 11703777188868
     assert now["values"]["net_ppe"] == 15359168484059 + 1277212606
     assert now["input_provenance"]["cfo"]["published_on"] == "2026-03-20"
-    # 25/10: trade receivables (3022) and depreciation expense (2242) join the
-    # enriched fields — DSRI and DEPI become computable on live general data.
-    assert now["values"]["receivables"] == 12734600596550
-    assert now["values"]["depreciation"] == 2914178360732
-    assert now["input_provenance"]["receivables"]["norm_id"] == 3022
-    assert now["input_provenance"]["depreciation"]["published_on"] == "2026-03-20"
+    # Preserve observed lines and provenance without claiming a canonical
+    # Compustat receivables or pure depreciation mapping.
+    assert now["values"]["trade_receivables_observed"] == 12734600596550
+    assert now["values"]["depreciation_and_investment_property_observed"] == 2914178360732
+    assert now["input_provenance"]["trade_receivables_observed"]["norm_id"] == 3022
+    observed_depreciation = now["input_provenance"][
+        "depreciation_and_investment_property_observed"
+    ]
+    assert observed_depreciation["published_on"] == "2026-03-20"
+    assert "receivables" not in now["values"] and "depreciation" not in now["values"]
     assert "current_portion_long_term_debt" not in now["values"]
     assert "equity_issued" not in now["values"]
 
@@ -332,10 +336,7 @@ def _no_lease_bctc() -> dict[str, Any]:
     }
 
 
-def test_missing_ppe_component_is_excluded_and_disclosed():
-    # One PPE component missing from the response: the net line is the sum of
-    # the components actually returned (never faked as zero), and the absent
-    # component is disclosed in limitations + provenance.
+def test_missing_ppe_component_keeps_observation_but_not_canonical_total():
     out = f.enrich_annual(
         f.normalize_annual(_annual_mirror_minimal(), as_of=AS_OF),
         {
@@ -360,25 +361,24 @@ def test_missing_ppe_component_is_excluded_and_disclosed():
         },
     )
     record = out["records"][-1]
-    assert record["values"]["net_ppe"] == 1000000000  # the leased component alone
+    assert "net_ppe" not in record["values"]
+    assert record["values"]["net_leased_ppe"] == 1000000000
     assert any("net_tangible_ppe" in item for item in out["limitations"])
-    assert record["input_provenance"]["net_ppe"]["components"] == ["net_leased_ppe"]
-    assert record["input_provenance"]["net_ppe"]["components_absent"] == ["net_tangible_ppe"]
+    assert record["input_provenance"]["net_leased_ppe"]["norm_id"] == 3036
 
 
-def test_ppe_components_without_finance_leases_still_derive_gross():
-    # HPG-shaped template: no finance-lease rows at all — net/gross PPE come
-    # from the tangible components alone, and the gross/accum identity holds
-    # (110 - 20 == 90; 180 - 80 == 100).
+def test_hpg_shaped_missing_lease_rows_leave_ppe_partial_until_source_proof():
+    # A provider template with no lease rows is not evidence that audited
+    # finance-lease PPE equals zero. A future HPG/MWG report fixture must prove
+    # subtotal/intangible hierarchy and gross-to-net reconciliation first.
     out = f.enrich_annual(
         f.normalize_annual(_annual_mirror_minimal(), as_of=AS_OF),
         _no_lease_bctc(),
     )
     record = out["records"][-1]
-    assert record["values"]["net_ppe"] == 100000000000  # 3035 only
-    assert record["values"]["gross_ppe"] == 180000000000  # 3083 only
-    assert record["input_provenance"]["gross_ppe"]["components"] == ["gross_tangible_ppe"]
-    assert record["input_provenance"]["gross_ppe"]["components_absent"] == ["gross_leased_ppe"]
+    assert "net_ppe" not in record["values"] and "gross_ppe" not in record["values"]
+    assert record["values"]["net_tangible_ppe"] == 100000000000
+    assert record["input_provenance"]["gross_tangible_ppe"]["norm_id"] == 3083
     assert any("gross_leased_ppe" in item for item in out["limitations"])
 
 

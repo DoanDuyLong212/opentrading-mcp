@@ -227,7 +227,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         sym = symbol.strip().upper()
         display_n = max(1, int(periods_n))
-        fp = f"v6|{sym}|{detail}|{display_n}"  # v6: DEPI v2 gross-PPE denominator
+        fp = f"v7|{sym}|{detail}|{display_n}"  # v7: strict observed-vs-canonical inputs
         hit = await cache_lookup("stock_forensic", fp)
         if hit is not None:
             return hit

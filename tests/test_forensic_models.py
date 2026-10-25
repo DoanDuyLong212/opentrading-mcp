@@ -27,6 +27,7 @@ def full_bundle():
             "current_assets": 40,
             "current_liabilities": 20,
             "net_ppe": 40,
+            "gross_ppe": 40,
             "long_term_debt": 20,
             "current_portion_long_term_debt": 4,
             "depreciation": 8,
@@ -43,6 +44,7 @@ def full_bundle():
             "current_assets": 60,
             "current_liabilities": 25,
             "net_ppe": 50,
+            "gross_ppe": 50,
             "long_term_debt": 15,
             "current_portion_long_term_debt": 3,
             "depreciation": 10,
@@ -120,6 +122,30 @@ def test_missing_input_never_scores_truncated_model(field):
     assert not d["flags"] and d["beneish"]["cutoff"] is None
 
 
+@pytest.mark.parametrize("period_index", [-2, -1])
+def test_depi_never_falls_back_to_gross_ppe_in_one_year(period_index):
+    bundle = full_bundle()
+    del bundle["records"][period_index]["values"]["net_ppe"]
+    d = calculate_forensic(bundle)
+    period = "previous" if period_index == -2 else "current"
+    assert d["depi"] is None and d["m_score"] is None
+    assert f"{period}.net_ppe" in d["beneish"]["component_missing"]["depi"]
+    assert d["beneish"]["depi_denominator"] == "net_ppe"
+    assert not d["flags"] and d["beneish"]["cutoff"] is None
+
+
+def test_appendix_a_depi_uses_net_ppe_even_when_gross_ppe_differs():
+    bundle = full_bundle()
+    expected = calculate_forensic(bundle)["depi"]
+    bundle["records"][-2]["values"]["gross_ppe"] = 4_000
+    bundle["records"][-1]["values"]["gross_ppe"] = 8_000
+    d = calculate_forensic(bundle)
+    assert d["depi"] == expected
+    assert d["beneish"]["depi_denominator"] == "net_ppe"
+    assert "current.gross_ppe" not in d["beneish"]["input_sources"]
+    assert "current.net_ppe" in d["beneish"]["input_sources"]
+
+
 def test_no_gross_from_net_income_and_no_equity_inference():
     bundle = full_bundle()
     values = bundle["records"][-1]["values"]
@@ -167,7 +193,7 @@ def test_industry_status_never_defaults_to_general(business):
 
 
 async def test_tool_actual_annual_parser_partial_display_and_versioned_cache(monkeypatch):
-    calls, stored, fetched = [], {"v3|FPT|True|1": {"data": {"m_score": 123}}}, []
+    calls, stored, fetched = [], {"v6|FPT|True|1": {"data": {"m_score": 123}}}, []
 
     def fake_financeinfo(symbol, *, period):
         fetched.append((symbol, period))
@@ -207,7 +233,7 @@ async def test_tool_actual_annual_parser_partial_display_and_versioned_cache(mon
     assert env["data"]["data_time"] == "2025-12-31"
     assert env == await fn("FPT", detail=True, periods_n=1)
     assert fetched == [("FPT", "year")]
-    assert calls == ["v6|FPT|True|1"] * 2
+    assert calls == ["v7|FPT|True|1"] * 2
     assert "current.depreciation" in env["data"]["m_partial"]
     assert "current.equity_issued" in env["data"]["f_missing"]
 
@@ -265,18 +291,17 @@ async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
     assert d["f_score"] is None  # equity issuance stays unsourced on live data
     assert d["diagnostics"]
     if symbol == "FPT":
-        # 25/10: 3022 trade receivables + 2242 depreciation expense complete the
-        # eight Beneish inputs. DEPI v2 runs on the gross-PPE denominator
-        # (3083+3085 with the accumulated-depreciation consistency check).
-        # M verified by an independent Fraction oracle over the same fixture.
-        assert d["m_score"] == -2.2815
-        assert d["beneish"]["depi_denominator"] == "gross_ppe"
+        # 3022 and 2242 are observed source lines, not verified equivalents of
+        # the canonical Beneish receivables and depreciation definitions.
+        assert d["m_score"] is None
+        assert d["beneish"]["depi_denominator"] == "net_ppe"
         assert d["data_time"] == "2025-12-31"
-        assert d["beneish"]["status"] == "complete"
+        assert d["beneish"]["status"] == "partial"
         assert d["piotroski"]["status"] == "partial"
         assert d["gmi"] is not None and d["sgi"] is not None
         assert d["f_evaluated"] == 7
-        assert not d["m_partial"]  # all eight inputs are sourced and anchored
+        assert {"current.receivables", "current.depreciation"} <= set(d["m_partial"])
+        assert not d["flags"] and d["beneish"]["cutoff"] is None
         assert "current.cfo" not in d["f_missing"]
         assert d["piotroski"]["input_sources"]["current.cfo"]["source"] == source.BCTC_SOURCE
         assert d["piotroski"]["input_sources"]["current.cfo"]["unit"].startswith("VND")
