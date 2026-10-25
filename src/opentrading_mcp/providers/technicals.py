@@ -36,6 +36,30 @@ def _last_float(series: pd.Series, nd: int = 2) -> float | None:
     return round(val, nd)
 
 
+def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
+    """Wilder smoothing: SMA seed over the first `period` values, then
+    out[i] = out[i-1] + (x[i] - out[i-1]) / period. NaN prefix is preserved
+    and availability matches the previous ewm(min_periods) behaviour."""
+    vals = series.to_numpy(dtype=float)
+    out = np.full(vals.shape, np.nan)
+    start = None
+    run = 0
+    for i, v in enumerate(vals):
+        run = run + 1 if not np.isnan(v) else 0
+        if run >= period:
+            start = i
+            break
+    if start is None:
+        return pd.Series(out, index=series.index)
+    out[start] = float(np.nanmean(vals[start - period + 1 : start + 1]))
+    for i in range(start + 1, len(vals)):
+        if np.isnan(vals[i]):
+            out[i] = out[i - 1]
+        else:
+            out[i] = out[i - 1] + (vals[i] - out[i - 1]) / period
+    return pd.Series(out, index=series.index)
+
+
 def _swing_pivots(
     h_vals: list[float], l_vals: list[float], order: int = 5
 ) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
@@ -83,12 +107,12 @@ def compute(
     n = len(df)
     last = float(close.iloc[-1]) if n else 0.0
 
-    # RSI14 Wilder ewm alpha=1/14
+    # RSI14 Wilder: SMA-seeded first average, then out = prev + (x - prev)/14.
     delta = close.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+    avg_gain = _wilder_smooth(gain, 14)
+    avg_loss = _wilder_smooth(loss, 14)
     rs = avg_gain / avg_loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
     # avg_loss==0 & avg_gain>0 -> 100; both zero -> 50
@@ -108,10 +132,15 @@ def compute(
     stoch_k = _last_float(k)
     stoch_d = _last_float(d)
 
-    # CCI20
+    # CCI20 — Lambert: MD at bar i is the mean of |tp[j] - SMA_i| over the SAME
+    # 20-bar window (every deviation measured against one constant SMA_i), not
+    # each bar's deviation from its own rolling mean. First valid value lands
+    # exactly at the 20th bar.
     tp = (high + low + close) / 3
     sma_tp = tp.rolling(20, min_periods=20).mean()
-    md = (tp - sma_tp).abs().rolling(20, min_periods=20).mean()
+    md = tp.rolling(20, min_periods=20).apply(
+        lambda w: float(np.fabs(w - w.mean()).mean()), raw=True
+    )
     cci = (tp - sma_tp) / (0.015 * md.replace(0, np.nan))
     cci = cci.where(md != 0, 0.0).where(md.notna())  # flat window: 0; warm-up: NaN
     cci20 = _last_float(cci)
@@ -122,16 +151,16 @@ def compute(
     tr2 = (high - prev_c).abs()
     tr3 = (low - prev_c).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+    atr = _wilder_smooth(tr, 14)
     atr14 = _last_float(atr)
 
     up = high.diff()
     down = -low.diff()
     plus_dm = pd.Series(np.where((up > down) & (up > 0), up, 0.0), index=df.index)
     minus_dm = pd.Series(np.where((down > up) & (down > 0), down, 0.0), index=df.index)
-    plus_sm = plus_dm.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
-    minus_sm = minus_dm.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
-    atr_sm = tr.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean().replace(0, np.nan)
+    plus_sm = _wilder_smooth(plus_dm, 14)
+    minus_sm = _wilder_smooth(minus_dm, 14)
+    atr_sm = _wilder_smooth(tr, 14).replace(0, np.nan)
     plus_di = 100 * plus_sm / atr_sm
     minus_di = 100 * minus_sm / atr_sm
     di_sum = plus_di + minus_di
@@ -139,7 +168,9 @@ def compute(
     # No directional movement gives DX 0; the DI warm-up stays NaN so it is not
     # averaged into ADX as fake zeros.
     dx = dx.where(~((di_sum == 0) & plus_di.notna()), 0.0)
-    adx = dx.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+    # Wilder ADX: first value is the SMA of the first 14 DX, then the same
+    # smoothing recursion as above.
+    adx = _wilder_smooth(dx, 14)
     adx14 = _last_float(adx)
 
     # MACD (12,26,9)

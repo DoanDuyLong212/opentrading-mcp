@@ -220,10 +220,12 @@ def calculate_forensic(bundle: dict[str, Any]) -> dict[str, Any]:
     if not known:
         m_missing.append("business_type.general")
     m_score = None
+    raw_m_score = None
     if known and not m_missing and all(v is not None for v in indexes.values()):
         raw_score = BENEISH_INTERCEPT + sum(BENEISH_COEF[k] * v for k, v in indexes.items())
         if finite_number(raw_score):
-            m_score = round(raw_score, 4)
+            raw_m_score = float(raw_score)  # classification uses raw precision
+            m_score = round(raw_score, 4)  # display rounding only
         else:
             m_missing.append("invalid.m_score.nonfinite")
 
@@ -331,7 +333,7 @@ def calculate_forensic(bundle: dict[str, Any]) -> dict[str, Any]:
         "turnover_basis": "sales / beginning total assets (§2.3.3)",
     }
     flags = []
-    if m_score is not None and m_score > -1.78:
+    if raw_m_score is not None and raw_m_score > -1.78:
         flags.append("M-Score above -1.78: further review warranted; not a fraud conclusion")
     return {
         "symbol": bundle.get("symbol"),

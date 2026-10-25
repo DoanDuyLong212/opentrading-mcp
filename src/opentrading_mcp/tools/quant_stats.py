@@ -326,7 +326,7 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             if raw.sum() == 0:
                 raw = np.ones(len(universe))
                 notes.append("zero volatility; fell back to equal")
-        else:  # max_sharpe closed form, clipped long-only
+        elif objective == "max_sharpe":  # closed form, clipped long-only
             mu = np.clip(rets.mean(axis=1), 0, None)
             cov = np.cov(rets) + np.eye(len(universe)) * 1e-6
             try:

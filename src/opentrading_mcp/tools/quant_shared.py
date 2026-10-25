@@ -207,7 +207,10 @@ def _run_strategy(
         return base
 
     if strategy == "buy_hold":
-        pos = [1] * n
+        # Same gating contract as the other strategies: entries follow _allowed,
+        # non-allowed bars force flat. month_filtered/cond gates are therefore
+        # truthful for buy_hold too.
+        pos = [1 if _allowed(i) else 0 for i in range(n)]
     elif strategy == "sma_cross":
         f = max(int(fast), 2)
         s = max(int(slow), f + 1)
