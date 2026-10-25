@@ -135,12 +135,19 @@ def compute(
     # CCI20 — Lambert: MD at bar i is the mean of |tp[j] - SMA_i| over the SAME
     # 20-bar window (every deviation measured against one constant SMA_i), not
     # each bar's deviation from its own rolling mean. First valid value lands
-    # exactly at the 20th bar.
+    # exactly at the 20th bar. Vectorized via a sliding-window view.
     tp = (high + low + close) / 3
     sma_tp = tp.rolling(20, min_periods=20).mean()
-    md = tp.rolling(20, min_periods=20).apply(
-        lambda w: float(np.fabs(w - w.mean()).mean()), raw=True
-    )
+    tp_arr = tp.to_numpy(dtype=float)
+    n_bars = len(tp_arr)
+    if n_bars >= 20:
+        windows = np.lib.stride_tricks.sliding_window_view(tp_arr, 20)
+        md_vals = np.fabs(windows - windows.mean(axis=1, keepdims=True)).mean(axis=1)
+        md = pd.Series(
+            np.concatenate([np.full(20 - 1, np.nan), md_vals]), index=tp.index
+        )
+    else:
+        md = pd.Series(np.full(n_bars, np.nan), index=tp.index)
     cci = (tp - sma_tp) / (0.015 * md.replace(0, np.nan))
     cci = cci.where(md != 0, 0.0).where(md.notna())  # flat window: 0; warm-up: NaN
     cci20 = _last_float(cci)
