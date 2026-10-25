@@ -138,9 +138,15 @@ def _follow_through(
     dates: list[str],
     lookback: int = FTD_LOOKBACK,
     highs: list[float | None] | None = None,
-    undercut_reverse_day1: bool = False,
+    undercut_reverse_day1: bool = True,
 ) -> dict[str, Any]:
     """State machine for the latest rally attempt: none/rally_attempt/confirmed/failed/stale.
+
+    undercut_reverse_day1 (default True, strict-IBD, repo-owner decision 25/10): a
+    session that undercuts the attempt low and closes in the upper half of its range
+    becomes the new Day 1 itself; that session is never also the FTD (day 4 still
+    applies). Needs highs; without them the close-up Day-1 policy runs. Pass False
+    for the previously shipped policy (Day 1 = next up close).
 
     A failed attempt stays the answer only until the next Day 1: once a new attempt
     starts, it is reported, and the failed one moves to `last_failed`.
@@ -293,7 +299,7 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def distribution_count(
         symbol: str = "VNINDEX",
         days: int = 40,
-        undercut_reverse_day1: bool = False,
+        undercut_reverse_day1: bool = True,
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Đếm phiên phân phối O'Neil + trạng thái follow-through. Dùng khi đánh giá
@@ -309,10 +315,10 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         Mức theo số phiên: 0-2 binh_thuong; 3 quan_sat; 4 canh_bao; 5 canh_bao_cao;
         trên 5 nguy_hiem. Đây là đọc trạng thái thị trường, không phải lệnh mua/bán.
         Có FTD xác nhận thì đếm lại phiên phân phối từ đầu (rally mới xóa đếm cũ).
-        undercut_reverse_day1 (mặc định False, đọc strict-IBD): phiên thủng đáy attempt
-        mà đóng ở nửa trên biên độ trở thành Day 1 của attempt mới ngay trong phiên đó
-        (phiên đó không bao giờ đồng thời là FTD); False giữ chính sách Day 1 = phiên
-        tăng-close kế tiếp.
+        undercut_reverse_day1 (mặc định True, đọc strict-IBD — quyết định chủ repo
+        25/10): phiên thủng đáy attempt mà đóng ở nửa trên biên độ trở thành Day 1
+        của attempt mới ngay trong phiên đó (phiên đó không bao giờ đồng thời là
+        FTD); đặt False để quay lại chính sách Day 1 = phiên tăng-close kế tiếp.
         Ví dụ: {"symbol": "VNINDEX", "days": 40}.
         """
         from datetime import datetime
@@ -323,8 +329,8 @@ def register_market_timing_tools(server: FastMCP) -> list[dict[str, Any]]:
         # Date in fp (VN calendar, not the server's): a new session must recompute.
         today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
         fp = (
-            f"v5|{sym}|{want}|{today}|{bool(undercut_reverse_day1)}"
-        )  # v5: optional undercut-reverse Day 1 policy
+            f"v6|{sym}|{want}|{today}|{bool(undercut_reverse_day1)}"
+        )  # v6: undercut-reverse Day 1 is the default policy (owner decision 25/10)
         hit = await cache_lookup("distribution_count", fp)
         if hit is not None:
             return hit

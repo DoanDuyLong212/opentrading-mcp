@@ -243,9 +243,20 @@ def test_undercut_reverse_needs_a_strong_close():
     assert out["day1_date"] == "2009-03-10"  # the first up close after the undercut
 
 
-def test_default_policy_ignores_the_option_branch():
-    # Default (option off): the 9 Mar undercut bar is not Day 1 even though it
-    # closes in the upper half — the close-up policy stays the shipped contract.
+def test_legacy_policy_kept_behind_explicit_false():
+    # With undercut_reverse_day1=False (the previously shipped policy) the 9 Mar
+    # undercut bar is not Day 1 even though it closes in the upper half.
+    closes, volumes, lows, highs, dates = _march2009()
+    out = mt._follow_through(
+        closes, volumes, lows, dates, highs=highs, undercut_reverse_day1=False
+    )
+    assert out["day1_date"] != "2009-03-09"
+
+
+def test_undercut_reverse_is_the_default_policy():
+    # Owner decision 25/10 (policy b): strict-IBD undercut-reverse Day 1 runs by
+    # default; the March-2009 session becomes Day 1 without passing the flag.
     closes, volumes, lows, highs, dates = _march2009()
     out = mt._follow_through(closes, volumes, lows, dates, highs=highs)
-    assert out["day1_date"] != "2009-03-09"
+    assert out["day1_date"] == "2009-03-09"
+    assert out["day1_low"] == 666.79
