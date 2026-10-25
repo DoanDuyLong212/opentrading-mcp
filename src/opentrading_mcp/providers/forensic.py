@@ -291,6 +291,26 @@ def _bctc_publication(value: Any) -> date | None:
         return None
 
 
+def _component_sum(
+    added: dict[str, Any], keys: tuple[int, ...]
+) -> tuple[Any, list[int], list[int]]:
+    """Sum the components the source actually returned; disclose absent ones.
+
+    A component absent from the standard-template response (e.g. no finance
+    leases) is excluded from the sum and disclosed — never faked as zero, and
+    never allowed to void the whole line.
+    """
+    total, used, absent = None, [], []
+    for k in keys:
+        v = added.get(k)
+        if finite_number(v):
+            total = (total or 0) + v
+            used.append(k)
+        else:
+            absent.append(k)
+    return total, used, absent
+
+
 def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
     """Use source-backed BCTC lines only after exact annual identity checks.
 
@@ -395,32 +415,35 @@ def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]
                 added[field] = value
             if not added:
                 continue
-            ppe = (added.get("net_tangible_ppe"), added.get("net_leased_ppe"))
-            if all(finite_number(v) for v in ppe):
-                total = ppe[0] + ppe[1]
-                if finite_number(total):
-                    if "net_ppe" in record["values"] and record["values"]["net_ppe"] != total:
-                        reject("annual BCTC net PPE conflicts with financeinfo")
-                        continue
-                    added["net_ppe"] = total
-            gross = (added.get("gross_tangible_ppe"), added.get("gross_leased_ppe"))
-            accum = (added.get("accum_dep_tangible_ppe"), added.get("accum_dep_leased_ppe"))
-            if all(finite_number(v) for v in gross) and all(
-                finite_number(v) for v in accum
-            ):
-                gross_total = gross[0] + gross[1]
-                accum_total = accum[0] + accum[1]
-                net_total = added.get("net_ppe")
+            net_total, net_used, net_absent = _component_sum(
+                added, ("net_tangible_ppe", "net_leased_ppe")
+            )
+            if net_used:
+                if "net_ppe" in record["values"] and record["values"]["net_ppe"] != net_total:
+                    reject("annual BCTC net PPE conflicts with financeinfo")
+                    continue
+                added["net_ppe"] = net_total
+            gross_total, gross_used, gross_absent = _component_sum(
+                added, ("gross_tangible_ppe", "gross_leased_ppe")
+            )
+            accum_total, accum_used, accum_absent = _component_sum(
+                added, ("accum_dep_tangible_ppe", "accum_dep_leased_ppe")
+            )
+            if gross_used and accum_used:
+                net_expected = added.get("net_ppe")
                 if (
-                    finite_number(gross_total)
-                    and finite_number(accum_total)
-                    and net_total is not None
-                    and gross_total + accum_total != net_total
+                    net_expected is not None
+                    and gross_total + accum_total != net_expected
                 ):
                     reject("annual BCTC gross/accumulated PPE inconsistent with net PPE")
                     continue
-                if finite_number(gross_total):
-                    added["gross_ppe"] = gross_total
+                added["gross_ppe"] = gross_total
+            absent_note = sorted(net_absent + gross_absent + accum_absent)
+            if net_used and absent_note:
+                out["limitations"].append(
+                    f"annual BCTC PPE component(s) {absent_note} absent for {year}"
+                    " — excluded from the sums, not treated as zero values"
+                )
             record["values"].update(added)
             if "cfo" in added:
                 record["statements"] = sorted(set(record["statements"]) | {"LCTT"})
@@ -439,7 +462,16 @@ def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]
             if "net_ppe" in added:
                 record["input_provenance"]["net_ppe"] = {
                     "source": BCTC_SOURCE,
-                    "components": [3035, 3036],
+                    "components": net_used,
+                    "components_absent": net_absent,
+                    "published_on": published.isoformat(),
+                    "unit": "VND",
+                }
+            if "gross_ppe" in added:
+                record["input_provenance"]["gross_ppe"] = {
+                    "source": BCTC_SOURCE,
+                    "components": gross_used,
+                    "components_absent": gross_absent,
                     "published_on": published.isoformat(),
                     "unit": "VND",
                 }
