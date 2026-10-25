@@ -38,25 +38,32 @@ def _last_float(series: pd.Series, nd: int = 2) -> float | None:
 
 def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
     """Wilder smoothing: SMA seed over the first `period` values, then
-    out[i] = out[i-1] + (x[i] - out[i-1]) / period. NaN prefix is preserved
-    and availability matches the previous ewm(min_periods) behaviour."""
+    out[i] = out[i-1] + (x[i] - out[i-1]) / period.
+
+    Computed as a pandas EMA plus a geometric seed correction
+    (W[i] = E[i] + decay^(i-s) * (W_s - E_s)) — O(n), vectorized, and exactly
+    the Wilder definition. NaN prefix preserved; availability matches the
+    previous ewm(min_periods) behaviour."""
     vals = series.to_numpy(dtype=float)
-    out = np.full(vals.shape, np.nan)
-    start = None
-    run = 0
-    for i, v in enumerate(vals):
-        run = run + 1 if not np.isnan(v) else 0
-        if run >= period:
-            start = i
-            break
-    if start is None:
+    n = vals.shape[0]
+    out = np.full(n, np.nan)
+    valid = ~np.isnan(vals)
+    if not valid.any():
         return pd.Series(out, index=series.index)
-    out[start] = float(np.nanmean(vals[start - period + 1 : start + 1]))
-    for i in range(start + 1, len(vals)):
-        if np.isnan(vals[i]):
-            out[i] = out[i - 1]
-        else:
-            out[i] = out[i - 1] + (vals[i] - out[i - 1]) / period
+    f = int(np.argmax(valid))  # first non-NaN
+    s = f + period - 1  # seed lands here
+    if s >= n:
+        return pd.Series(out, index=series.index)
+    seed = float(vals[f : s + 1].mean())
+    e = (
+        pd.Series(vals)
+        .ewm(alpha=1 / period, adjust=False, min_periods=1)
+        .mean()
+        .to_numpy()
+    )
+    decay = (period - 1) / period
+    k = np.arange(n - s, dtype=float)
+    out[s:] = e[s:] + np.power(decay, k) * (seed - e[s])
     return pd.Series(out, index=series.index)
 
 
