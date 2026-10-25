@@ -207,7 +207,7 @@ async def test_tool_actual_annual_parser_partial_display_and_versioned_cache(mon
     assert env["data"]["data_time"] == "2025-12-31"
     assert env == await fn("FPT", detail=True, periods_n=1)
     assert fetched == [("FPT", "year")]
-    assert calls == ["v5|FPT|True|1"] * 2
+    assert calls == ["v6|FPT|True|1"] * 2
     assert "current.depreciation" in env["data"]["m_partial"]
     assert "current.equity_issued" in env["data"]["f_missing"]
 
@@ -266,8 +266,11 @@ async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
     assert d["diagnostics"]
     if symbol == "FPT":
         # 25/10: 3022 trade receivables + 2242 depreciation expense complete the
-        # eight Beneish inputs, so the strict M-score is now computable.
-        assert d["m_score"] == -2.2808
+        # eight Beneish inputs. DEPI v2 runs on the gross-PPE denominator
+        # (3083+3085 with the accumulated-depreciation consistency check).
+        # M verified by an independent Fraction oracle over the same fixture.
+        assert d["m_score"] == -2.2815
+        assert d["beneish"]["depi_denominator"] == "gross_ppe"
         assert d["data_time"] == "2025-12-31"
         assert d["beneish"]["status"] == "complete"
         assert d["piotroski"]["status"] == "partial"

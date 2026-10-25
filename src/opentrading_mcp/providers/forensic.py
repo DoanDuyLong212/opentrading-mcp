@@ -69,6 +69,10 @@ BCTC_FIELDS = {
     3035: "net_tangible_ppe",
     3036: "net_leased_ppe",
     3078: "long_term_debt",
+    3083: "gross_tangible_ppe",
+    3084: "accum_dep_tangible_ppe",
+    3085: "gross_leased_ppe",
+    3086: "accum_dep_leased_ppe",
 }
 
 
@@ -399,6 +403,24 @@ def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]
                         reject("annual BCTC net PPE conflicts with financeinfo")
                         continue
                     added["net_ppe"] = total
+            gross = (added.get("gross_tangible_ppe"), added.get("gross_leased_ppe"))
+            accum = (added.get("accum_dep_tangible_ppe"), added.get("accum_dep_leased_ppe"))
+            if all(finite_number(v) for v in gross) and all(
+                finite_number(v) for v in accum
+            ):
+                gross_total = gross[0] + gross[1]
+                accum_total = accum[0] + accum[1]
+                net_total = added.get("net_ppe")
+                if (
+                    finite_number(gross_total)
+                    and finite_number(accum_total)
+                    and net_total is not None
+                    and gross_total + accum_total != net_total
+                ):
+                    reject("annual BCTC gross/accumulated PPE inconsistent with net PPE")
+                    continue
+                if finite_number(gross_total):
+                    added["gross_ppe"] = gross_total
             record["values"].update(added)
             if "cfo" in added:
                 record["statements"] = sorted(set(record["statements"]) | {"LCTT"})
