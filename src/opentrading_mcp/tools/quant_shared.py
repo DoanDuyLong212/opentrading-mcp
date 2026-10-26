@@ -275,14 +275,19 @@ def _run_strategy(
     # preferred) or closes (documented fallback). The position held during the
     # leg px[i-1] -> px[i] is the state decided at close[i-2]; equity accrues
     # px-to-px, fees apply at each fill, and a still-open position is marked to
-    # the last close.
+    # the last close. If ANY open is None/0 the whole series falls back to
+    # next-bar-close (never a partial mixed-price chain).
     if opens is not None and len(opens) == n:
-        px = [float(o) if o is not None else None for o in opens]
+        candidate = [float(o) if o is not None else None for o in opens]
+        px_ok = all(p is not None and p > 0 for p in candidate)
+    else:
+        candidate, px_ok = None, False
+    if px_ok:
+        px = candidate
         fill_mode = "next-bar-open"
     else:
         px = list(closes)
         fill_mode = "next-bar-close-fallback"
-    px_ok = all(p is not None and p > 0 for p in px)
 
     state = 0  # position decided at close[i-1], filled at px[i]
     in_pos = False
