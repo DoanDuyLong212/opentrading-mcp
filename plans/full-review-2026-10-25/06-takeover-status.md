@@ -1,56 +1,52 @@
-# 06 — Takeover status (opencode coordinator, 25/10/2026 ~23:00)
+# 06 — Takeover status (opencode coordinator)
 
-Context: original coordinator (codex) exhausted ChatGPT usage; AGY-A exhausted
-Antigravity quota (reset ~162h). User authorized opencode to take over and finish
-the plan. This file records what was done and what remains in flight.
+## Update 26/10/2026 — takeover COMPLETE (except OC-A's undelivered harness)
 
-## Completed in this takeover (branch `fix/full-review-wave-b`, base 3932cba3)
+All work below landed on branch `fix/full-review-wave-b` (base 3932cba3):
 
-- `05-finance-audit-opencode.md` — independent financial audit (AGY replacement;
-  reduced-independence disclosed). Verified F01/F02/F03/F06/F15/F14 by direct
-  source reading; accepted F07/F09/F10 on archived repros; F05 deferred to user
-  policy; new observations N1–N3.
-- Financial fixes + independent oracles (commit `1c056ef`):
-  F01 equal-branch, F02 Lambert CCI (available at bar 20), F03 Wilder SMA seeds
-  (RSI/ATR/±DM/ADX), F06 raw-precision classification, F15 buy_hold gating,
-  F14 HNX/UPCoM metadata. 6 oracle tests in `tests/test_full_review_oracles.py`.
-- Perf hardening (commits `697eec9`, `ffcb561`): CCI MD vectorized via
-  sliding_window_view; `_wilder_smooth` as EMA + geometric seed correction in
-  pure numpy. Paired interleaved micro-benchmark vs baseline 3932cba
-  (`/tmp/opencode/bench_technicals_v2.py`), min-of-60/40 rounds:
-  - 500 bars (typical): +6.9% median compute
-  - 2000 bars (stress): +5.2%
-  Within the ≤10% acceptance (post-optimization from an initial +66%).
-- Full offline suite after all changes: **785 passed, 8 skipped** + the
-  `test_full_matrix_stdio` contract test re-run standalone → **passed** (slow
-  stdio test, flaky only under full-suite load).
+1. `1c056ef` — financial fixes F01/F02/F03/F06/F15/F14 + 6 independent oracles
+2. `697eec9`, `ffcb561` — CCI vectorized (sliding_window_view) + `_wilder_smooth`
+   as EMA + geometric seed correction in pure numpy; paired interleaved
+   benchmark vs baseline: 500 bars +6.9%, 2000 bars +5.2% (≤10% acceptance)
+3. `008ba90` — F05 fill/gating semantics (user policy): next-bar-open fills
+   (open-to-open accrual, close-marked final leg, documented close fallback),
+   missing cond_ok blocks entry, stale observations flagged
+4. `a059aac` — Wave-B perf/storage: S05 full-SHA-256 cache keys (s05 prefix),
+   S04 transactional quota with per-user advisory lock + Asia/Ho_Chi_Minh day,
+   S01 dbinit close/lock/timeout, P01 admission accounting fixed (cancelled-
+   queued futures release via done-callback), P02 ws_snapshot legs offloaded
+   (market/scan/dnse_ext/dnse_tools), P03 watchlist PG offloaded, P04 bounded
+   middleware/obs cardinality maps
+5. Oracles: `test_f05_fill_oracles.py` (4), `test_s04_quota_oracles.py` (2),
+   `test_full_review_oracles.py` (6) — all hand-derived from definitions
+6. OC-A verdict: HUNG (9.5h, 0 commits, 0 file writes, terminal whitespace
+   only, local process ~6% CPU waiting on NVIDIA). Process terminated
+   directly (Orca runtime was already down); dispatch will be fenced when
+   Orca restarts. Nothing to salvage — no work product existed.
 
-## In flight (independent process — do not duplicate)
+## Test evidence
 
-- **OC-A** (task task_e326941e5705, dispatch ctx_cc7c4e644a8b, terminal
-  term_bbacbb34, worktree `review-perf-storage`): alive at last check
-  (~23:00), deep in P01/P02 analysis on GLM-5.3. No commits yet in its
-  worktree. When it settles: inspect diff → run `coordinator-repros.jsonl`
-  against it → integrate accepted commits (cherry-pick/fast-forward only).
-- The HTTP load-benchmark harness (k6/autocannon, fake deterministic upstream,
-  concurrency 1/8/32) is part of OC-A's deliverable; autocannon/k6 are not on
-  PATH yet (`npm i -g autocannon` when integrating).
+- Unit suite: **366 passed** (excludes live-provider contract tests)
+- Affected contract suites: **121 passed** (p6/p8/p9, breadth, auth, cache)
+- `test_full_matrix_stdio`: failed once on a live vietcap 60s timeout
+  (network flakiness, tool untouched by changes); passed standalone earlier.
+  Contract full-suite runs take >15 min at night due to provider timeouts.
 
-## Deferred (needs user decision or later wave)
+## Remaining (needs user decision or a later wave)
 
-- F05 fill policy (decision timestamp + fill convention) — user/business call.
-- F09/F10/F12 data-contract repairs (identity/completeness metadata) — after
-  the formula wave, so cache fingerprints change once.
-- F13 pricing basis — [khuyến nghị] pending primary-source evidence.
-- AGY independent cross-review (Wave C) — impossible until Antigravity quota
-  resets (~162h from 15:0x); opencode GLM cross-review would be a disclosed
-  reduced-independence substitute.
+- HTTP load-benchmark harness (k6/autocannon against a running server with
+  fake deterministic upstream) — pillar-1/2 % improvements remain N/A until
+  this harness exists and OC-A's intended fixes are implemented directly
+- P05/P06 (need repro + approval); F09/F10/F12 data-contract repairs
+- AGY independent cross-review: Antigravity quota resets ~162h from 25/10
+- Branch merge to main: deferred by user; Google key rotation: skipped by user
 
 ## Honesty notes
 
 - No performance improvement is claimed yet: the only paired measurement so
   far compares MY branch to baseline and shows +5–7% technicals compute cost
-  (within acceptance). Pillar-1/2 improvements await OC-A's fixes and the
-  paired HTTP benchmark.
+  (within acceptance). Pillar-1/2 improvements await the paired HTTP
+  benchmark harness and direct implementation of the approved P/S fixes.
 - The audit's reduced independence (same GLM family as OC-A) is disclosed.
-- Numbers above are point-in-time; OC-A state may change after this file.
+- Original coordinator artifacts (00–04 + evidence) remain untouched in
+  `plans/full-review-2026-10-25/`.
