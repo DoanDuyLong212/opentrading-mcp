@@ -152,12 +152,19 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
             us2y = float(v2_raw) / 100
             d10, d2 = ten_pts[0].get("t"), two_pts[0].get("t")
             extra_warn = ["yfinance blocked — FRED DGS10/DGS2 fallback"]
+            inverted: bool | None = us2y > us10y
             if d10 != d2:
-                # legs dated differently: both are disclosed, never subtracted silently
-                extra_warn.append(f"FRED legs dated differently: 10Y {d10}, 2Y {d2}")
+                # F10 deep contract: legs dated differently are distinct
+                # observations — both values are disclosed but the inversion
+                # DECISION is withheld (never classified across incompatible
+                # dates).
+                inverted = None
+                extra_warn.append(
+                    f"FRED legs dated differently: 10Y {d10}, 2Y {d2} — inverted withheld"
+                )
             return await cache_store(
                 "yf_yield_curve", "-", TTL_SECONDS["hour"],
-                {"us10y": us10y, "us2y": us2y, "inverted": us2y > us10y,
+                {"us10y": us10y, "us2y": us2y, "inverted": inverted,
                  "as_of_10y": d10, "as_of_2y": d2},
                 source="fred",
                 warnings=extra_warn,

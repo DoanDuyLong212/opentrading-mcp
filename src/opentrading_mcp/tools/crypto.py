@@ -50,9 +50,29 @@ def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
+        # F09/F11 completeness contract: every requested symbol must appear in
+        # the output or be listed as missing — partial results are explicit.
+        returned = {str(t.get("symbol", "")).upper() for t in tickers if isinstance(t, dict)}
+        requested = {s.strip().upper() for s in capped if str(s).strip()}
+        missing = sorted(requested - returned)
+        if missing:
+            warnings.append(
+                f"no observation for {len(missing)}/{len(requested)} requested: {', '.join(missing)}"
+            )
+        identity_degraded = [
+            str(t.get("symbol")) for t in tickers
+            if isinstance(t, dict) and t.get("identity_exact") is False
+        ]
+        if identity_degraded:
+            warnings.append(
+                "CoinGecko fallback returned USD reference prices, not exact pair quotes for: "
+                + ", ".join(identity_degraded)
+            )
         return await cache_store(
             "crypto_spot", fp, TTL_SECONDS["market"],  # 24/7 asset: fixed 60s, not HOSE hours
-            {"tickers": tickers}, source="binance", warnings=warnings or None,
+            {"tickers": tickers, "requested": sorted(requested), "missing": missing},
+            source="binance", warnings=warnings or None,
+            availability="partial" if (missing or identity_degraded) and tickers else None,
         )
 
     @server.tool(annotations=READ_ONLY_OPEN)
