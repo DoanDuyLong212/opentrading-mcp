@@ -536,25 +536,32 @@ async def run_blocking[T](
         _pending += 1
     started = time.monotonic()
 
+    # P01: exactly ONE release per admission — the thread's real completion OR
+    # a cancelled-while-queued skip, never both (a wrapper cancel plus a late
+    # thread finish would otherwise double-release below baseline).
+    released = False
+
+    def _release_once() -> None:
+        nonlocal released
+        global _pending
+        with _pending_guard:
+            if released:
+                return
+            released = True
+            _pending -= 1
+
     def _release_if_cancelled(fut) -> None:
-        # P01: a future cancelled while still queued is skipped by the worker,
-        # so the tracked body never runs — release the admission here instead,
-        # exactly once (a running future cannot be cancelled).
+        # a future cancelled while still queued is skipped by the worker, so
+        # the tracked body never runs — release the admission here instead
         if fut.cancelled():
-            with _pending_guard:
-                global _pending
-                _pending -= 1
+            _release_once()
 
     def _tracked():
-        # P01: the admission stays counted until the thread ACTUALLY finishes
-        # (or is skipped after cancellation) — a caller timeout/cancel must not
-        # undercount physically queued or running work.
-        global _pending
+        # the admission stays counted until the thread ACTUALLY finishes
         try:
             return ctx.run(no_exit, fn)
         finally:
-            with _pending_guard:
-                _pending -= 1
+            _release_once()
 
     try:
         future = loop.run_in_executor(pool, _tracked)
@@ -570,6 +577,5 @@ async def run_blocking[T](
         raise
     except RuntimeError:
         # executor rejected the submission (shutdown): release our admission
-        with _pending_guard:
-            _pending -= 1
+        _release_once()
         raise
