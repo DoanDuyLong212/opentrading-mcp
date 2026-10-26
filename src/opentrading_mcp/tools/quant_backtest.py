@@ -181,14 +181,14 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         strategy: 'sma_cross' (SMA nhanh vượt SMA chậm), 'momentum' (giá trên
         giá[slow] phiên trước), 'rsi_meanrev' (long khi RSI14 < rsi_low, flat khi
         RSI14 > rsi_high), 'buy_hold'. fast/slow: số nến nhìn lại. cost_bps:
-        bps vào+ra trừ mỗi lần đảo vị thế. months/quarters: chỉ vào lệnh theo
+        bps mỗi chiều, trừ một lần tại mỗi khớp mua/bán. months/quarters: chỉ vào lệnh theo
         tháng (1-12) / quý (1-4); thoát lệnh luôn cho phép.
         condition_symbol: chặn vào lệnh theo tài sản khác (dầu/vàng/FX: BZ=F, GC=F,
         USDVND...); condition_rule 'above_sma' (trên SMA của nó) hoặc 'rising'
         (đang tăng trong condition_lookback nến). Mã VN qua vnstock, khác qua
         lịch ngày yfinance.
         """
-        fp = (f"{symbol}|{strategy}|{fast}|{slow}|{cost_bps}|{rsi_low}|{rsi_high}|"
+        fp = (f"v2|{symbol}|{strategy}|{fast}|{slow}|{cost_bps}|{rsi_low}|{rsi_high}|"
               f"{months}|{quarters}|{condition_symbol}|{condition_rule}|{condition_lookback}")
         hit = await cache_lookup("backtest_strategies", fp)
         if hit is not None:
@@ -270,6 +270,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             quarters=quarters,
             cond_ok=cond_ok,
             opens=opens,
+            dates_inferred=_walked,
         )
         out: dict[str, Any] = {
             "symbol": symbol.upper(),
@@ -317,7 +318,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         fast_range/slow_range: candidate bars (product capped at 30 combos).
         rsi_meanrev allowed (fixed 30/70 thresholds). months/quarters passthrough.
         """
-        fp = f"{symbol}|{strategy}|{fast_range}|{slow_range}|{cost_bps}|{months}|{quarters}"
+        fp = f"v2|{symbol}|{strategy}|{fast_range}|{slow_range}|{cost_bps}|{months}|{quarters}"
         hit = await cache_lookup("param_sweep", fp)
         if hit is not None:
             return hit
@@ -348,7 +349,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         closes = [c["c"] for c in candles if c["c"]]
         opens = [c.get("o") for c in candles if c["c"]]
-        dates, _, _ = _dated_closes(candles)
+        dates, _, walked = _dated_closes(candles)
         ranked = []
         for f, s in combos:
             res = _run_strategy(
@@ -361,6 +362,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 months=months,
                 quarters=quarters,
                 opens=opens,
+                dates_inferred=walked,
             )
             ranked.append({"fast": f, "slow": s, **res})
         ranked.sort(key=lambda r: r["net_return"], reverse=True)

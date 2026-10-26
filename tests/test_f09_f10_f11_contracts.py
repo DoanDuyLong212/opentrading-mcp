@@ -74,18 +74,25 @@ def test_f10_missing_fred_leg_returns_unavailable(monkeypatch):
     assert "FRED" in " ".join(env["warnings"]), env["warnings"]
 
 
-def test_f10_mismatched_leg_dates_withhold_inversion():
+def test_f10_mismatched_leg_dates_withhold_inversion(monkeypatch):
     """Legs dated differently: both values stay visible, but `inverted` is
     None — the classification is never made across incompatible dates."""
     ten = {"points": [{"t": "2026-10-20", "v": 4.10}]}
     two = {"points": [{"t": "2026-10-17", "v": 3.90}]}
-    us10y = float(ten["points"][0]["v"]) / 100
-    us2y = float(two["points"][0]["v"]) / 100
-    d10, d2 = ten["points"][0]["t"], two["points"][0]["t"]
-    assert math.isclose(us10y, 0.041, abs_tol=1e-9)
-    assert math.isclose(us2y, 0.039, abs_tol=1e-9)
-    inverted = None if d10 != d2 else us2y > us10y
-    assert inverted is None  # withheld — never classified across dates
+    from opentrading_mcp.providers import intel as intel_p
+    from opentrading_mcp.tools import yf as yf_mod
+
+    def blocked():
+        raise ProviderUnavailable("blocked")
+
+    monkeypatch.setattr(yf_mod.yf_p, "yield_curve", blocked)
+    monkeypatch.setattr(intel_p, "fred_series", lambda sid, limit: ten if sid == "DGS10" else two)
+    env = asyncio.run(_tool_fn("yf_yield_curve")())
+    assert env["availability"] == "available"
+    assert math.isclose(env["data"]["us10y"], .041, abs_tol=1e-9)
+    assert math.isclose(env["data"]["us2y"], .039, abs_tol=1e-9)
+    assert env["data"]["as_of_10y"] != env["data"]["as_of_2y"]
+    assert env["data"]["inverted"] is None
 
 
 # ------------------------------------------------------------------ F11
