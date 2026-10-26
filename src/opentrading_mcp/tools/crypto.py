@@ -57,7 +57,8 @@ def register_crypto_tools(server: FastMCP) -> list[dict[str, Any]]:
         missing = sorted(requested - returned)
         if missing:
             warnings.append(
-                f"no observation for {len(missing)}/{len(requested)} requested: {', '.join(missing)}"
+                f"no observation for {len(missing)}/{len(requested)} requested: "
+                f"{', '.join(missing)}"
             )
         identity_degraded = [
             str(t.get("symbol")) for t in tickers

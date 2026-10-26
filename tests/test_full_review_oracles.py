@@ -8,11 +8,10 @@ matrix in plans/full-review-2026-10-25/02-execution-plan.md §3.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
-import pytest
 
 
 # ---------------------------------------------------------------- F01 equal
@@ -76,7 +75,7 @@ def test_f02_cci_matches_lambert_definition_and_available_at_bar_20():
     closes = list(50 + np.cumsum(rng.normal(0, 0.5, 45)))
     candles = [
         {
-            "t": datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+            "t": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
             "o": c * 0.99,
             "h": c * 1.01,
             "l": c * 0.98,
@@ -120,9 +119,9 @@ def test_f03_rsi_uses_sma_seed_wilder_recurrence():
     seed_gain = sum(gains[:14]) / 14
     seed_loss = sum(losses[:14]) / 14
     ag, al = seed_gain, seed_loss
-    for g, l in zip(gains[14:], losses[14:]):
+    for g, ls in zip(gains[14:], losses[14:], strict=True):
         ag = (ag * 13 + g) / 14
-        al = (al * 13 + l) / 14
+        al = (al * 13 + ls) / 14
     rs = ag / al if al else math.inf
     expected_rsi = 100 - 100 / (1 + rs)
 

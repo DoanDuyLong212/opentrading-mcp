@@ -14,7 +14,7 @@ import asyncio
 import math
 
 from opentrading_mcp.providers import binance as bn_p
-from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.providers.errors import ProviderUnavailable
 from opentrading_mcp.server import create_server, register_preset
 
 

@@ -74,7 +74,6 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         closes = [c["c"] for c in candles if c["c"]]
-        opens = [c.get("o") for c in candles if c["c"]]
         if len(closes) < 2:
             return make_envelope({"symbol": symbol.upper()}, source="vnstock", availability="empty")
         gross = closes[-1] / closes[0] - 1

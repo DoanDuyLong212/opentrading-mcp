@@ -101,7 +101,8 @@ def test_p01_recovery_after_timeout_storm():
                     lambda: time.sleep(0.3) or "x", "p01-storm", 0.05
                 )
         deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline and _pending() > baseline:
+        # ASYNC110 intentional: we poll a thread-side counter, not an awaitable
+        while time.monotonic() < deadline and _pending() > baseline:  # noqa: ASYNC110
             await asyncio.sleep(0.05)
         assert _pending() == baseline
         # a DIFFERENT call key is unaffected by the storm's negative cache

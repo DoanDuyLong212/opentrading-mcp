@@ -18,7 +18,6 @@ def test_p05_shared_pool_is_singleton():
 
 def test_p05_shared_pool_bounds_live_threads_under_hang():
     pool = vn_p._shared_batch_pool(3)
-    started = threading.Barrier(3, timeout=5)
     release = threading.Event()
     hung = threading.Semaphore(0)
 

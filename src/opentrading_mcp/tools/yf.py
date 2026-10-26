@@ -142,7 +142,12 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
             # observation (points[-1] was the oldest of the 5, about a week stale).
             ten_pts = ten.get("points") or []
             two_pts = two.get("points") or []
-            if not ten_pts or not two_pts or not isinstance(ten_pts[0], dict) or not isinstance(two_pts[0], dict):
+            if (
+                not ten_pts
+                or not two_pts
+                or not isinstance(ten_pts[0], dict)
+                or not isinstance(two_pts[0], dict)
+            ):
                 raise ProviderBadData("FRED returned no DGS10/DGS2 observations")
             v10_raw, v2_raw = ten_pts[0].get("v"), two_pts[0].get("v")
             if v10_raw is None or v2_raw is None:

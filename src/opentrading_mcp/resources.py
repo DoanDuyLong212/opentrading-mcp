@@ -54,11 +54,13 @@ _EXCHANGES = {
         },
         "HNX": {
             "session": "09:00-11:30, 13:00-14:30 continuous; 14:30-14:45 ATC",
-            "auction": "ATC 14:30-14:45 (closing periodic order match); daily band ±10%, first-trading-day ±30%",
+            "auction": "ATC 14:30-14:45 (closing periodic order match); "
+            "daily band ±10%, first-trading-day ±30%",
         },
         "UPCOM": {
             "session": "09:00-11:30, 13:00-14:30 continuous; 14:30-14:45 ATC",
-            "auction": "ATC 14:30-14:45; daily band ±15%, resumed/first-day ±40% (reference price = rolling average of previous continuous-match day)",
+            "auction": "ATC 14:30-14:45; daily band ±15%, resumed/first-day ±40% "
+            "(reference price = rolling average of previous continuous-match day)",
         },
     },
     "settlement": "T+2",

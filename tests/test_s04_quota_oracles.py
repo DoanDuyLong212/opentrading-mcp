@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 import datetime
 import zoneinfo
-
-import pytest
+from typing import Any
 
 from opentrading_mcp import quota as quota_mod
 
@@ -68,7 +66,6 @@ def test_s04_quota_sequence_is_transactional_and_uses_vn_day(monkeypatch):
 def test_s04_quota_day_uses_vn_midnight_boundary():
     """At 16:59:59 UTC it is still the previous VN day; at 17:00 UTC the VN day
     rolls over (UTC+7). retry_after counts to VN midnight."""
-    import os
 
     from opentrading_mcp import quota as quota_mod
 
