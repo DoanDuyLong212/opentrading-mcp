@@ -166,24 +166,42 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     missing: list[str] = []
     chunks = [syms[i : i + 10] for i in range(0, len(syms), 10)]
-    # NOTE: shutdown(wait=False) — a hung vnstock thread must NEVER block
-    # this function past the per-chunk timeout, or run_blocking's cap is
-    # defeated and the server process accumulates zombie threads (OOM → 502).
-    pool = ThreadPoolExecutor(max_workers=min(3, len(chunks)))
-    try:
-        futs = {pool.submit(_one, c): c for c in chunks}
-        for fut, chunk in futs.items():
-            try:
-                out.extend(fut.result(timeout=45.0))
-            except Exception:
-                missing.extend(chunk)
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+    # NOTE: P05 fix — a module-level shared pool (max 3 workers) bounds the
+    # total number of live vnstock threads process-wide: a hung chunk thread
+    # occupies one slot and degrades later batches to `missing` instead of
+    # accumulating unbounded zombie threads (OOM → 502). The wait budget is a
+    # single 50s TOTAL for the whole batch, not 45s per chunk.
+    pool = _shared_batch_pool(len(chunks))
+    deadline = time.monotonic() + 50.0
+    futs = {pool.submit(_one, c): c for c in chunks}
+    for fut, chunk in futs.items():
+        remaining = max(0.5, deadline - time.monotonic())
+        try:
+            out.extend(fut.result(timeout=remaining))
+        except Exception:
+            missing.extend(chunk)
     if missing and not out:
         raise ProviderUnavailable(f"vnstock batch quote failed for {len(missing)} symbols")
     if missing:
         out.append({"_missing": sorted(set(missing))})
     return out
+
+
+_VN_BATCH_POOL: ThreadPoolExecutor | None = None
+_VN_BATCH_POOL_LOCK = threading.Lock()
+
+
+def _shared_batch_pool(min_workers: int) -> ThreadPoolExecutor:
+    """P05: one process-wide bounded pool for vnstock batch legs. Hung legs
+    occupy a worker but can never multiply across calls; the hard bound keeps
+    live thread count ≤ 3 no matter how many batches time out."""
+    global _VN_BATCH_POOL
+    with _VN_BATCH_POOL_LOCK:
+        if _VN_BATCH_POOL is None:
+            _VN_BATCH_POOL = ThreadPoolExecutor(
+                max_workers=3, thread_name_prefix="vnstock-batch"
+            )
+        return _VN_BATCH_POOL
 
 
 def split_batch(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:

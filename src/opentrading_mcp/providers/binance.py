@@ -79,33 +79,49 @@ def _num(val: Any) -> float | None:
 
 
 def _coingecko_fallback(syms: list[str], last_exc: Exception | None) -> list[dict[str, Any]]:
-    """Last-resort spot prices via CoinGecko (USD only, no high/low)."""
-    ids: dict[str, str] = {}
+    """Last-resort spot prices via CoinGecko (USD reference only, no high/low).
+
+    F09 fix: rows are keyed by the REQUESTED symbol — BTCUSDT/BTCUSDC (same
+    CoinGecko base) no longer overwrite each other in the id map — and every
+    row discloses its quote identity: CoinGecko prices are USD observations,
+    so a USD-reference price cannot silently satisfy an exact USDT/USDC quote.
+    """
+    per_symbol: dict[str, str] = {}
     for s in syms:
-        base = re.sub(r"(USDT|USDC|BUSD|USD)$", "", s)
-        cid = _COINGECKO_IDS.get(base, base.lower())
-        ids[cid] = s
-    if not ids:
+        m = re.search(r"(USDT|USDC|BUSD|USD)$", s)
+        base = s[: m.start()] if m else s
+        per_symbol[s] = _COINGECKO_IDS.get(base, base.lower())
+    if not per_symbol:
         raise ProviderUnavailable(f"no coingecko mapping: {last_exc}")
+    unique_ids = sorted(set(per_symbol.values()))
     try:
         data = _get_json(
             "https://api.coingecko.com/api/v3/simple/price",
-            {"ids": ",".join(ids), "vs_currencies": "usd",
+            {"ids": ",".join(unique_ids), "vs_currencies": "usd",
              "include_24hr_change": "true", "include_24hr_vol": "true"},
         )
     except Exception as exc:
         raise ProviderUnavailable(f"binance + coingecko unreachable: {exc}") from exc
     if not isinstance(data, dict) or not data:
         raise ProviderUnavailable(f"binance + coingecko empty: {last_exc}")
-    out = [
-        {"symbol": sym, "lastPrice": v.get("usd"),
-         "priceChangePercent": v.get("usd_24h_change"),
-         # CoinGecko's 24h volume is in USD: quote volume, not base-asset volume
-         "highPrice": None, "lowPrice": None,
-         "volume": None, "quoteVolume": v.get("usd_24h_vol")}
-        for cid, sym in ids.items()
-        if isinstance((v := data.get(cid)), dict) and v.get("usd") is not None
-    ]
+    out = []
+    for sym, cid in per_symbol.items():
+        if not isinstance((v := data.get(cid)), dict) or v.get("usd") is None:
+            continue
+        m = re.search(r"(USDT|USDC|BUSD|USD)$", sym)
+        exact_usd = bool(m and m.group(1) == "USD")
+        out.append({
+            "symbol": sym,
+            "lastPrice": v.get("usd"),
+            "priceChangePercent": v.get("usd_24h_change"),
+            # CoinGecko's 24h volume is in USD: quote volume, not base-asset volume
+            "highPrice": None, "lowPrice": None,
+            "volume": None, "quoteVolume": v.get("usd_24h_vol"),
+            # F09: truthful quote identity — a USD reference is not the exact
+            # USDT/USDC pair the caller asked for
+            "quote_currency": "USD",
+            "identity_exact": exact_usd,
+        })
     if not out:
         raise ProviderUnavailable(f"binance + coingecko empty: {last_exc}")
     return out

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 import math
@@ -281,8 +282,11 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            overview = await _call("v", vs_p.overview_trading, symbol, secs=45.0)
-            quotes = await _call("q", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
+            # P06: the two legs are independent — fetch concurrently (was sequential)
+            overview, quotes = await asyncio.gather(
+                _call("v", vs_p.overview_trading, symbol, secs=45.0),
+                _call("q", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0),
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("valuation_run", str(exc))
         info = overview if isinstance(overview, dict) else {}
@@ -561,12 +565,20 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         warnings: list[str] = []
         seen_ids: set[str] = set()
-        for name in [symbol, *peers][:6]:
-            try:
-                table = await _call("p", vn_p.equity_ratios, name, "year", secs=45.0)
-            except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-                rows.append({"symbol": name.upper(), "error": str(exc)})
-                warnings.append(f"{name.upper()}: {exc}")
+        names = [symbol, *peers][:6]
+        sem = asyncio.Semaphore(3)  # P06: bounded concurrency, upstream quota respected
+
+        async def _fetch_table(name: str):
+            async with sem:
+                return await _call("p", vn_p.equity_ratios, name, "year", secs=45.0)
+
+        gathered = await asyncio.gather(
+            *(_fetch_table(name) for name in names), return_exceptions=True
+        )
+        for name, table in zip(names, gathered, strict=True):
+            if isinstance(table, BaseException):
+                rows.append({"symbol": name.upper(), "error": str(table)})
+                warnings.append(f"{name.upper()}: {table}")
                 continue
             newest = table["periods"][0]
             row: dict[str, Any] = {"symbol": name.upper(), "period_label": newest}

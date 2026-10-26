@@ -88,6 +88,13 @@ def in_vn_session(now: Any = None) -> bool:
             from zoneinfo import ZoneInfo
 
             now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+        elif getattr(now, "tzinfo", None) is not None:
+            # F12: normalize ANY timezone-aware input to VN time — a UTC-aware
+            # caller at 16:59/17:00 UTC (VN midnight boundary) must not be
+            # evaluated with UTC hours.
+            from zoneinfo import ZoneInfo
+
+            now = now.astimezone(ZoneInfo("Asia/Ho_Chi_Minh"))
     except Exception:
         return True  # fail-open to short TTLs: fresh data over saved fetches
     if now.weekday() >= 5:

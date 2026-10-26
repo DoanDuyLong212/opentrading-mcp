@@ -140,13 +140,27 @@ def register_yf_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             # fred_series asks FRED for sort_order=desc: points[0] is the newest
             # observation (points[-1] was the oldest of the 5, about a week stale).
-            us10y = float((ten.get("points") or [{}])[0].get("v", 0)) / 100
-            us2y = float((two.get("points") or [{}])[0].get("v", 0)) / 100
+            ten_pts = ten.get("points") or []
+            two_pts = two.get("points") or []
+            if not ten_pts or not two_pts or not isinstance(ten_pts[0], dict) or not isinstance(two_pts[0], dict):
+                raise ProviderBadData("FRED returned no DGS10/DGS2 observations")
+            v10_raw, v2_raw = ten_pts[0].get("v"), two_pts[0].get("v")
+            if v10_raw is None or v2_raw is None:
+                # F10: a missing leg can never become a valid zero
+                raise ProviderBadData("FRED newest observation missing value")
+            us10y = float(v10_raw) / 100
+            us2y = float(v2_raw) / 100
+            d10, d2 = ten_pts[0].get("t"), two_pts[0].get("t")
+            extra_warn = ["yfinance blocked — FRED DGS10/DGS2 fallback"]
+            if d10 != d2:
+                # legs dated differently: both are disclosed, never subtracted silently
+                extra_warn.append(f"FRED legs dated differently: 10Y {d10}, 2Y {d2}")
             return await cache_store(
                 "yf_yield_curve", "-", TTL_SECONDS["hour"],
-                {"us10y": us10y, "us2y": us2y, "inverted": us2y > us10y},
+                {"us10y": us10y, "us2y": us2y, "inverted": us2y > us10y,
+                 "as_of_10y": d10, "as_of_2y": d2},
                 source="fred",
-                warnings=["yfinance blocked — FRED DGS10/DGS2 fallback"] if us10y else None,
+                warnings=extra_warn,
             )
         except (ProviderUnavailable, ProviderBadData, ProviderAuthMissing,
                 TypeError, ValueError, IndexError) as exc:
