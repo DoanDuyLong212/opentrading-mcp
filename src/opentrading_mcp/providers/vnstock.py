@@ -170,9 +170,10 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     # total number of live vnstock threads process-wide: a hung chunk thread
     # occupies one slot and degrades later batches to `missing` instead of
     # accumulating unbounded zombie threads (OOM → 502). The wait budget is a
-    # single 50s TOTAL for the whole batch, not 45s per chunk.
+    # single 45s TOTAL for the whole batch (matches the historical hang-return
+    # contract), not 45s per chunk.
     pool = _shared_batch_pool(len(chunks))
-    deadline = time.monotonic() + 50.0
+    deadline = time.monotonic() + 45.0
     futs = {pool.submit(_one, c): c for c in chunks}
     for fut, chunk in futs.items():
         remaining = max(0.5, deadline - time.monotonic())
