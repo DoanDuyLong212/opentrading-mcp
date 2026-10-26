@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
@@ -135,7 +136,7 @@ def _condition_gate(
     for i in range(len(stock_dates)):
         c = values[i]
         if c is None:
-            out.append(True)  # no condition data: never block
+            out.append(False)  # missing observations cannot authorize entry
             continue
         hist = values[max(0, i - lb + 1) : i + 1]
         vals = [float(x) for x in hist if isinstance(x, (int, float)) and x == x]
@@ -162,6 +163,7 @@ def _run_strategy(
     quarters: list[int] | None = None,
     cond_ok: list[bool] | None = None,
     opens: list[float] | None = None,
+    dates_inferred: bool = False,
 ) -> dict[str, Any]:
     """Long-only engine: buy_hold | sma_cross | momentum | rsi_meanrev.
 
@@ -175,7 +177,8 @@ def _run_strategy(
     open[i] (next-bar-open) and the position accrues open-to-open until its exit
     fill. When `opens` is unavailable the engine falls back to next-bar-close
     fills and marks `fill="next-bar-close-fallback"` in the output. The final
-    open position is marked to the last close.
+    open position is marked to the last close. cost_bps is charged per side,
+    once at each actual fill; final marking is not a liquidation.
     """
     import statistics
 
@@ -268,21 +271,26 @@ def _run_strategy(
             elif r > float(rsi_high):
                 state = 0
             pos.append(state if _allowed(i) else 0)
-    fee = max(float(cost_bps), 0.0) / 10000 * 2  # in+out per flip
+    fee = max(float(cost_bps), 0.0) / 10000  # per actual entry/exit fill
 
     # ---- F05a fill machinery -------------------------------------------------
     # A decision at close[i-1] fills at px[i] where px = opens (next-bar-open,
     # preferred) or closes (documented fallback). The position held during the
     # leg px[i-1] -> px[i] is the state decided at close[i-2]; equity accrues
     # px-to-px, fees apply at each fill, and a still-open position is marked to
-    # the last close.
+    # the last close. If ANY open is None/0 the whole series falls back to
+    # next-bar-close (never a partial mixed-price chain).
     if opens is not None and len(opens) == n:
-        px = [float(o) if o is not None else None for o in opens]
+        candidate = [float(o) if o is not None else None for o in opens]
+        px_ok = all(p is not None and math.isfinite(p) and p > 0 for p in candidate)
+    else:
+        candidate, px_ok = None, False
+    if px_ok:
+        px = candidate
         fill_mode = "next-bar-open"
     else:
         px = list(closes)
         fill_mode = "next-bar-close-fallback"
-    px_ok = all(p is not None and p > 0 for p in px)
 
     state = 0  # position decided at close[i-1], filled at px[i]
     in_pos = False
@@ -292,6 +300,12 @@ def _run_strategy(
     equity = 1.0
     peak = 1.0
     max_dd = 0.0
+
+    def record_equity() -> None:
+        nonlocal peak, max_dd
+        peak = max(peak, equity)
+        max_dd = max(max_dd, (peak - equity) / peak if peak else 0.0)
+
     prev_px = px[0] if px_ok else (closes[0] if closes else None)
     for i in range(1, n):
         leg_px = px[i] if px_ok else closes[i]
@@ -301,8 +315,7 @@ def _run_strategy(
         leg_ret = (leg_px - prev_px) / prev_px
         if in_pos:
             equity *= 1 + leg_ret
-            peak = max(peak, equity)
-            max_dd = max(max_dd, (peak - equity) / peak if peak else 0.0)
+            record_equity()
         prev_px = leg_px
         # decision made at close[i-1] fills at px[i]
         want = pos[i - 1]
@@ -313,20 +326,27 @@ def _run_strategy(
                 trades += 1
                 entry_eq = equity
                 equity *= 1 - fee
+                record_equity()
             elif want == 0 and in_pos:
                 in_pos = False
                 state = 0
                 equity *= 1 - fee
+                record_equity()
                 pnls.append(equity - entry_eq)
     if in_pos:
         # mark the final open position to the last close
         last_close = closes[-1] if closes else prev_px
         if prev_px:
             equity *= last_close / prev_px
+            record_equity()
         pnls.append(equity - entry_eq)
 
     wins = sum(1 for p in pnls if p > 0)
-    stale = dates is None or len(dates) < n
+    # Historical backtests deliberately contain old data: stale here describes
+    # missing/invalid/inferred observation dates, not the age of the sample.
+    stale = dates_inferred or dates is None or len(dates) < n or any(
+        _parse_day(str(d)) is None for d in (dates or [])
+    )
     out: dict[str, Any] = {
         "trades": trades,
         "net_return": round(equity - 1, 4),
@@ -335,9 +355,11 @@ def _run_strategy(
         "bars": n,
         "stale": stale,
         "fill": fill_mode,
+        "date_basis": "inferred" if dates_inferred else "observed" if not stale else "missing",
+        "cost_basis": "bps per side at actual fills; final mark is not liquidation",
     }
     if stale:
-        out["stale_note"] = "some bars missing dates; signals may use stale observations (F05c)"
+        out["stale_note"] = "stale: observation dates are missing, invalid or inferred"
     if gated:
         out["month_filtered"] = True
         out["note"] = "entries only in selected months/quarters; exits always allowed"

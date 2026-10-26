@@ -464,53 +464,57 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=["name required"],
                 availability="empty",
             )
-        conn = _pg()
-        if conn is not None:
-            try:
-                from psycopg.rows import dict_row
-
-                # P03: sync PG I/O must not run on the event loop — offload the
-                # whole create-and-deduplicate block to the bounded executor.
-                def _pg_create():
-                    with conn.cursor(row_factory=dict_row) as cur:
-                        cur.execute("SELECT id FROM watchlists WHERE name = %s", (name,))
-                        if cur.fetchone() is not None:
-                            return make_envelope(
-                                {"tool": "watchlist_create"},
-                                source="postgres",
-                                warnings=[f"watchlist '{name}' already exists"],
-                                availability="empty",
-                            )
-                        cur.execute(
-                            "INSERT INTO watchlists (name) VALUES (%s) RETURNING id, name",
-                            (name,),
-                        )
-                        row = cur.fetchone()
-                    return make_envelope(
-                        {"id": row["id"], "name": row["name"], "symbols": []},
-                        source="postgres",
-                    )
-
-                return await run_blocking(_pg_create, "watchlist_create", timeout_secs=30.0)
-            except Exception as exc:
-                warnings_pg = f"pg create failed, file fallback: {exc}"
-                logger.warning(warnings_pg)
-            finally:
+        def _create():
+            conn = _pg()
+            if conn is not None:
                 try:
-                    conn.close()
-                except Exception:
-                    pass
-        existing = _file_load("lists")
-        if any(r["name"] == name for r in existing):
-            return make_envelope(
-                {"tool": "watchlist_create"},
-                source="local",
-                warnings=[f"watchlist '{name}' already exists"],
-                availability="unavailable",
-            )
-        new_id = max((int(str(r["id"])) for r in existing if str(r["id"]).isdigit()), default=0) + 1
-        created = _upsert_list(str(new_id), name)
-        return make_envelope(created, source="file")
+                    from psycopg.rows import dict_row
+
+                    # Connection, query and cleanup all belong to this worker.
+                    def _pg_create():
+                        with conn.cursor(row_factory=dict_row) as cur:
+                            cur.execute("SELECT id FROM watchlists WHERE name = %s", (name,))
+                            if cur.fetchone() is not None:
+                                return make_envelope(
+                                    {"tool": "watchlist_create"},
+                                    source="postgres",
+                                    warnings=[f"watchlist '{name}' already exists"],
+                                    availability="empty",
+                                )
+                            cur.execute(
+                                "INSERT INTO watchlists (name) VALUES (%s) RETURNING id, name",
+                                (name,),
+                            )
+                            row = cur.fetchone()
+                        return make_envelope(
+                            {"id": row["id"], "name": row["name"], "symbols": []},
+                            source="postgres",
+                        )
+
+                    return _pg_create()
+                except Exception as exc:
+                    warnings_pg = f"pg create failed, file fallback: {exc}"
+                    logger.warning(warnings_pg)
+                finally:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+            existing = _file_load("lists")
+            if any(r["name"] == name for r in existing):
+                return make_envelope(
+                    {"tool": "watchlist_create"},
+                    source="local",
+                    warnings=[f"watchlist '{name}' already exists"],
+                    availability="unavailable",
+                )
+            new_id = max(
+                (int(str(r["id"])) for r in existing if str(r["id"]).isdigit()), default=0
+            ) + 1
+            created = _upsert_list_file(str(new_id), name)
+            return make_envelope(created, source="file")
+
+        return await run_blocking(_create, "watchlist_create", timeout_secs=30.0)
 
     @server.tool(annotations=READ_ONLY)
     async def watchlist_list(ctx: AnyContext | None = None) -> dict[str, Any]:
