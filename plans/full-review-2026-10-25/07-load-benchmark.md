@@ -1,4 +1,9 @@
-# 07 — Paired HTTP load benchmark (Wave-B fix vs baseline 3932cba3)
+# 07 — Historical ASGI benchmark (superseded)
+
+> Superseded by 09-load-benchmark-http.md. The original harness accepted
+> unavailable tool envelopes, included warmup time in RPS and generated
+> process-dependent fixtures. Its numbers and causal performance claims below
+> are retained as historical context, not valid acceptance evidence.
 
 Harness: `scripts/load_bench.py` — real ASGI app (FastMCP streamable HTTP,
 stateless mode), deterministic synthetic upstream (no live network), tool

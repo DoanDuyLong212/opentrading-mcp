@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
-import statistics
 import sys
 import time
 
@@ -31,7 +31,7 @@ CANDLE_BARS = 300  # ~1.2 years of daily bars per symbol
 
 
 def _synthetic_candles(symbol: str, n: int = CANDLE_BARS) -> list[dict]:
-    seed = abs(hash(symbol)) % (2**32)
+    seed = int.from_bytes(hashlib.sha256(symbol.encode()).digest()[:4], "big")
     closes = list(50 + np.cumsum(np.random.default_rng(seed).normal(0, 0.5, n)))
     import datetime as dt
 
@@ -51,7 +51,7 @@ def _patch_offline() -> None:
     """Deterministic fake upstream — no live provider calls during the bench."""
     from opentrading_mcp.providers import vnstock as vn_p
 
-    vn_p.quote_history = lambda symbol, days: _synthetic_candles(symbol)[: max(days, 30)]
+    vn_p.quote_history = lambda symbol, days, iv=None: _synthetic_candles(symbol)[: max(days, 30)]
     vn_p.equity_quote_batch = lambda symbols: [
         {"symbol": s, "close": 50.0, "change": 0.0} for s in symbols
     ]
@@ -86,10 +86,10 @@ async def _call_tool(client: httpx.AsyncClient, i: int) -> tuple[bool, float]:
         elapsed = (time.perf_counter() - t0) * 1000
         if resp.status_code != 200:
             return False, elapsed
-        body = resp.text
-        # json_response=False → SSE frames; extract the data line
-        ok = '"isError":false' in body or '"result"' in body
-        return ok, elapsed
+        from load_bench_http import _decode
+
+        transport, ok, env = _decode(resp.text)
+        return bool(transport and ok and env["data"].get("rsi14") is not None), elapsed
     except Exception:
         return False, (time.perf_counter() - t0) * 1000
 
@@ -98,7 +98,6 @@ async def run_level(app, concurrency: int, rounds: int) -> dict:
     transport = httpx.ASGITransport(app=app)
     latencies: list[float] = []
     failures = 0
-    t0 = time.perf_counter()
     sem = asyncio.Semaphore(concurrency)
 
     async def one(i: int):
@@ -117,6 +116,7 @@ async def run_level(app, concurrency: int, rounds: int) -> dict:
             warmup_failures += 0 if ok else 1
         latencies.clear()
         failures = 0
+        t0 = time.perf_counter()
         await asyncio.gather(*(one(i) for i in range(rounds)))
     elapsed = time.perf_counter() - t0
 
