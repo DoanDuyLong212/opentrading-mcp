@@ -64,7 +64,10 @@ async def test_yield_curve_fred_fallback_takes_the_newest_point(monkeypatch):
 
     monkeypatch.setattr(store, "_memory", {})
     env = await _tool("yf_yield_curve", "all")()
-    assert env["data"] == {"us10y": 0.0425, "us2y": 0.039, "inverted": False}
+    assert env["data"] == {
+        "us10y": 0.0425, "us2y": 0.039, "inverted": False,
+        "as_of_10y": "2026-10-22", "as_of_2y": "2026-10-22",
+    }
 
 
 # --- scenario_simulate: P/L from the unrounded price, with units ----------------------

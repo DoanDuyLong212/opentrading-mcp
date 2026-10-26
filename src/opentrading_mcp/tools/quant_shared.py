@@ -192,10 +192,21 @@ def _run_strategy(
             return None
         d = dates[i]
         month = getattr(d, "month", None)
-        try:
-            return int(month) if month is not None else None
-        except (TypeError, ValueError):
-            return None
+        if month is not None:
+            try:
+                return int(month)
+            except (TypeError, ValueError):
+                pass
+        # CR6 (cross-review): ISO date STRINGS must gate too — silently treating
+        # them as undated made month/quarter filters no-op for string dates.
+        if isinstance(d, str):
+            import datetime as _dt
+
+            try:
+                return int(_dt.date.fromisoformat(d[:10]).month)
+            except (TypeError, ValueError):
+                return None
+        return None
 
     def _allowed(i: int) -> bool:
         if not gated:
