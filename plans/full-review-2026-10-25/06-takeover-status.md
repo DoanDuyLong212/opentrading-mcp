@@ -17,9 +17,15 @@ All work below landed on branch `fix/full-review-wave-b` (base 3932cba3):
    queued futures release via done-callback), P02 ws_snapshot legs offloaded
    (market/scan/dnse_ext/dnse_tools), P03 watchlist PG offloaded, P04 bounded
    middleware/obs cardinality maps
-5. Oracles: `test_f05_fill_oracles.py` (4), `test_s04_quota_oracles.py` (2),
-   `test_full_review_oracles.py` (6) — all hand-derived from definitions
-6. OC-A verdict: HUNG (9.5h, 0 commits, 0 file writes, terminal whitespace
+5. `5f63dcc` — F09/F10/F12 data-contract repairs + P05 shared bounded pool +
+   P06 concurrent provider legs (+ missing `import asyncio` fix)
+6. `7cfe5e1`, `242760c` — HTTP load harness (`scripts/load_bench.py`) and
+   paired results in `07-load-benchmark.md`: p99 −88% @conc1, p50 −24% /
+   RPS +17% @conc8, parity @conc32; P05 pool oracles
+7. Oracles: `test_f05_fill_oracles.py` (4), `test_s04_quota_oracles.py` (2),
+   `test_full_review_oracles.py` (6), `test_p05_vnstock_pool.py` (2) — all
+   hand-derived from definitions
+8. OC-A verdict: HUNG (9.5h, 0 commits, 0 file writes, terminal whitespace
    only, local process ~6% CPU waiting on NVIDIA). Process terminated
    directly (Orca runtime was already down); dispatch will be fenced when
    Orca restarts. Nothing to salvage — no work product existed.
