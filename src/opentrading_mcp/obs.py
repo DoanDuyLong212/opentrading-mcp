@@ -18,6 +18,8 @@ _errors: dict[tuple[str, str], int] = {}
 _latency_ms_sum: dict[str, float] = {}
 _latency_ms_max: dict[str, float] = {}
 _upstream_failures: dict[str, int] = {}
+_MAX_TRACKED_TOOLS = 500  # P04: real registry is ~160; bound caller-controlled names
+_MAX_TRACKED_ERRORS = 2_000  # (tool, error_code) pairs
 
 
 def reset() -> None:
@@ -31,11 +33,17 @@ def reset() -> None:
 
 def record_tool_call(tool: str, duration_ms: float, ok: bool, error_code: str = "") -> None:
     with _lock:
+        # P04: the caller controls the tool name and upstream error strings, so
+        # these maps must stay bounded against cardinality floods.
+        if tool not in _calls and len(_calls) >= _MAX_TRACKED_TOOLS:
+            return
         _calls[tool] = _calls.get(tool, 0) + 1
         _latency_ms_sum[tool] = _latency_ms_sum.get(tool, 0.0) + duration_ms
         _latency_ms_max[tool] = max(_latency_ms_max.get(tool, 0.0), duration_ms)
         if not ok:
             key = (tool, error_code or "unknown")
+            if key not in _errors and len(_errors) >= _MAX_TRACKED_ERRORS:
+                return
             _errors[key] = _errors.get(key, 0) + 1
 
 

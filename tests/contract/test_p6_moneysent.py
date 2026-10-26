@@ -40,8 +40,12 @@ async def test_money_flow_uses_nn_chart_fallback(monkeypatch):
     async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
         from opentrading_mcp.providers import vietstock as vs_mod
 
-        assert fn is vs_mod.nn_flow_chart
-        return [["/Date(1)/"], [{"BuyVol": 2.0}]]
+        # nn_flow_chart is submitted directly; the ws leg arrives as a
+        # functools.partial (P02 offload) — invoking it raises the patched
+        # ProviderUnavailable and triggers this fallback.
+        if fn is vs_mod.nn_flow_chart or getattr(fn, "func", None) is vs_mod.nn_flow_chart:
+            return [["/Date(1)/"], [{"BuyVol": 2.0}]]
+        return fn()
 
     monkeypatch.setattr(dnse_p, "ws_snapshot", boom)
     import opentrading_mcp.tools.scan as scan_mod

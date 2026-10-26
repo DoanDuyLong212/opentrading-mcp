@@ -181,6 +181,10 @@ def test_quota_exceeded_returns_429(monkeypatch):
             async def __aexit__(self, *args):
                 return False
 
+            async def execute(self, query, params=None):
+                # S04: BEGIN / advisory lock / COMMIT all land here
+                return None
+
             async def fetchone(self, query, params):
                 return (1000, 1000)  # quota_day, used
 
@@ -214,7 +218,7 @@ def test_quota_allows_under_limit(monkeypatch):
                 seen["upsert"] = True
                 return None
 
-            async def execute(self, query, params):
+            async def execute(self, query, params=None):
                 seen["upsert"] = True
 
         return FakeConn()

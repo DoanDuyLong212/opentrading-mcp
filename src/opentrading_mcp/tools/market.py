@@ -962,7 +962,11 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         }
         session: Any = None
         try:
-            session = dnse_p.ws_snapshot(["VNINDEX", "VN30", "VN30F1M"])
+            session = await run_blocking(
+                functools.partial(dnse_p.ws_snapshot, ["VNINDEX", "VN30", "VN30F1M"]),
+                "dnse_ws_snapshot",
+                timeout_secs=15.0,
+            )
         except (ProviderUnavailable, ProviderAuthMissing) as exc:
             warnings.append(f"session unavailable: {exc}")
         data = {
@@ -998,7 +1002,11 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            snap = dnse_p.ws_snapshot(["VNINDEX", "VN30", "VN30F1M"])
+            snap = await run_blocking(
+                functools.partial(dnse_p.ws_snapshot, ["VNINDEX", "VN30", "VN30F1M"]),
+                "dnse_ws_snapshot",
+                timeout_secs=15.0,
+            )
             return await cache_store(
                 "dnse_market_status", "-", price_ttl(), snap, source="dnse-ws"
             )

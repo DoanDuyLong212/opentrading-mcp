@@ -60,7 +60,11 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = dnse_p.ws_snapshot(symbols or ["VNINDEX", "VN30"])
+            data = await run_blocking(
+                functools.partial(dnse_p.ws_snapshot, symbols or ["VNINDEX", "VN30"]),
+                "dnse_ws_snapshot",
+                timeout_secs=15.0,
+            )
             return await cache_store(
                 "dnse_indices", fp, price_ttl(), data, source="dnse-ws"
             )

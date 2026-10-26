@@ -469,27 +469,37 @@ def register_watchlist_tools(server: FastMCP) -> list[dict[str, Any]]:
             try:
                 from psycopg.rows import dict_row
 
-                with conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute("SELECT id FROM watchlists WHERE name = %s", (name,))
-                    if cur.fetchone() is not None:
-                        return make_envelope(
-                            {"tool": "watchlist_create"},
-                            source="postgres",
-                            warnings=[f"watchlist '{name}' already exists"],
-                            availability="empty",
+                # P03: sync PG I/O must not run on the event loop — offload the
+                # whole create-and-deduplicate block to the bounded executor.
+                def _pg_create():
+                    with conn.cursor(row_factory=dict_row) as cur:
+                        cur.execute("SELECT id FROM watchlists WHERE name = %s", (name,))
+                        if cur.fetchone() is not None:
+                            return make_envelope(
+                                {"tool": "watchlist_create"},
+                                source="postgres",
+                                warnings=[f"watchlist '{name}' already exists"],
+                                availability="empty",
+                            )
+                        cur.execute(
+                            "INSERT INTO watchlists (name) VALUES (%s) RETURNING id, name",
+                            (name,),
                         )
-                    cur.execute(
-                        "INSERT INTO watchlists (name) VALUES (%s) RETURNING id, name", (name,)
+                        row = cur.fetchone()
+                    return make_envelope(
+                        {"id": row["id"], "name": row["name"], "symbols": []},
+                        source="postgres",
                     )
-                    row = cur.fetchone()
-                return make_envelope(
-                    {"id": row["id"], "name": row["name"], "symbols": []}, source="postgres"
-                )
+
+                return await run_blocking(_pg_create, "watchlist_create", timeout_secs=30.0)
             except Exception as exc:
                 warnings_pg = f"pg create failed, file fallback: {exc}"
                 logger.warning(warnings_pg)
             finally:
-                conn.close()
+                try:
+                    conn.close()
+                except Exception:
+                    pass
         existing = _file_load("lists")
         if any(r["name"] == name for r in existing):
             return make_envelope(

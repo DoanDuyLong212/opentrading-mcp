@@ -130,14 +130,12 @@ def price_ttl(now: Any = None) -> int:
 
 
 async def _cache_key_for(tool: str, fingerprint: str) -> str:
-    import hashlib
-
     from opentrading_mcp.cache import cache_key
 
-    fp = fingerprint
-    if len(fp) > 100:
-        fp = "h:" + hashlib.sha256(fp.encode()).hexdigest()[:32]
-    return cache_key(tool, fp)
+    # S05: no conditional shortening — cache_key hashes the complete raw
+    # fingerprint (full SHA-256), so distinct financial arguments never share
+    # a payload key.
+    return cache_key(tool, fingerprint)
 
 
 async def cache_lookup(tool: str, fingerprint: str) -> dict[str, Any] | None:
@@ -530,16 +528,41 @@ async def run_blocking[T](
             )
         _pending += 1
     started = time.monotonic()
+
+    def _release_if_cancelled(fut) -> None:
+        # P01: a future cancelled while still queued is skipped by the worker,
+        # so the tracked body never runs — release the admission here instead,
+        # exactly once (a running future cannot be cancelled).
+        if fut.cancelled():
+            with _pending_guard:
+                global _pending
+                _pending -= 1
+
+    def _tracked():
+        # P01: the admission stays counted until the thread ACTUALLY finishes
+        # (or is skipped after cancellation) — a caller timeout/cancel must not
+        # undercount physically queued or running work.
+        global _pending
+        try:
+            return ctx.run(no_exit, fn)
+        finally:
+            with _pending_guard:
+                _pending -= 1
+
     try:
-        future = loop.run_in_executor(pool, functools.partial(ctx.run, no_exit, fn))
-        return await asyncio.wait_for(future, timeout_secs)
-    except TimeoutError as exc:
-        _neg_mark(neg_key)
-        raise ProviderUnavailable(f"{tool} timed out after {timeout_secs}s") from exc
+        future = loop.run_in_executor(pool, _tracked)
+        future.add_done_callback(_release_if_cancelled)
+        try:
+            return await asyncio.wait_for(future, timeout_secs)
+        except TimeoutError as exc:
+            _neg_mark(neg_key)
+            raise ProviderUnavailable(f"{tool} timed out after {timeout_secs}s") from exc
     except ProviderUnavailable:
         if time.monotonic() - started >= _NEG_SLOW_SECONDS:
             _neg_mark(neg_key)
         raise
-    finally:
+    except RuntimeError:
+        # executor rejected the submission (shutdown): release our admission
         with _pending_guard:
             _pending -= 1
+        raise

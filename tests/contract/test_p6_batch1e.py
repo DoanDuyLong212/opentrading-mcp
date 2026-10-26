@@ -53,6 +53,9 @@ async def test_market_overview_composite(monkeypatch):
                 {"symbol": "VCB", "change": 1.5},
                 {"symbol": "HPG", "change": -0.5},
             ]
+        # P02: the dnse ws_snapshot leg is offloaded through run_blocking too
+        if target is dnse_p.ws_snapshot or callable(target):
+            return {"mock": True}
         raise AssertionError(f"unexpected upstream {target}")
 
     monkeypatch.setattr(market_mod, "run_blocking", fake_block)

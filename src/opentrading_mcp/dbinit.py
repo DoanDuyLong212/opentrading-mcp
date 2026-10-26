@@ -8,6 +8,7 @@ User decision 2026-10-01: 8010 retired — MCP-server owns its own database
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any
 
 _ensured = False
@@ -222,29 +223,44 @@ def connect(**kwargs: Any) -> Any:
         return None
 
 
+_ensure_lock = threading.Lock()
+
+
 def ensure_tables() -> bool:
-    """CREATE TABLE IF NOT EXISTS for every table; once per process. True on success."""
+    """CREATE TABLE IF NOT EXISTS for every table; once per process. True on success.
+
+    S01 fix: the connection is always closed (success, failure, concurrent
+    waiters), initialization is serialized by a process lock (one DDL pass),
+    and connect uses an explicit timeout."""
     global _ensured
     if _ensured:
         return True
-    conn = connect()
-    if conn is None:
-        return False
-    try:
-        with conn.cursor() as cur:
-            for ddl in _DDL.values():
-                cur.execute(ddl)
-            for migration in _MIGRATIONS:
-                cur.execute(migration)
-        conn.commit()
-        _ensured = True
-        return True
-    except Exception:
+    with _ensure_lock:
+        if _ensured:  # another thread finished while we waited
+            return True
+        conn = connect(connect_timeout=10)
+        if conn is None:
+            return False
         try:
-            conn.rollback()
+            with conn.cursor() as cur:
+                for ddl in _DDL.values():
+                    cur.execute(ddl)
+                for migration in _MIGRATIONS:
+                    cur.execute(migration)
+            conn.commit()
+            _ensured = True
+            return True
         except Exception:
-            pass
-        return False
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return False
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def create_database() -> str:

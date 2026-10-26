@@ -127,8 +127,11 @@ async def test_market_overview_ranks_and_counts_on_percent_change(monkeypatch):
     from opentrading_mcp.providers import vnstock as vn_p
 
     async def fake_rb(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        assert getattr(fn, "func", None) is vn_p.equity_quote_batch
-        return [dict(q) for q in FIXTURE["board_quotes"]]
+        submitted = getattr(fn, "func", None)
+        if submitted is vn_p.equity_quote_batch:
+            return [dict(q) for q in FIXTURE["board_quotes"]]
+        # P02: ws_snapshot is offloaded through run_blocking as well
+        return {"mock": True}
 
     monkeypatch.setattr(market_mod, "run_blocking", fake_rb)
     monkeypatch.setattr(dnse_p, "ws_snapshot", lambda symbols: {"mock": True})
@@ -261,7 +264,13 @@ async def test_breadth_cache_v3_preserves_nulls_and_warnings(monkeypatch):
     first = await _tool_fn("breadth_scan")(exchange="HOSE")
     assert first["data"]["ceiling"] is None
     assert calls == ["HOSE"]  # the stale v2| fingerprint is not served
-    assert "mcp:breadth_scan:v3_HOSE" in store._memory
+    import hashlib as _hl
+
+    # S05 key = mcp:s05:{tool}:{sha256(complete raw fingerprint)}; the tool's
+    # fingerprint itself is "v3|HOSE" (v3 = null-preserving breadth contract).
+    s05_key = "mcp:s05:breadth_scan:" + _hl.sha256(b"v3|HOSE").hexdigest()
+    assert s05_key in store._memory
+    assert "mcp:breadth_scan:v3_HOSE" not in store._memory
     assert "mcp:breadth_scan:v2_HOSE" not in store._memory
     calls.clear()
     second = await _tool_fn("breadth_scan")(exchange="HOSE")

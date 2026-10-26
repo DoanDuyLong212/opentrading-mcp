@@ -12,6 +12,7 @@ import os
 from typing import Any
 
 DEFAULT_QUOTA_DAY = 1000
+QUOTA_TZ = "Asia/Ho_Chi_Minh"  # S04: quota day locked to the business timezone
 
 
 async def _connect() -> Any:
@@ -50,37 +51,66 @@ class _PgConn:
 
 
 def _seconds_until_midnight() -> int:
-    now = datetime.datetime.now().astimezone()
+    """Seconds to the next quota-day boundary in the quota timezone (S04:
+    quota day is Asia/Ho_Chi_Minh — the server's declared business timezone —
+    independent of host/PG session timezone; boundary = VN midnight, UTC+7)."""
+    _, remaining = _quota_day_and_remaining()
+    return remaining
+
+
+def _quota_day_and_remaining() -> tuple[str, int]:
+    import zoneinfo
+
+    now = datetime.datetime.now(zoneinfo.ZoneInfo(QUOTA_TZ))
+    day = now.date().isoformat()
     midnight = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    return max(1, int((midnight - now).total_seconds()))
+    return day, max(1, int((midnight - now).total_seconds()))
 
 
 async def check_and_record(
     user_id: str, tool: str, duration_ms: float, quota_default: int = DEFAULT_QUOTA_DAY
 ) -> tuple[bool, int]:
-    """Return (allowed, retry_after_seconds); records one billable call."""
+    """Return (allowed, retry_after_seconds); records one billable call.
+
+    S04: check+increment run in ONE transaction serialized by a per-user
+    advisory lock, so concurrent calls can never exceed the daily quota. The
+    recorded day and retry-after use the explicit quota timezone, not the
+    PG session timezone."""
     if not os.environ.get("DATABASE_URL", "").strip():
         return True, 0
     try:
         conn = await _connect()
     except _NoDatabaseError:
         return True, 0
+    day, retry_after = _quota_day_and_remaining()
     async with conn:
-        row = await conn.fetchone(
-            "SELECT COALESCE((SELECT quota_day FROM mcp_auth_tokens WHERE user_id = %s), %s),"
-            " COALESCE((SELECT SUM(count) FROM mcp_tool_usage"
-            " WHERE user_id = %s AND day = CURRENT_DATE), 0)",
-            (user_id, quota_default, user_id),
-        )
-        quota_day, used = (row[0], row[1]) if row else (quota_default, 0)
-        if int(used) >= int(quota_day):
-            return False, _seconds_until_midnight()
-        await conn.execute(
-            "INSERT INTO mcp_tool_usage (user_id, tool, day, count, total_ms)"
-            " VALUES (%s, %s, CURRENT_DATE, 1, %s)"
-            " ON CONFLICT (user_id, tool, day) DO UPDATE SET"
-            " count = mcp_tool_usage.count + 1,"
-            " total_ms = mcp_tool_usage.total_ms + EXCLUDED.total_ms",
-            (user_id, tool, int(duration_ms)),
-        )
-        return True, 0
+        await conn.execute("BEGIN")
+        try:
+            # per-user transaction lock: serializes concurrent quota decisions
+            await conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (user_id,))
+            row = await conn.fetchone(
+                "SELECT COALESCE((SELECT quota_day FROM mcp_auth_tokens WHERE user_id = %s), %s),"
+                " COALESCE((SELECT SUM(count) FROM mcp_tool_usage"
+                " WHERE user_id = %s AND day = %s), 0)",
+                (user_id, quota_default, user_id, day),
+            )
+            quota_day, used = (row[0], row[1]) if row else (quota_default, 0)
+            if int(used) >= int(quota_day):
+                await conn.execute("COMMIT")
+                return False, retry_after
+            await conn.execute(
+                "INSERT INTO mcp_tool_usage (user_id, tool, day, count, total_ms)"
+                " VALUES (%s, %s, %s, 1, %s)"
+                " ON CONFLICT (user_id, tool, day) DO UPDATE SET"
+                " count = mcp_tool_usage.count + 1,"
+                " total_ms = mcp_tool_usage.total_ms + EXCLUDED.total_ms",
+                (user_id, tool, day, int(duration_ms)),
+            )
+            await conn.execute("COMMIT")
+            return True, 0
+        except Exception:
+            try:
+                await conn.execute("ROLLBACK")
+            except Exception:
+                pass
+            raise

@@ -556,7 +556,11 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             from opentrading_mcp.providers import dnse as dnse_mod
 
-            ws = dnse_mod.ws_snapshot(symbols or ["VNINDEX"])
+            ws = await run_blocking(
+                functools.partial(dnse_mod.ws_snapshot, symbols or ["VNINDEX"]),
+                "dnse_ws_snapshot",
+                timeout_secs=15.0,
+            )
             return await cache_store(
                 "money_flow", fp, price_ttl(),
                 {

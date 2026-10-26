@@ -177,8 +177,13 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbols: channels to read (None reads VN30F1M+VNINDEX+VN30).
         """
         try:
+            snap = await run_blocking(
+                functools.partial(dnse_p.ws_snapshot, symbols or ["VN30F1M", "VNINDEX", "VN30"]),
+                "dnse_ws_snapshot",
+                timeout_secs=15.0,
+            )
             return make_envelope(
-                dnse_p.ws_snapshot(symbols or ["VN30F1M", "VNINDEX", "VN30"]),
+                snap,
                 source="dnse-ws",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

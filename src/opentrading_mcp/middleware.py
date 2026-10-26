@@ -27,6 +27,8 @@ class RateLimiter(BaseHTTPMiddleware):
     X-Forwarded-For (Render proxy) then the direct peer address.
     """
 
+    MAX_TRACKED_CLIENTS = 10_000  # P04: bound memory against spoofed XFF floods
+
     def __init__(self, app: Any, limit_per_minute: int = 120) -> None:
         super().__init__(app)
         self.limit_per_minute = max(1, int(limit_per_minute))
@@ -43,7 +45,17 @@ class RateLimiter(BaseHTTPMiddleware):
         if request.method != "POST" or request.url.path != "/mcp":
             return await call_next(request)
         now = time.monotonic()
-        bucket = self._hits.setdefault(self._client_ip(request), deque())
+        ip = self._client_ip(request)
+        if ip not in self._hits and len(self._hits) >= self.MAX_TRACKED_CLIENTS:
+            # P04: evict expired/oldest buckets before admitting a new key so a
+            # spoofed-XFF flood cannot grow the map without bound.
+            cutoff_now = now - WINDOW_SECONDS
+            expired = [k for k, dq in self._hits.items() if not dq or dq[-1] <= cutoff_now]
+            for k in expired:
+                self._hits.pop(k, None)
+            while len(self._hits) >= self.MAX_TRACKED_CLIENTS:
+                self._hits.pop(next(iter(self._hits)))
+        bucket = self._hits.setdefault(ip, deque())
         cutoff = now - WINDOW_SECONDS
         while bucket and bucket[0] <= cutoff:
             bucket.popleft()
