@@ -132,13 +132,20 @@ def test_f09_mixed_usd_family_identity(monkeypatch):
 
 
 # ------------------------------------------------- F10 both legs same date
-def test_f10_same_date_legs_compute_inversion():
+def test_f10_same_date_legs_compute_inversion(monkeypatch):
     """Same-date legs → inversion IS computed (None-withholding only applies
     to mismatched dates)."""
-    ten = {"points": [{"t": "2026-10-20", "v": 4.10}]}
-    two = {"points": [{"t": "2026-10-20", "v": 3.90}]}
-    us10y = float(ten["points"][0]["v"]) / 100
-    us2y = float(two["points"][0]["v"]) / 100
-    d10, d2 = ten["points"][0]["t"], two["points"][0]["t"]
-    inverted = None if d10 != d2 else us2y > us10y
-    assert inverted is False  # 3.90 < 4.10 → not inverted
+    from opentrading_mcp.providers import intel as intel_p
+    from opentrading_mcp.providers.errors import ProviderUnavailable
+    from opentrading_mcp.tools import yf as yf_mod
+
+    def blocked():
+        raise ProviderUnavailable("blocked")
+
+    monkeypatch.setattr(yf_mod.yf_p, "yield_curve", blocked)
+    monkeypatch.setattr(intel_p, "fred_series", lambda sid, limit: {
+        "points": [{"t": "2026-10-20", "v": 4.10 if sid == "DGS10" else 3.90}]})
+    env = asyncio.run(_tool_fn("yf_yield_curve")())
+    assert env["availability"] == "available"
+    assert env["data"]["inverted"] is False
+    assert env["data"]["as_of_10y"] == env["data"]["as_of_2y"] == "2026-10-20"
