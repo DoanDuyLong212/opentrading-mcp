@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from opentrading_mcp.providers import binance as bn_p
 from opentrading_mcp.server import create_server, register_preset
 

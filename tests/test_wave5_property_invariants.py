@@ -68,7 +68,7 @@ def test_prop_cci_flat_is_zero_and_warmup_nan(seed):
 
 @pytest.mark.parametrize("seed", [31, 32, 33])
 def test_prop_wilder_nan_prefix_and_continuity(seed):
-    vals = pd.Series([np.nan] + list(np.random.default_rng(seed).normal(0, 1, 60)))
+    vals = pd.Series([np.nan, *np.random.default_rng(seed).normal(0, 1, 60)])
     sm = _wilder_smooth(vals, 14)
     assert sm.iloc[:14].isna().all()  # NaN prefix before the seed index
     assert not sm.iloc[14:].isna().any()  # defined from the seed onward
