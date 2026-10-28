@@ -19,6 +19,16 @@ from starlette.responses import JSONResponse, Response
 # The only routes served without a token, rate limit or quota. Everything else, including
 # any route mounted later, is gated: allowlist what is public, never list what is private.
 PUBLIC_PATHS = ("/healthz", "/readyz", "/.well-known/mcp.json")
+# Diagnostics on the public health routes: ?full=1 queries Redis/Postgres/worker and
+# ?deep=1 calls every upstream family. Too costly to hand to anyone; they need the token.
+_PRIVATE_HEALTH_PARAMS = ("full", "deep")
+
+
+def is_public(request: Request) -> bool:
+    """The request may skip auth and rate limit: a public path, minus its costly variants."""
+    if request.url.path not in PUBLIC_PATHS:
+        return False
+    return not any(request.query_params.get(p) == "1" for p in _PRIVATE_HEALTH_PARAMS)
 
 WINDOW_SECONDS = 60.0
 
@@ -54,7 +64,7 @@ class RateLimiter(BaseHTTPMiddleware):
         return self._client_ip(request)
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        if request.url.path in PUBLIC_PATHS:
+        if is_public(request):
             return await call_next(request)
         now = time.monotonic()
         ip = self._key(request)
@@ -166,7 +176,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         # Default deny: every method on every route needs a token unless it is listed as
         # public. Gating only POST /mcp once left a later /sse mount fully open (28/10/2026).
-        if request.url.path in PUBLIC_PATHS:
+        if is_public(request):
             return await call_next(request)
         from opentrading_mcp import auth, auth_oauth, quota
 
