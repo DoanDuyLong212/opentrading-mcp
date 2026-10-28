@@ -16,13 +16,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-EXEMPT_PATHS = ("/healthz", "/.well-known/mcp.json")
+# The only routes served without a token, rate limit or quota. Everything else, including
+# any route mounted later, is gated: allowlist what is public, never list what is private.
+PUBLIC_PATHS = ("/healthz", "/readyz", "/.well-known/mcp.json")
 
 WINDOW_SECONDS = 60.0
 
 
 class RateLimiter(BaseHTTPMiddleware):
-    """Per-IP sliding-window limiter for POST /mcp only.
+    """Per-IP sliding-window limiter for every route except ``PUBLIC_PATHS``.
 
     Health/discovery routes are never limited. Client IP prefers
     X-Forwarded-For (Render proxy) then the direct peer address.
@@ -43,7 +45,7 @@ class RateLimiter(BaseHTTPMiddleware):
         return client.host if client else "unknown"
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        if request.method != "POST" or request.url.path != "/mcp":
+        if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
         now = time.monotonic()
         ip = self._client_ip(request)
@@ -144,7 +146,7 @@ def _unauthorized(message: str) -> JSONResponse:
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """Gate POST /mcp behind team bearer or validated JWT.
+    """Gate every route except ``PUBLIC_PATHS`` behind team bearer or validated JWT.
 
     Open when neither is configured (local stdio-style dev). Team bearer
     callers bypass quota; JWT subjects are quota-checked per user/day.
@@ -153,13 +155,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.url.path in EXEMPT_PATHS:
-            return await call_next(request)
-        # /metrics exposes tool names/counts: same auth as /mcp, never public.
-        if not (
-            (request.method == "POST" and request.url.path == "/mcp")
-            or (request.method == "GET" and request.url.path == "/metrics")
-        ):
+        # Default deny: every method on every route needs a token unless it is listed as
+        # public. Gating only POST /mcp once left a later /sse mount fully open (28/10/2026).
+        if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
         from opentrading_mcp import auth, auth_oauth, quota
 
@@ -184,7 +182,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         else:
             return await call_next(request)
         request.state.user_id = user_id
-        if user_id != "team":
+        if user_id != "team" and request.method == "POST":
             try:
                 raw = await request.body()
             except Exception:
