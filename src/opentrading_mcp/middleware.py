@@ -24,10 +24,13 @@ WINDOW_SECONDS = 60.0
 
 
 class RateLimiter(BaseHTTPMiddleware):
-    """Per-IP sliding-window limiter for every route except ``PUBLIC_PATHS``.
+    """Sliding-window limiter for every route except ``PUBLIC_PATHS``.
 
-    Health/discovery routes are never limited. Client IP prefers
-    X-Forwarded-For (Render proxy) then the direct peer address.
+    Runs inside ``AuthMiddleware``, so it knows who is calling. A JWT user is counted by
+    its subject: the first X-Forwarded-For entry is whatever the client sent (Render
+    appends to it), so an IP key would let one user spread calls over invented IPs. The
+    team bearer (trusted, already quota-free) and an unauthenticated local server are
+    counted per client IP: X-Forwarded-For first, then the direct peer address.
     """
 
     MAX_TRACKED_CLIENTS = 10_000  # P04: bound memory against spoofed XFF floods
@@ -44,11 +47,17 @@ class RateLimiter(BaseHTTPMiddleware):
         client = request.client
         return client.host if client else "unknown"
 
+    def _key(self, request: Request) -> str:
+        user = getattr(request.state, "user_id", None)
+        if isinstance(user, str) and user and user != "team":
+            return f"user:{user}"
+        return self._client_ip(request)
+
     async def dispatch(self, request: Request, call_next: Any) -> Any:
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
         now = time.monotonic()
-        ip = self._client_ip(request)
+        ip = self._key(request)
         if ip not in self._hits and len(self._hits) >= self.MAX_TRACKED_CLIENTS:
             # P04: evict expired/oldest buckets before admitting a new key so a
             # spoofed-XFF flood cannot grow the map without bound.

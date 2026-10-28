@@ -95,3 +95,24 @@ def test_the_served_app_runs_every_middleware_in_order(app):
         AuthMiddleware,
         RateLimiter,
     ]
+
+
+def test_the_served_rate_limit_counts_a_jwt_user_by_subject_not_forwarded_ip(monkeypatch):
+    from opentrading_mcp import auth_oauth, quota
+
+    async def allow(*_args):
+        return True, 0
+
+    monkeypatch.delenv("MCP_BEARER_TEAM", raising=False)
+    monkeypatch.delenv("MCP_TOKEN", raising=False)
+    monkeypatch.setattr(auth_oauth, "is_configured", lambda: True)
+    monkeypatch.setattr(auth_oauth, "validate_jwt", lambda token: {"sub": "alice"})
+    monkeypatch.setattr(quota, "check_and_record", allow)
+    monkeypatch.setenv("MCP_RATE_LIMIT_PER_MIN", "1")
+    server = create_server()
+    add_health_routes(server)
+    client = TestClient(build_http_app(server), raise_server_exceptions=False)
+    auth = {"Authorization": "Bearer jwt"}
+    assert client.get("/metrics", headers={**auth, "X-Forwarded-For": "1.1.1.1"}).status_code == 200
+    spoofed = client.get("/metrics", headers={**auth, "X-Forwarded-For": "2.2.2.2"})
+    assert spoofed.status_code == 429
