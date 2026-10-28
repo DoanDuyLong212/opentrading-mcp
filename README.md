@@ -139,6 +139,7 @@ File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
 |---|---|---|
 | `authentication_failed` / 401 | Thiếu/sai Bearer token | Thêm header `Authorization: Bearer <TEAM_TOKEN>` |
 | 429 + `Retry-After` | Vượt rate-limit hoặc hết quota ngày | Chờ theo header, giảm tần suất |
+| 503 `server_busy` + `Retry-After` | Server quá tải (≥ `MCP_QUEUE_SHED` call đang chờ/chạy); chỉ chặn `tools/call` | Call chưa chạy, an toàn để gọi lại sau `retry_after` giây |
 | `availability: "unavailable"` + warnings | Upstream chết/thiếu worker (vd WS trio cần worker local) | Đọc `warnings`, dùng tool fallback được gợi ý |
 | `availability: "empty"` | Query hợp lệ nhưng không có rows (vd IPO rỗng) | Đúng bản chất, không phải lỗi |
 | Cold start 20–40s | Render free-tier sleep | `/healthz` chỉ đánh thức instance (liveness, không I/O); vnstock được import nền ngay khi process khởi động. Kiểm tra Redis/Postgres: `/readyz` |

@@ -423,6 +423,12 @@ _pending = 0
 _pending_guard = threading.Lock()
 
 
+def pending_calls() -> int:
+    """Blocking calls queued or running right now (what ``shed_limit()`` is compared to)."""
+    with _pending_guard:
+        return _pending
+
+
 def neg_ttl() -> float:
     """Seconds a timed-out/slow-failed leg stays failed-fast (env MCP_NEG_TTL, default 90).
 
