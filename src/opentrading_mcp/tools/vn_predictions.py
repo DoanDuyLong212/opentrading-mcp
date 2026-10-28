@@ -21,10 +21,11 @@ TABLE = "predictions.predictions_daily"
 SOURCE = "vn_predictions"
 
 
-async def _read(tool: str, sql: str, args: tuple, cols: list[str], filtered: bool = False) -> dict[str, Any]:
+async def _read(tool: str, sql: str, args: tuple, cols: list[str],
+                filtered: bool = False) -> dict[str, Any]:
     try:
         return await db.read_rows(tool, SOURCE, sql, args, cols, filtered=filtered)
-    except Exception as exc:  # noqa: BLE001 — missing schema/table/unreachable all read as unavailable
+    except Exception as exc:  # any failure (missing schema, unreachable) -> unavailable
         return make_envelope({}, source=SOURCE,
                              warnings=[f"predictions store unavailable: {str(exc)[:180]}"])
 
