@@ -138,3 +138,58 @@ def test_tool_calls_pass_below_the_shed_limit(monkeypatch):
     response = client.post("/mcp", json=_CALL)
     assert response.status_code == 200
     assert response.json()["echo"] == _CALL
+
+
+def _identity_app(user_id: str | None, limit_per_minute: int = 1) -> TestClient:
+    """RateLimiter behind a stand-in for AuthMiddleware that sets request.state.user_id."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class FakeAuth(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            if user_id:
+                request.state.user_id = user_id
+            return await call_next(request)
+
+    async def ok(request):
+        return JSONResponse({"ok": True})
+
+    app = Starlette()
+    app.add_middleware(RateLimiter, limit_per_minute=limit_per_minute)
+    app.add_middleware(FakeAuth)
+    app.add_route("/mcp", ok, methods=["POST"])
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_a_jwt_user_cannot_dodge_the_limit_with_invented_forwarded_ips():
+    client = _identity_app("alice")
+    assert client.post("/mcp", json={}, headers={"X-Forwarded-For": "1.1.1.1"}).status_code == 200
+    spoofed = client.post("/mcp", json={}, headers={"X-Forwarded-For": "2.2.2.2"})
+    assert spoofed.status_code == 429
+
+
+def test_jwt_users_have_their_own_buckets():
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class HeaderAuth(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            request.state.user_id = request.headers["x-user"]
+            return await call_next(request)
+
+    async def ok(request):
+        return JSONResponse({"ok": True})
+
+    app = Starlette()
+    app.add_middleware(RateLimiter, limit_per_minute=1)
+    app.add_middleware(HeaderAuth)
+    app.add_route("/mcp", ok, methods=["POST"])
+    client = TestClient(app, raise_server_exceptions=False)
+    assert client.post("/mcp", json={}, headers={"x-user": "alice"}).status_code == 200
+    assert client.post("/mcp", json={}, headers={"x-user": "bob"}).status_code == 200
+    assert client.post("/mcp", json={}, headers={"x-user": "alice"}).status_code == 429
+
+
+def test_the_team_bearer_is_still_counted_per_client_ip():
+    client = _identity_app("team")
+    assert client.post("/mcp", json={}, headers={"X-Forwarded-For": "1.1.1.1"}).status_code == 200
+    assert client.post("/mcp", json={}, headers={"X-Forwarded-For": "1.1.1.1"}).status_code == 429
+    assert client.post("/mcp", json={}, headers={"X-Forwarded-For": "3.3.3.3"}).status_code == 200
