@@ -407,7 +407,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "remaining": remaining,
             }, source="cycle_stats")
 
-        return await db.guarded_write("cycle_stats_refresh", work)
+        return await db.guarded_write("cycle_stats_refresh", work, ctx)
 
     @server.tool(annotations=READ_WRITE_STATE)
     async def cycle_stats_finalize(extra_tet: list[str] | None = None,
@@ -423,7 +423,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 return db.na("cycle_stats_finalize", str(exc))
             return make_envelope(data, source="cycle_stats")
 
-        return await db.guarded_write("cycle_stats_finalize", work)
+        return await db.guarded_write("cycle_stats_finalize", work, ctx)
 
     return [*tools, {"name": "cycle_stats_refresh"}, {"name": "cycle_stats_finalize"}]
 

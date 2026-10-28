@@ -40,6 +40,23 @@ READ_ONLY_OPEN = ToolAnnotations(
 
 AnyContext = Context[Any, Any, Any]
 
+# The team bearer's principal, and the caller when auth is off (stdio, local HTTP).
+TEAM_PRINCIPAL = "team"
+
+
+def caller_id(ctx: AnyContext | None) -> str:
+    """Who is calling: AuthMiddleware's ``user_id`` (``"team"`` or a JWT ``sub``).
+
+    The middleware stores it on the request scope's state, which the SDK hands to the
+    tool as ``ctx.request_context.request``. No request (stdio, tests) or no auth
+    configured means the single local user, ``TEAM_PRINCIPAL``.
+    """
+    try:
+        user = getattr(ctx.request_context.request.state, "user_id", None)  # type: ignore[union-attr]
+    except Exception:
+        return TEAM_PRINCIPAL
+    return user if isinstance(user, str) and user else TEAM_PRINCIPAL
+
 
 CLOSE_KEYS = ("c", "close", "Close", "CLOSE")
 HIGH_KEYS = ("h", "high", "High", "HIGH")
