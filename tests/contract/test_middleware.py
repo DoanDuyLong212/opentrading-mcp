@@ -7,7 +7,12 @@ from starlette.responses import JSONResponse
 from starlette.testclient import TestClient
 
 from opentrading_mcp import obs
-from opentrading_mcp.middleware import McpObservabilityMiddleware, RateLimiter, tool_name_of
+from opentrading_mcp.middleware import (
+    LoadShedMiddleware,
+    McpObservabilityMiddleware,
+    RateLimiter,
+    tool_name_of,
+)
 
 
 def _app(limit_per_minute: int = 3) -> TestClient:
@@ -91,3 +96,45 @@ def test_observability_logs_tool_call_without_body(capsys):
     assert lines[0]["duration_ms"] >= 0
     assert "VCB" not in json.dumps(lines)
     assert 'tool_calls_total{tool="market_snapshot"} 1' in obs.render_metrics()
+
+
+def _shed_app(monkeypatch, pending: int, limit: int = 3) -> TestClient:
+    from opentrading_mcp.tools import shared
+
+    monkeypatch.setattr(shared, "pending_calls", lambda: pending)
+    monkeypatch.setenv("MCP_QUEUE_SHED", str(limit))
+
+    async def echo(request):
+        return JSONResponse({"echo": json.loads(await request.body())})
+
+    app = Starlette()
+    app.add_middleware(LoadShedMiddleware)
+    app.add_route("/mcp", echo, methods=["POST"])
+    return TestClient(app, raise_server_exceptions=False)
+
+
+_CALL = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "vn_listing"}}
+
+
+def test_saturated_server_refuses_tool_calls_with_503_retry_after(monkeypatch):
+    client = _shed_app(monkeypatch, pending=3)
+    response = client.post("/mcp", json=_CALL)
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "2"
+    assert response.json() == {"error": "server_busy", "retry_after": 2}
+
+
+def test_saturated_server_still_answers_other_methods_with_the_body_intact(monkeypatch):
+    client = _shed_app(monkeypatch, pending=3)
+    for method in ("initialize", "ping", "tools/list"):
+        body = {"jsonrpc": "2.0", "id": 1, "method": method}
+        response = client.post("/mcp", json=body)
+        assert response.status_code == 200
+        assert response.json()["echo"] == body
+
+
+def test_tool_calls_pass_below_the_shed_limit(monkeypatch):
+    client = _shed_app(monkeypatch, pending=2)
+    response = client.post("/mcp", json=_CALL)
+    assert response.status_code == 200
+    assert response.json()["echo"] == _CALL
