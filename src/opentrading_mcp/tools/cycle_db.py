@@ -21,6 +21,7 @@ from typing import Any
 
 from opentrading_mcp import dbinit
 from opentrading_mcp.schemas import make_envelope
+from opentrading_mcp.tools.shared import TEAM_PRINCIPAL, AnyContext, caller_id
 
 STALE_DAYS = 90
 NOT_SEEDED = (
@@ -176,10 +177,16 @@ def transactional[R](fn: Callable[..., R], *args: Any) -> R:
         conn.close()
 
 
-async def guarded_write(tool: str, work: Callable[[], Any]) -> dict[str, Any] | Any:
-    """Writes are off (MCP_CYCLE_WRITE=0), busy (another refresh running) or run one at a time."""
+async def guarded_write(
+    tool: str, work: Callable[[], Any], ctx: AnyContext | None = None
+) -> dict[str, Any] | Any:
+    """Writes are off (MCP_CYCLE_WRITE=0), team-only, busy (another refresh running) or
+    run one at a time. The cycle tables are shared by every caller and a refresh is a long
+    compute job, so a JWT user (public client) may read them but never rebuild them."""
     if not writes_enabled():
         return na(tool, "Ghi bảng chu kỳ đang tắt trên server (MCP_CYCLE_WRITE=0).")
+    if caller_id(ctx) != TEAM_PRINCIPAL:
+        return na(tool, "Chỉ token team được refresh/finalize bảng chu kỳ.")
     if write_lock.locked():
         return na(tool, "Đang có một refresh/finalize khác chạy; thử lại sau khi nó xong.")
     async with write_lock:

@@ -254,7 +254,7 @@ def register_asset_cycle_tools(server: FastMCP) -> list[dict[str, Any]]:
                 return db.na("vn_asset_refresh", str(exc))
             return make_envelope(summ, source="asset_cycle")
 
-        return await db.guarded_write("vn_asset_refresh", work)
+        return await db.guarded_write("vn_asset_refresh", work, ctx)
 
     @server.tool(annotations=READ_WRITE_STATE)
     async def g_asset_refresh(ctx: AnyContext | None = None) -> dict[str, Any]:
@@ -267,7 +267,7 @@ def register_asset_cycle_tools(server: FastMCP) -> list[dict[str, Any]]:
                 return db.na("g_asset_refresh", str(exc))
             return make_envelope(summ, source="asset_cycle")
 
-        return await db.guarded_write("g_asset_refresh", work)
+        return await db.guarded_write("g_asset_refresh", work, ctx)
 
     return [*tools, {"name": "vn_asset_refresh"}, {"name": "g_asset_refresh"}]
 

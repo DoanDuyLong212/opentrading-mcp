@@ -123,7 +123,9 @@ CREATE TABLE IF NOT EXISTS g_asset_meta (
 );
 CREATE TABLE IF NOT EXISTS watchlists (
   id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL
+  name TEXT NOT NULL,
+  owner TEXT NOT NULL DEFAULT 'team',
+  UNIQUE(owner, name)
 );
 
 CREATE TABLE IF NOT EXISTS watchlist_items (
@@ -138,5 +140,6 @@ CREATE TABLE IF NOT EXISTS alert_rules (
   metric TEXT NOT NULL DEFAULT 'price',
   op TEXT NOT NULL DEFAULT '>',
   threshold DOUBLE PRECISION NOT NULL,
-  active BOOLEAN NOT NULL DEFAULT TRUE
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  owner TEXT NOT NULL DEFAULT 'team'
 );

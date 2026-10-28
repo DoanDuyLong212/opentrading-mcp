@@ -202,6 +202,12 @@ _MIGRATIONS = (
     "ALTER TABLE cycle_yearly ADD COLUMN IF NOT EXISTS is_partial_year BOOLEAN",
     "ALTER TABLE cycle_yearly ADD COLUMN IF NOT EXISTS data_through DATE",
     "ALTER TABLE cycle_yearly ADD COLUMN IF NOT EXISTS period_basis TEXT",
+    # Watchlists and alert rules belong to the caller (team bearer = 'team', JWT = sub).
+    # Existing rows were all made with the team token: the default backfills them.
+    "ALTER TABLE watchlists ADD COLUMN IF NOT EXISTS owner TEXT NOT NULL DEFAULT 'team'",
+    "ALTER TABLE watchlists DROP CONSTRAINT IF EXISTS watchlists_name_key",
+    "CREATE UNIQUE INDEX IF NOT EXISTS watchlists_owner_name ON watchlists (owner, name)",
+    "ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS owner TEXT NOT NULL DEFAULT 'team'",
 )
 
 
