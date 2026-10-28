@@ -112,6 +112,27 @@ def warm_up() -> None:
     logging.getLogger(__name__).warning("warm-up: vnstock ready in %.1fs", elapsed)
 
 
+def build_http_app(server: FastMCP) -> Any:
+    """The public HTTP app: Streamable HTTP at /mcp only, behind rate limit, auth and logging.
+
+    The legacy HTTP+SSE transport is not served: no client used it, and its /sse mount
+    bypassed every check (all of them gated only POST /mcp). Tests build this same app
+    to check that no route answers without a token.
+    """
+    from opentrading_mcp.middleware import (
+        AuthMiddleware,
+        McpObservabilityMiddleware,
+        RateLimiter,
+        rate_limit_per_minute,
+    )
+
+    app = server.streamable_http_app()
+    app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
+    app.add_middleware(AuthMiddleware)
+    app.add_middleware(McpObservabilityMiddleware)
+    return app
+
+
 def start_warm_up() -> None:
     """Warm up in the background (MCP_WARMUP=0 turns it off), so the port opens at once."""
     import os
@@ -167,18 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         host_error = require_public_host_args(args, dict(os.environ))
         if host_error is not None:
             parser.error(host_error)
-        from opentrading_mcp.middleware import (
-            AuthMiddleware,
-            McpObservabilityMiddleware,
-            RateLimiter,
-            rate_limit_per_minute,
-        )
-
-        app = server.streamable_http_app()
-        app.mount("/sse", server.sse_app())
-        app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
-        app.add_middleware(AuthMiddleware)
-        app.add_middleware(McpObservabilityMiddleware)
+        app = build_http_app(server)
         start_warm_up()
         from opentrading_mcp.loops import start_in_web_loops
 

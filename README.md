@@ -2,7 +2,7 @@
 
 Shareable MCP-server for Vietnamese market research. Team internal first, public later.
 
-- Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp` + legacy `/sse` fallback.
+- Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp`. Legacy HTTP+SSE (`/sse`) đã gỡ 28/10/2026: nó bỏ qua auth/quota/rate limit.
 - Presets (each <50 tools): `market`, `scan`, `quant`, `brief`, `intel`, `all`.
 - Backend: Postgres 16 + Redis 7 only. No MongoDB (`reports` PG JSONB replaces `vietstock_news`).
 - Timezone `Asia/Ho_Chi_Minh` tz-aware everywhere.
@@ -78,8 +78,8 @@ Xoay token mỗi tháng: đổi env là xong, không đụng code.
 - `"oauth": false` — server là resource-server thuần, không có OAuth endpoints;
   bỏ trống thì opencode tự thử OAuth discovery và fail.
 - `headers.Authorization` — thay `<TEAM_TOKEN>` bằng token Bước 0.
-- `url` đúng `/mcp`. Opencode tự thử StreamableHTTP trước, SSE fallback sau —
-  server hỗ trợ cả hai (`POST /mcp` + legacy `/sse`).
+- `url` đúng `/mcp`. Server chỉ phục vụ Streamable HTTP (`/mcp`);
+  mọi route ngoài `/healthz`, `/readyz`, `/.well-known/mcp.json` đều cần token.
 
 Xong bước này thì restart opencode/harness → server `opentrading` hiện 138 tools là thành công.
 Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
