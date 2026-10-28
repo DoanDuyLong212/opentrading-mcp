@@ -113,7 +113,8 @@ def warm_up() -> None:
 
 
 def build_http_app(server: FastMCP) -> Any:
-    """The public HTTP app: Streamable HTTP at /mcp only, behind rate limit, auth and logging.
+    """The public HTTP app: Streamable HTTP at /mcp only, behind rate limit, auth, load
+    shedding and logging.
 
     The legacy HTTP+SSE transport is not served: no client used it, and its /sse mount
     bypassed every check (all of them gated only POST /mcp). Tests build this same app
@@ -121,6 +122,7 @@ def build_http_app(server: FastMCP) -> Any:
     """
     from opentrading_mcp.middleware import (
         AuthMiddleware,
+        LoadShedMiddleware,
         McpObservabilityMiddleware,
         RateLimiter,
         rate_limit_per_minute,
@@ -129,6 +131,8 @@ def build_http_app(server: FastMCP) -> Any:
     app = server.streamable_http_app()
     app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
     app.add_middleware(AuthMiddleware)
+    # Added after Auth so it runs before it: a saturated server refuses before JWT work.
+    app.add_middleware(LoadShedMiddleware)
     app.add_middleware(McpObservabilityMiddleware)
     return app
 

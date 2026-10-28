@@ -77,3 +77,21 @@ def test_removed_sse_routes_are_gone_even_with_a_token(client):
 def test_public_routes_answer_without_a_token(client):
     assert client.get("/healthz").status_code == 200
     assert client.get("/.well-known/mcp.json").status_code == 200
+
+
+def test_the_served_app_runs_every_middleware_in_order(app):
+    """A merge once kept LoadShedMiddleware in middleware.py but dropped it from the app."""
+    from opentrading_mcp.middleware import (
+        AuthMiddleware,
+        LoadShedMiddleware,
+        McpObservabilityMiddleware,
+        RateLimiter,
+    )
+
+    # user_middleware lists the outermost first: the order requests pass through.
+    assert [m.cls for m in app.user_middleware] == [
+        McpObservabilityMiddleware,
+        LoadShedMiddleware,
+        AuthMiddleware,
+        RateLimiter,
+    ]
