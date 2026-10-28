@@ -194,6 +194,10 @@ HINTS: dict[str, str] = {
     # web
     "web_fetch": "doc trang web lien ket | read url page",
     "web_search": "tim kiem internet tin moi | internet search",
+    # vn_predictions (sub-backend: daily distribution forecasts, Neon shared PG)
+    "vn_predictions_check": "do tuoi bang du bao ngay | daily predictions freshness",
+    "vn_predictions_latest": "du bao 12 thang moi nhat | latest 12m distribution forecasts",
+    "vn_predictions_sparkline": "bien dong du bao theo ngay | daily forecast sparkline",
 }
 
 

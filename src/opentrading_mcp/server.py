@@ -56,6 +56,7 @@ ALL_MODULES: tuple[str, ...] = (
     "cycle_stats",
     "asset_cycle",
     "market_timing",
+    "vn_predictions",
 )
 
 # Deprecated compat: PRESETS/PRESET_MODULES/PRESET_CAPS giữ để import cũ không vỡ.
@@ -95,6 +96,7 @@ _REGISTER_BY_MODULE = {
     "cycle_stats": "register_cycle_stats_tools",
     "asset_cycle": "register_asset_cycle_tools",
     "market_timing": "register_market_timing_tools",
+    "vn_predictions": "register_vn_predictions_tools",
 }
 
 

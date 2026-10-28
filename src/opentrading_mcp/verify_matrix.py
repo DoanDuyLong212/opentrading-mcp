@@ -95,6 +95,10 @@ MATRIX: list[tuple[str, dict[str, Any], float]] = [
     ("g_asset_phase", {}, 30.0),
     ("g_asset_corr", {"regime": "post22"}, 30.0),
     ("g_asset_outlook", {}, 30.0),
+    # vn_predictions (sub-backend daily forecasts; unavailable offline is fine)
+    ("vn_predictions_check", {}, 30.0),
+    ("vn_predictions_latest", {}, 30.0),
+    ("vn_predictions_sparkline", {"asset": "Họ GELEX"}, 30.0),
     ("cycle_stats_refresh", {"symbols": ["VCB"]}, 120.0),
     ("vn_asset_refresh", {}, 120.0),
     ("g_asset_refresh", {}, 120.0),
