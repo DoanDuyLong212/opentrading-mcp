@@ -1,4 +1,5 @@
-"""Starlette middleware: rate limiting (Phase 0), auth (Phase 2), observability (Phase 1)."""
+"""Starlette middleware: rate limiting (Phase 0), auth (Phase 2), observability (Phase 1),
+load shedding (503 while saturated)."""
 
 from __future__ import annotations
 
@@ -68,6 +69,49 @@ class RateLimiter(BaseHTTPMiddleware):
             )
         bucket.append(now)
         return await call_next(request)
+
+
+SHED_RETRY_AFTER = 2
+
+
+class LoadShedMiddleware(BaseHTTPMiddleware):
+    """Refuse POST /mcp tools/call with 503 + Retry-After while the server is saturated.
+
+    ``run_blocking`` already sheds past ``shed_limit()`` outstanding calls, but the tools
+    turn that into an ordinary "unavailable" envelope, so clients cannot tell it from a
+    real answer. Refusing at HTTP level first gives them a status and a wait they can act
+    on; the refused call never ran, so it is safe to retry. Other methods (initialize,
+    ping, tools/list) always pass: they are cheap and keep sessions alive.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.method != "POST" or request.url.path != "/mcp":
+            return await call_next(request)
+        from opentrading_mcp.tools.shared import pending_calls, shed_limit
+
+        if pending_calls() < shed_limit():
+            return await call_next(request)
+        try:
+            raw = await request.body()
+        except Exception:
+            raw = b""
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError):
+            payload = None
+        if not (isinstance(payload, dict) and payload.get("method") == "tools/call"):
+
+            async def receive() -> dict[str, Any]:
+                return {"type": "http.request", "body": raw, "more_body": False}
+
+            return await call_next(Request(request.scope, receive))
+        return JSONResponse(
+            {"error": "server_busy", "retry_after": SHED_RETRY_AFTER},
+            status_code=503,
+            headers={"Retry-After": str(SHED_RETRY_AFTER)},
+        )
 
 
 def rate_limit_per_minute() -> int:

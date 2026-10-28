@@ -169,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(host_error)
         from opentrading_mcp.middleware import (
             AuthMiddleware,
+            LoadShedMiddleware,
             McpObservabilityMiddleware,
             RateLimiter,
             rate_limit_per_minute,
@@ -178,6 +179,8 @@ def main(argv: list[str] | None = None) -> int:
         app.mount("/sse", server.sse_app())
         app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
         app.add_middleware(AuthMiddleware)
+        # Added after Auth so it runs before it: a saturated server refuses before JWT work.
+        app.add_middleware(LoadShedMiddleware)
         app.add_middleware(McpObservabilityMiddleware)
         start_warm_up()
         from opentrading_mcp.loops import start_in_web_loops
