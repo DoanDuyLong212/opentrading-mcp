@@ -79,6 +79,13 @@ def test_public_routes_answer_without_a_token(client):
     assert client.get("/.well-known/mcp.json").status_code == 200
 
 
+@pytest.mark.parametrize(
+    "path", ["/healthz?full=1", "/healthz?deep=1", "/readyz?deep=1", "/readyz?full=1"]
+)
+def test_costly_health_diagnostics_need_a_token(client, path):
+    assert client.get(path).status_code == 401
+
+
 def test_the_served_app_runs_every_middleware_in_order(app):
     """A merge once kept LoadShedMiddleware in middleware.py but dropped it from the app."""
     from opentrading_mcp.middleware import (

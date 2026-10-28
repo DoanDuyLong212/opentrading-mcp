@@ -116,7 +116,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | MCP endpoint | `https://opentrading-mcp-web.onrender.com/mcp` |
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
-| Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` (liveness) · `/readyz` (Redis/Postgres/worker; `?deep=1` thêm upstream) |
+| Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` (liveness) · `/readyz` (Redis/Postgres/worker; `?deep=1` thêm upstream, `?full=1`/`?deep=1` cần token) |
 | Tools | 139 (140 khi có websearch key), single full surface, client tự lọc |
 | Deploy | Render chạy `serve --http` full surface (xem `Dockerfile` CMD) |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
