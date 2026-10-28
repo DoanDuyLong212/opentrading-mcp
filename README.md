@@ -2,7 +2,7 @@
 
 Shareable MCP-server for Vietnamese market research. Team internal first, public later.
 
-- Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp`. Legacy HTTP+SSE (`/sse`) đã gỡ 28/10/2026: nó bỏ qua auth/quota/rate limit.
+- Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp`. Legacy HTTP+SSE (`/sse`) đã gỡ 28/10/2026.
 - Presets (each <50 tools): `market`, `scan`, `quant`, `brief`, `intel`, `all`.
 - Backend: Postgres 16 + Redis 7 only. No MongoDB (`reports` PG JSONB replaces `vietstock_news`).
 - Timezone `Asia/Ho_Chi_Minh` tz-aware everywhere.
