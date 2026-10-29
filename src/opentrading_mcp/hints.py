@@ -198,6 +198,13 @@ HINTS: dict[str, str] = {
     "vn_predictions_check": "do tuoi bang du bao ngay | daily predictions freshness",
     "vn_predictions_latest": "du bao 12 thang moi nhat | latest 12m distribution forecasts",
     "vn_predictions_sparkline": "bien dong du bao theo ngay | daily forecast sparkline",
+    "vn_screener_check": "do tuoi bang tin hieu screener | screener signals freshness",
+    "vn_screener_top": "top ma co xac suat cham +20% trong 20 phien | top touch probability stocks",
+    "vn_screener_symbol": "lich su tin hieu cham cua mot ma | per-symbol touch signal history",
+    "vnindex_scenarios_check": "do tuoi bang kich ban VNINDEX | vnindex scenarios freshness",
+    "vnindex_scenarios_latest": "kich ban VNINDEX | up mid down scenarios",
+    "vnindex_scenarios_history": "chuoi kich ban VNINDEX | vnindex scenario sparkline",
+    "vnindex_risk_heads": "canh bao rui roi cham xuong | vnindex downside risk heads",
 }
 
 

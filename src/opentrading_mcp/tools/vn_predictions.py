@@ -64,7 +64,7 @@ def register_vn_predictions_tools(server: FastMCP) -> list[dict[str, Any]]:
             args.append(f"%{asset}%")
         sql = (f"SELECT asset, currency, as_of_date::text AS as_of_date, origin::text AS origin, "
                f"target::text AS target, p_profit, p_gain15, p_gain30, p_gain150, p_loss20, "
-               f"median, q10, q90, model_version FROM {TABLE} "
+               f"median, q10, q90, name, model_version FROM {TABLE} "
                f"WHERE {' AND '.join(where)} ORDER BY currency, asset LIMIT 120")
         return await _read(src, sql, tuple(args),
                            ["asset", "currency", "as_of_date", "origin", "target", "p_profit",
@@ -83,12 +83,12 @@ def register_vn_predictions_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         days = max(1, min(int(days), 365))
         sql = (f"SELECT as_of_date::text AS as_of_date, p_profit, p_gain15, p_gain30, "
-               f"p_gain150, p_loss20, median FROM {TABLE} "
+               f"p_gain150, p_loss20, median, name FROM {TABLE} "
                f"WHERE asset = %s AND currency = %s "
                f"ORDER BY as_of_date DESC LIMIT %s")
         return await _read(src, sql, (asset, currency.upper(), days),
                            ["as_of_date", "p_profit", "p_gain15", "p_gain30", "p_gain150",
-                            "p_loss20", "median"], filtered=True)
+                            "p_loss20", "median", "name"], filtered=True)
 
     return [
         {"name": "vn_predictions_check"},
