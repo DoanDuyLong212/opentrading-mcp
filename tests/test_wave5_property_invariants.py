@@ -72,11 +72,11 @@ def test_prop_wilder_nan_prefix_and_continuity(seed):
     sm = _wilder_smooth(vals, 14)
     assert sm.iloc[:14].isna().all()  # NaN prefix before the seed index
     assert not sm.iloc[14:].isna().any()  # defined from the seed onward
-    # continuity: each step moves at most |x[i] - x[i-1]| toward x[i]
+    expected = sum(float(x) for x in vals.iloc[1:15]) / 14
+    assert math.isclose(sm.iloc[14], expected, abs_tol=1e-12)
     for i in range(15, len(vals)):
-        step = abs(sm.iloc[i] - sm.iloc[i - 1])
-        jump = abs(vals[i] - vals[i - 1])
-        assert step <= max(jump, 1e-9) or math.isclose(step, abs(sm.iloc[i] - sm.iloc[i - 1]))
+        expected = (13 * expected + float(vals.iloc[i])) / 14
+        assert math.isclose(sm.iloc[i], expected, abs_tol=1e-12)
 
 
 @pytest.mark.parametrize("seed", [51, 52])

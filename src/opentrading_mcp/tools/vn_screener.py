@@ -35,7 +35,8 @@ def register_vn_screener_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vn_screener_check(ctx: AnyContext | None = None) -> dict[str, Any]:
         """Độ mới của bảng tín hiệu screener (số mã, ngày gần nhất). Dùng trước tiên."""
-        sql = (f"SELECT COUNT(*)::int AS rows, COUNT(*) FILTER (WHERE p_touch20 IS NOT NULL)::int AS scored, "
+        sql = (f"SELECT COUNT(*)::int AS rows, "
+               f"COUNT(*) FILTER (WHERE p_touch20 IS NOT NULL)::int AS scored, "
                f"MAX(as_of_date)::text AS latest_as_of FROM {TABLE}")
         return await _read(src, sql, (), ["rows", "scored", "latest_as_of"])
 
@@ -46,30 +47,30 @@ def register_vn_screener_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Top mã có xác suất chạm +20% trong 20 phiên cao nhất (ngày gần nhất).
 
         limit: số mã tối đa (mặc định 10). min_probability: lọc dưới ngưỡng (0-1).
-        Xác suất nghiên cứu: trung bình dự báo 6.8% vs thực tế 4.2% — màn hình sàng lọc, không phải khuyến nghị.
+        Xác suất nghiên cứu (TB 6.8% vs thực tế 4.2%) — màn hình sàng lọc, không khuyến nghị.
         """
         limit = max(1, min(int(limit), 50))
         where, args = ["p_touch20 IS NOT NULL"], []
         if min_probability is not None:
             where.append("p_touch20 >= %s")
             args.append(float(min_probability))
-        sql = (f"SELECT symbol, as_of_date::text AS as_of_date, reference_close, p_touch20, "
-               f"model_version, status FROM {TABLE} "
+        sql = (f"SELECT symbol, as_of_date::text AS as_of_date, reference_close, "
+               f"p_touch20, model_version, status FROM {TABLE} "
                f"WHERE as_of_date = (SELECT MAX(as_of_date) FROM {TABLE}) "
                f"AND {' AND '.join(where)} ORDER BY p_touch20 DESC LIMIT {limit}")
-        cols = ["symbol", "as_of_date", "reference_close", "p_touch20", "model_version", "status"]
+        cols = ["symbol", "as_of_date", "reference_close", "p_touch20",
+                "model_version", "status"]
         return await _read(src, sql, tuple(args), cols, filtered=True)
 
     @server.tool(annotations=READ_ONLY)
     async def vn_screener_symbol(symbol: str,
                                  ctx: AnyContext | None = None) -> dict[str, Any]:
         """Lịch sử tín hiệu của một mã (toàn bộ ngày đã ghi — sparkline P(touch))."""
-        sql = (f"SELECT as_of_date::text AS as_of_date, reference_close, p_touch20, "
-               f"model_version, status FROM {TABLE} "
+        sql = (f"SELECT as_of_date::text AS as_of_date, reference_close, "
+               f"p_touch20, model_version, status FROM {TABLE} "
                f"WHERE symbol = %s ORDER BY as_of_date DESC LIMIT 90")
-        return await _read(src, sql, (symbol.strip().upper(),),
-                           ["as_of_date", "reference_close", "p_touch20", "model_version", "status"],
-                           filtered=True)
+        cols = ["as_of_date", "reference_close", "p_touch20", "model_version", "status"]
+        return await _read(src, sql, (symbol.strip().upper(),), cols, filtered=True)
 
     return [
         {"name": "vn_screener_check"},

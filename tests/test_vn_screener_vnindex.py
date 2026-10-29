@@ -14,7 +14,10 @@ server_mod = importlib.import_module("opentrading_mcp.server")
 def _tools(module):
     from mcp.server.fastmcp import FastMCP
     server = FastMCP("t")
-    module.register_vn_screener_tools(server) if module is scr else module.register_vnindex_scenarios_tools(server)
+    if module is scr:
+        module.register_vn_screener_tools(server)
+    else:
+        module.register_vnindex_scenarios_tools(server)
     get = server._tool_manager.get_tool
     return {name: get(name).fn for name in
             ("vn_screener_check", "vn_screener_top", "vn_screener_symbol",

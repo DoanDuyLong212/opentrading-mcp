@@ -202,9 +202,9 @@ HINTS: dict[str, str] = {
     "vn_screener_top": "top ma co xac suat cham +20% trong 20 phien | top touch probability stocks",
     "vn_screener_symbol": "lich su tin hieu cham cua mot ma | per-symbol touch signal history",
     "vnindex_scenarios_check": "do tuoi bang kich ban VNINDEX | vnindex scenarios freshness",
-    "vnindex_scenarios_latest": "kich ban VNINDEX tang tich luy giam | vnindex up mid down scenarios",
-    "vnindex_scenarios_history": "chuoi kich ban VNINDEX theo ngay | vnindex scenario sparkline",
-    "vnindex_risk_heads": "canh bao rui roi cham xuong 5 10 phan tram | vnindex downside risk heads",
+    "vnindex_scenarios_latest": "kich ban VNINDEX | up mid down scenarios",
+    "vnindex_scenarios_history": "chuoi kich ban VNINDEX | vnindex scenario sparkline",
+    "vnindex_risk_heads": "canh bao rui roi cham xuong | vnindex downside risk heads",
 }
 
 

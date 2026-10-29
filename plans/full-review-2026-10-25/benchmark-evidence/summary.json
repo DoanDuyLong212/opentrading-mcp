@@ -1,0 +1,2899 @@
+{
+  "baseline_revision": "565ec6fbd4a2a89b8eed3a289509a1a0fe43efe4",
+  "candidate_production_revision": "0e4d57af2411fc4687da5dcf99a2d97a64b5fda8",
+  "environment": {
+    "python": "3.12.3",
+    "httpx": "0.28.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.3",
+    "MCP_BLOCKING_SLOTS": 3,
+    "MCP_QUEUE_SHED": 50,
+    "redis_image": "redis:7-alpine",
+    "redis_image_id": "sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf"
+  },
+  "sources": {
+    "scripts/_bench_serve.py": "6472198544fd446ce22e3cab4c204d31c7586d6df16d569b24449c96a48b3b20",
+    "scripts/load_bench_http.py": "329107ddc0707caa5be18b8b8acd31e03c9f2c1ef20ff5ba15c13eea62760edc",
+    "scripts/load_bench.py": "e4abd9374efe667b3bcc4efd3d296e56d56962c560d4f1c40660be58996240b7"
+  },
+  "runs": {
+    "candidate-smoke": {
+      "sha256_json": "d608cec9ae933e70b85f91c37978a00a3f7e5c1cb11cb2447d64997c415c5471",
+      "sha256_gzip": "ac01219d0588611209001149af626dc63c8b4f9f88cea3bd99372df5df23fba4",
+      "rows": [
+        {
+          "mode": "cold",
+          "concurrency": 2,
+          "namespace": "ca236766470c4e8bbacaf3d932320f38",
+          "sample_seconds": 1.0699130180000793,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 8,
+          "rps": 7.48,
+          "p50_ms": 262.22,
+          "p95_ms": 314.61,
+          "p99_ms": 314.61,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 2,
+            "provider_calls": 22,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "warm",
+          "concurrency": 2,
+          "namespace": "b99cc5c86ae34caa85a1f240854b9f72",
+          "sample_seconds": 1.1372875749984814,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 43,
+          "rps": 37.81,
+          "p50_ms": 45.09,
+          "p95_ms": 64.96,
+          "p99_ms": 181.25,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 43,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "burst",
+          "concurrency": 2,
+          "namespace": "051c4b7f87f34a2a95bdff070e832e05",
+          "sample_seconds": 1.0865731540034176,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 16,
+          "rps": 14.73,
+          "p50_ms": 32.04,
+          "p95_ms": 41.13,
+          "p99_ms": 41.13,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 16,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "mixed",
+          "concurrency": 2,
+          "namespace": "edd5fb793ee24973b99eacca360ac80a",
+          "sample_seconds": 1.15628967000157,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 15,
+          "rps": 12.97,
+          "p50_ms": 27.41,
+          "p95_ms": 319.62,
+          "p99_ms": 319.62,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 8,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 2,
+            "provider_calls": 20,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "stall",
+          "concurrency": 2,
+          "namespace": "7c662b58879445039fd71c80c4823c92",
+          "sample_seconds": 2.1725411869992968,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 2,
+          "rps": 0.92,
+          "p50_ms": 2171.46,
+          "p95_ms": 2171.46,
+          "p99_ms": 2171.46,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 4,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 2,
+            "provider_calls": 8,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "health-under-load",
+          "concurrency": 2,
+          "namespace": "f4e2851a07784fe4a6448b5e2875a2ce",
+          "sample_seconds": 1.1129509729980782,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 8,
+          "rps": 7.19,
+          "p50_ms": 285.38,
+          "p95_ms": 294.9,
+          "p99_ms": 294.9,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 2,
+            "provider_calls": 22,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [
+            {
+              "ms": 8.37835700076539,
+              "ok": true
+            },
+            {
+              "ms": 29.743484003120102,
+              "ok": true
+            },
+            {
+              "ms": 9.94172900027479,
+              "ok": true
+            },
+            {
+              "ms": 5.402265000157058,
+              "ok": true
+            },
+            {
+              "ms": 67.57239199941978,
+              "ok": true
+            },
+            {
+              "ms": 5.123278999235481,
+              "ok": true
+            },
+            {
+              "ms": 83.37522500005434,
+              "ok": true
+            },
+            {
+              "ms": 5.7056549994740635,
+              "ok": true
+            },
+            {
+              "ms": 81.24687800227548,
+              "ok": true
+            }
+          ],
+          "outage": null
+        },
+        {
+          "mode": "peer",
+          "concurrency": 2,
+          "namespace": "ba222eca29564ee3857aa12c7e37bdfa",
+          "sample_seconds": 1.050650854002015,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 25,
+          "rps": 23.79,
+          "p50_ms": 81.71,
+          "p95_ms": 92.9,
+          "p99_ms": 111.13,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 30,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 180,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "redis-down",
+          "concurrency": 2,
+          "namespace": "2fa86ac97b22499c930331605666718a",
+          "sample_seconds": 1.0884063279991096,
+          "warmup_seconds": 0.2,
+          "measurement": "smoke",
+          "requests": 6,
+          "rps": 5.51,
+          "p50_ms": 322.71,
+          "p95_ms": 527.35,
+          "p99_ms": 527.35,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 2,
+            "provider_calls": 18,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": true
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": true
+          },
+          "health_probes": [],
+          "outage": {
+            "stopped_during_sample": true,
+            "state_during_outage": {
+              "latency_ms": 20.0,
+              "active": 0,
+              "max_active": 2,
+              "provider_calls": 18,
+              "pending": 0,
+              "redis_configured": true,
+              "redis_client_active": false,
+              "redis_backoff": true
+            }
+          }
+        }
+      ]
+    },
+    "candidate-main": {
+      "sha256_json": "4e9653f4ec34f04ccdaf5005896d9aba5b93df2ea452752d9f2eab226e2e63da",
+      "sha256_gzip": "0558999f0e1d152ca5c0ed972d63ed387eee95de1d5683feab03e1946b9f0e1c",
+      "rows": [
+        {
+          "mode": "cold",
+          "concurrency": 1,
+          "namespace": "2661b037443b45e9a9c841819613e964",
+          "sample_seconds": 15.022325502999593,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 113,
+          "rps": 7.52,
+          "p50_ms": 127.5,
+          "p95_ms": 188.32,
+          "p99_ms": 224.32,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 310,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "cold",
+          "concurrency": 8,
+          "namespace": "251b669e7cc44d0a96ad10cf4f21cf60",
+          "sample_seconds": 15.490068768998754,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 148,
+          "rps": 9.55,
+          "p50_ms": 754.35,
+          "p95_ms": 1181.68,
+          "p99_ms": 1239.85,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 88,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 384,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "cold",
+          "concurrency": 32,
+          "namespace": "41541499f641428dacf9bc29b844e26e",
+          "sample_seconds": 16.049657966999803,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 172,
+          "rps": 10.72,
+          "p50_ms": 2880.89,
+          "p95_ms": 3910.7,
+          "p99_ms": 3931.45,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 428,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "warm",
+          "concurrency": 1,
+          "namespace": "5029b336329f4dd89ddbc80c7088d24f",
+          "sample_seconds": 15.005696542000805,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 951,
+          "rps": 63.38,
+          "p50_ms": 14.41,
+          "p95_ms": 22.91,
+          "p99_ms": 39.37,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 951,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 80,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 80,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "warm",
+          "concurrency": 8,
+          "namespace": "ece82655beb94d8c848ce1be9ba03a8b",
+          "sample_seconds": 15.050439001002815,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 706,
+          "rps": 46.91,
+          "p50_ms": 153.08,
+          "p95_ms": 324.76,
+          "p99_ms": 588.82,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 706,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "warm",
+          "concurrency": 32,
+          "namespace": "dcba6d8f10744f8cbdc4a64821eedcd9",
+          "sample_seconds": 15.147109691999503,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 1174,
+          "rps": 77.51,
+          "p50_ms": 395.88,
+          "p95_ms": 531.95,
+          "p99_ms": 840.47,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 1174,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 74,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 74,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "stall",
+          "concurrency": 1,
+          "namespace": "6b4db19812c54934afd5f5946c31c2e3",
+          "sample_seconds": 16.567319275000045,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 8,
+          "rps": 0.48,
+          "p50_ms": 2069.28,
+          "p95_ms": 2090.46,
+          "p99_ms": 2090.46,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 8,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 24,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "stall",
+          "concurrency": 8,
+          "namespace": "59db22ac647441c7baee1a0e0b3413a2",
+          "sample_seconds": 18.371960879001563,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 26,
+          "rps": 1.42,
+          "p50_ms": 5119.52,
+          "p95_ms": 6149.15,
+          "p99_ms": 6190.85,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 8,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 60,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "stall",
+          "concurrency": 32,
+          "namespace": "819d0070f83a40c386d35e7f011d8b76",
+          "sample_seconds": 28.614287604999845,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 42,
+          "rps": 1.47,
+          "p50_ms": 15432.29,
+          "p95_ms": 21481.94,
+          "p99_ms": 22391.39,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 8,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 1000.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 92,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "health-under-load",
+          "concurrency": 1,
+          "namespace": "36bfdb61ab424b3f95ba62f139b8b325",
+          "sample_seconds": 15.066248202001589,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 117,
+          "rps": 7.77,
+          "p50_ms": 127.49,
+          "p95_ms": 144.22,
+          "p99_ms": 172.39,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 318,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [
+            {
+              "ms": 5.603691999567673,
+              "ok": true
+            },
+            {
+              "ms": 12.94678100020974,
+              "ok": true
+            },
+            {
+              "ms": 30.15776900065248,
+              "ok": true
+            },
+            {
+              "ms": 24.095643999316962,
+              "ok": true
+            },
+            {
+              "ms": 13.178291999793146,
+              "ok": true
+            },
+            {
+              "ms": 16.915522999624955,
+              "ok": true
+            },
+            {
+              "ms": 17.665657000179635,
+              "ok": true
+            },
+            {
+              "ms": 17.513804999907734,
+              "ok": true
+            },
+            {
+              "ms": 16.013331998692593,
+              "ok": true
+            },
+            {
+              "ms": 26.215140998829156,
+              "ok": true
+            },
+            {
+              "ms": 31.27850399687304,
+              "ok": true
+            },
+            {
+              "ms": 30.482401001791004,
+              "ok": true
+            },
+            {
+              "ms": 28.661667001870228,
+              "ok": true
+            },
+            {
+              "ms": 25.962940002500545,
+              "ok": true
+            },
+            {
+              "ms": 24.888275998819154,
+              "ok": true
+            },
+            {
+              "ms": 27.859486999659566,
+              "ok": true
+            },
+            {
+              "ms": 25.374651999300113,
+              "ok": true
+            },
+            {
+              "ms": 25.99975200064364,
+              "ok": true
+            },
+            {
+              "ms": 21.31681199898594,
+              "ok": true
+            },
+            {
+              "ms": 26.155889998335624,
+              "ok": true
+            },
+            {
+              "ms": 31.503979000262916,
+              "ok": true
+            },
+            {
+              "ms": 23.10331300031976,
+              "ok": true
+            },
+            {
+              "ms": 19.929776000935817,
+              "ok": true
+            },
+            {
+              "ms": 15.669665001041722,
+              "ok": true
+            },
+            {
+              "ms": 16.884265998669434,
+              "ok": true
+            },
+            {
+              "ms": 10.433442002977245,
+              "ok": true
+            },
+            {
+              "ms": 15.078920998348622,
+              "ok": true
+            },
+            {
+              "ms": 18.080439000186743,
+              "ok": true
+            },
+            {
+              "ms": 25.940801002434455,
+              "ok": true
+            },
+            {
+              "ms": 22.14874000128475,
+              "ok": true
+            },
+            {
+              "ms": 18.179234000854194,
+              "ok": true
+            },
+            {
+              "ms": 16.22575000146753,
+              "ok": true
+            },
+            {
+              "ms": 15.890222002781229,
+              "ok": true
+            },
+            {
+              "ms": 41.744409001694294,
+              "ok": true
+            },
+            {
+              "ms": 27.915147999010514,
+              "ok": true
+            },
+            {
+              "ms": 30.34861600099248,
+              "ok": true
+            },
+            {
+              "ms": 35.14646400071797,
+              "ok": true
+            },
+            {
+              "ms": 32.31818700078293,
+              "ok": true
+            },
+            {
+              "ms": 26.794105000590207,
+              "ok": true
+            },
+            {
+              "ms": 21.00680300281965,
+              "ok": true
+            },
+            {
+              "ms": 21.693680999305798,
+              "ok": true
+            },
+            {
+              "ms": 29.354295002121944,
+              "ok": true
+            },
+            {
+              "ms": 29.39934799724142,
+              "ok": true
+            },
+            {
+              "ms": 21.215248001681175,
+              "ok": true
+            },
+            {
+              "ms": 32.16723299919977,
+              "ok": true
+            },
+            {
+              "ms": 44.07743100091466,
+              "ok": true
+            },
+            {
+              "ms": 42.175566999503644,
+              "ok": true
+            },
+            {
+              "ms": 34.41892800037749,
+              "ok": true
+            },
+            {
+              "ms": 30.515065001964103,
+              "ok": true
+            },
+            {
+              "ms": 22.507854002469685,
+              "ok": true
+            },
+            {
+              "ms": 19.301004002045374,
+              "ok": true
+            },
+            {
+              "ms": 20.662162998632994,
+              "ok": true
+            },
+            {
+              "ms": 26.79474999968079,
+              "ok": true
+            },
+            {
+              "ms": 31.409963998157764,
+              "ok": true
+            },
+            {
+              "ms": 30.023488998267567,
+              "ok": true
+            },
+            {
+              "ms": 21.300575997884152,
+              "ok": true
+            },
+            {
+              "ms": 37.638689998857444,
+              "ok": true
+            },
+            {
+              "ms": 38.851237997732824,
+              "ok": true
+            },
+            {
+              "ms": 21.84251299695461,
+              "ok": true
+            },
+            {
+              "ms": 30.14071600046009,
+              "ok": true
+            },
+            {
+              "ms": 29.50947900171741,
+              "ok": true
+            },
+            {
+              "ms": 37.58608499992988,
+              "ok": true
+            },
+            {
+              "ms": 32.58102299878374,
+              "ok": true
+            },
+            {
+              "ms": 27.04238499791245,
+              "ok": true
+            },
+            {
+              "ms": 23.3957950003969,
+              "ok": true
+            },
+            {
+              "ms": 19.05155300119077,
+              "ok": true
+            },
+            {
+              "ms": 25.244877997465665,
+              "ok": true
+            },
+            {
+              "ms": 31.31794299770263,
+              "ok": true
+            },
+            {
+              "ms": 30.10228399944026,
+              "ok": true
+            },
+            {
+              "ms": 32.25395099798334,
+              "ok": true
+            },
+            {
+              "ms": 35.53423999983352,
+              "ok": true
+            },
+            {
+              "ms": 40.41848400083836,
+              "ok": true
+            },
+            {
+              "ms": 45.744268001726596,
+              "ok": true
+            },
+            {
+              "ms": 46.85631000029389,
+              "ok": true
+            },
+            {
+              "ms": 70.26837800003705,
+              "ok": true
+            },
+            {
+              "ms": 36.61433500019484,
+              "ok": true
+            },
+            {
+              "ms": 41.808043999481015,
+              "ok": true
+            },
+            {
+              "ms": 47.274798998842016,
+              "ok": true
+            },
+            {
+              "ms": 40.889168998546666,
+              "ok": true
+            },
+            {
+              "ms": 35.86879900103668,
+              "ok": true
+            },
+            {
+              "ms": 32.118436000018846,
+              "ok": true
+            },
+            {
+              "ms": 18.526890999055468,
+              "ok": true
+            },
+            {
+              "ms": 18.497074001061264,
+              "ok": true
+            },
+            {
+              "ms": 18.26303000052576,
+              "ok": true
+            },
+            {
+              "ms": 23.172114000772126,
+              "ok": true
+            },
+            {
+              "ms": 27.985458000330254,
+              "ok": true
+            },
+            {
+              "ms": 20.506718999968143,
+              "ok": true
+            },
+            {
+              "ms": 16.932853999605868,
+              "ok": true
+            },
+            {
+              "ms": 21.43890499792178,
+              "ok": true
+            },
+            {
+              "ms": 11.37631399979,
+              "ok": true
+            },
+            {
+              "ms": 74.4909370005189,
+              "ok": true
+            },
+            {
+              "ms": 17.050332000508206,
+              "ok": true
+            },
+            {
+              "ms": 29.96738000001642,
+              "ok": true
+            },
+            {
+              "ms": 31.3082150023547,
+              "ok": true
+            },
+            {
+              "ms": 24.822221999784233,
+              "ok": true
+            },
+            {
+              "ms": 17.440576000808505,
+              "ok": true
+            },
+            {
+              "ms": 20.00882799984538,
+              "ok": true
+            },
+            {
+              "ms": 22.378446999937296,
+              "ok": true
+            },
+            {
+              "ms": 22.880084998178063,
+              "ok": true
+            },
+            {
+              "ms": 23.618053997779498,
+              "ok": true
+            },
+            {
+              "ms": 19.20872499977122,
+              "ok": true
+            },
+            {
+              "ms": 32.18317799837678,
+              "ok": true
+            },
+            {
+              "ms": 32.69502499824739,
+              "ok": true
+            },
+            {
+              "ms": 29.480167999281548,
+              "ok": true
+            },
+            {
+              "ms": 35.300298000947805,
+              "ok": true
+            },
+            {
+              "ms": 32.872806001250865,
+              "ok": true
+            },
+            {
+              "ms": 35.29123900079867,
+              "ok": true
+            },
+            {
+              "ms": 36.70590600086143,
+              "ok": true
+            },
+            {
+              "ms": 36.006128997541964,
+              "ok": true
+            },
+            {
+              "ms": 44.53340899999603,
+              "ok": true
+            },
+            {
+              "ms": 35.24690799895325,
+              "ok": true
+            },
+            {
+              "ms": 28.428048000932904,
+              "ok": true
+            },
+            {
+              "ms": 23.553807001007954,
+              "ok": true
+            },
+            {
+              "ms": 24.009061999095138,
+              "ok": true
+            },
+            {
+              "ms": 14.72048700088635,
+              "ok": true
+            },
+            {
+              "ms": 19.25181399928988,
+              "ok": true
+            },
+            {
+              "ms": 20.39271199828363,
+              "ok": true
+            },
+            {
+              "ms": 19.894218999979785,
+              "ok": true
+            }
+          ],
+          "outage": null
+        },
+        {
+          "mode": "health-under-load",
+          "concurrency": 8,
+          "namespace": "456eaadd34f44bd2a2f8d33e8f8e80ee",
+          "sample_seconds": 15.321225109000807,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 165,
+          "rps": 10.77,
+          "p50_ms": 727.71,
+          "p95_ms": 1102.73,
+          "p99_ms": 1151.33,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 414,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [
+            {
+              "ms": 18.525466999562923,
+              "ok": true
+            },
+            {
+              "ms": 20.435012997040758,
+              "ok": true
+            },
+            {
+              "ms": 422.97922000216204,
+              "ok": true
+            },
+            {
+              "ms": 9.86928099882789,
+              "ok": true
+            },
+            {
+              "ms": 5.26851700124098,
+              "ok": true
+            },
+            {
+              "ms": 481.7980309999257,
+              "ok": true
+            },
+            {
+              "ms": 26.51180800239672,
+              "ok": true
+            },
+            {
+              "ms": 250.02539699926274,
+              "ok": true
+            },
+            {
+              "ms": 150.2176980029617,
+              "ok": true
+            },
+            {
+              "ms": 217.45382899825927,
+              "ok": true
+            },
+            {
+              "ms": 199.6238159990753,
+              "ok": true
+            },
+            {
+              "ms": 49.46503899918753,
+              "ok": true
+            },
+            {
+              "ms": 25.445937000768026,
+              "ok": true
+            },
+            {
+              "ms": 262.0270999977947,
+              "ok": true
+            },
+            {
+              "ms": 104.1163139998389,
+              "ok": true
+            },
+            {
+              "ms": 8.424548999755643,
+              "ok": true
+            },
+            {
+              "ms": 150.41256400218117,
+              "ok": true
+            },
+            {
+              "ms": 371.733685999061,
+              "ok": true
+            },
+            {
+              "ms": 91.32171000237577,
+              "ok": true
+            },
+            {
+              "ms": 15.426730999024585,
+              "ok": true
+            },
+            {
+              "ms": 502.5431110007048,
+              "ok": true
+            },
+            {
+              "ms": 86.17454200066277,
+              "ok": true
+            },
+            {
+              "ms": 9.188092000840697,
+              "ok": true
+            },
+            {
+              "ms": 282.443123000121,
+              "ok": true
+            },
+            {
+              "ms": 173.64059800092946,
+              "ok": true
+            },
+            {
+              "ms": 3.5585969999374356,
+              "ok": true
+            },
+            {
+              "ms": 225.82594100094866,
+              "ok": true
+            },
+            {
+              "ms": 96.54210699955001,
+              "ok": true
+            },
+            {
+              "ms": 142.70242500060704,
+              "ok": true
+            },
+            {
+              "ms": 415.88608999882126,
+              "ok": true
+            },
+            {
+              "ms": 12.898692999442574,
+              "ok": true
+            },
+            {
+              "ms": 18.94740600255318,
+              "ok": true
+            },
+            {
+              "ms": 342.5640149980609,
+              "ok": true
+            },
+            {
+              "ms": 34.20508300041547,
+              "ok": true
+            },
+            {
+              "ms": 278.27746600087266,
+              "ok": true
+            },
+            {
+              "ms": 54.434409001260065,
+              "ok": true
+            },
+            {
+              "ms": 57.10028300018166,
+              "ok": true
+            },
+            {
+              "ms": 343.55197900003986,
+              "ok": true
+            },
+            {
+              "ms": 33.86017099910532,
+              "ok": true
+            },
+            {
+              "ms": 30.508952997479355,
+              "ok": true
+            },
+            {
+              "ms": 22.753793997253524,
+              "ok": true
+            },
+            {
+              "ms": 348.3498759997019,
+              "ok": true
+            },
+            {
+              "ms": 23.06815500196535,
+              "ok": true
+            },
+            {
+              "ms": 16.66872099667671,
+              "ok": true
+            },
+            {
+              "ms": 402.4650510000356,
+              "ok": true
+            },
+            {
+              "ms": 4.320338000979973,
+              "ok": true
+            },
+            {
+              "ms": 10.183678001340013,
+              "ok": true
+            },
+            {
+              "ms": 343.77622999818414,
+              "ok": true
+            },
+            {
+              "ms": 86.67863899972872,
+              "ok": true
+            },
+            {
+              "ms": 170.78352099997574,
+              "ok": true
+            },
+            {
+              "ms": 179.98609399728593,
+              "ok": true
+            },
+            {
+              "ms": 142.12812400000985,
+              "ok": true
+            },
+            {
+              "ms": 37.515490999794565,
+              "ok": true
+            },
+            {
+              "ms": 386.78615899698343,
+              "ok": true
+            },
+            {
+              "ms": 175.40824500247254,
+              "ok": true
+            },
+            {
+              "ms": 30.545511999662267,
+              "ok": true
+            },
+            {
+              "ms": 76.49476100050379,
+              "ok": true
+            },
+            {
+              "ms": 340.78060200045,
+              "ok": true
+            },
+            {
+              "ms": 11.368248000508174,
+              "ok": true
+            },
+            {
+              "ms": 273.02895599859767,
+              "ok": true
+            },
+            {
+              "ms": 143.67670700085,
+              "ok": true
+            }
+          ],
+          "outage": null
+        },
+        {
+          "mode": "health-under-load",
+          "concurrency": 32,
+          "namespace": "af888f105041443286599981f4531827",
+          "sample_seconds": 16.254911379000987,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 168,
+          "rps": 10.34,
+          "p50_ms": 3122.02,
+          "p95_ms": 3562.63,
+          "p99_ms": 3569.53,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 420,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [
+            {
+              "ms": 55.64877099823207,
+              "ok": true
+            },
+            {
+              "ms": 345.93504700023914,
+              "ok": true
+            },
+            {
+              "ms": 494.8658300017996,
+              "ok": true
+            },
+            {
+              "ms": 1295.7018999986758,
+              "ok": true
+            },
+            {
+              "ms": 924.4154699990759,
+              "ok": true
+            },
+            {
+              "ms": 183.48555699776625,
+              "ok": true
+            },
+            {
+              "ms": 440.83416299690725,
+              "ok": true
+            },
+            {
+              "ms": 1112.4634029984009,
+              "ok": true
+            },
+            {
+              "ms": 856.861840999045,
+              "ok": true
+            },
+            {
+              "ms": 311.7437170003541,
+              "ok": true
+            },
+            {
+              "ms": 304.38747099833563,
+              "ok": true
+            },
+            {
+              "ms": 253.29649500054074,
+              "ok": true
+            },
+            {
+              "ms": 1784.654061000765,
+              "ok": true
+            },
+            {
+              "ms": 265.20418300060555,
+              "ok": true
+            },
+            {
+              "ms": 222.1782720007468,
+              "ok": true
+            },
+            {
+              "ms": 115.79923300087103,
+              "ok": true
+            },
+            {
+              "ms": 1927.8880640013085,
+              "ok": true
+            },
+            {
+              "ms": 517.2591720001947,
+              "ok": true
+            },
+            {
+              "ms": 351.2394930003211,
+              "ok": true
+            },
+            {
+              "ms": 685.7483700005105,
+              "ok": true
+            },
+            {
+              "ms": 1368.4177539980737,
+              "ok": true
+            },
+            {
+              "ms": 275.1952840008016,
+              "ok": true
+            }
+          ],
+          "outage": null
+        },
+        {
+          "mode": "peer",
+          "concurrency": 1,
+          "namespace": "b38ad406e99e4ef19e5c72bed094438e",
+          "sample_seconds": 15.011064366000937,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 274,
+          "rps": 18.25,
+          "p50_ms": 54.49,
+          "p95_ms": 58.32,
+          "p99_ms": 60.91,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 540,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 2184,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "peer",
+          "concurrency": 8,
+          "namespace": "71adb935706844ceb1c8d7228ef8b983",
+          "sample_seconds": 15.233317842998076,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 372,
+          "rps": 24.42,
+          "p50_ms": 323.32,
+          "p95_ms": 340.62,
+          "p99_ms": 389.81,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 558,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 2790,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "peer",
+          "concurrency": 32,
+          "namespace": "be787db123ed4f7f83f15c292f4ff81b",
+          "sample_seconds": 15.567738825997367,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 697,
+          "rps": 44.77,
+          "p50_ms": 681.95,
+          "p95_ms": 1390.53,
+          "p99_ms": 1644.36,
+          "transport_failures": 0,
+          "envelope_errors": 517,
+          "success_rate": 25.82,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 522,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 2424,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        }
+      ]
+    },
+    "candidate-extra": {
+      "sha256_json": "1a6aa15b5a7a1703642e948bd18b30a32bae4afb52809288f874c1ca9002398d",
+      "sha256_gzip": "84e8ee98c58bc43f243e1822e9a59c2857a0df24731dc42a559b42677a3d1cdd",
+      "rows": [
+        {
+          "mode": "burst",
+          "concurrency": 8,
+          "namespace": "53a8ec94c60341e089809c14be6dea0c",
+          "sample_seconds": 15.164050884999597,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 632,
+          "rps": 41.68,
+          "p50_ms": 76.9,
+          "p95_ms": 103.97,
+          "p99_ms": 147.31,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 632,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 82,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 82,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "mixed",
+          "concurrency": 8,
+          "namespace": "17b22dd8105c438c9c150e15d90236ee",
+          "sample_seconds": 15.72899695399974,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 210,
+          "rps": 13.35,
+          "p50_ms": 530.32,
+          "p95_ms": 1359.24,
+          "p99_ms": 2191.95,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 105,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 84,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 294,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "redis-down",
+          "concurrency": 8,
+          "namespace": "0afd41e969464e7fbdccc30f23cb4b2b",
+          "sample_seconds": 15.315770260000136,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 157,
+          "rps": 10.25,
+          "p50_ms": 747.97,
+          "p95_ms": 1003.14,
+          "p99_ms": 1149.71,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 68,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 382,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": true
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": true
+          },
+          "health_probes": [],
+          "outage": {
+            "stopped_during_sample": true,
+            "state_during_outage": {
+              "latency_ms": 20.0,
+              "active": 0,
+              "max_active": 3,
+              "provider_calls": 382,
+              "pending": 0,
+              "redis_configured": true,
+              "redis_client_active": false,
+              "redis_backoff": true
+            }
+          }
+        }
+      ]
+    },
+    "candidate-overload": {
+      "sha256_json": "5f5fd029afefb2e533cd169c762b75442eee45a628567a5bdd8d945555bd9e86",
+      "sha256_gzip": "1a58a1127cc4cd9ce4f8b9d004767cfb06ceff4c73f2360b019f64e8b80be390",
+      "rows": [
+        {
+          "mode": "peer",
+          "concurrency": 32,
+          "namespace": "8217bd5d176a42d88c760537cda4c19c",
+          "sample_seconds": 15.455927224000334,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 996,
+          "rps": 64.44,
+          "p50_ms": 500.78,
+          "p95_ms": 966.52,
+          "p99_ms": 1007.39,
+          "transport_failures": 0,
+          "envelope_errors": 879,
+          "success_rate": 11.75,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 522,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 2549,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 6,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        }
+      ]
+    },
+    "baseline-main": {
+      "sha256_json": "0ec31982f1fbcf1d1d3635d7faa8aba640358116c4288a7a87140dbe1ec7fcb4",
+      "sha256_gzip": "a5fd94fc3fa610e2d46228e70a5db38cd6021e1ce7b6e9696d94e9428f781b17",
+      "rows": [
+        {
+          "mode": "cold",
+          "concurrency": 1,
+          "namespace": "55bcd44cc7744c469e9a302d6fcc03e0",
+          "sample_seconds": 15.099481091001508,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 95,
+          "rps": 6.29,
+          "p50_ms": 133.4,
+          "p95_ms": 267.58,
+          "p99_ms": 384.23,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": false,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 78,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 268,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "cold",
+          "concurrency": 8,
+          "namespace": "eb2779793f704c04832ec6d70a8b110a",
+          "sample_seconds": 15.440576914999838,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 172,
+          "rps": 11.14,
+          "p50_ms": 723.49,
+          "p95_ms": 913.53,
+          "p99_ms": 935.03,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 80,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 424,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "cold",
+          "concurrency": 32,
+          "namespace": "aca32459c59b46c4ae33710f4c6333c9",
+          "sample_seconds": 17.121481980997487,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 198,
+          "rps": 11.56,
+          "p50_ms": 2785.45,
+          "p95_ms": 2983.43,
+          "p99_ms": 2988.97,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 0,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 82,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 3,
+            "provider_calls": 478,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "warm",
+          "concurrency": 1,
+          "namespace": "d79fdec2ee24457b84c05ae96c8c55e0",
+          "sample_seconds": 15.012986923000426,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 1039,
+          "rps": 69.21,
+          "p50_ms": 14.03,
+          "p95_ms": 17.37,
+          "p99_ms": 20.5,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 1039,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 82,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 82,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "warm",
+          "concurrency": 8,
+          "namespace": "5213a8bdc18f4dfeb7d1748ee2a77907",
+          "sample_seconds": 15.080599147000612,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 1149,
+          "rps": 76.19,
+          "p50_ms": 99.58,
+          "p95_ms": 154.28,
+          "p99_ms": 211.87,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 1149,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 82,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 82,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        },
+        {
+          "mode": "warm",
+          "concurrency": 32,
+          "namespace": "57621dea43b34d6a91294372ce1260ae",
+          "sample_seconds": 15.215324593998957,
+          "warmup_seconds": 5.0,
+          "measurement": "benchmark",
+          "requests": 1015,
+          "rps": 66.71,
+          "p50_ms": 458.42,
+          "p95_ms": 612.97,
+          "p99_ms": 775.36,
+          "transport_failures": 0,
+          "envelope_errors": 0,
+          "success_rate": 100.0,
+          "cache_hits": 1015,
+          "config": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 0,
+            "provider_calls": 0,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "before": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 80,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "after": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 80,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "recovery_ok": true,
+          "recovered_state": {
+            "latency_ms": 20.0,
+            "active": 0,
+            "max_active": 1,
+            "provider_calls": 2,
+            "pending": 0,
+            "redis_configured": true,
+            "redis_client_active": true,
+            "redis_backoff": false
+          },
+          "health_probes": [],
+          "outage": null
+        }
+      ]
+    }
+  }
+}

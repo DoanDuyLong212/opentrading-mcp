@@ -173,14 +173,33 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     # single 45s TOTAL for the whole batch (matches the historical hang-return
     # contract), not 45s per chunk.
     pool = _shared_batch_pool(len(chunks))
-    deadline = time.monotonic() + 45.0
-    futs = {pool.submit(_one, c): c for c in chunks}
-    for fut, chunk in futs.items():
-        remaining = max(0.5, deadline - time.monotonic())
-        try:
-            out.extend(fut.result(timeout=remaining))
-        except Exception:
-            missing.extend(chunk)
+    deadline = time.monotonic() + _VN_BATCH_WAIT_SECONDS
+    futs = {}
+    try:
+        for chunk in chunks:
+            # A shared executor alone has an unbounded queue. Admit at most
+            # three physical legs, including work retained after caller timeout.
+            if not _VN_BATCH_SLOTS.acquire(blocking=False):
+                missing.extend(chunk)
+                continue
+            try:
+                fut = pool.submit(_one, chunk)
+            except BaseException:
+                _VN_BATCH_SLOTS.release()
+                raise
+            fut.add_done_callback(lambda _f: _VN_BATCH_SLOTS.release())
+            futs[fut] = chunk
+        for fut, chunk in futs.items():
+            remaining = max(0.0, deadline - time.monotonic())
+            try:
+                out.extend(fut.result(timeout=remaining))
+            except Exception:
+                missing.extend(chunk)
+    finally:
+        # Cancel work that never started; running work retains its admission
+        # until its Future completes. No expired requests run after recovery.
+        for fut in futs:
+            fut.cancel()
     if missing and not out:
         raise ProviderUnavailable(f"vnstock batch quote failed for {len(missing)} symbols")
     if missing:
@@ -190,6 +209,8 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
 
 _VN_BATCH_POOL: ThreadPoolExecutor | None = None
 _VN_BATCH_POOL_LOCK = threading.Lock()
+_VN_BATCH_SLOTS = threading.BoundedSemaphore(3)
+_VN_BATCH_WAIT_SECONDS = 45.0
 
 
 def _shared_batch_pool(min_workers: int) -> ThreadPoolExecutor:

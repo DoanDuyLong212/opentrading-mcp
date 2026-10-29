@@ -550,12 +550,6 @@ async def run_blocking[T](
             released = True
             _pending -= 1
 
-    def _release_if_cancelled(fut) -> None:
-        # a future cancelled while still queued is skipped by the worker, so
-        # the tracked body never runs — release the admission here instead
-        if fut.cancelled():
-            _release_once()
-
     def _tracked():
         # the admission stays counted until the thread ACTUALLY finishes
         try:
@@ -563,9 +557,16 @@ async def run_blocking[T](
         finally:
             _release_once()
 
+    # Only the executor Future knows whether cancellation prevented execution.
+    # An asyncio wrapper can be cancelled while its thread is still running.
     try:
-        future = loop.run_in_executor(pool, _tracked)
-        future.add_done_callback(_release_if_cancelled)
+        submitted = pool.submit(_tracked)
+    except BaseException:
+        _release_once()
+        raise
+    submitted.add_done_callback(lambda _future: _release_once())
+    try:
+        future = asyncio.wrap_future(submitted, loop=loop)
         try:
             return await asyncio.wait_for(future, timeout_secs)
         except TimeoutError as exc:
@@ -574,8 +575,4 @@ async def run_blocking[T](
     except ProviderUnavailable:
         if time.monotonic() - started >= _NEG_SLOW_SECONDS:
             _neg_mark(neg_key)
-        raise
-    except RuntimeError:
-        # executor rejected the submission (shutdown): release our admission
-        _release_once()
         raise

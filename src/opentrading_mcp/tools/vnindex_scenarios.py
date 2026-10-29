@@ -75,7 +75,7 @@ def register_vnindex_scenarios_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def vnindex_risk_heads(asof: str | None = None,
                                  ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Cảnh báo rủi ro: P(chạm −5%/−10% sau 10/20 phiên) kèm baseline và credibility."""
+        """Cảnh báo rủi ro: P(chạm -5%/-10% sau 10/20 phiên) kèm baseline và credibility."""
         where, args = [], []
         if asof:
             where.append("as_of_date = %s")
