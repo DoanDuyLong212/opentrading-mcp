@@ -2,7 +2,7 @@
 
 Shareable MCP-server for Vietnamese market research. Team internal first, public later.
 
-- Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp` + legacy `/sse` fallback.
+- Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp`. Legacy HTTP+SSE (`/sse`) đã gỡ 28/10/2026.
 - Presets (each <50 tools): `market`, `scan`, `quant`, `brief`, `intel`, `all`.
 - Backend: Postgres 16 + Redis 7 only. No MongoDB (`reports` PG JSONB replaces `vietstock_news`).
 - Timezone `Asia/Ho_Chi_Minh` tz-aware everywhere.
@@ -78,8 +78,8 @@ Xoay token mỗi tháng: đổi env là xong, không đụng code.
 - `"oauth": false` — server là resource-server thuần, không có OAuth endpoints;
   bỏ trống thì opencode tự thử OAuth discovery và fail.
 - `headers.Authorization` — thay `<TEAM_TOKEN>` bằng token Bước 0.
-- `url` đúng `/mcp`. Opencode tự thử StreamableHTTP trước, SSE fallback sau —
-  server hỗ trợ cả hai (`POST /mcp` + legacy `/sse`).
+- `url` đúng `/mcp`. Server chỉ phục vụ Streamable HTTP (`/mcp`);
+  mọi route ngoài `/healthz`, `/readyz`, `/.well-known/mcp.json` đều cần token.
 
 Xong bước này thì restart opencode/harness → server `opentrading` hiện 138 tools là thành công.
 Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
@@ -116,7 +116,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | MCP endpoint | `https://opentrading-mcp-web.onrender.com/mcp` |
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
-| Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` (liveness) · `/readyz` (Redis/Postgres/worker; `?deep=1` thêm upstream) |
+| Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` (liveness) · `/readyz` (Redis/Postgres/worker; `?deep=1` thêm upstream, `?full=1`/`?deep=1` cần token) |
 | Tools | 139 (140 khi có websearch key), single full surface, client tự lọc |
 | Deploy | Render chạy `serve --http` full surface (xem `Dockerfile` CMD) |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
@@ -139,6 +139,7 @@ File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
 |---|---|---|
 | `authentication_failed` / 401 | Thiếu/sai Bearer token | Thêm header `Authorization: Bearer <TEAM_TOKEN>` |
 | 429 + `Retry-After` | Vượt rate-limit hoặc hết quota ngày | Chờ theo header, giảm tần suất |
+| 503 `server_busy` + `Retry-After` | Server quá tải (≥ `MCP_QUEUE_SHED` call đang chờ/chạy); chỉ chặn `tools/call` | Call chưa chạy, an toàn để gọi lại sau `retry_after` giây |
 | `availability: "unavailable"` + warnings | Upstream chết/thiếu worker (vd WS trio cần worker local) | Đọc `warnings`, dùng tool fallback được gợi ý |
 | `availability: "empty"` | Query hợp lệ nhưng không có rows (vd IPO rỗng) | Đúng bản chất, không phải lỗi |
 | Cold start 20–40s | Render free-tier sleep | `/healthz` chỉ đánh thức instance (liveness, không I/O); vnstock được import nền ngay khi process khởi động. Kiểm tra Redis/Postgres: `/readyz` |

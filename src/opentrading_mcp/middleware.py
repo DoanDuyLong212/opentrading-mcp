@@ -1,4 +1,5 @@
-"""Starlette middleware: rate limiting (Phase 0), auth (Phase 2), observability (Phase 1)."""
+"""Starlette middleware: rate limiting (Phase 0), auth (Phase 2), observability (Phase 1),
+load shedding (503 while saturated)."""
 
 from __future__ import annotations
 
@@ -15,16 +16,31 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-EXEMPT_PATHS = ("/healthz", "/.well-known/mcp.json")
+# The only routes served without a token, rate limit or quota. Everything else, including
+# any route mounted later, is gated: allowlist what is public, never list what is private.
+PUBLIC_PATHS = ("/healthz", "/readyz", "/.well-known/mcp.json")
+# Diagnostics on the public health routes: ?full=1 queries Redis/Postgres/worker and
+# ?deep=1 calls every upstream family. Too costly to hand to anyone; they need the token.
+_PRIVATE_HEALTH_PARAMS = ("full", "deep")
+
+
+def is_public(request: Request) -> bool:
+    """The request may skip auth and rate limit: a public path, minus its costly variants."""
+    if request.url.path not in PUBLIC_PATHS:
+        return False
+    return not any(request.query_params.get(p) == "1" for p in _PRIVATE_HEALTH_PARAMS)
 
 WINDOW_SECONDS = 60.0
 
 
 class RateLimiter(BaseHTTPMiddleware):
-    """Per-IP sliding-window limiter for POST /mcp only.
+    """Sliding-window limiter for every route except ``PUBLIC_PATHS``.
 
-    Health/discovery routes are never limited. Client IP prefers
-    X-Forwarded-For (Render proxy) then the direct peer address.
+    Runs inside ``AuthMiddleware``, so it knows who is calling. A JWT user is counted by
+    its subject: the first X-Forwarded-For entry is whatever the client sent (Render
+    appends to it), so an IP key would let one user spread calls over invented IPs. The
+    team bearer (trusted, already quota-free) and an unauthenticated local server are
+    counted per client IP: X-Forwarded-For first, then the direct peer address.
     """
 
     MAX_TRACKED_CLIENTS = 10_000  # P04: bound memory against spoofed XFF floods
@@ -41,11 +57,17 @@ class RateLimiter(BaseHTTPMiddleware):
         client = request.client
         return client.host if client else "unknown"
 
+    def _key(self, request: Request) -> str:
+        user = getattr(request.state, "user_id", None)
+        if isinstance(user, str) and user and user != "team":
+            return f"user:{user}"
+        return self._client_ip(request)
+
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        if request.method != "POST" or request.url.path != "/mcp":
+        if is_public(request):
             return await call_next(request)
         now = time.monotonic()
-        ip = self._client_ip(request)
+        ip = self._key(request)
         if ip not in self._hits and len(self._hits) >= self.MAX_TRACKED_CLIENTS:
             # P04: evict expired/oldest buckets before admitting a new key so a
             # spoofed-XFF flood cannot grow the map without bound.
@@ -68,6 +90,49 @@ class RateLimiter(BaseHTTPMiddleware):
             )
         bucket.append(now)
         return await call_next(request)
+
+
+SHED_RETRY_AFTER = 2
+
+
+class LoadShedMiddleware(BaseHTTPMiddleware):
+    """Refuse POST /mcp tools/call with 503 + Retry-After while the server is saturated.
+
+    ``run_blocking`` already sheds past ``shed_limit()`` outstanding calls, but the tools
+    turn that into an ordinary "unavailable" envelope, so clients cannot tell it from a
+    real answer. Refusing at HTTP level first gives them a status and a wait they can act
+    on; the refused call never ran, so it is safe to retry. Other methods (initialize,
+    ping, tools/list) always pass: they are cheap and keep sessions alive.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.method != "POST" or request.url.path != "/mcp":
+            return await call_next(request)
+        from opentrading_mcp.tools.shared import pending_calls, shed_limit
+
+        if pending_calls() < shed_limit():
+            return await call_next(request)
+        try:
+            raw = await request.body()
+        except Exception:
+            raw = b""
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError):
+            payload = None
+        if not (isinstance(payload, dict) and payload.get("method") == "tools/call"):
+
+            async def receive() -> dict[str, Any]:
+                return {"type": "http.request", "body": raw, "more_body": False}
+
+            return await call_next(Request(request.scope, receive))
+        return JSONResponse(
+            {"error": "server_busy", "retry_after": SHED_RETRY_AFTER},
+            status_code=503,
+            headers={"Retry-After": str(SHED_RETRY_AFTER)},
+        )
 
 
 def rate_limit_per_minute() -> int:
@@ -100,7 +165,7 @@ def _unauthorized(message: str) -> JSONResponse:
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """Gate POST /mcp behind team bearer or validated JWT.
+    """Gate every route except ``PUBLIC_PATHS`` behind team bearer or validated JWT.
 
     Open when neither is configured (local stdio-style dev). Team bearer
     callers bypass quota; JWT subjects are quota-checked per user/day.
@@ -109,13 +174,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.url.path in EXEMPT_PATHS:
-            return await call_next(request)
-        # /metrics exposes tool names/counts: same auth as /mcp, never public.
-        if not (
-            (request.method == "POST" and request.url.path == "/mcp")
-            or (request.method == "GET" and request.url.path == "/metrics")
-        ):
+        # Default deny: every method on every route needs a token unless it is listed as
+        # public. Gating only POST /mcp once left a later /sse mount fully open (28/10/2026).
+        if is_public(request):
             return await call_next(request)
         from opentrading_mcp import auth, auth_oauth, quota
 
@@ -140,7 +201,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         else:
             return await call_next(request)
         request.state.user_id = user_id
-        if user_id != "team":
+        if user_id != "team" and request.method == "POST":
             try:
                 raw = await request.body()
             except Exception:
