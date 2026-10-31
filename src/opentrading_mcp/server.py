@@ -59,6 +59,7 @@ ALL_MODULES: tuple[str, ...] = (
     "vn_predictions",
     "vn_screener",
     "vnindex_scenarios",
+    "vn_reversal",
 )
 
 # Deprecated compat: PRESETS/PRESET_MODULES/PRESET_CAPS giữ để import cũ không vỡ.
@@ -101,6 +102,7 @@ _REGISTER_BY_MODULE = {
     "vn_predictions": "register_vn_predictions_tools",
     "vn_screener": "register_vn_screener_tools",
     "vnindex_scenarios": "register_vnindex_scenarios_tools",
+    "vn_reversal": "register_vn_reversal_tools",
 }
 
 
