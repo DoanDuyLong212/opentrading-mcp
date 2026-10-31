@@ -201,8 +201,8 @@ HINTS: dict[str, str] = {
     "vn_screener_check": "do tuoi bang tin hieu screener | screener signals freshness",
     "vn_screener_top": "top ma co xac suat cham +20% trong 20 phien | top touch probability stocks",
     # vn_reversal (sub-backend Stage D: DAY/DINH reversal signals, Neon shared PG)
-    "vn_reversal_check": "do tuoi bang tin hieu day dinh | reversal signals freshness",
-    "vn_reversal_signals": "tin hieu day dinh hom nay day bat | today bottom top reversal signals",
+    "vn_reversal_check": "do tuoi bang tin hieu mua ban | buy sell signals freshness",
+    "vn_reversal_signals": "tin hieu mua ban hom nay | today buy sell reversal signals",
     "vn_reversal_dashboard": "dashboard nganh dem day dinh theo ro | sector bottom top counts",
     "vn_reversal_history": "lich su xac suat day dinh cua ma | per symbol reversal history",
     "vn_screener_symbol": "lich su tin hieu cham cua mot ma | per-symbol touch signal history",
