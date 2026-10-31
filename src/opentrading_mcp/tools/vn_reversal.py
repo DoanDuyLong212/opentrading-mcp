@@ -98,15 +98,16 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
             args.append(asof)
         else:
             where.append("as_of_date = (SELECT MAX(as_of_date) FROM " + SEC_TABLE + ")")
-        sql = (f"SELECT basket, kind, as_of_date::text AS as_of_date, n_ma, "
-               f"n_xn_day_5p, n_xn_dinh_5p, n_sig_dinh, n_sig_day, ret5_mean, "
-               f"breadth_ma50, leader_symbol, model_version FROM {SEC_TABLE} "
-               f"WHERE {' AND '.join(where)} "
+        sql = (f"SELECT basket, ten_vn, "
+               f"CASE kind WHEN 'ro' THEN 'Rổ ngành' WHEN 'ho' THEN 'Họ' ELSE kind END AS loai, "
+               f"as_of_date::text AS as_of_date, n_ma, n_xn_day_5p, n_xn_dinh_5p, "
+               f"n_sig_dinh, n_sig_day, ret5_mean, breadth_ma50, leader_symbol, model_version "
+               f"FROM {SEC_TABLE} WHERE {' AND '.join(where)} "
                f"ORDER BY kind, n_xn_dinh_5p DESC, n_xn_day_5p DESC LIMIT 40")
-        return await _read(src, sql, tuple(args),
-                           ["basket", "kind", "as_of_date", "n_ma", "n_xn_day_5p", "n_xn_dinh_5p",
-                            "n_sig_dinh", "n_sig_day", "ret5_mean", "breadth_ma50", "leader_symbol",
-                            "model_version"])
+        cols = ["basket", "ten_vn", "loai", "as_of_date", "n_ma", "n_xn_day_5p", "n_xn_dinh_5p",
+                "n_sig_dinh", "n_sig_day", "ret5_mean", "breadth_ma50",
+                "leader_symbol", "model_version"]
+        return await _read(src, sql, tuple(args), cols)
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_history(symbol: str, days: int = 30,
