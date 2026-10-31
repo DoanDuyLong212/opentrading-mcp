@@ -41,13 +41,16 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_check(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Độ mới của bảng tín hiệu ĐÁY/ĐỈNH (số mã, ngày gần nhất, model_version). Dùng trước tiên."""
-        sql = (f"SELECT COUNT(*)::int AS rows, COUNT(DISTINCT symbol)::int AS symbols, "
+        """Độ mới của bảng tín hiệu ĐÁY/ĐỈNH (số mã, ngày gần nhất,
+        model_version). Dùng trước tiên."""
+        sql = (f"SELECT COUNT(*)::int AS rows, "
+               f"COUNT(DISTINCT symbol)::int AS symbols, "
                f"MAX(as_of_date)::text AS latest_as_of, "
                f"COUNT(*) FILTER (WHERE signal = 'DINH')::int AS n_dinh, "
                f"COUNT(*) FILTER (WHERE signal = 'DAY')::int AS n_day, "
                f"MIN(model_version) AS model_version FROM {SIG_TABLE}")
-        return await _read(src, sql, (), ["rows", "symbols", "latest_as_of", "n_dinh", "n_day", "model_version"])
+        return await _read(src, sql, (),
+                           ["rows", "symbols", "latest_as_of", "n_dinh", "n_day", "model_version"])
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_signals(asof: str | None = None,
@@ -78,10 +81,9 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
                f"WHERE {' AND '.join(where)} "
                f"ORDER BY CASE signal WHEN 'DINH' THEN 0 WHEN 'DAY' THEN 1 ELSE 2 END, "
                f"p_dinh_barrier DESC LIMIT 200")
-        return await _read(src, sql, tuple(args),
-                           ["symbol", "signal", "as_of_date", "close", "p_dinh_barrier", "p_day_barrier",
-                            "p_swing_day", "p_swing_dinh", "rsi14", "dist_sma50", "dd20", "ret5",
-                            "model_version"], filtered=bool(action))
+        cols = ["symbol", "signal", "as_of_date", "close", "p_dinh_barrier", "p_day_barrier",
+                "p_swing_day", "p_swing_dinh", "rsi14", "dist_sma50", "dd20", "ret5", "model_version"]
+        return await _read(src, sql, tuple(args), cols, filtered=bool(action))
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_dashboard(asof: str | None = None,
@@ -95,9 +97,10 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
             args.append(asof)
         else:
             where.append("as_of_date = (SELECT MAX(as_of_date) FROM " + SEC_TABLE + ")")
-        sql = (f"SELECT basket, kind, as_of_date::text AS as_of_date, n_ma, n_xn_day_5p, "
-               f"n_xn_dinh_5p, n_sig_dinh, n_sig_day, ret5_mean, breadth_ma50, leader_symbol, "
-               f"model_version FROM {SEC_TABLE} WHERE {' AND '.join(where)} "
+        sql = (f"SELECT basket, kind, as_of_date::text AS as_of_date, n_ma, "
+               f"n_xn_day_5p, n_xn_dinh_5p, n_sig_dinh, n_sig_day, ret5_mean, "
+               f"breadth_ma50, leader_symbol, model_version FROM {SEC_TABLE} "
+               f"WHERE {' AND '.join(where)} "
                f"ORDER BY kind, n_xn_dinh_5p DESC, n_xn_day_5p DESC LIMIT 40")
         return await _read(src, sql, tuple(args),
                            ["basket", "kind", "as_of_date", "n_ma", "n_xn_day_5p", "n_xn_dinh_5p",
