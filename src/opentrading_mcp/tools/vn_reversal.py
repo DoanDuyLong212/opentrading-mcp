@@ -81,8 +81,9 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
                f"WHERE {' AND '.join(where)} "
                f"ORDER BY CASE signal WHEN 'DINH' THEN 0 WHEN 'DAY' THEN 1 ELSE 2 END, "
                f"p_dinh_barrier DESC LIMIT 200")
-        cols = ["symbol", "signal", "as_of_date", "close", "p_dinh_barrier", "p_day_barrier",
-                "p_swing_day", "p_swing_dinh", "rsi14", "dist_sma50", "dd20", "ret5", "model_version"]
+        cols = ["symbol", "signal", "as_of_date", "close",
+                "p_dinh_barrier", "p_day_barrier", "p_swing_day", "p_swing_dinh",
+                "rsi14", "dist_sma50", "dd20", "ret5", "model_version"]
         return await _read(src, sql, tuple(args), cols, filtered=bool(action))
 
     @server.tool(annotations=READ_ONLY)
