@@ -46,22 +46,24 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
         sql = (f"SELECT COUNT(*)::int AS rows, "
                f"COUNT(DISTINCT symbol)::int AS symbols, "
                f"MAX(as_of_date)::text AS latest_as_of, "
-               f"COUNT(*) FILTER (WHERE signal = 'DINH')::int AS n_dinh, "
-               f"COUNT(*) FILTER (WHERE signal = 'DAY')::int AS n_day, "
+               f"COUNT(*) FILTER (WHERE signal = 'MUA')::int AS n_mua, "
+               f"COUNT(*) FILTER (WHERE signal = 'BAN')::int AS n_ban, "
                f"MIN(model_version) AS model_version FROM {SIG_TABLE}")
         return await _read(src, sql, (),
-                           ["rows", "symbols", "latest_as_of", "n_dinh", "n_day", "model_version"])
+                           ["rows", "symbols", "latest_as_of", "n_mua", "n_ban", "model_version"])
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_signals(asof: str | None = None,
                                   action: str | None = None,
                                   include_neutral: bool = False,
                                   ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Danh sách tín hiệu ĐÁY/ĐỈNH mới nhất cho từng cổ phiếu (+ VNINDEX).
+        """Danh sách tín hiệu MUA/BÁN mới nhất cho từng cổ phiếu (+ VNINDEX).
 
-        action: 'DINH' | 'DAY' | bỏ trống = cả hai.
+        action: 'MUA' | 'BAN' | bỏ trống = cả hai
+        (mua = bật +10% trước rơi -10%; bán = rơi -10% trước bật +10%).
         include_neutral: true để gồm cả mã trung tính (mặc định chỉ tín hiệu).
-        Độ tin cậy: ĐỈNH đã audit (econ20 69%); ĐÁY là secondary (~59%, dùng quy mô nhỏ).
+        Độ tin cậy: BÁN MẠNH đã audit (rơi ≥7%/20 phiên 69%); MUA secondary (59-83%).
+        trang_thai 6 mức: MUA MANH / MUA / BAN MANH / BAN / BIEN DONG CAO / TRUNG BINH.
         Xem theo ngành: dùng vn_reversal_dashboard.
         """
         where, args = [], []
@@ -76,13 +78,13 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
         elif not include_neutral:
             where.append("signal <> 'NEUTRAL'")
         sql = (f"SELECT symbol, signal, as_of_date::text AS as_of_date, close, "
-               f"p_dinh_barrier, p_day_barrier, p_swing_day, p_swing_dinh, "
+               f"p_ban, p_mua, p_swing_day, p_swing_dinh, "
                f"rsi14, dist_sma50, dd20, ret5, model_version FROM {SIG_TABLE} "
                f"WHERE {' AND '.join(where)} "
-               f"ORDER BY CASE signal WHEN 'DINH' THEN 0 WHEN 'DAY' THEN 1 ELSE 2 END, "
+               f"ORDER BY CASE signal WHEN 'MUA' THEN 0 WHEN 'BAN' THEN 1 ELSE 2 END, "
                f"p_dinh_barrier DESC LIMIT 200")
         cols = ["symbol", "signal", "as_of_date", "close",
-                "p_dinh_barrier", "p_day_barrier", "p_swing_day", "p_swing_dinh",
+                "p_ban", "p_mua", "p_swing_day", "p_swing_dinh",
                 "rsi14", "dist_sma50", "dd20", "ret5", "model_version"]
         return await _read(src, sql, tuple(args), cols, filtered=bool(action))
 
@@ -101,11 +103,11 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
         sql = (f"SELECT basket, ten_vn, "
                f"CASE kind WHEN 'ro' THEN 'Rổ ngành' WHEN 'ho' THEN 'Họ' ELSE kind END AS loai, "
                f"as_of_date::text AS as_of_date, n_ma, n_xn_day_5p, n_xn_dinh_5p, "
-               f"n_sig_dinh, n_sig_day, ret5_mean, breadth_ma50, leader_symbol, model_version "
+               f"n_sig_ban, n_sig_mua, ret5_mean, breadth_ma50, leader_symbol, model_version "
                f"FROM {SEC_TABLE} WHERE {' AND '.join(where)} "
                f"ORDER BY kind, n_xn_dinh_5p DESC, n_xn_day_5p DESC LIMIT 40")
         cols = ["basket", "ten_vn", "loai", "as_of_date", "n_ma", "n_xn_day_5p", "n_xn_dinh_5p",
-                "n_sig_dinh", "n_sig_day", "ret5_mean", "breadth_ma50",
+                "n_sig_ban", "n_sig_mua", "ret5_mean", "breadth_ma50",
                 "leader_symbol", "model_version"]
         return await _read(src, sql, tuple(args), cols)
 
@@ -118,7 +120,7 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         days = max(1, min(int(days), 365))
         sql = (f"SELECT symbol, as_of_date::text AS as_of_date, close, signal, "
-               f"p_dinh_barrier, p_day_barrier, p_swing_day, p_swing_dinh FROM {SIG_TABLE} "
+               f"p_ban, p_mua, p_swing_day, p_swing_dinh FROM {SIG_TABLE} "
                f"WHERE symbol = %s ORDER BY as_of_date DESC LIMIT %s")
         return await _read(src, sql, (symbol, days),
                            ["symbol", "as_of_date", "close", "signal", "p_dinh_barrier",
