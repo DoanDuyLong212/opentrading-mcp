@@ -1,12 +1,15 @@
-"""vn_reversal: read-only access to the daily DAY/DINH reversal signals
+"""vn_reversal: read-only access to the daily MUA/BÁN reversal signals
 written by the `mcp-opentrading-sub` Stage D (reversal-signals v1) into the
 shared Postgres (schema `predictions`, tables `reversal_signals_daily` /
 `reversal_sector_daily`).
 
 Model 4 — frozen configs audited 2026-10-30:
-- DINH: barrier SELL rf/S1 tau=0.80  -> audit econ20 69.3%, 3/3 nam duong (PASS)
-- DAY:  barrier BUY  logit/S2 tau=0.90 -> audit econ20 59.1% (WEAK_PASS — secondary)
-- swing detector: chi dung cho dashboard nganh, khong phai lenh.
+- BÁN MẠNH: barrier SELL rf/S1 tau=0.80 -> audit rơi≥7%/20 phiên 69.3%, 3/3 nam (PASS)
+- MUA:      barrier BUY  logit/S2 tau=0.90 -> audit nảy≥7%/20 phiên 59.1% (WEAK_PASS — secondary)
+- swing W5 detector: chi dung cho dashboard nganh (day/dinh cau truc), khong phai lenh.
+
+VNINDEX được trả RIÊNG trong data.vnindex ở truy vấn signals — không trộn vào
+danh sách cổ phiếu.
 
 The writer is NOT this service — this module only reads. Missing schema/table
 (pipeline not run yet) reads as "not seeded".
@@ -27,6 +30,13 @@ SEC_TABLE = "predictions.reversal_sector_daily"
 SOURCE = "vn_reversal"
 
 
+def _split_vnindex(rows: list[dict]) -> tuple[list[dict], dict[str, Any] | None]:
+    """Tách VNINDEX khỏi danh sách cổ phiếu — index được trả riêng trong data.vnindex."""
+    stocks = [r for r in rows if r.get('symbol') != 'VNINDEX']
+    vn = next((r for r in rows if r.get('symbol') == 'VNINDEX'), None)
+    return stocks, vn
+
+
 async def _read(tool: str, sql: str, args: tuple, cols: list[str],
                 filtered: bool = False) -> dict[str, Any]:
     try:
@@ -41,23 +51,34 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_check(ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Độ mới của bảng tín hiệu ĐÁY/ĐỈNH (số mã, ngày gần nhất,
-        model_version). Dùng trước tiên."""
+        """Độ mới của bảng tín hiệu MUA/BÁN (số cổ phiếu — không kể VNINDEX,
+        trạng thái VNINDEX riêng, ngày gần nhất, model_version). Dùng trước tiên."""
         sql = (f"SELECT COUNT(*)::int AS rows, "
-               f"COUNT(DISTINCT symbol)::int AS symbols, "
+               f"COUNT(DISTINCT symbol) FILTER (WHERE symbol <> 'VNINDEX')::int AS symbols, "
                f"MAX(as_of_date)::text AS latest_as_of, "
-               f"COUNT(*) FILTER (WHERE signal = 'MUA')::int AS n_mua, "
-               f"COUNT(*) FILTER (WHERE signal = 'BAN')::int AS n_ban, "
-               f"MIN(model_version) AS model_version FROM {SIG_TABLE}")
-        return await _read(src, sql, (),
-                           ["rows", "symbols", "latest_as_of", "n_mua", "n_ban", "model_version"])
+               f"COUNT(*) FILTER (WHERE signal = 'MUA' AND symbol <> 'VNINDEX')::int AS n_mua, "
+               f"COUNT(*) FILTER (WHERE signal = 'BAN' AND symbol <> 'VNINDEX')::int AS n_ban, "
+               f"MIN(model_version) AS model_version, "
+               f"(SELECT trang_thai FROM {SIG_TABLE} WHERE symbol = 'VNINDEX' "
+               f"ORDER BY as_of_date DESC LIMIT 1) AS vnindex_trang_thai, "
+               f"(SELECT close FROM {SIG_TABLE} WHERE symbol = 'VNINDEX' "
+               f"ORDER BY as_of_date DESC LIMIT 1) AS vnindex_close, "
+               f"(SELECT p_mua FROM {SIG_TABLE} WHERE symbol = 'VNINDEX' "
+               f"ORDER BY as_of_date DESC LIMIT 1) AS vnindex_p_mua, "
+               f"(SELECT p_ban FROM {SIG_TABLE} WHERE symbol = 'VNINDEX' "
+               f"ORDER BY as_of_date DESC LIMIT 1) AS vnindex_p_ban "
+               f"FROM {SIG_TABLE}")
+        cols = ["rows", "symbols", "latest_as_of", "n_mua", "n_ban", "model_version",
+                "vnindex_trang_thai", "vnindex_close", "vnindex_p_mua", "vnindex_p_ban"]
+        return await _read(src, sql, (), cols)
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_signals(asof: str | None = None,
                                   action: str | None = None,
                                   include_neutral: bool = False,
                                   ctx: AnyContext | None = None) -> dict[str, Any]:
-        """Danh sách tín hiệu MUA/BÁN mới nhất cho từng cổ phiếu (+ VNINDEX).
+        """Danh sách tín hiệu MUA/BÁN mới nhất cho từng cổ phiếu.
+        VNINDEX trả RIÊNG trong data.vnindex (không trộn vào danh sách mã).
 
         action: 'MUA' | 'BAN' | bỏ trống = cả hai
         (mua = bật +10% trước rơi -10%; bán = rơi -10% trước bật +10%).
@@ -82,11 +103,17 @@ def register_vn_reversal_tools(server: FastMCP) -> list[dict[str, Any]]:
                f"rsi14, dist_sma50, dd20, ret5, model_version FROM {SIG_TABLE} "
                f"WHERE {' AND '.join(where)} "
                f"ORDER BY CASE signal WHEN 'MUA' THEN 0 WHEN 'BAN' THEN 1 ELSE 2 END, "
-               f"p_dinh_barrier DESC LIMIT 200")
+               f"p_ban DESC LIMIT 200")
         cols = ["symbol", "signal", "as_of_date", "close",
                 "p_ban", "p_mua", "p_swing_day", "p_swing_dinh",
                 "rsi14", "dist_sma50", "dd20", "ret5", "model_version"]
-        return await _read(src, sql, tuple(args), cols, filtered=bool(action))
+        res = await _read(src, sql, tuple(args), cols, filtered=bool(action))
+        rows = (res.get('data') or {}).get('rows') or []
+        if rows:
+            stocks, vn = _split_vnindex(rows)
+            res['data']['rows'] = stocks
+            res['data']['vnindex'] = vn
+        return res
 
     @server.tool(annotations=READ_ONLY)
     async def vn_reversal_dashboard(asof: str | None = None,
