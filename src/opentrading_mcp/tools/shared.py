@@ -6,6 +6,7 @@ import asyncio
 import contextvars
 import copy
 import functools
+import math
 import os
 import threading
 import time
@@ -479,18 +480,19 @@ def _neg_key(tool: str, fn: Callable[..., Any]) -> str:
     return tool
 
 
-def _neg_hit(key: str) -> bool:
-    ttl = neg_ttl()
-    if ttl <= 0:
-        return False
+def _neg_remaining(key: str) -> int:
+    """Whole seconds this call stays failed-fast, rounded up; 0 when it is not marked."""
+    if neg_ttl() <= 0:
+        return 0
     with _neg_guard:
         until = _neg.get(key)
         if until is None:
-            return False
-        if time.monotonic() < until:
-            return True
+            return 0
+        remaining = until - time.monotonic()
+        if remaining > 0:
+            return math.ceil(remaining)
         _neg.pop(key, None)
-        return False
+        return 0
 
 
 def _neg_mark(key: str) -> None:
@@ -546,15 +548,21 @@ async def run_blocking[T](
 
     global _pending
     neg_key = _neg_key(tool, fn)
-    if _neg_hit(neg_key):
-        raise ProviderUnavailable(f"{tool} briefly unavailable (recent timeout), retry shortly")
+    neg_remaining = _neg_remaining(neg_key)
+    if neg_remaining:
+        raise ProviderUnavailable(
+            f"{tool} briefly unavailable (recent timeout), retry shortly",
+            reason="recent_failure",
+            retry_after_s=neg_remaining,
+        )
     loop = asyncio.get_running_loop()
     ctx = contextvars.copy_context()
     pool = _HEAVY_EXECUTOR if heavy else _EXECUTOR
     with _pending_guard:
         if _pending >= shed_limit():
             raise ProviderUnavailable(
-                f"{tool} shed: server busy ({_pending} calls outstanding), retry shortly"
+                f"{tool} shed: server busy ({_pending} calls outstanding), retry shortly",
+                reason="busy",
             )
         _pending += 1
     started = time.monotonic()
@@ -594,7 +602,12 @@ async def run_blocking[T](
             return await asyncio.wait_for(future, timeout_secs)
         except TimeoutError as exc:
             _neg_mark(neg_key)
-            raise ProviderUnavailable(f"{tool} timed out after {timeout_secs}s") from exc
+            raise ProviderUnavailable(
+                f"{tool} timed out after {timeout_secs}s",
+                reason="upstream_timeout",
+                # A retry sooner than this only hits the mark just set above.
+                retry_after_s=_neg_remaining(neg_key) or None,
+            ) from exc
     except ProviderUnavailable:
         if time.monotonic() - started >= _NEG_SLOW_SECONDS:
             _neg_mark(neg_key)
