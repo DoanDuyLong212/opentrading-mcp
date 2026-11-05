@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from opentrading_mcp.failures import failure_fields
+
 TIMEZONE = "Asia/Ho_Chi_Minh"
 _TZ = ZoneInfo(TIMEZONE)
 
@@ -114,6 +116,9 @@ def make_envelope(
     the newest data point, e.g. max candle `t`) when known so callers can judge
     staleness — critical once responses are served from cache, where `as_of`
     alone would look freshly fetched.
+
+    An `unavailable` envelope also says why, for clients that act on it: see
+    `failures.failure_fields`.
     """
     source = _SOURCE_ALIASES.get(source, source)
     has_data = data not in (None, {}, [], ())
@@ -128,6 +133,8 @@ def make_envelope(
         "warnings": warnings or [],
         "availability": availability or ("available" if has_data else "empty"),
     }
+    if body["availability"] == "unavailable":
+        body.update(failure_fields(data, body["warnings"]))
     if data_time is not None:
         body["provenance"]["data_time"] = data_time
     if page is not None:
