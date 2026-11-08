@@ -35,6 +35,16 @@ def test_candles_without_overlap_are_not_a_match():
     assert status == "NO OVERLAP"
 
 
+def test_crypto_unit_change_is_recognised():
+    """v4 priced BTCUSDT in VND; a USD/VND-sized ratio is that unit change."""
+    v4 = [{"time": "2026-11-07", "close": 1937606367.08}]
+    v6 = [{"time": "2026-11-07T00:00:00+00:00", "close": 75855.44}]
+    status, detail = parity.compare_crypto(v4, v6)
+    assert status == "expected DIFF (unit VND -> USDT)" and "25,54" in detail
+    same = [{"t": "x", "c": 75855.0}]
+    assert parity.compare_crypto(same, same)[0] == "match"
+
+
 def test_listing_compares_symbols_and_names():
     v4 = [{"symbol": "A32", "name": "Công ty Cổ phần 32"}, {"symbol": "AAA", "name": "X"}]
     v6 = [{"symbol": "A32", "name": "Công ty Cổ phần 32"}, {"symbol": "AAA", "name": "Y"}]

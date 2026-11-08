@@ -96,15 +96,32 @@ def compare_candles(v4: Any, v6: Any) -> tuple[str, str]:
     return ("match" if gaps.get(worst, 0.0) <= CANDLE_TOLERANCE else "DIFF"), detail
 
 
+def compare_crypto(v4: Any, v6: Any) -> tuple[str, str]:
+    """v4 priced BTCUSDT in VND (close 1.94e9 on 2026-11-07); gen 6 (binance) in
+    USDT (~75,800). A v4/v6 ratio equal to USD/VND is that unit change, not noise."""
+    old, new = _closes(v4), _closes(v6)
+    shared = sorted(set(old) & set(new))
+    ratios = sorted(old[d] / new[d] for d in shared if new[d])
+    if ratios and 20_000 <= ratios[len(ratios) // 2] <= 30_000:
+        mid = ratios[len(ratios) // 2]
+        return "expected DIFF (unit VND -> USDT)", (
+            f"{len(shared)} shared days; v4/v6 median ratio {mid:,.0f} = USD/VND, so v4 was "
+            "VND-denominated and gen 6 is USDT"
+        )
+    return compare_candles(v4, v6)
+
+
 def compare_listing(v4: Any, v6: Any) -> tuple[str, str]:
     old = {r["symbol"]: r.get("name", "") for r in v4 if isinstance(r, dict)}
     new = {r["symbol"]: r.get("name", "") for r in v6 if isinstance(r, dict)}
     shared = set(old) & set(new)
     same_name = sum(1 for s in shared if old[s].strip().lower() == new[s].strip().lower())
     status = "match" if old and len(shared) == len(old) else "DIFF"
+    example = next((s for s in sorted(shared) if old[s] != new[s]), None)
+    sample = f"; e.g. {example}: v4 {old[example]!r} vs v6 {new[example]!r}" if example else ""
     return status, (
         f"{len(shared)}/{len(old)} baseline symbols present; names equal for "
-        f"{same_name}/{len(shared)}; v6 lists {len(new)} symbols in total"
+        f"{same_name}/{len(shared)}{sample}; v6 lists {len(new)} symbols in total"
     )
 
 
@@ -195,7 +212,7 @@ def _probes() -> list[tuple[str, tuple[str, ...], Callable[[], Any], Compare]]:
         ("equity_ohlcv_FPT", chain, lambda: vn.equity_ohlcv("FPT", count=30), candles),
         ("index_ohlcv_VNINDEX", chain, lambda: vn.index_ohlcv("VNINDEX", count=30), candles),
         ("futures_ohlcv_VN30F1M", chain, lambda: vn.futures_ohlcv("VN30F1M", count=30), candles),
-        ("crypto_ohlv_BTCUSDT", (), lambda: vn.crypto_ohlv("BTCUSDT", count=30), candles),
+        ("crypto_ohlv_BTCUSDT", (), lambda: vn.crypto_ohlv("BTCUSDT", count=30), compare_crypto),
         ("forex_ohlcv_USDVND", (), lambda: yf.fx_history("USDVND", count=30), candles),
         ("global_index_USA30", (), lambda: yf.global_index("USA30", count=30), candles),
         ("listing_symbols", chain, lambda: vn.listing_symbols(), compare_listing),
@@ -293,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
     socket.setdefaulttimeout(45)
     _load_env(args.env, no_vietstock_login=args.no_vietstock_login)
     report = render(run())
+    if hasattr(sys.stdout, "reconfigure"):  # Windows consoles default to cp1252
+        sys.stdout.reconfigure(encoding="utf-8")
     print(report)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(report, encoding="utf-8")
