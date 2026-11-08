@@ -174,6 +174,35 @@ def compare_fx_gold(v4: Any, v6: Any) -> tuple[str, str]:
     return "expected DIFF (spot -> futures)", f"{fx}; {gold}"
 
 
+def compare_trades(v4: Any, v6: Any) -> tuple[str, str]:
+    """Every v4 print (time to the second, price, volume) must be in gen 6's
+    whole-session tape. A volume unit change (dnse lots of 10) fails here."""
+    def key(row: dict[str, Any]) -> tuple[str, float, float]:
+        when = str(row.get("time", "")).replace("T", " ")[:19]
+        return when, float(row.get("price") or 0), float(row.get("volume") or 0)
+
+    tape = {key(r) for r in v6 if isinstance(r, dict)}
+    prints = [key(r) for r in v4 if isinstance(r, dict)]
+    found = sum(1 for p in prints if p in tape)
+    missing = next((p for p in prints if p not in tape), None)
+    detail = f"{found}/{len(prints)} v4 prints found in {len(tape)} gen-6 trades"
+    if missing:
+        detail += f"; first missing {missing}"
+    return ("match" if prints and found == len(prints) else "DIFF"), detail
+
+
+def compare_reference(v4: Any, v6: Any) -> tuple[str, str]:
+    old = {r["symbol"]: r for r in v4 if isinstance(r, dict)}
+    new = {r["symbol"]: r for r in v6 if isinstance(r, dict)}
+    shared = set(old) & set(new)
+    same_exchange = sum(1 for s in shared if old[s].get("exchange") == new[s].get("exchange"))
+    status = "match" if old and len(shared) == len(old) and same_exchange == len(shared) else "DIFF"
+    return status, (
+        f"{len(shared)}/{len(old)} baseline symbols present; exchange equal for "
+        f"{same_exchange}/{len(shared)}; v6 lists {len(new)} rows for the exchange"
+    )
+
+
 def compare_none(v4: Any, v6: Any) -> tuple[str, str]:
     """Routes without a source: a value means something answered unexpectedly."""
     return "UNEXPECTED VALUE", f"route answered {type(v6).__name__}; update this probe"
@@ -241,6 +270,12 @@ def _probes() -> list[tuple[str, tuple[str, ...], Callable[[], Any], Compare]]:
         ("global_index_USA30", (),
          lambda: yf.global_index("USA30", count=n("global_index_USA30", 30)), candles),
         ("listing_symbols", chain, lambda: vn.listing_symbols(), compare_listing),
+        ("reference_equity_HOSE", chain, lambda: vn.reference_equity("HOSE"), compare_reference),
+        # The baseline holds 20 prints of 2026-11-06; fetch that whole session.
+        ("equity_trades_FPT", ("dnse",),
+         lambda: vn.equity_trades("FPT", limit=50_000, from_date="2026-11-06",
+                                  to_date="2026-11-06"),
+         compare_trades),
         ("equity_ratios_FPT", ("vietstock",), ratios("FPT"), compare_ratios),
         ("equity_ratios_VCB", ("vietstock",), ratios("VCB"), compare_ratios),
         ("equity_ratios_SSI", ("vietstock",), ratios("SSI"), compare_ratios),
