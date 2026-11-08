@@ -43,6 +43,12 @@ jobs:
       - run: uv run ruff check src tests scripts
       # strict mypy with a baseline: fails on NEW errors only (#98).
       - run: uv run python scripts/mypy_baseline.py
+      # The suite must collect without the private vnstocks.com wheels (#100):
+      # conftest swaps in inert stand-ins; a module-level vnstock import breaks this.
+      - name: Collect tests with vnstock stand-ins
+        run: uv run pytest -q --co -p no:cacheprovider
+        env:
+          OT_TEST_VNSTOCK_STUBS: "1"
       # The full live matrix calls real upstreams (and needs their keys): run it by hand.
       - run: >-
           uv run pytest -q -p no:cacheprovider
