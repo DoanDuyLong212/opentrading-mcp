@@ -1138,32 +1138,47 @@ _EXCHANGE_KEYS = ("exchange", "san", "floor", "exchangecode", "exchange_code")
 def reference_equity(
     exchange: str = "HOSE", by: str = "exchange", key: str | None = None
 ) -> list[dict[str, Any]]:
+    """Listing by exchange, index group or ICB industry, over the SRC_LISTING chain (#88).
+
+    Every mode walks the chain through ``_fetch_frame`` (reasons survive, a failed
+    source is not retried with another method). ``by="group"``: members of an index
+    basket (``key`` or ``exchange``, e.g. VN30). ``by="industry"``: gen 6's
+    ``list_by_industry`` has no industry argument — it returns the exchange with
+    ``icb_code``/``icb_name``, so ``key`` filters on those (code exact, name
+    substring). The exchange is passed upstream instead of pulling the whole market.
+    """
     try:
         from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    try:
-        if by == "group":
-            frame = Reference("ssi").equity.list_by_group(key or exchange)
-            return _records(frame)
-        if by == "industry":
-            frame = Reference("ssi").equity.list_by_industry(key or exchange)
-            return _records(frame)
-        frame = None
-        for source in SRC_LISTING:
-            try:
-                candidate = Reference(source).equity.list_by_exchange()
-                if candidate is not None and len(candidate) > 0:
-                    frame = candidate
-                    break
-            except Exception:
-                continue
-        if frame is None:
-            frame = Reference(SRC_LISTING[0]).equity.list()
-    except Exception as exc:
-        raise ProviderUnavailable("vnstock reference failed") from exc
-    rows = _records(frame)
-    query = exchange.upper()
+    query = exchange.strip().upper()
+    venue = query if query in ("HOSE", "HNX", "UPCOM") else None
+
+    def _chain(call: Any, label: str) -> list[dict[str, Any]]:
+        try:
+            frame = _fetch_frame(
+                [(source, (lambda source=source: call(Reference(source).equity)))
+                 for source in SRC_LISTING],
+                label,
+            )
+        except ProviderUnavailable as exc:
+            raise _rewrap(exc, "vnstock reference failed") from exc
+        return _records(frame)
+
+    if by == "group":
+        group = (key or exchange).strip()
+        return _chain(lambda eq: eq.list_by_group(group), f"group {group}")
+    if by == "industry":
+        rows = _chain(lambda eq: eq.list_by_industry(exchange=venue), f"industries {query}")
+        if key:
+            want = key.strip().lower()
+            rows = [
+                r for r in rows
+                if str(r.get("icb_code", "")).strip().lower() == want
+                or want in str(r.get("icb_name", "")).strip().lower()
+            ]
+        return rows
+    rows = _chain(lambda eq: eq.list_by_exchange(exchange=venue), f"exchange {query}")
     if query not in ("ALL", ""):
         lowered_keys = {k.lower(): k for r in rows for k in r}
         hit_key = next((lowered_keys[k] for k in _EXCHANGE_KEYS if k in lowered_keys), None)

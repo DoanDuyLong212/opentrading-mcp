@@ -13,7 +13,7 @@ def test_reference_equity_uses_ssi_source(monkeypatch):
     seen: dict[str, Any] = {}
 
     class FakeEquity:
-        def list_by_exchange(self) -> Any:
+        def list_by_exchange(self, exchange=None) -> Any:
             import pandas as pd
 
             return pd.DataFrame(
