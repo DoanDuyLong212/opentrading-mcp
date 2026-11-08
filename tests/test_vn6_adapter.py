@@ -701,6 +701,74 @@ def test_candles_range_has_its_own_breaker(monkeypatch):
     circuit.reset("vnstock-batch")
 
 
+async def test_quote_batch_tool_envelope_says_not_configured(monkeypatch):
+    """What clients see for a discontinued route: unavailable, not retryable."""
+    from opentrading_mcp.server import create_server, register_preset
+
+    class Anything:
+        def __init__(self, *a, **kw):
+            raise AssertionError("upstream touched")
+
+    _install(monkeypatch, Market=Anything)
+    server = create_server("all")
+    register_preset(server, "all")
+    env = await server._tool_manager.get_tool("vn_equity_quote_batch").fn(symbols=["FPT"])
+    assert env["availability"] == "unavailable"
+    assert env["reason"] == "not_configured"
+    assert env["retryable"] is False
+
+
+def test_not_configured_is_not_counted_as_upstream_failure(monkeypatch):
+    from opentrading_mcp import obs
+
+    before = dict(obs._upstream_failures)
+    with pytest.raises(ProviderUnavailable):
+        vn_p.equity_quote_batch(["FPT"])
+    assert obs._upstream_failures.get("vnstock", 0) == before.get("vnstock", 0)
+
+
+def test_records_turn_timestamps_into_iso_strings():
+    """Gen-6 frames carry tz-aware pd.Timestamp; envelopes must json-serialise."""
+    import json
+
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        {"time": [pd.Timestamp("2026-11-06 14:45:02.813", tz="Asia/Ho_Chi_Minh")],
+         "price": [50.8]}
+    )
+    rows = vn_p._records(frame)
+    assert rows == [{"time": "2026-11-06T14:45:02.813000+07:00", "price": 50.8}]
+    json.dumps(rows)
+
+
+def test_equity_trades_asks_dnse_for_big_pages(monkeypatch):
+    """dnse pages the whole session using `limit` as the page size (500-page cap):
+    small limits meant hundreds of requests and a truncated day."""
+    seen: dict = {}
+
+    class Equity:
+        def trades(self, **kw):
+            seen.update(kw)
+            return _Frame([
+                {"time": f"2026-11-06T14:{m:02d}:00+07:00", "price": 50.0 + m, "volume": 1}
+                for m in range(10)
+            ])
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            seen["source"] = source
+
+        def equity(self, symbol):
+            return Equity()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.equity_trades("FPT", limit=3)
+    assert seen["source"] == "dnse"
+    assert seen["limit"] >= 1000
+    assert [r["price"] for r in rows] == [59.0, 58.0, 57.0]  # newest first, sliced
+
+
 def test_redact_hides_vnstock_secret_names():
     from opentrading_mcp.auth import redact
 

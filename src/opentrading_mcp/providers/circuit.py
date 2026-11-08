@@ -103,8 +103,10 @@ def guarded(upstream: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
 
             try:
                 return get_circuit(upstream).call(lambda: fn(*args, **kwargs))
-            except ProviderUnavailable:
-                obs.record_upstream_failure(upstream)
+            except ProviderUnavailable as exc:
+                # A discontinued/unkeyed route is configuration, not upstream health.
+                if getattr(exc, "reason", None) not in _CONFIG_REASONS:
+                    obs.record_upstream_failure(upstream)
                 raise
 
         return wrapper

@@ -430,6 +430,9 @@ def split_batch(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[
     return quotes, sorted(set(missing))
 
 
+_TRADES_PAGE_SIZE = 1000
+
+
 @guarded("vnstock")
 def equity_trades(
     symbol: str,
@@ -447,7 +450,11 @@ def equity_trades(
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        kwargs: dict[str, Any] = {"limit": max(int(limit), 1)}
+        # dnse pages through the WHOLE session whatever `limit` is, using it as the
+        # page size, capped at 500 pages: limit=3 made 500 requests and still cut
+        # the day short (measured 2026-11-08: FPT 16,181 trades; page 1000 → 0.9s,
+        # page 3 → 3.8s and truncated). Ask for big pages, then slice locally.
+        kwargs: dict[str, Any] = {"limit": max(int(limit), _TRADES_PAGE_SIZE)}
         if from_date is not None:
             kwargs["start"] = from_date
         if to_date is not None:
@@ -522,11 +529,17 @@ def _fetch_listing() -> list[dict[str, str]]:
 
 
 def _records(frame: Any) -> list[dict[str, Any]]:
+    """Frame rows as dicts. Gen-6 frames carry tz-aware ``pd.Timestamp`` times,
+    which ``json.dumps`` (cache store, envelopes) cannot encode: datetimes become
+    ISO strings here, once, for every route."""
     try:
         rows = frame.to_dict(orient="records")
     except Exception:
         return []
-    return [{str(k): v for k, v in r.items()} for r in rows]
+    return [
+        {str(k): (v.isoformat() if isinstance(v, (datetime, date)) else v) for k, v in r.items()}
+        for r in rows
+    ]
 
 
 def _clean(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
