@@ -59,7 +59,7 @@ _DOWN_TYPES = frozenset({"ConnectionError", "ConnectError", "TransportError"})
 UPSTREAMS: dict[str, str] = {
     "dnse_indices": "dnse-ws",
     "vn_fundamentals": "vnstock",
-    "vn_retail_fx": "vnstock-retail",
+    "vn_retail_fx": "vietcombank",
     "vs_currency": "vietstock",
     "vs_market_index": "vietstock",
     "vs_trading_info": "vietstock",
@@ -71,7 +71,9 @@ UPSTREAMS: dict[str, str] = {
 ALTERNATIVES: dict[str, tuple[str, ...]] = {
     "dnse_indices": ("vs_market_index",),  # index levels
     "vn_fundamentals": ("vs_trading_info",),  # PE, PB, EPS
-    "vn_retail_fx": ("vs_currency",),  # USD/VND rates
+    # vs_currency rows carry no currency names (checked 2026-11-09), so it is not a
+    # usable stand-in for vn_retail_fx; the reverse holds (same Vietcombank figures,
+    # labelled, separate upstream).
     "vs_currency": ("vn_retail_fx",),
     "vs_trading_info": ("vn_fundamentals",),
 }

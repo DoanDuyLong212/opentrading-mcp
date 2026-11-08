@@ -1,124 +1,116 @@
-"""Contract: global index symbol aliasing + informative unknown-symbol error (Q69 fix)."""
+"""Contract: global index aliasing → Yahoo tickers, informative errors (#78, #97).
+
+vn_global_index moved from vnstock's fmp route (no key, MSN-style codes nobody
+verified) to yfinance. Every alias target below was checked live on 2026-11-09
+(^GSPC 7376.86, ^DJI 51285.73, ^NDX 26989.99, …); the old MSN codes stay
+accepted so existing callers keep working.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+import sys
+import types
 
-from opentrading_mcp.providers import vnstock as vn_p
-from opentrading_mcp.providers.errors import ProviderUnavailable
+import pandas as pd
+import pytest
 
+from opentrading_mcp.providers import yfinance as yf_p
+from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
-def test_alias_maps_common_spellings():
-    assert vn_p._normalize_global_symbol("SPX") == "INX"
-    assert vn_p._normalize_global_symbol("GSPC") == "INX"
-    assert vn_p._normalize_global_symbol("S&P500") == "INX"
-    assert vn_p._normalize_global_symbol("^GSPC") == "INX"
-    assert vn_p._normalize_global_symbol("DJI") == "USA30"  # vnstock treats DJI as USA30
-    assert vn_p._normalize_global_symbol("Nasdaq") == "COMP"
-    assert vn_p._normalize_global_symbol("IXIC") == "COMP"
-    assert vn_p._normalize_global_symbol("CAC40") == "PX1"
-    assert vn_p._normalize_global_symbol("FTSE100") == "UKX"
-    assert vn_p._normalize_global_symbol("Nikkei") == "N225"
-    assert vn_p._normalize_global_symbol("HangSeng") == "HSI"
-    assert vn_p._normalize_global_symbol("SHCOMP") == "000001"
-    # canonical codes pass through untouched
-    for code in ("INX", "USA30", "COMP", "VNI", "SENSEX", "000001"):
-        assert vn_p._normalize_global_symbol(code) == code
+norm = yf_p.normalize_global_symbol
 
 
-def test_alias_ignores_spaces_hyphens_and_dots():
-    assert vn_p._normalize_global_symbol("S&P 500") == "INX"
-    assert vn_p._normalize_global_symbol("Dow Jones") == "USA30"
-    assert vn_p._normalize_global_symbol("Nasdaq Composite") == "COMP"
-    assert vn_p._normalize_global_symbol("CAC 40") == "PX1"
-    assert vn_p._normalize_global_symbol("CAC") == "PX1"
-    assert vn_p._normalize_global_symbol("Nikkei 225") == "N225"
-    assert vn_p._normalize_global_symbol("VN-Index") == "VNI"
-    assert vn_p._normalize_global_symbol("000001.SS") == "000001"
-    assert vn_p._normalize_global_symbol(" ^gdaxi ") == "DAX"
+@pytest.mark.parametrize(
+    ("spelling", "ticker"),
+    [
+        ("SPX", "^GSPC"), ("S&P 500", "^GSPC"), ("^GSPC", "^GSPC"),
+        ("Dow Jones", "^DJI"), ("DJI", "^DJI"),
+        ("Nasdaq", "^IXIC"), ("Nasdaq Composite", "^IXIC"), ("NDX", "^NDX"),
+        ("CAC 40", "^FCHI"), ("FTSE100", "^FTSE"), ("Nikkei 225", "^N225"),
+        ("HangSeng", "^HSI"), ("SHCOMP", "000001.SS"), ("000001.SS", "000001.SS"),
+        (" ^gdaxi ", "^GDAXI"), ("SENSEX", "^BSESN"),
+    ],
+)
+def test_common_spellings_map_to_yahoo(spelling, ticker):
+    assert norm(spelling) == ticker
 
 
-def test_aliases_and_listed_codes_exist_in_vnstock():
-    # gen 6: the v4 msn const table is gone from the package — pin the accepted
-    # codes to this frozen snapshot (recorded from the v4 table on 2026-11-08;
-    # gen-6 global indices are fmp-served). Live re-verification goes through
-    # scripts/parity_compare.py once an fmp key exists.
-    frozen_v6_global_codes = {
-        "INX", "USA30", "DJI", "COMP", "RUT", "NYA", "RUI", "RUA", "UKX", "DAX",
-        "PX1", "N225", "000001", "HSI", "SENSEX", "VNI",
-    }
-    assert set(vn_p.GLOBAL_INDEX_ALIASES.values()) <= frozen_v6_global_codes
-    listed = {
-        code
-        for part in vn_p.VALID_GLOBAL_SYMBOLS.split(", ")
-        for code in part.split(" ")[0].split("/")
-    }
-    assert listed <= frozen_v6_global_codes, listed - frozen_v6_global_codes
+@pytest.mark.parametrize(
+    ("old_code", "ticker"),
+    [("INX", "^GSPC"), ("USA30", "^DJI"), ("COMP", "^IXIC"), ("UKX", "^FTSE"),
+     ("PX1", "^FCHI"), ("N225", "^N225"), ("000001", "000001.SS")],
+)
+def test_old_msn_codes_still_work(old_code, ticker):
+    assert norm(old_code) == ticker
 
 
-async def test_global_index_alias_reaches_vnstock(monkeypatch):
-    seen: dict[str, Any] = {}
-
-    class FakeMarket:
-        def __init__(self, source=None, **kwargs):
-            seen["source"] = source
-
-        def global_index(self, symbol: str):
-            seen["symbol"] = symbol
-            return self
-
-        def ohlcv(self, *, count_back=None, interval=None, **kwargs):
-            import pandas as pd
-
-            return pd.DataFrame(
-                [
-                    {
-                        "time": "2026-10-12",
-                        "open": 1.0,
-                        "high": 2.0,
-                        "low": 0.5,
-                        "close": 1.5,
-                        "volume": 100,
-                    }
-                ]
-            )
-
-    import importlib
-
-    vnstock_mod = importlib.import_module("vnstock")
-    monkeypatch.setattr(vnstock_mod, "Market", FakeMarket, raising=False)
-    # fmp was discontinued 2026-11-08 (global_index moves to yfinance, #78); re-enable
-    # the old chain so the alias → upstream wiring stays tested until then.
-    monkeypatch.setattr(vn_p, "SRC_GLOBAL", ("fmp",))
-    rows = vn_p.global_index("SPX", 5)
-    assert seen["symbol"] == "INX"
-    assert seen["source"] == "fmp"
-    assert rows and rows[-1]["close"] == 1.5
+@pytest.mark.parametrize("spelling", ["VNI", "VN-Index", "VNINDEX"])
+def test_vn_index_points_to_the_domestic_route(spelling):
+    with pytest.raises(ProviderBadData, match="vn_index_ohlcv"):
+        norm(spelling)
 
 
-async def test_global_index_unknown_symbol_error_lists_valid(monkeypatch):
-    import importlib
+def test_unknown_symbol_lists_valid_codes():
+    with pytest.raises(ProviderBadData) as info:
+        norm("NOT-AN-INDEX")
+    assert "S&P 500" in str(info.value) and "NDX" in str(info.value)
 
-    vnstock_mod = importlib.import_module("vnstock")
 
-    class FakeMarket:
-        def index(self, symbol: str, scope: str):
-            raise RuntimeError("bad symbol")
+def test_other_yahoo_index_tickers_pass_through():
+    assert norm("^STOXX50E") == "^STOXX50E"
 
-        def __call__(self):  # pragma: no cover
-            return self
 
-    def fake_market():
-        return FakeMarket()
+def _install_yahoo(monkeypatch, frame: pd.DataFrame, seen: dict):
+    class Ticker:
+        def __init__(self, ticker):
+            seen["ticker"] = ticker
 
-    monkeypatch.setattr(vnstock_mod, "Market", fake_market, raising=False)
-    try:
-        vn_p.global_index("NDX", 5)
-        raise AssertionError("expected ProviderUnavailable")
-    except ProviderUnavailable as exc:
-        msg = str(exc)
-        assert "NDX" in msg and "INX" in msg, msg
-        assert "yf_global_indices" in msg, msg
+        def history(self, **kw):
+            seen.update(kw)
+            return frame
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=Ticker))
+
+
+def _frame(closes: list[float]) -> pd.DataFrame:
+    idx = pd.date_range("2026-11-02", periods=len(closes), freq="D", tz="America/New_York")
+    return pd.DataFrame(
+        {"Open": closes, "High": closes, "Low": closes, "Close": closes,
+         "Volume": [1.0] * len(closes)},
+        index=idx,
+    )
+
+
+def test_global_index_reaches_yahoo_with_the_mapped_ticker(monkeypatch):
+    seen: dict = {}
+    _install_yahoo(monkeypatch, _frame([1.0, float("nan"), 3.0, 4.0]), seen)
+    from opentrading_mcp.providers import circuit
+
+    circuit.reset("yfinance")
+    rows = yf_p.global_index("SPX", 2)
+    assert seen["ticker"] == "^GSPC" and seen["interval"] == "1d"
+    assert [r["close"] for r in rows] == [3.0, 4.0]  # NaN close dropped, last `count`
+    assert rows[0]["time"] == "2026-11-04"
+    assert set(rows[0]) == {"time", "open", "high", "low", "close", "volume"}
+
+
+def test_float32_noise_is_rounded_to_its_real_precision(monkeypatch):
+    """Yahoo sends float32 prices: 7678.72021484375 is 7678.72, and an FX rate
+    such as 1.1228 must keep its decimals."""
+    seen: dict = {}
+    frame = _frame([7678.72021484375])
+    frame["Volume"] = [7654840000.0]
+    _install_yahoo(monkeypatch, frame, seen)
+    assert yf_p.global_index("SPX", 1)[0]["close"] == 7678.72
+    assert yf_p.global_index("SPX", 1)[0]["volume"] == 7654840000.0
+    _install_yahoo(monkeypatch, _frame([1.122799992561340332]), seen)
+    assert yf_p.fx_history("EURUSD", 1)[0]["close"] == 1.1228
+
+
+def test_empty_yahoo_frame_is_unavailable(monkeypatch):
+    _install_yahoo(monkeypatch, pd.DataFrame(), {})
+    with pytest.raises(ProviderUnavailable, match="no bars"):
+        yf_p.global_index("SPX", 5)
 
 
 def test_docstring_lists_symbols():
@@ -126,7 +118,6 @@ def test_docstring_lists_symbols():
 
     server = create_server()
     register_all(server)
-    fn = server._tool_manager.get_tool("vn_global_index").fn
-    text = fn.__doc__ or ""
-    for marker in ("INX", "COMP", "USA30", "NDX"):
+    text = server._tool_manager.get_tool("vn_global_index").fn.__doc__ or ""
+    for marker in ("S&P 500", "Dow Jones", "NDX", "vn_index_ohlcv"):
         assert marker in text, f"docstring missing {marker!r}"

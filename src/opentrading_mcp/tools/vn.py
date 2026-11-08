@@ -8,6 +8,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.cache import TTL_SECONDS
+from opentrading_mcp.providers import vn_public as vn_pub
 from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
@@ -256,24 +257,28 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_retail_fx() -> dict[str, Any]:
-        """USD/VND daily series from the gen-6 forex route. Use for currency conversion context.
+        """Tỷ giá Vietcombank mua/bán hôm nay. Dùng khi cần giá ngân hàng mua vào/bán ra ngoại tệ.
 
-        Gen 6 has no bank retail bid/ask (vnstock Retail is removed); rows are
-        daily OHLC candles for USDVND from the fhsc source.
+        Không dùng khi: cần chuỗi tỷ giá theo ngày (dùng vn_forex_ohlcv — tỷ giá liên ngân hàng).
+
+        rows: mỗi ngoại tệ {currency_code, currency_name, buy_cash, buy_transfer, sell} — đồng
+            cho 1 đơn vị ngoại tệ (USD sell 25780 = 25.780 đ); None khi ngân hàng không yết giá
+            chiều đó. updated_at: thời điểm Vietcombank cập nhật bảng.
         """
-        hit = await cache_lookup("vn_retail_fx", "-")
+        # v2: Vietcombank's public board replaces the gen-6 fhsc forex candles (#85).
+        hit = await cache_lookup("vn_retail_fx", "v2")
         if hit is not None:
             return hit
         try:
-            rows = await run_blocking(
-                functools.partial(vn_p.forex_ohlcv, "USDVND", 30), "vn_retail_fx"
-            )
+            # Vietcombank asks for at most one request per 5 minutes: cache for an hour.
+            data = await run_blocking(vn_pub.vcb_exchange_rates, "vn_retail_fx")
             return await cache_store(
                 "vn_retail_fx",
-                "-",
+                "v2",
                 TTL_SECONDS["hour"],
-                {"rows": rows},
-                source="vnstock-forex",
+                data,
+                source="vietcombank",
+                data_time=data.get("updated_at"),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_retail_fx", str(exc))

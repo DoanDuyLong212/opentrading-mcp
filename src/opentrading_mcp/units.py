@@ -68,6 +68,12 @@ UNITS: dict[str, dict[str, str]] = {
     "market_movers": _BOARD,
     "vn_company": {"target_price": "đồng/cổ phiếu"},
     "scenario_simulate": _SCENARIO,
+    # Vietcombank board, checked 2026-11-09 (USD sell 25780; matches the bank's site).
+    "vn_retail_fx": {
+        "buy_cash, buy_transfer, sell": "đồng cho 1 đơn vị ngoại tệ (USD sell 25780 = 25.780 đ)"
+    },
+    # Yahoo index bars, checked 2026-11-09 (^GSPC 7376.86).
+    "vn_global_index": {"open, high, low, close, last": POINTS},
 }
 
 

@@ -81,12 +81,12 @@ async def test_vn_index_ohlcv_accepts_interval(monkeypatch):
 
 
 async def test_vn_forex_ohlcv_accepts_summary_columns(monkeypatch):
-    from opentrading_mcp.providers import vnstock as vn_p
+    from opentrading_mcp.providers import yfinance as yf_p
 
     def fake_fx(pair: str = "USDVND", count: int = 30):
         return [{"t": 1, "o": 1.0, "h": 2.0, "l": 0.5, "c": 1.5, "v": 10.0}]
 
-    monkeypatch.setattr(vn_p, "forex_ohlcv", fake_fx)
+    monkeypatch.setattr(yf_p, "fx_history", fake_fx)
     fn = _tool_fn("vn_forex_ohlcv")
     env = await fn(pair="EURUSD", count=5, summary=True)
     _check_envelope(env, "vn_forex_ohlcv")
@@ -161,32 +161,73 @@ async def test_vn_company_detail_controls_extras(monkeypatch):
     assert "shareholders" in calls and "officers" in calls
 
 
-async def test_vn_retail_fx_uses_v6_forex(monkeypatch):
-    """Gen 6: no bank bid/ask — the tool returns USDVND daily OHLC rows."""
-    from opentrading_mcp.providers import vnstock as vn_p
+async def test_vn_retail_fx_returns_vietcombank_buy_sell(monkeypatch):
+    """#85: the tool answers what its name and hint promise again — the bank's
+    buy/sell board (gen 6 had turned it into USDVND candles from fhsc)."""
+    from opentrading_mcp.providers import vn_public as vn_pub
 
-    calls: list[tuple] = []
+    payload = {
+        "Count": 2,
+        "UpdatedDate": "2026-11-08T23:00:00+07:00",
+        "Data": [
+            {"currencyName": "US DOLLAR", "currencyCode": "USD", "cash": "25370.00",
+             "transfer": "25400.00", "sell": "25780.00"},
+            {"currencyName": "DANISH KRONE", "currencyCode": "DKK", "cash": "-",
+             "transfer": "3,755.60", "sell": "3,900.10"},
+        ],
+    }
 
-    def fake_forex(pair: str, count: int = 30):
-        calls.append((pair, count))
-        return [{"t": "2026-11-07", "o": 26100.0, "h": 26120.0, "l": 26080.0,
-                 "c": 26105.0, "v": 0.0}]
+    class Resp:
+        def raise_for_status(self):
+            return None
 
-    monkeypatch.setattr(vn_p, "forex_ohlcv", fake_forex)
-    fn = _tool_fn("vn_retail_fx")
-    env = await fn()
+        def json(self):
+            return payload
+
+    seen: dict[str, Any] = {}
+
+    class Client:
+        def get(self, url, params=None, **kw):
+            seen.update(url=url, params=params)
+            return Resp()
+
+    monkeypatch.setattr(vn_pub, "shared_client", lambda: Client())
+    env = await _tool_fn("vn_retail_fx")()
     _check_envelope(env, "vn_retail_fx")
-    assert calls == [("USDVND", 30)]
-    assert env["provenance"]["source"] == "vnstock-forex"
-    assert env["data"]["rows"][0]["c"] == 26105.0
+    assert seen["url"] == vn_pub.VCB_RATES_URL and "date" in seen["params"]
+    assert env["provenance"]["source"] == "vietcombank"
+    rows = {r["currency_code"]: r for r in env["data"]["rows"]}
+    assert rows["USD"] == {
+        "currency_code": "USD", "currency_name": "US DOLLAR",
+        "buy_cash": 25370.0, "buy_transfer": 25400.0, "sell": 25780.0,
+    }
+    assert rows["DKK"]["buy_cash"] is None  # "-" = no quote, not 0
+    assert rows["DKK"]["buy_transfer"] == 3755.6  # thousands separator handled
+    assert env["units"]["buy_cash, buy_transfer, sell"].startswith("đồng")
+
+
+async def test_vn_retail_fx_malformed_payload_is_unavailable(monkeypatch):
+    from opentrading_mcp.providers import vn_public as vn_pub
+
+    class Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"unexpected": True}
+
+    monkeypatch.setattr(vn_pub, "shared_client", lambda: type("C", (), {
+        "get": lambda self, *a, **k: Resp()})())
+    env = await _tool_fn("vn_retail_fx")()
+    assert env["availability"] == "unavailable"
 
 
 async def test_vn_msn_fx_gold_accepts_symbols_days(monkeypatch):
     import inspect
 
-    from opentrading_mcp.providers import vnstock as vn_p
+    from opentrading_mcp.providers import yfinance as yf_p
 
-    sig = inspect.signature(vn_p.msn_fx_gold)
+    sig = inspect.signature(yf_p.fx_gold)
     assert "symbols" in sig.parameters and "days" in sig.parameters
     assert sig.parameters["days"].default == 35
 

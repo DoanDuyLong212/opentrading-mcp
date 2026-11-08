@@ -27,15 +27,14 @@ from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailabl
 # both return the same closes in the same units (equity, index and futures,
 # measured live 2026-11-08). vnstock routes only fhsc/fmp/tcbs serve have an
 # empty chain and fail as not configured: batch quote, statements/fa, company
-# profile, insider trades, forex, commodity and global indices.
+# profile and insider trades. Forex, gold and global indices moved to
+# providers/yfinance.py (#78, #79); bank FX to providers/vn_public.py (#85).
 SRC_EQUITY = ("ssi", "dnse")
 SRC_QUOTE: tuple[str, ...] = ()  # market.equity.quote: fhsc/tcbs only
 SRC_TRADES = ("dnse",)  # market.equity.trades: dnse/tcbs only
 SRC_LISTING = ("ssi", "dnse")
 SRC_INDEX = ("ssi", "dnse")
 SRC_DERIV = ("ssi", "dnse")
-SRC_FX: tuple[str, ...] = ()  # market.forex / market.commodity: fhsc/fmp only
-SRC_GLOBAL: tuple[str, ...] = ()  # market.global_index: fhsc/fmp only
 SRC_CRYPTO = ("binance",)
 SRC_FUNDAMENTAL: tuple[str, ...] = ()  # fundamental.* and reference.company.*: fhsc only
 
@@ -54,8 +53,6 @@ SOURCE_CHAINS: dict[str, tuple[str, ...]] = {
     "crypto": SRC_CRYPTO,
     "quote": SRC_QUOTE,
     "fundamental": SRC_FUNDAMENTAL,
-    "forex": SRC_FX,
-    "global": SRC_GLOBAL,
 }
 
 
@@ -194,8 +191,8 @@ def quota_info() -> dict[str, Any]:
 
 def _ascending_by_time(rows: list[dict[str, Any]], key: str = "time") -> list[dict[str, Any]]:
     """Chronological order for frame rows. Gen-6 profiles flip row order between
-    functions; consumers (market_timing rows[-1], corp.py closes[-1], msn_fx_gold
-    series[-35:]) all assume ascending, so every raw ohlcv path normalizes here."""
+    functions; consumers (market_timing rows[-1], corp.py closes[-1]) assume
+    ascending, so every raw ohlcv path normalizes here."""
     return sorted(rows, key=lambda r: str(r.get(key, ""))[:24])
 
 
@@ -666,34 +663,6 @@ def futures_ohlcv(
 
 
 @guarded("vnstock")
-def forex_ohlcv(pair: str = "USDVND", count: int = 30) -> list[dict[str, Any]]:
-    try:
-        from vnstock import Market
-    except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
-    try:
-        frame = _fetch_frame(
-            [
-                (
-                    source,
-                    (
-                        lambda source=source: (
-                            Market(source)
-                            .forex(pair.upper())
-                            .ohlcv(count_back=count, interval="1D")
-                        )
-                    ),
-                )
-                for source in SRC_FX
-            ],
-            f"forex bars {pair}",
-        )
-    except ProviderUnavailable as exc:
-        raise _rewrap(exc, f"vnstock forex failed: {pair}") from exc
-    return _ascending_by_time(_records(frame))
-
-
-@guarded("vnstock")
 def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]]:
     try:
         from vnstock import Market
@@ -718,99 +687,6 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
         )
     except ProviderUnavailable as exc:
         raise _rewrap(exc, f"vnstock crypto failed: {symbol}") from exc
-    return _ascending_by_time(_records(frame))
-
-
-# Common spellings → the MSN-style codes vnstock's global index accepts
-# (vnstock.explorer.msn.const._GLOBAL_INDICES: INX, USA30, COMP...). Keys are already
-# normalized: upper case, no spaces, hyphens or dots ("S&P 500" → "S&P500").
-GLOBAL_INDEX_ALIASES = {
-    "SPX": "INX",
-    "GSPC": "INX",
-    "^GSPC": "INX",
-    "SP500": "INX",
-    "S&P500": "INX",
-    "S&P": "INX",
-    "DJIA": "USA30",
-    "DJI": "USA30",
-    "^DJI": "USA30",
-    "DOW": "USA30",
-    "DOWJONES": "USA30",
-    "IXIC": "COMP",
-    "^IXIC": "COMP",
-    "NASDAQ": "COMP",
-    "NASDAQCOMPOSITE": "COMP",
-    "RUSSELL2000": "RUT",
-    "^RUT": "RUT",
-    "^NYA": "NYA",
-    "CAC": "PX1",
-    "CAC40": "PX1",
-    "FCHI": "PX1",
-    "^FCHI": "PX1",
-    "FTSE": "UKX",
-    "FTSE100": "UKX",
-    "^FTSE": "UKX",
-    "GDAXI": "DAX",
-    "^GDAXI": "DAX",
-    "NIKKEI": "N225",
-    "NIKKEI225": "N225",
-    "^N225": "N225",
-    "HANGSENG": "HSI",
-    "^HSI": "HSI",
-    "SHCOMP": "000001",
-    "SSEC": "000001",
-    "SHANGHAI": "000001",
-    "SHANGHAICOMPOSITE": "000001",
-    "000001SS": "000001",
-    "^BSESN": "SENSEX",
-    "VNINDEX": "VNI",
-}
-
-
-def _normalize_global_symbol(symbol: str) -> str:
-    """Map common spellings (SPX, "S&P 500", Dow Jones...) to vnstock's global codes."""
-    raw = re.sub(r"[\s.\-]+", "", str(symbol)).upper()
-    return GLOBAL_INDEX_ALIASES.get(raw, raw)
-
-
-VALID_GLOBAL_SYMBOLS = (
-    "INX (S&P 500), USA30/DJI (Dow Jones), COMP (Nasdaq Composite), RUT (Russell 2000), "
-    "NYA (NYSE Composite), RUI/RUA (Russell 1000/3000), UKX (FTSE 100), DAX, PX1 (CAC 40), "
-    "N225 (Nikkei 225), 000001 (Shanghai SE), HSI (Hang Seng), SENSEX, VNI (VN-Index)"
-)
-
-
-@guarded("vnstock")
-def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]:
-    try:
-        from vnstock import Market
-    except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
-    normalized = _normalize_global_symbol(symbol)
-    try:
-        frame = _fetch_frame(
-            [
-                (
-                    source,
-                    (
-                        lambda source=source: (
-                            Market(source)
-                            .global_index(normalized)
-                            .ohlcv(count_back=count, interval="1D")
-                        )
-                    ),
-                )
-                for source in SRC_GLOBAL
-            ],
-            f"global index bars {normalized}",
-        )
-    except ProviderUnavailable as exc:
-        raise _rewrap(
-            exc,
-            f"vnstock global index failed: {symbol} (→ {normalized}). "
-            f"Valid symbols: {VALID_GLOBAL_SYMBOLS}. "
-            f"For indices not listed here (e.g. Nasdaq-100 NDX) use yf_global_indices",
-        ) from exc
     return _ascending_by_time(_records(frame))
 
 
@@ -1241,58 +1117,6 @@ def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
     if frame is None or len(frame) == 0:
         raise ProviderUnavailable(f"vnstock events failed: {symbol}")
     return _clean(_records(frame))[: max(limit, 1)]
-
-
-def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[str, Any]]:
-    """USDVND and international gold (GC futures) via gen-6 Market forex/commodity.
-
-    Name is historical (the MSN explorer is gone in gen 6). XAUUSD maps to the
-    GC commodity contract — the v6 Open API has no spot XAUUSD route.
-    """
-    try:
-        from vnstock import Market
-    except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
-    from datetime import date, timedelta
-
-    end = date.today().isoformat()
-    start = (date.today() - timedelta(days=max(days, 5))).isoformat()
-    out: list[dict[str, Any]] = []
-    legs: list[tuple[str, str, str, tuple[str, ...]]] = [
-        # (returned symbol, v6 group, upstream symbol, source chain)
-        ("USDVND", "forex", "USDVND", SRC_FX),
-        ("XAUUSD", "commodity", "GC", SRC_FX),  # GC = gold futures contract
-    ]
-    for symbol, group, upstream, sources in legs:
-        if symbols and symbol not in symbols:
-            continue
-        try:
-            frame = _fetch_frame(
-                [
-                    (
-                        source,
-                        (
-                            lambda source=source, group=group, upstream=upstream: getattr(
-                                Market(source), group
-                            )(upstream).ohlcv(start=start, end=end, interval="1D")
-                        ),
-                    )
-                    for source in sources
-                ],
-                f"{group} bars {upstream}",
-            )
-        except ProviderUnavailable as exc:
-            raise _rewrap(exc, f"vnstock {group} failed: {symbol}") from exc
-        rows = _ascending_by_time(_clean(_records(frame)))
-        out.append(
-            {
-                "symbol": symbol,
-                "points": len(rows),
-                "last": rows[-1] if rows else None,
-                "series": rows[-35:] if rows else [],
-            }
-        )
-    return out
 
 
 VN30 = [
