@@ -727,6 +727,118 @@ def test_equity_trades_asks_dnse_for_big_pages(monkeypatch):
     assert [r["price"] for r in rows] == [59.0, 58.0, 57.0]  # newest first, sliced
 
 
+class _RefEquity:
+    """gen-6 Reference(src).equity shape (pinned by test_vnstock_signatures)."""
+
+    def __init__(self, source, calls, fail=()):
+        self.source, self.calls, self.fail = source, calls, fail
+
+    def _rows(self):
+        import pandas as pd
+
+        if self.source in self.fail:
+            raise RuntimeError(f"{self.source} down")
+        return pd.DataFrame([
+            {"symbol": "VCB", "exchange": "HOSE", "icb_code": "8355", "icb_name": "Ngân hàng"},
+            {"symbol": "FPT", "exchange": "HOSE", "icb_code": "9533", "icb_name": "Phần mềm"},
+            {"symbol": "SHS", "exchange": "HNX", "icb_code": "8777", "icb_name": "Môi giới"},
+        ])
+
+    def list_by_exchange(self, exchange=None):
+        self.calls.append((self.source, "exchange", exchange))
+        rows = self._rows()
+        return rows[rows["exchange"] == exchange] if exchange else rows
+
+    def list_by_industry(self, exchange=None):
+        self.calls.append((self.source, "industry", exchange))
+        return self._rows()
+
+    def list_by_group(self, group):
+        self.calls.append((self.source, "group", group))
+        import pandas as pd
+
+        if self.source in self.fail:
+            raise RuntimeError(f"{self.source} down")
+        return pd.DataFrame([{"symbol": "VCB", "index_symbol": group}])
+
+    def list(self, **kw):
+        raise AssertionError("reference_equity must not fall back to a different method")
+
+
+def _install_reference(monkeypatch, fail=()):
+    calls: list[tuple] = []
+
+    class Reference:
+        def __init__(self, source=None, **kw):
+            self.equity = _RefEquity(source, calls, fail)
+
+    _install(monkeypatch, Reference=Reference)
+    return calls
+
+
+def test_reference_exchange_is_passed_upstream(monkeypatch):
+    """#88: v6 pulled the whole market on every call and filtered locally."""
+    calls = _install_reference(monkeypatch)
+    rows = vn_p.reference_equity("HOSE")
+    assert calls == [("ssi", "exchange", "HOSE")]
+    assert {r["symbol"] for r in rows} == {"VCB", "FPT"}
+
+
+def test_reference_industry_filters_on_icb(monkeypatch):
+    """gen 6's list_by_industry has no industry argument: v6 passed the industry
+    name as the exchange. Filter on icb_name (substring) or icb_code (exact)."""
+    calls = _install_reference(monkeypatch)
+    assert [r["symbol"] for r in vn_p.reference_equity("HOSE", by="industry",
+                                                       key="ngân hàng")] == ["VCB"]
+    assert [r["symbol"] for r in vn_p.reference_equity("ALL", by="industry",
+                                                       key="8777")] == ["SHS"]
+    assert calls[0] == ("ssi", "industry", "HOSE") and calls[1] == ("ssi", "industry", None)
+
+
+def test_reference_group_rides_the_chain(monkeypatch):
+    calls = _install_reference(monkeypatch, fail=("ssi",))
+    rows = vn_p.reference_equity(by="group", key="VN30")
+    assert rows[0]["symbol"] == "VCB"
+    assert calls == [("ssi", "group", "VN30"), ("dnse", "group", "VN30")]
+
+
+def test_reference_failure_keeps_every_source_and_never_retries_ssi(monkeypatch):
+    """v6 retried ssi with .list() after the chain failed, masking the real error."""
+    calls = _install_reference(monkeypatch, fail=("ssi", "dnse"))
+    with pytest.raises(ProviderUnavailable) as info:
+        vn_p.reference_equity("HOSE")
+    assert "ssi: ssi down" in str(info.value) and "dnse: dnse down" in str(info.value)
+    assert [c[0] for c in calls] == ["ssi", "dnse"]
+
+
+def test_dnse_trade_volumes_are_scaled_to_shares(monkeypatch):
+    """dnse counts lots of 10: the 2026-11-06 FPT session summed to 1,216,220
+    while 12,162,200 shares traded (v4 and the DNSE board agree on the latter)."""
+    import pandas as pd
+
+    class Equity:
+        def trades(self, **kw):
+            return pd.DataFrame([
+                {"time": "2026-11-06T14:45:02+07:00", "price": 50.8, "volume": 20,
+                 "match_type": "ATC", "accumulated_volume": 1216220},
+                {"time": "2026-11-06T14:27:52+07:00", "price": 50.9, "volume": 620,
+                 "match_type": "sell", "accumulated_volume": 1100000},
+            ])
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            return Equity()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.equity_trades("FPT", limit=5)
+    assert [r["volume"] for r in rows] == [200, 6200]  # v4 shows the 6,200-share print
+    assert rows[0]["accumulated_volume"] == 12162200
+    assert rows[0]["price"] == 50.8  # prices are already thousand dong, as in v4
+
+
 def test_redact_hides_vnstock_secret_names():
     from opentrading_mcp.auth import redact
 
