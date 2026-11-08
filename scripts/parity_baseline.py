@@ -19,7 +19,7 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -62,11 +62,11 @@ def _jsonable(obj: object) -> object:
 
 def _probe(name: str, fn, *, truncate: int | None = None, attempts: int = 2):
     last_error = None
-    for attempt in range(attempts):
+    for _attempt in range(attempts):
         started = time.monotonic()
         try:
             result = fn()
-            rows = result if isinstance(result, list) else result
+            rows = result
             payload: dict = {"ok": True, "elapsed_s": round(time.monotonic() - started, 2)}
             if isinstance(rows, list) and truncate is not None and len(rows) > truncate:
                 payload["total_rows"] = len(rows)
@@ -76,7 +76,7 @@ def _probe(name: str, fn, *, truncate: int | None = None, attempts: int = 2):
                 if not isinstance(rows, list):
                     payload["data"] = _jsonable(rows)
             return payload
-        except Exception as exc:  # noqa: BLE001 - probe must survive any upstream error
+        except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
             time.sleep(2)
     return {"ok": False, "elapsed_s": round(time.monotonic() - started, 2), "error": last_error}
@@ -124,7 +124,7 @@ def main() -> int:
     probes["msn_fx_gold"] = _probe("msn", vn.msn_fx_gold)
 
     meta = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "vnstock_version": importlib.metadata.version("vnstock"),
         "python_version": sys.version.split()[0],
         "git_sha": _git_sha(),

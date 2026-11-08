@@ -39,6 +39,12 @@ See `configs/` for opencode / Claude / Cursor / Codex / Antigravity snippets,
 Server dùng **vnstock thế hệ 6** (bản RC `6.0.0rc4` cho tới khi có bản chính thức): mỗi nguồn dữ
 liệu là một tài khoản Open API riêng, khoá đặt bằng biến môi trường, **không** commit.
 
+> **Bản RC `6.0.0rc4` hết hạn ngày 07/12/2026.** Sau ngày đó mọi tool lấy dữ liệu qua vnstock
+> (nến, chỉ số, phái sinh, listing…) ngừng chạy, kể cả khi đã có khoá ssi/dnse. Phải nâng bản ghim
+> trong `uv.lock` trước ngày này. `source_status` → `upstreams.vnstock_release` báo số ngày còn lại
+> và gắn cảnh báo từ 30 ngày trước hạn; khi đổi phiên bản, ghi hạn của bản mới vào
+> `src/opentrading_mcp/vnstock_release.py` (test sẽ đỏ nếu quên).
+
 | Nguồn | Cung cấp | Biến env |
 |---|---|---|
 | `fhsc` | BCTC, company profile/events/insider, batch quote, forex, hàng hoá (06:00–21:00 giờ VN) | `FHSC_API_KEY` |

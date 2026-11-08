@@ -10,7 +10,9 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Only superseded PR runs are cancelled: two quick pushes to main must each
+  # finish, or a commit lands on main without a completed CI run (#99).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -30,14 +32,14 @@ jobs:
     env:
       # Cycle-table tests run against this throwaway database; nothing else uses it.
       TEST_DATABASE_URL: postgresql://postgres:pw@localhost:5432/postgres
-      VNSTOCK_TELEMETRY: "off"
-      MPLBACKEND: Agg
+      # Same value as the Dockerfile: vnstock 6 reads 0 as "off".
+      VNSTOCK_TELEMETRY: "0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.12"
       - run: uv sync --frozen --extra dev
-      - run: uv run ruff check src tests
+      - run: uv run ruff check src tests scripts
       # The full live matrix calls real upstreams (and needs their keys): run it by hand.
       - run: uv run pytest -q -p no:cacheprovider --deselect tests/contract/test_verify_matrix.py::test_full_matrix_stdio

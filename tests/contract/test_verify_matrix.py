@@ -3,13 +3,28 @@
 from opentrading_mcp.verify_matrix import all_calls, run_stdio_all
 
 
+def test_matrix_covers_every_registered_tool():
+    """Offline (no stdio, no network), so CI runs it: the live matrix test below
+    is deselected in CI, and that hid 4 vn_reversal_* tools missing here (#99)."""
+    from opentrading_mcp.server import create_server, register_all
+
+    server = create_server()
+    registered = {t["name"] for t in register_all(server)}
+    matrix = [tool for tool, _, _ in all_calls()]
+    assert len(matrix) == len(set(matrix)), "duplicate matrix entries"
+    assert set(matrix) == registered, (
+        f"missing from matrix: {sorted(registered - set(matrix))}; "
+        f"not registered: {sorted(set(matrix) - registered)}"
+    )
+
+
 async def test_full_matrix_stdio():
     from opentrading_mcp.server import create_server, register_all
 
     server = create_server()
     tools = register_all(server)
     calls = all_calls()
-    assert len(calls) == len(tools) == 170, f"matrix {len(calls)} vs tools {len(tools)}"
+    assert len(calls) == len(tools), f"matrix {len(calls)} vs tools {len(tools)}"
     rows = await run_stdio_all()
     assert rows, "matrix returned no rows"
     assert len(rows) == len(calls)

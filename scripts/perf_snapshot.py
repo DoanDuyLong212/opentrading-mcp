@@ -123,14 +123,14 @@ async def main() -> int:
                     continue
                 try:
                     res = _json.loads(line[5:])
-                except Exception:  # noqa: BLE001
+                except Exception:
                     continue
                 result = res.get("result")
                 if not isinstance(result, dict):
                     continue
                 try:
                     return True, result["content"][0]["text"], ""
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     return False, None, f"parse: {exc}"
             return False, None, "no result frame"
 
@@ -150,7 +150,7 @@ async def main() -> int:
                     info = {"availability": body.get("availability", "?"),
                             "source": prov.get("source", "?"),
                             "has_data_time": bool(prov.get("data_time"))}
-                except Exception:  # noqa: BLE001
+                except Exception:
                     info = {"availability": "?", "source": "?", "has_data_time": False}
                 rows.append({"tool": name, "ok": True, "seconds": round(seconds, 2), **info})
             else:
@@ -216,7 +216,8 @@ async def main() -> int:
     s = snapshot["summary"]
     print(f"[{args.label}] tools={s['n_tools']} median_cold={s['median_cold_s']}s "
           f"median_warm={s['median_warm_s']}s warm_faster={s['warm_faster']} "
-          f"warm_from_cache={s['warm_from_cache']} with_data_time={s['with_data_time']} -> {args.out}")
+          f"warm_from_cache={s['warm_from_cache']} with_data_time={s['with_data_time']} "
+          f"-> {args.out}")
     return 0
 
 
