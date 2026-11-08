@@ -23,7 +23,7 @@ import pytest
 from vnstock_quant import fa
 
 from opentrading_mcp.providers import vnstock as vn_p
-from opentrading_mcp.providers.errors import ProviderUnavailable
+from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.server import create_server, register_preset
 
 NP = "IS_PROFIT_AFTER_TAX_FOR_SHAREHOLDERS_OF_PARENT_COMPANY"
@@ -89,27 +89,72 @@ def _fa_long() -> pd.DataFrame:
     )
 
 
-def _patch_fa_load(monkeypatch, *, with_prices: bool = True) -> list[str]:
+def _fa_long_year() -> pd.DataFrame:
+    """Annual fa rows (audited years), same columns as ``_fa_long``."""
+    rows = [
+        ("2025", "RT_VALUE_PE", 25.0, "times", ""),
+        ("2025", "RT_VALUE_EPS", 6000.0, "VND/share", ""),
+        ("2025", "RT_VALUE_BVPS", 21000.0, "VND/share", ""),
+        ("2025", "RT_PRT_ROE", 0.28, "ratio", ""),
+        ("2024", "RT_VALUE_PE", 20.0, "times", ""),
+        ("2024", "RT_VALUE_EPS", 5000.0, "VND/share", ""),
+        ("2024", "RT_VALUE_BVPS", 18000.0, "VND/share", ""),
+        ("2024", "RT_PRT_ROE", 0.25, "ratio", ""),
+    ]
+    return pd.DataFrame(
+        [
+            {"symbol": "FPT", "period": p, "id": i, "value": v, "unit": u, "reason": r}
+            for p, i, v, u, r in rows
+        ]
+    )
+
+
+def _patch_fa_load(
+    monkeypatch,
+    *,
+    frames: dict[tuple[str, str], pd.DataFrame] | None = None,
+) -> list[str]:
+    """Stub fa at its own boundary (``Dataset.load`` + ``ratios``) so the real
+    ``_fa_to_v4_table`` / ``equity_fundamentals`` code runs.
+
+    ``frames`` maps (symbol, period) to the long frame fa returns; a missing
+    key falls back to the FPT fixtures (quarter → ``_fa_long``, year →
+    ``_fa_long_year``). The dataset handle carries the symbol so per-symbol
+    frames reach the right call.
+    """
     calls: list[str] = []
+    frames = frames or {}
 
     def fake_load(symbols, period="both", source=None, estimate_shares=False, **kwargs):
         calls.append(str(source))
         assert source == "fhsc"
         assert estimate_shares is True
-        return object()  # opaque dataset handle; ratios is stubbed too
+        assert period == "both"
+        return types.SimpleNamespace(symbol=str(next(iter(symbols))).upper())
 
     def fake_ratios(
         data, ids=None, period="quarter", profile="vn", overrides=None, format="long", **kwargs
     ):
-        frame = _fa_long()
-        if period == "year":
-            return frame.iloc[0:0]
         assert format == "long"
-        return frame
+        assert period in ("quarter", "year")
+        key = (data.symbol, period)
+        if key in frames:
+            return frames[key]
+        return _fa_long_year() if period == "year" else _fa_long()
 
     monkeypatch.setattr(fa.Dataset, "load", staticmethod(fake_load))
     monkeypatch.setattr(fa, "ratios", fake_ratios)
     return calls
+
+
+def _long(rows: list[tuple]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {"symbol": "FPT", "period": p, "id": i, "value": v, "unit": u, "reason": r}
+            for p, i, v, u, r in rows
+        ],
+        columns=["symbol", "period", "id", "value", "unit", "reason"],
+    )
 
 
 # --- equity_ratios: v4 table shape, RT mapping, percent scaling --------------------
@@ -134,7 +179,7 @@ def test_equity_ratios_maps_rt_ids_to_v4_table(monkeypatch):
 
 
 def test_equity_ratios_gross_margin_missing_input_becomes_none(monkeypatch):
-    _patch_fa_load(monkeypatch, with_prices=False)
+    _patch_fa_load(monkeypatch)
     out = vn_p.equity_ratios("FPT", "quarter")
     gm = next(r for r in out["ratios"] if r["item_id"] == "gross_profit_margin")
     assert all(v is None for v in gm["values"].values())
@@ -146,18 +191,108 @@ def test_equity_ratios_known_fa_gaps_get_explained_rows(monkeypatch):
     out = vn_p.equity_ratios("FPT", "year")
     dy = next((r for r in out["ratios"] if r["item_id"] == "dividend_yield"), None)
     assert dy is not None and all(v is None for v in dy["values"].values())
+    assert set(dy["values"]) == {"2025", "2024"}
     assert "not in vnstock_quant.fa" in (dy.get("quality_note") or "")
 
 
 def test_equity_ratios_year_period_uses_fa_year(monkeypatch):
     _patch_fa_load(monkeypatch)
     out = vn_p.equity_ratios("FPT", "year")
-    # the stubbed fa table only carries quarter rows for this fixture
-    assert out["periods"] == []
+    assert out["periods"] == ["2025", "2024"]
     assert out["frequency"] == "annual"
+    pe = next(r for r in out["ratios"] if r["item_id"] == "p_e")
+    assert pe["values"] == {"2025": 25.0, "2024": 20.0}
+
+
+def test_equity_ratios_raises_bad_data_when_fa_has_no_rows(monkeypatch):
+    """#75: v4 never returned empty periods; an empty fa frame must raise
+    ProviderBadData (tools turn it into an unavailable envelope), not hand
+    callers a table whose periods[0] crashes."""
+    _patch_fa_load(monkeypatch, frames={("FPT", "year"): _fa_long_year().iloc[0:0]})
+    with pytest.raises(ProviderBadData, match="no usable year period"):
+        vn_p.equity_ratios("FPT", "year")
+
+
+def test_equity_ratios_raises_bad_data_when_every_label_is_discarded(monkeypatch):
+    frame = _long([("weird", "RT_PRT_ROE", 0.2, "ratio", "")])
+    _patch_fa_load(monkeypatch, frames={("FPT", "year"): frame})
+    with pytest.raises(ProviderBadData, match="weird"):
+        vn_p.equity_ratios("FPT", "year")
+
+
+def test_equity_ratios_empty_result_is_not_cached(monkeypatch):
+    calls = _patch_fa_load(monkeypatch, frames={("FPT", "year"): _fa_long_year().iloc[0:0]})
+    for _ in range(2):
+        with pytest.raises(ProviderBadData):
+            vn_p.equity_ratios("FPT", "year")
+    assert calls == ["fhsc", "fhsc"]
 
 
 # --- equity_fundamentals: pe/roe fraction + period label ---------------------------
+
+
+def test_equity_fundamentals_takes_the_newest_period(monkeypatch):
+    """Mutant G24 (#94): walking periods oldest-first must fail a test."""
+    _patch_fa_load(monkeypatch)
+    out = vn_p.equity_fundamentals("FPT", "year")
+    assert out["period_label"] == "2025"
+    assert out["pe"] == pytest.approx(25.0)
+    assert out["eps"] == pytest.approx(6000.0)
+    assert out["bvps"] == pytest.approx(21000.0)
+    assert out["roe"] == pytest.approx(0.28)
+
+
+def test_equity_fundamentals_never_mixes_periods(monkeypatch):
+    """#76: a 2025 row whose P/E is missing must not borrow the 2024 P/E while
+    labelling the result 2025 (the removed v4 guard said: a PE and an EPS never
+    mix years)."""
+    frame = _long([
+        ("2025", "RT_VALUE_PE", float("nan"), "times", "MISSING_MARKET"),
+        ("2024", "RT_VALUE_PE", 20.0, "times", ""),
+        ("2025", "RT_VALUE_EPS", 6000.0, "VND/share", ""),
+        ("2024", "RT_VALUE_EPS", 5000.0, "VND/share", ""),
+        ("2025", "RT_PRT_ROE", 0.28, "ratio", ""),
+    ])
+    _patch_fa_load(monkeypatch, frames={("FPT", "year"): frame})
+    out = vn_p.equity_fundamentals("FPT", "year")
+    assert out["period_label"] == "2025"
+    assert out["pe"] is None  # 2025 P/E is missing; 20.0 belongs to 2024
+    assert out["eps"] == pytest.approx(6000.0)
+    assert out["roe"] == pytest.approx(0.28)
+    assert "pe" in out["missing_in_period"]
+
+
+def test_equity_fundamentals_skips_a_period_with_no_core_metric(monkeypatch):
+    """A newest period holding only non-core rows (e.g. a margin) is not the
+    anchor: the label follows the period the returned numbers come from."""
+    frame = _long([
+        ("2025", "RT_PRT_NET_MARGIN", 0.1, "ratio", ""),
+        ("2024", "RT_VALUE_PE", 20.0, "times", ""),
+        ("2024", "RT_VALUE_EPS", 5000.0, "VND/share", ""),
+    ])
+    _patch_fa_load(monkeypatch, frames={("FPT", "year"): frame})
+    out = vn_p.equity_fundamentals("FPT", "year")
+    assert out["period_label"] == "2024"
+    assert out["pe"] == pytest.approx(20.0)
+    assert out["eps"] == pytest.approx(5000.0)
+
+
+def test_equity_fundamentals_eps_basis_follows_the_period(monkeypatch):
+    """#76: annual fa rows are the audited year, not TTM."""
+    _patch_fa_load(monkeypatch)
+    assert vn_p.equity_fundamentals("FPT", "year")["eps_basis"] == "reported_period_ratio"
+    vn_p._fa_cache.clear()
+    assert vn_p.equity_fundamentals("FPT", "quarter")["eps_basis"] == "trailing_four_quarters"
+
+
+def test_equity_fundamentals_passes_discarded_labels_through(monkeypatch):
+    frame = pd.concat([
+        _fa_long_year(),
+        _long([("weird", "RT_PRT_ROE", 0.2, "ratio", "")]),
+    ])
+    _patch_fa_load(monkeypatch, frames={("FPT", "year"): frame})
+    out = vn_p.equity_fundamentals("FPT", "year")
+    assert out["discarded_period_labels"] == ["weird"]
 
 
 def test_equity_fundamentals_from_fa_table(monkeypatch):
@@ -295,6 +430,37 @@ def _tool(name: str, preset: str = "all"):
     tool = server._tool_manager.get_tool(name)
     assert tool is not None, name
     return tool.fn
+
+
+def _empty_year_for(symbol: str) -> dict[tuple[str, str], pd.DataFrame]:
+    return {(symbol, "year"): _fa_long_year().iloc[0:0]}
+
+
+async def test_peer_compare_survives_a_peer_with_no_fa_periods(monkeypatch):
+    """#75: one peer without annual fa rows used to raise IndexError out of
+    the tool; it must become an error row next to the healthy symbol."""
+    _patch_fa_load(monkeypatch, frames=_empty_year_for("VCB"))
+    out = await _tool("peer_compare")(symbol="FPT", peers=["VCB"])
+    rows = {r["symbol"]: r for r in out["data"]["rows"]}
+    assert rows["FPT"]["period_label"] == "2025"
+    assert rows["FPT"]["p_e"] == pytest.approx(25.0)
+    assert "no usable year period" in rows["VCB"]["error"]
+    assert out["availability"] == "partial"
+
+
+async def test_financial_ratios_survives_a_peer_with_no_fa_periods(monkeypatch):
+    _patch_fa_load(monkeypatch, frames=_empty_year_for("VCB"))
+    out = await _tool("financial_ratios")(symbol="FPT", peers=["VCB"])
+    data = out["data"]
+    assert data["periods"] == ["2025", "2024"]
+    peer = next(p for p in data["peers"] if p["symbol"] == "VCB")
+    assert "no usable year period" in peer["error"]
+
+
+async def test_financial_ratios_main_symbol_without_periods_is_unavailable(monkeypatch):
+    _patch_fa_load(monkeypatch, frames=_empty_year_for("FPT"))
+    out = await _tool("financial_ratios")(symbol="FPT")
+    assert out["availability"] == "unavailable"
 
 
 async def test_vn_fundamentals_returns_fa_table(monkeypatch):

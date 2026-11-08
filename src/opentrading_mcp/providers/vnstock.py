@@ -888,6 +888,11 @@ def _fa_to_v4_table(symbol: str, period: str, long_frame: Any) -> dict[str, Any]
     ordered = sorted(periods, key=_period_sort_key, reverse=True)
     discarded = sorted(p for p in periods if _period_sort_key(p) == (0, 0))
     ordered = [p for p in ordered if p not in set(discarded)]
+    if not ordered:
+        # v4 contract: a ratio table always has at least one period. Callers
+        # index periods[0], so an empty table must fail here, not downstream.
+        detail = f" (discarded labels: {', '.join(discarded)})" if discarded else ""
+        raise ProviderBadData(f"fa returned no usable {period} period for {symbol.upper()}{detail}")
     ratios: list[dict[str, Any]] = []
     for v4_id, entry in rows_by_id.items():
         entry["values"] = {p: entry["values"].get(p) for p in ordered}
@@ -955,37 +960,61 @@ def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     """Per-symbol PE/ROE/EPS/BVPS from the fa table (v4 semantics: ROE fraction).
 
-    Missing metrics come back as None. ``period_label`` names the report period
-    the numbers belong to ('2025' = year-end 2025), so a year-end PE is never
-    mistaken for today's multiple.
+    Every value comes from ONE report period — the newest period holding at
+    least one core metric (P/E, EPS, BVPS, ROE) — so a P/E and an EPS never mix
+    years. A core metric missing in that period is None and is listed in
+    ``missing_in_period``; it is never borrowed from an older period.
+    ``period_label`` names that period ('2025' = year-end 2025), so a year-end
+    PE is never mistaken for today's multiple. ``eps_basis`` follows the fa
+    row: audited annual rows are ``reported_period_ratio``, quarter rows TTM.
     """
     table = equity_ratios(symbol, period)
     by_id = {r["item_id"]: r for r in table["ratios"]}
 
-    def _newest(item_id: str) -> float | None:
+    def _value(item_id: str, label: str) -> float | None:
         row = by_id.get(item_id)
-        if not row:
-            return None
-        for p in table["periods"]:
-            if row["values"].get(p) is not None:
-                return row["values"][p]
-        return None
+        return row["values"].get(label) if row else None
 
-    roe_pct = _newest("roe")
+    anchor = next(
+        (
+            p for p in table["periods"]
+            if any(_value(item_id, p) is not None for item_id in _FUNDAMENTAL_CORE.values())
+        ),
+        None,
+    )
+    picked = {
+        name: (_value(item_id, anchor) if anchor is not None else None)
+        for name, item_id in _FUNDAMENTAL_CORE.items()
+    }
+    roe_pct = picked["roe"]
+    eps_row = by_id.get("trailing_eps") or {}
+    eps_basis = eps_row.get("basis") or (
+        "trailing_four_quarters" if period == "quarter" else "reported_period_ratio"
+    )
     return {
         "symbol": symbol.upper(),
-        "pe": _newest("p_e"),
+        "pe": picked["pe"],
         "roe": roe_pct / 100.0 if roe_pct is not None else None,
         "market_cap": None,
         "market_cap_status": "missing_from_ratio_table",
-        "eps": _newest("trailing_eps"),
-        "bvps": _newest("book_value_per_share_bvps"),
-        "period_label": table["periods"][0] if table["periods"] else None,
+        "eps": picked["eps"],
+        "bvps": picked["bvps"],
+        "period_label": anchor,
+        "missing_in_period": sorted(k for k, v in picked.items() if v is None),
         "frequency": table["frequency"],
-        "eps_basis": "trailing_four_quarters",
-        "discarded_period_labels": [],
+        "eps_basis": eps_basis,
+        "discarded_period_labels": list(table.get("discarded_period_labels", [])),
         "source": "vnstock_quant.fa",
     }
+
+
+# equity_fundamentals output name -> v4 ratio-table item_id
+_FUNDAMENTAL_CORE = {
+    "pe": "p_e",
+    "eps": "trailing_eps",
+    "bvps": "book_value_per_share_bvps",
+    "roe": "roe",
+}
 
 
 _EXCHANGE_KEYS = ("exchange", "san", "floor", "exchangecode", "exchange_code")

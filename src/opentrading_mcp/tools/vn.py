@@ -197,7 +197,8 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         period: 'year' hoặc 'quarter'. report_type chỉ còn tác dụng phân biệt cache
             ('ttm'/'latest') — gen 6 tính chỉ số từ BCTC đã chuẩn hoá, quý là TTM.
         """
-        fp = f"{symbol}|{period}|{report_type}"
+        # v2: gen-6 fa table replaces the v4 raw records list (#86).
+        fp = f"v2|{symbol}|{period}|{report_type}"
         hit = await cache_lookup("vn_fundamentals", fp)
         if hit is not None:
             return hit

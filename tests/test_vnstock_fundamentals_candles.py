@@ -59,7 +59,8 @@ def test_equity_fundamentals_reads_the_fa_table(monkeypatch):
         "period_label": "2025",
     }
     assert out["frequency"] == "annual"
-    assert out["eps_basis"] == "trailing_four_quarters"
+    # annual fa rows are the audited year, not TTM (#76)
+    assert out["eps_basis"] == "reported_period_ratio"
     assert out["market_cap_status"] == "missing_from_ratio_table"
 
 
