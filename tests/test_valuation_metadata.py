@@ -18,7 +18,7 @@ async def _valuation(monkeypatch, overview: dict[str, Any], fund: dict[str, Any]
             return overview
         if fn is cf.vn_p.equity_quote_batch:
             return [{"symbol": "FPT", "close_price": 57400}]
-        if fn is cf.vn_p.equity_fundamentals:
+        if fn is cf.vs_ratios.equity_fundamentals:
             return fund
         raise AssertionError(fn)
 

@@ -18,6 +18,7 @@ from opentrading_mcp.forensic_models import calculate_forensic
 from opentrading_mcp.providers import forensic as forensic_p
 from opentrading_mcp.providers import vietstock as vs_p
 from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.providers import vs_ratios
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
@@ -167,7 +168,7 @@ def _fd_line(detail: dict[str, Any], line: str) -> list[float | None]:
     return _fd_row(detail, norm_ids, names)
 
 
-# vnstock ratio items computed from the price on the period's closing date. A model
+# Ratio items computed from the price on the period's closing date. A model
 # asked for "P/E hiện tại" read FY2025 p_e 15.91 as today's multiple (live ~9.5), so
 # these rows are labelled as period-end values in every response that carries them.
 _PERIOD_END_PRICE_ITEMS = frozenset(
@@ -188,7 +189,7 @@ def _label_period_end(row: dict[str, Any]) -> dict[str, Any]:
     return {**row, "item": f"{row['item']}{_PERIOD_END_SUFFIX}", "as_of": "period_end"}
 
 
-# peer_compare metric spellings -> vnstock ratio item_id.
+# peer_compare metric spellings -> ratio-table item_id.
 _PEER_METRIC_ALIASES = {
     "pe": "p_e", "p/e": "p_e", "pb": "p_b", "p/b": "p_b", "ps": "p_s",
     "eps": "trailing_eps", "bvps": "book_value_per_share_bvps",
@@ -277,7 +278,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
         # v6: EPS/BVPS from one fa period, eps_basis from that period (gen 6, #76).
-        fp = f"v6|{symbol}|{btype}|{method}"
+        # v7: EPS/BVPS from Vietstock financeinfo (fhsc/fa discontinued).
+        fp = f"v7|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -330,10 +332,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             # vnstock reports for its newest period. Not price / PE: that PE is priced at
             # the period end, so it would give a wrong EPS for today's price.
             try:
-                fund = await _call("f", vn_p.equity_fundamentals, symbol.upper(), secs=45.0)
+                fund = await _call("f", vs_ratios.equity_fundamentals, symbol.upper(), secs=45.0)
             except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
                 fund = None
-                warnings.append(f"vnstock fundamentals unavailable: {exc}")
+                warnings.append(f"Vietstock fundamentals unavailable: {exc}")
             if isinstance(fund, dict):
                 label = fund.get("period_label")
                 if eps is None and fund.get("eps") is not None:
@@ -344,7 +346,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                         basis = fund.get("eps_basis") or "unverified"
                         suffix = f", period {label}" if label else ""
                         name = "trailing EPS" if basis == "trailing_four_quarters" else "EPS"
-                        out["eps_source"] = f"vnstock {name}{suffix}"
+                        out["eps_source"] = f"Vietstock {name}{suffix}"
                         out["eps_period"] = label
                         out["eps_frequency"] = fund.get("frequency") or "unverified"
                         out["eps_basis"] = basis
@@ -354,7 +356,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                         warnings.append("BVPS invalid in vnstock fundamentals")
                     else:
                         suffix = f", period {label}" if label else ""
-                        out["bvps_source"] = f"vnstock BVPS{suffix}"
+                        out["bvps_source"] = f"Vietstock BVPS{suffix}"
                         out["bvps_period"] = label
                         out["bvps_frequency"] = fund.get("frequency") or "unverified"
                 if fund.get("discarded_period_labels"):
@@ -450,7 +452,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         period: str = "year",
         peers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Bảng chỉ số tài chính theo kỳ của vnstock. Dùng khi soi chỉ số tài chính của 1 mã qua
+        """Bảng chỉ số tài chính theo kỳ (Vietstock). Dùng khi soi chỉ số tài chính của 1 mã qua
             các năm/quý (kèm peers tuỳ chọn).
 
         Dùng khi: "ROE các năm của VCB", so chỉ số 1 mã với vài peers, P/E các năm trước.
@@ -458,9 +460,12 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             dùng stock_overview hoặc valuation_run); so dạng bảng head-to-head nhiều mã (dùng
             peer_compare — gọn hơn); cần vùng giá trị (dùng valuation_run).
 
-        period: 'year' (mặc định) hoặc 'quarter'. Gen 6 tính chỉ số tại máy bằng
-        vnstock_quant.fa từ ba BCTC — quý trả TTM bình thường, không còn lỗi kỳ trùng của
-        bảng KBS cũ. set: chỉ giữ chỉ số có item_id hoặc tên chứa
+        period: 'year' (mặc định, nhãn '2025') hoặc 'quarter' (nhãn 'Q3/2026'). Mỗi dòng có
+        basis: EPS luôn là 4 quý gần nhất (trailing_four_quarters); ở bảng QUÝ, roe/roa/
+        net_profit_margin là số của RIÊNG quý đó (single_quarter, ~1/4 số năm), không phải
+        TTM. Dòng derived (p_b, gross_profit_margin) tính từ số cùng kỳ, kèm formula. Các chỉ
+        số nguồn không có (p_s, ev_ebit, beta…) trả None kèm quality_note.
+        set: chỉ giữ chỉ số có item_id hoặc tên chứa
         chuỗi này ('all' giữ hết; ví dụ 'roe', 'p_e', 'margin'). Trả periods (mới→cũ) và
         ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng % (roe 28.3 =
         28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ (dòng có as_of
@@ -470,7 +475,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         # gen 6: period labels come from fa (computed locally), no upstream frame
         # parsing to refuse; rejected labels surface via discarded_period_labels.
         # v8: fa-computed values replace cached v4 (KBS) payloads (#86).
-        fp = f"v8|{symbol}|{set}|{period}|{peers}"
+        # v9: Vietstock financeinfo replaces fa (fhsc discontinued).
+        fp = f"v9|{symbol}|{set}|{period}|{peers}"
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -482,7 +488,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             return want in row["item_id"].lower() or want in row["item"].lower()
 
         try:
-            table = await _call("r", vn_p.equity_ratios, symbol, period, secs=45.0)
+            table = await _call("r", vs_ratios.equity_ratios, symbol, period, secs=45.0)
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_ratios", str(exc))
         kept = [r for r in table["ratios"] if _keep(r)]
@@ -499,7 +505,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             out["peers"] = []
             for peer in peers:
                 try:
-                    peer_table = await _call("r", vn_p.equity_ratios, peer, period, secs=45.0)
+                    peer_table = await _call("r", vs_ratios.equity_ratios, peer, period, secs=45.0)
                 except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
                     out["peers"].append({"symbol": peer.upper(), "error": str(exc)})
                     warnings.append(f"{peer.upper()}: {exc}")
@@ -530,7 +536,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 out["peers"].append(peer_row)
         return await cache_store(
             "financial_ratios", fp, TTL_SECONDS["overview"],
-            out, source="vnstock", warnings=warnings or None,
+            out, source="vietstock", warnings=warnings or None,
             availability="partial" if warnings else None,
         )
 
@@ -555,7 +561,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         # v7: retain reported frequency, metric basis and rejected period labels.
         # v8: fa-computed values replace cached v4 (KBS) payloads (#86).
-        fp = f"v8|{symbol}|{peers}|{metrics}"
+        # v9: Vietstock financeinfo replaces fa (fhsc discontinued).
+        fp = f"v9|{symbol}|{peers}|{metrics}"
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit
@@ -572,7 +579,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         async def _fetch_table(name: str):
             async with sem:
-                return await _call("p", vn_p.equity_ratios, name, "year", secs=45.0)
+                return await _call("p", vs_ratios.equity_ratios, name, "year", secs=45.0)
 
         gathered = await asyncio.gather(
             *(_fetch_table(name) for name in names), return_exceptions=True
@@ -607,13 +614,13 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             rows.append(row)
         if wanted is not None and seen_ids:
             for metric in sorted(wanted - seen_ids):
-                warnings.append(f"metric {metric!r} is not in the vnstock ratio table")
+                warnings.append(f"metric {metric!r} is not in the Vietstock ratio table")
         result: dict[str, Any] = {"rows": rows}
         if any("valuation_as_of" in r for r in rows):
             result = {"note": _PERIOD_END_NOTE, "rows": rows}
         return await cache_store(
             "peer_compare", fp, TTL_SECONDS["overview"],
-            result, source="vnstock", warnings=warnings or None,
+            result, source="vietstock", warnings=warnings or None,
             availability="partial" if warnings else None,
         )
 

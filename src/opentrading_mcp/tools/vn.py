@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.providers import vs_ratios
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import (
@@ -198,13 +199,13 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             ('ttm'/'latest') — gen 6 tính chỉ số từ BCTC đã chuẩn hoá, quý là TTM.
         """
         # v2: gen-6 fa table replaces the v4 raw records list (#86).
-        fp = f"v2|{symbol}|{period}|{report_type}"
+        fp = f"v3|{symbol}|{period}|{report_type}"
         hit = await cache_lookup("vn_fundamentals", fp)
         if hit is not None:
             return hit
         try:
             data = await run_blocking(
-                functools.partial(vn_p.equity_ratios, symbol.upper(), period),
+                functools.partial(vs_ratios.equity_ratios, symbol.upper(), period),
                 "vn_fundamentals",
             )
             return await cache_store(
@@ -217,9 +218,9 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "report_type": report_type,
                     "periods": data.get("periods", []),
                     "ratios": data.get("ratios", []),
-                    "source": data.get("source", "vnstock_quant.fa"),
+                    "source": data.get("source", vs_ratios.SOURCE),
                 },
-                source="vnstock_quant.fa",
+                source="vietstock",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_fundamentals", str(exc))

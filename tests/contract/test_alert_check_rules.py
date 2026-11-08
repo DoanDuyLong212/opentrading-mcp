@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from opentrading_mcp.providers import vs_ratios as vsr_mod
 from opentrading_mcp.server import create_server, register_preset
 
 
@@ -123,7 +124,7 @@ async def test_screener_reports_scope_and_fundamentals_period(monkeypatch):
     def fake_fund(symbol: str, period: str = "year") -> dict[str, Any]:
         return {"symbol": symbol, "pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     env = await _tool("stock_screener")(max_pe=10, limit=5)
     data = env["data"]
     assert data["universe"] == 40
@@ -160,7 +161,7 @@ async def test_screener_evaluated_excludes_missing_required_metric(monkeypatch):
             return {"symbol": symbol, "roe": 0.2, "period_label": "2025"}
         return {"symbol": symbol, "pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     env = await _tool("stock_screener")(max_pe=10, limit=5)
     data = env["data"]
     assert _coverage_core(data) == {
@@ -206,7 +207,7 @@ async def test_screener_technical_stage_reports_true_scope(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(40)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
     calls: list[str] = []
 
     def fake_history(symbol: str, days: int) -> list[dict[str, Any]]:
@@ -238,7 +239,7 @@ async def test_screener_technical_unavailable_is_not_a_reject(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(5)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
 
     def fake_history(symbol: str, days: int) -> list[dict[str, Any]]:
         if symbol == "S03":
@@ -284,7 +285,7 @@ async def test_screener_technical_eligible_follows_prefilter(monkeypatch):
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(40)]
     )
     monkeypatch.setattr(
-        vn_p,
+        vsr_mod,
         "equity_fundamentals",
         lambda symbol: {"pe": 8.0 if int(symbol[1:]) < 10 else 30.0, "roe": 0.2},
     )
@@ -323,7 +324,7 @@ async def test_screener_technical_empty_dict_is_no_technical_stage(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(40)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
     calls: list[str] = []
 
     def fake_history(symbol: str, days: int) -> list[dict[str, Any]]:
@@ -358,7 +359,7 @@ async def test_screener_all_technical_rejects_is_not_partial(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(5)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
     monkeypatch.setattr(vn_p, "quote_history", lambda symbol, days: _falling_history_sync(days))
     env = await _tool("stock_screener")(technical={"above_sma20": True}, limit=5)
     data = env["data"]
@@ -388,7 +389,7 @@ async def test_screener_valuation_coverage_survives_cache_hit(monkeypatch):
         fund_calls.append(symbol)
         return {"pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     fn = _tool("stock_screener")
     env = await fn(max_pe=10, limit=5)
     assert env["data"]["screened"] == 20
@@ -427,7 +428,7 @@ async def test_screener_fundamentals_failure_warns_per_symbol(monkeypatch):
             raise RuntimeError("upstream down")
         return {"pe": 8.0, "roe": 0.2}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     env = await _tool("stock_screener")(max_pe=10, limit=5)
     data = env["data"]
     assert _coverage_core(data) == {

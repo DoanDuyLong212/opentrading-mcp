@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import technicals as tech_p
 from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.providers import vs_ratios
 from opentrading_mcp.providers.errors import (
     ProviderAuthMissing,
     ProviderBadData,
@@ -107,7 +108,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         # v6: reject malformed bounds before cache/upstream; expose metric coverage.
         # v7: pe/roe and fundamentals_period from one fa period (#76).
-        fp = f"v7|{eff}|{limit}|{technical}"
+        fp = f"v8|{eff}|{limit}|{technical}"
         hit = await cache_lookup("stock_screener", fp)
         if hit is not None:
             return hit
@@ -148,7 +149,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             async with sem:
                 try:
                     info = await run_blocking(
-                        functools.partial(vn_p.equity_fundamentals, sym),
+                        functools.partial(vs_ratios.equity_fundamentals, sym),
                         "stock_screener",
                         timeout_secs=10.0,
                     )

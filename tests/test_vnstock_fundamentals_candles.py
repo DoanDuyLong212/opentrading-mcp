@@ -143,7 +143,7 @@ async def test_valuation_run_uses_trailing_eps_not_price_over_pe(monkeypatch):
             return {"data": [{"StockCode": "FPT", "ClosePrice": 57400}]}  # live: no EPS
         if fn is comp_fin.vn_p.equity_quote_batch:
             return [{"symbol": "FPT", "close_price": 57400}]
-        if fn is comp_fin.vn_p.equity_fundamentals:
+        if fn is comp_fin.vs_ratios.equity_fundamentals:
             return {
                 "pe": 15.91,
                 "eps": 6021.21,
@@ -179,7 +179,7 @@ async def test_valuation_run_flags_missing_inputs(monkeypatch):
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
         if fn is comp_fin.vn_p.equity_quote_batch:
             return [{"symbol": "FPT", "close_price": 57400}]
-        if fn is comp_fin.vn_p.equity_fundamentals:
+        if fn is comp_fin.vs_ratios.equity_fundamentals:
             return {"pe": None, "eps": None, "bvps": None, "period_label": None}
         return {"data": []}
 
@@ -207,7 +207,7 @@ async def test_valuation_run_cache_hit_shares_fingerprint(monkeypatch):
             return {"data": [{"StockCode": "FPT", "ClosePrice": 57400}]}  # no EPS
         if fn is comp_fin.vn_p.equity_quote_batch:
             return [{"symbol": "FPT", "close_price": 57400}]
-        if fn is comp_fin.vn_p.equity_fundamentals:
+        if fn is comp_fin.vs_ratios.equity_fundamentals:
             return {"pe": 15.91, "eps": 6021.21, "bvps": 25679.55, "period_label": "2025"}
         raise AssertionError(fn)
 
