@@ -76,7 +76,8 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         (tuần Tết) bị bỏ. summary/columns: summary chỉ trả {count,last,high,low}; columns giữ
         trường nêu tên.
         """
-        fp = f"{symbol}|{days}|{summary}|{columns}|{interval}"
+        # v2: all units.INDEX_SYMBOLS codes ride the index group (#77).
+        fp = f"v2|{symbol}|{days}|{summary}|{columns}|{interval}"
         hit = await cache_lookup("vn_quote_history", fp)
         if hit is not None:
             return hit

@@ -448,7 +448,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         days: số nến ngày mỗi mã (tối đa 100 mã). summary/columns: summary chỉ trả
             {count,last,high,low}; columns giữ lại trường nêu tên.
         """
-        fp = f"{','.join(symbols or [])}|{days}|{summary}|{columns}"
+        # v2: all units.INDEX_SYMBOLS codes ride the index group (#77).
+        fp = f"v2|{','.join(symbols or [])}|{days}|{summary}|{columns}"
         hit = await cache_lookup("market_candles_batch", fp)
         if hit is not None:
             return hit

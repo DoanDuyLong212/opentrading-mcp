@@ -106,7 +106,8 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         interval: cỡ nến ('1D' ngày; intraday như '1m'/'15m' nếu nguồn hỗ trợ).
         summary/columns: summary chỉ trả {count,last,high,low}; columns giữ trường nêu tên.
         """
-        fp = f"{symbol}|{count}|{summary}|{columns}|{interval}"
+        # v2: index codes are refused (they came back /1000 from the equity group, #77).
+        fp = f"v2|{symbol}|{count}|{summary}|{columns}|{interval}"
         hit = await cache_lookup("vn_equity_ohlcv", fp)
         if hit is not None:
             return hit
