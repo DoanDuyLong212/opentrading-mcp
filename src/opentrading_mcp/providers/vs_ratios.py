@@ -104,6 +104,19 @@ def _finite(value: Any) -> float | None:
     return out if math.isfinite(out) else None
 
 
+def _price_to_book(pe: float | None, eps: float | None, bvps: float | None) -> float | None:
+    """P/B from same-period P/E, trailing EPS and BVPS (P/E * EPS = period-end price)."""
+    if pe is None or eps is None or bvps is None or bvps <= 0:
+        return None
+    return round(pe * eps / bvps, 2)
+
+
+def _percent_of(part: float | None, whole: float | None) -> float | None:
+    if part is None or whole is None or whole == 0:
+        return None
+    return round(part / whole * 100.0, 2)
+
+
 def table_from_financeinfo(symbol: str, period: str, aligned: dict[str, Any]) -> dict[str, Any]:
     """Aligned financeinfo (``vietstock.align_financeinfo``) → v4 ratio table.
 
@@ -156,11 +169,7 @@ def table_from_financeinfo(symbol: str, period: str, aligned: dict[str, Any]) ->
                 "item_id": "p_b",
                 "item": "Chỉ số giá thị trường trên giá trị sổ sách (P/B)",
                 "unit": "times",
-                "values": {
-                    p: (round(pe[p] * eps[p] / bvps[p], 2)
-                        if None not in (pe[p], eps[p], bvps[p]) and bvps[p] > 0 else None)
-                    for p in ordered
-                },
+                "values": {p: _price_to_book(pe[p], eps[p], bvps[p]) for p in ordered},
                 "basis": "period_end",
                 "derived": True,
                 "formula": "P/E * EPS(trailing) / BVPS — the period-end price over book value",
@@ -175,11 +184,7 @@ def table_from_financeinfo(symbol: str, period: str, aligned: dict[str, Any]) ->
                 "item_id": "gross_profit_margin",
                 "item": "Tỷ suất lợi nhuận gộp biên",
                 "unit": "percent",
-                "values": {
-                    p: (round(gross[p] / revenue[p] * 100.0, 2)
-                        if None not in (gross[p], revenue[p]) and revenue[p] else None)
-                    for p in ordered
-                },
+                "values": {p: _percent_of(gross[p], revenue[p]) for p in ordered},
                 "basis": "reported_period_ratio" if kind == "year" else "single_quarter",
                 "derived": True,
                 "formula": "gross profit / net revenue * 100",
