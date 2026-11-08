@@ -40,9 +40,10 @@ async def run(batch: int = 12, only: str | None = None) -> dict[str, Any]:
                         done += 1
                         break
                     except Exception as exc:
-                        # vnstock's community quota is 60 requests/minute: wait it out once.
+                        # gen 6 rate limits are per-source (the Vnstock-side 60/min
+                        # quota is gone): back off once, then give up on the symbol.
                         if RATE_LIMITED in str(exc) and attempt == 0:
-                            print("vnstock rate limit: waiting 65s", file=sys.stderr)
+                            print("source rate limit: waiting 65s", file=sys.stderr)
                             await asyncio.sleep(65)
                             continue
                         report["failed"].append({"symbol": sym, "error": str(exc)[:200]})

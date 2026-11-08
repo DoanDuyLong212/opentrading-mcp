@@ -93,7 +93,7 @@ def add_health_routes(server: FastMCP) -> None:
 
 
 def warm_up() -> None:
-    """Import vnstock (and the matplotlib it drags in) before the first tool needs it.
+    """Import vnstock (gen 6 core, Rust-backed) before the first tool needs it.
 
     The first import takes seconds of CPU on a small host; paid inside the first burst
     of tool calls, it stalled every request at once. Errors are ignored: tools report
@@ -104,7 +104,7 @@ def warm_up() -> None:
 
     started = time.monotonic()
     try:
-        import vnstock.common  # noqa: F401  (imports vnstock too)
+        import vnstock  # noqa: F401
     except Exception as exc:  # pragma: no cover - depends on the environment
         logging.getLogger(__name__).warning("warm-up import failed: %s", exc)
         return

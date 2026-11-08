@@ -17,7 +17,9 @@ dependencies = [
   "uvicorn>=0.30",
   "redis>=5.0",
   "psycopg[binary]>=3.1",
-  "vnstock>=3.0",
+  "vnstock>=6.0.0rc1,<7",
+  "vnstock-oapi>=0.1.0rc1,<1",
+  "vnstock-quant>=1.0.0rc1,<2",
   "yfinance>=0.2",
   "pandas>=2.0",
   "markdownify>=1.2.3",
@@ -66,5 +68,18 @@ packages = ["opentrading_mcp"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["vnstock.*", "yfinance.*"]
+module = ["vnstock.*", "vnstock_quant.*", "vnstock_oapi.*", "yfinance.*"]
 ignore_missing_imports = true
+
+# Vnstock ships gen 6 (vnstock, vnstock-oapi, vnstock-quant) from its own index,
+# not PyPI. `explicit` keeps every other package on PyPI; the rc pins above let
+# uv pick prereleases for exactly these three.
+[[tool.uv.index]]
+name = "vnstocks"
+url = "https://vnstocks.com/api/packages"
+explicit = true
+
+[tool.uv.sources]
+vnstock = { index = "vnstocks" }
+vnstock-oapi = { index = "vnstocks" }
+vnstock-quant = { index = "vnstocks" }

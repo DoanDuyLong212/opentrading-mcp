@@ -35,3 +35,9 @@ services:
         sync: false
       - key: VNSTOCK_API_KEY
         sync: false
+      - key: FHSC_API_KEY
+        sync: false
+      - key: SSI_API_KEY
+        sync: false
+      - key: SSI_API_SECRET
+        sync: false
