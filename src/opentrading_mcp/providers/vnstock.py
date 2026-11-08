@@ -331,22 +331,26 @@ def candles_range(symbol: str, start: str, end: str, interval: str = "1D") -> li
     return rows
 
 
-@guarded("vnstock")
+@guarded("dnse-board")
 def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     """Batch quotes, sub-batched in 10s with per-chunk timeouts (P22: full-VN30
-    single batch hangs from some networks — partial results beat a hang)."""
-    try:
-        from vnstock import Market
-    except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
+    single batch hangs from some networks — partial results beat a hang).
+
+    vnstock 6 serves the board only from fhsc/tcbs (no key), so rows come from
+    the project's DNSE client (providers/dnse_board.py, #84) in the v4 board
+    shape; ``SRC_QUOTE`` re-enables a vnstock source if one ever has a key."""
     syms = [str(s).upper() for s in symbols or []]
     if not syms:
         return []
-    if not SRC_QUOTE:
-        raise _no_source("batch quote")
 
     def _one(chunk: list[str]) -> list[dict[str, Any]]:
+        if not SRC_QUOTE:
+            from opentrading_mcp.providers import dnse_board
+
+            return dnse_board.quote_rows(chunk)
         try:
+            from vnstock import Market
+
             frame = Market(SRC_QUOTE[0]).equity.quote(symbols=chunk)
         except Exception as exc:
             raise ProviderUnavailable(f"vnstock batch quote failed: {exc}") from exc
@@ -358,6 +362,7 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
 
     out: list[dict[str, Any]] = []
     missing: list[str] = []
+    first_error: Exception | None = None
     chunks = [syms[i : i + 10] for i in range(0, len(syms), 10)]
     # NOTE: P05 fix — a module-level shared pool (max 3 workers) bounds the
     # total number of live vnstock threads process-wide: a hung chunk thread
@@ -386,15 +391,21 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
             remaining = max(0.0, deadline - time.monotonic())
             try:
                 out.extend(fut.result(timeout=remaining))
-            except Exception:
+            except Exception as exc:
                 missing.extend(chunk)
+                first_error = first_error or exc
     finally:
         # Cancel work that never started; running work retains its admission
         # until its Future completes. No expired requests run after recovery.
         for fut in futs:
             fut.cancel()
-    if missing and not out:
-        raise ProviderUnavailable(f"vnstock batch quote failed for {len(missing)} symbols")
+    if missing and not [r for r in out if "_missing" not in r]:
+        # Keep the reason (missing DNSE keys → not_configured) for the envelope.
+        raise ProviderUnavailable(
+            f"batch quote failed for {len(set(missing))} symbols"
+            + (f": {first_error}" if first_error else ""),
+            reason=getattr(first_error, "reason", None),
+        )
     if missing:
         out.append({"_missing": sorted(set(missing))})
     return out
@@ -1119,35 +1130,46 @@ def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
     return _clean(_records(frame))[: max(limit, 1)]
 
 
+# Fallback only: the basket is rebalanced twice a year, and the hard-coded list
+# had drifted 8/30 symbols (BCM, BVH, NAB, NVL, PJB, PLX, PNJ, TPB out; BSR, MCH,
+# SHB, SSB, TCX, VIB, VPL, VRE in) by 2026-11-09. vn30_symbols() reads the live
+# basket; this copy is the ssi basket of that date.
 VN30 = [
-    "ACB",
-    "BCM",
-    "BID",
-    "BVH",
-    "CTG",
-    "FPT",
-    "GAS",
-    "GVR",
-    "HDB",
-    "HPG",
-    "LPB",
-    "MBB",
-    "MSN",
-    "MWG",
-    "NAB",
-    "NVL",
-    "PJB",
-    "PLX",
-    "PNJ",
-    "SAB",
-    "SSI",
-    "STB",
-    "TCB",
-    "TPB",
-    "VCB",
-    "VHM",
-    "VIC",
-    "VJC",
-    "VNM",
-    "VPB",
+    "ACB", "BID", "BSR", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG", "LPB",
+    "MBB", "MCH", "MSN", "MWG", "SAB", "SHB", "SSB", "SSI", "STB", "TCB",
+    "TCX", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VPL", "VRE",
 ]
+_VN30_TTL = 24 * 3600.0
+_vn30_cache: tuple[float, list[str]] | None = None
+_vn30_lock = threading.Lock()
+
+
+def vn30_symbols() -> list[str]:
+    """The live VN30 basket (Reference(src).equity.list_by_group("VN30") over the
+    listing chain), cached 24 h; falls back to ``VN30`` when no source answers.
+    Blocking: call it from a worker thread."""
+    global _vn30_cache
+    with _vn30_lock:
+        if _vn30_cache is not None and time.monotonic() - _vn30_cache[0] < _VN30_TTL:
+            return list(_vn30_cache[1])
+    try:
+        from vnstock import Reference
+    except ImportError:
+        return list(VN30)
+    for source in SRC_LISTING:
+        try:
+            rows = _records(Reference(source).equity.list_by_group("VN30"))
+        except Exception:
+            continue
+        symbols = sorted({str(r.get("symbol", "")).upper() for r in rows if r.get("symbol")})
+        if len(symbols) >= 25:  # a partial answer is worse than the dated fallback
+            with _vn30_lock:
+                _vn30_cache = (time.monotonic(), symbols)
+            return list(symbols)
+    return list(VN30)
+
+
+def quote_batch_or_vn30(symbols: list[str] | None = None) -> list[dict[str, Any]]:
+    """``equity_quote_batch`` for ``symbols``, or for the live VN30 basket when
+    none are given (resolved inside the worker thread, not on the event loop)."""
+    return equity_quote_batch(list(symbols) if symbols else vn30_symbols())

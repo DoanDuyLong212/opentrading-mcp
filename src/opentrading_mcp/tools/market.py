@@ -356,7 +356,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbols: các mã cần báo giá — mặc định cả rổ VN30. as_of: nhãn thời điểm yêu cầu, ghi vào
             requested_as_of (dữ liệu luôn là mới nhất).
         """
-        fp = f"{','.join(symbols or [])}|{as_of}"
+        # v2: board rows from the DNSE client and the live VN30 basket (#84).
+        fp = f"v2|{','.join(symbols or [])}|{as_of}"
         hit = await cache_lookup("market_snapshot", fp)
         if hit is not None:
             return hit
@@ -364,7 +365,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             await ctx.log("info", f"market_snapshot symbols={symbols or []}")
         try:
             quotes = await run_blocking(
-                functools.partial(vn_p.equity_quote_batch, symbols or vn_p.VN30),
+                functools.partial(vn_p.quote_batch_or_vn30, symbols or None),
                 "market_snapshot",
             )
             quotes, missing = vn_p.split_batch(quotes)
@@ -378,7 +379,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 fp,
                 price_ttl(),
                 data,
-                source="vnstock",
+                source="dnse-rest",
                 warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -765,7 +766,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         top_n: số dòng mỗi bảng. universe: 'vn30' (mặc định, 30 bluechip — nhanh, ổn định) hoặc
             'hose' (cả sàn ≤60 mã, chậm; mã kém thanh khoản có thể treo → trả partial kèm missing).
         """
-        fp = f"{top_n}|{universe}"
+        # v2: board rows from the DNSE client and the live VN30 basket (#84).
+        fp = f"v2|{top_n}|{universe}"
         hit = await cache_lookup("market_movers", fp)
         if hit is not None:
             return hit
@@ -780,10 +782,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                     ) if isinstance(r, dict) and r.get("symbol")][:60]
                 except (ProviderUnavailable, ProviderBadData):
                     syms = []
-            if not syms:
-                syms = list(vn_p.VN30)
             quotes = await run_blocking(
-                functools.partial(vn_p.equity_quote_batch, syms),
+                functools.partial(vn_p.quote_batch_or_vn30, syms or None),
                 "market_movers",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -817,7 +817,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
              "losers": [_clean(g) for g in losers],
              "volume_leaders": [_clean(g) for g in volume],
              "universe": len(rows), **({"missing": missing} if missing else {})},
-            source="vnstock",
+            source="dnse-rest",
             warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
         )
 
