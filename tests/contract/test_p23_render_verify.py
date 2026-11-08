@@ -26,27 +26,28 @@ def test_equity_quote_batch_subbatches_partial(monkeypatch):
 
     calls: list[list[str]] = []
 
-    class FakeMarket:
-        def __init__(self):
-            self._syms: list[str] = []
-
-        def equity(self, syms: list[str]):
-            calls.append(list(syms))
-            self._syms = syms
-            return self
-
-        def quote(self):
+    class FakeEquityGroup:
+        def quote(self, *, symbols=None, **kwargs):
             import pandas as pd
 
-            if len(self._syms) > 10:
-                raise AssertionError(f"chunk too big: {len(self._syms)}")
-            if "HANG" in self._syms:
+            calls.append(list(symbols or []))
+            if len(symbols or []) > 10:
+                raise AssertionError(f"chunk too big: {len(symbols)}")
+            if "HANG" in symbols:
                 import time
 
                 time.sleep(50)
-            if "BAD" in self._syms:
+            if "BAD" in symbols:
                 raise RuntimeError("boom")
-            return pd.DataFrame([{"symbol": s, "close": 10.0} for s in self._syms])
+            return pd.DataFrame([{"symbol": s, "close": 10.0} for s in symbols])
+
+    class FakeMarket:
+        def __init__(self, source=None, **kwargs):
+            pass
+
+        @property
+        def equity(self):
+            return FakeEquityGroup()
 
     import sys
     import types

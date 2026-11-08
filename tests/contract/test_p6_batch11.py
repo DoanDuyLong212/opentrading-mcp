@@ -7,14 +7,13 @@ from typing import Any
 from opentrading_mcp.server import create_server, register_preset
 
 
-def test_reference_equity_uses_kbs_source(monkeypatch):
+def test_reference_equity_uses_ssi_source(monkeypatch):
     from opentrading_mcp.providers import vnstock as vn_p
 
     seen: dict[str, Any] = {}
 
     class FakeEquity:
-        def list_by_exchange(self, source: str = "kbs") -> Any:
-            seen["source"] = source
+        def list_by_exchange(self) -> Any:
             import pandas as pd
 
             return pd.DataFrame(
@@ -25,7 +24,8 @@ def test_reference_equity_uses_kbs_source(monkeypatch):
             )
 
     class FakeReference:
-        def __init__(self) -> None:
+        def __init__(self, source=None) -> None:
+            seen["source"] = source
             self.equity = FakeEquity()
 
     import sys
@@ -35,7 +35,7 @@ def test_reference_equity_uses_kbs_source(monkeypatch):
     fake_mod.Reference = FakeReference  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "vnstock", fake_mod)
     rows = vn_p.reference_equity("HOSE")
-    assert seen["source"] == "KBS"
+    assert seen["source"] == "ssi"
     assert [r["symbol"] for r in rows] == ["VCB"]
 
 

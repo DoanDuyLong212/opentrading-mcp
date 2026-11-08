@@ -23,15 +23,18 @@ def test_expired_batches_do_not_accumulate_or_run_after_recovery(monkeypatch):
     calls = []
 
     class Market:
-        def equity(self, chunk):
-            self.chunk = chunk
+        def __init__(self, source=None, **kwargs):
+            pass
+
+        @property
+        def equity(self):
             return self
 
-        def quote(self):
-            calls.append(self.chunk)
+        def quote(self, *, symbols=None, **kwargs):
+            calls.append(list(symbols or []))
             started.release()
             assert release.wait(5)
-            return SimpleNamespace(to_dict=lambda **kwargs: [{"symbol": self.chunk[0]}])
+            return SimpleNamespace(to_dict=lambda **kwargs: [{"symbol": (symbols or ["?"])[0]}])
 
     monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market))
     monkeypatch.setattr(vn_p, "_VN_BATCH_POOL", pool)

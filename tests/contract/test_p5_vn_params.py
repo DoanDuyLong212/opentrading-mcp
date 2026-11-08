@@ -118,7 +118,7 @@ async def test_vn_reference_accepts_by_key(monkeypatch):
 
     import vnstock as _vs
 
-    monkeypatch.setattr(_vs, "Reference", lambda: FakeRef())
+    monkeypatch.setattr(_vs, "Reference", lambda source=None: FakeRef())
     rows = vn_p.reference_equity(by="group", key="Banks")
     assert seen == {"key": "Banks"}
     assert rows[0]["symbol"] == "VCB"
@@ -146,11 +146,16 @@ async def test_vn_company_detail_controls_extras(monkeypatch):
             calls.append("officers")
             return FakeFrame()
 
+    class FakeReference:
+        def company(self, symbol):
+            calls.append("company")
+            return FakeClient()
+
     import vnstock as _vs
 
-    monkeypatch.setattr(_vs, "Company", lambda source, symbol: FakeClient())
+    monkeypatch.setattr(_vs, "Reference", lambda source=None: FakeReference())
     vn_p.company_info("VCB", detail=False)
-    assert calls == ["info"]
+    assert calls == ["company", "info"]
     vn_p.company_info("VCB", detail=True)
     assert "shareholders" in calls and "officers" in calls
 
@@ -180,12 +185,19 @@ async def test_vn_trades_accepts_board_range(monkeypatch):
             return FakeFrame()
 
     class FakeMarket:
+        def __init__(self, source=None, **kwargs):
+            assert source == "fhsc"
+
         def equity(self, symbol):
             assert symbol == "VCB"
             return FakeEquity()
 
     import vnstock as _vs
 
-    monkeypatch.setattr(_vs, "Market", lambda: FakeMarket())
+    monkeypatch.setattr(_vs, "Market", lambda source=None: FakeMarket(source))
+    # gen 6: board param no longer exists — dropped; dates map to start/end, limit forwarded
     vn_p.equity_trades("VCB", 5, board="HOSE", from_date="2026-01-01", to_date="2026-02-01")
-    assert seen.get("board") == "HOSE"
+    assert seen.get("limit") == 5
+    assert seen.get("start") == "2026-01-01"
+    assert seen.get("end") == "2026-02-01"
+    assert "board" not in seen

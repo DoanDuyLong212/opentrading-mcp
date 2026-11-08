@@ -105,15 +105,19 @@ def test_equity_fundamentals_keeps_valid_zeros(monkeypatch):
 
 
 def _fake_quote(monkeypatch, frame: pd.DataFrame, seen: dict[str, Any]) -> None:
-    class Quote:
-        def __init__(self, symbol: str, source: str) -> None:
-            pass
-
-        def history(self, start: str, end: str, interval: str) -> pd.DataFrame:
+    class Equity:
+        def ohlcv(self, start: str, end: str, interval: str, **kwargs) -> pd.DataFrame:
             seen["start"] = start
             return frame
 
-    monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Quote=Quote))
+    class Market:
+        def __init__(self, source=None, **kwargs) -> None:
+            pass
+
+        def equity(self, symbol: str) -> Equity:
+            return Equity()
+
+    monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Market=Market))
 
 
 def _daily(n: int) -> pd.DataFrame:

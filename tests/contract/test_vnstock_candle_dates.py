@@ -32,14 +32,18 @@ def test_quote_history_reads_the_time_column(monkeypatch):
         }
     )  # RangeIndex 0..2, like vnstock
 
-    class Quote:
-        def __init__(self, symbol: str, source: str) -> None:
-            pass
-
-        def history(self, **_: object) -> pd.DataFrame:
+    class Equity:
+        def ohlcv(self, **_: object) -> pd.DataFrame:
             return frame
 
-    monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Quote=Quote))
+    class Market:
+        def __init__(self, source=None, **kwargs) -> None:
+            pass
+
+        def equity(self, symbol: str) -> Equity:
+            return Equity()
+
+    monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Market=Market))
     rows = vn.quote_history("FPT", 3)
     assert [r["t"] for r in rows] == ["2026-10-02", "2026-10-05", "2026-10-06"]
     assert rows[-1]["c"] == 60.2

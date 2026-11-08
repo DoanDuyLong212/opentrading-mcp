@@ -1,9 +1,16 @@
-"""vnstock provider (VCI/KBS/MSN). Direct fetch, no 8010 dependency."""
+"""vnstock provider (gen 6: Market/Reference/Fundamental over Open API, source-explicit).
+
+Gen 6 removed the gen-4 classes (Quote/Listing/Company/Finance/Trading) and the
+implicit VCI/KBS/MSN sources: every call carries an explicit ``source`` and the
+first non-empty frame wins across the chain below. Mapping notes live in
+plans/vnstock-gen6-migration-2026-11-08.md; measured API in the SDD workspace.
+"""
 
 from __future__ import annotations
 
 import itertools
 import math
+import os
 import re
 import threading
 import time
@@ -18,52 +25,65 @@ from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailabl
 
 _API_KEY_DONE = False
 
+# Gen-6 source chains (first non-empty frame wins). fhsc serves fundamentals,
+# company profile and group batch quotes; ssi serves listing and domestic index
+# candles; binance is keyless crypto; fmp is the only global-index source.
+SRC_EQUITY = ("fhsc", "ssi")
+SRC_QUOTE = ("fhsc",)
+SRC_LISTING = ("ssi", "fhsc")
+SRC_INDEX = ("ssi", "fhsc")
+SRC_DERIV = ("fhsc",)
+SRC_GLOBAL = ("fmp",)
+SRC_CRYPTO = ("binance",)
+SRC_FUNDAMENTAL = ("fhsc",)
+SOURCE_KEY_VARS = ("FHSC_API_KEY", "SSI_API_KEY", "DNSE_API_KEY", "TCBS_API_KEY", "FMP_API_KEY")
+
+
+def _fetch_frame(fetchers: list[tuple[str, Any]], label: str) -> Any:
+    """Try ``(source, callable)`` pairs in order; return the first non-empty frame."""
+    last: Exception | None = None
+    for _source, call in fetchers:
+        try:
+            candidate = call()
+            if candidate is None:
+                continue
+            try:
+                if len(candidate) == 0:
+                    continue
+            except TypeError:
+                pass  # frame without __len__ — trust it and let the caller parse
+            return candidate
+        except Exception as exc:  # noqa: BLE001 - source fallback is the point
+            last = exc
+            continue
+    detail = f" (last error: {last})" if last else ""
+    raise ProviderUnavailable(f"no data for {label}{detail}")
+
 
 def ensure_api_key() -> str:
-    """Register VNSTOCK_API_KEY once per process (60 req/min community tier).
-
-    The vnai authenticator reads VNSTOCK_API_KEY env directly; this also runs
-    the one-time device registration so the backend associates this egress IP.
-    Never raises — anonymous throttling remains as fallback.
-    Returns "keyed" / "anonymous" / "" (vnstock missing).
+    """Gen-6: per-source Open API keys decide availability — no runtime
+    registration call exists. ``VNSTOCK_API_KEY`` (stored by ``vnstock login``)
+    only unlocks the full VAS statement set on Fundamental routes.
+    Never raises. Returns "keyed" / "anonymous".
     """
-    global _API_KEY_DONE
-    import os
-
-    if _API_KEY_DONE:
-        return "keyed" if os.environ.get("VNSTOCK_API_KEY", "").strip() else "anonymous"
-    _API_KEY_DONE = True
-    key = os.environ.get("VNSTOCK_API_KEY", "").strip()
-    if not key:
-        return "anonymous"
-    try:
-        from vnstock import change_api_key
-
-        change_api_key(key)
-    except Exception:
-        pass
-    return "keyed"
+    for var in (*SOURCE_KEY_VARS, "VNSTOCK_API_KEY"):
+        if str(os.environ.get(var, "")).strip():
+            return "keyed"
+    return "anonymous"
 
 
 def quota_info() -> dict[str, Any]:
-    """Best-effort vnstock tier/quota for source_status (never raises)."""
+    """Best-effort gen-6 source-key/tier report for source_status (never raises)."""
     try:
-        ensure_api_key()
-        import os
-
-        key = os.environ.get("VNSTOCK_API_KEY", "").strip()
-        if not key:
-            return {"tier": "anonymous"}
-        from vnai.beam.auth import authenticator
-
-        info = authenticator.get_tier_info()
-        if isinstance(info, dict):
-            lim = info.get("limits", {})
-            return {
-                "tier": info.get("tier"),
-                "per_minute": (lim.get("per_minute") if isinstance(lim, dict) else None),
-            }
-        return {"tier": "keyed"}
+        sources = {
+            var.removesuffix("_API_KEY").lower(): bool(str(os.environ.get(var, "")).strip())
+            for var in SOURCE_KEY_VARS
+        }
+        if any(sources.values()):
+            return {"tier": "source-keyed", "sources": sources}
+        if str(os.environ.get("VNSTOCK_API_KEY", "")).strip():
+            return {"tier": "account-keyed", "sources": sources}
+        return {"tier": "anonymous", "sources": sources}
     except Exception as exc:
         return {"tier": "unknown", "note": str(exc)[:100]}
 
@@ -84,9 +104,9 @@ def _candle_day(value: Any) -> str:
 
 @guarded("vnstock")
 def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[dict[str, Any]]:
-    """Daily/weekly/monthly candles; interval 1D|1W|1M (P15, probe-verified)."""
+    """Daily/weekly/monthly candles; interval 1D|1W|1M. Gen-6 Market().equity().ohlcv."""
     try:
-        from vnstock import Quote
+        from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     symbol = symbol.upper()
@@ -104,22 +124,23 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
         span = span * 31 + 60
     end = date.today().isoformat()
     start = (date.today() - timedelta(days=span)).isoformat()
-    frame = None
-    for source in ("VCI", "KBS"):
-        try:
-            candidate = Quote(symbol=symbol, source=source).history(
-                start=start, end=end, interval=iv
+    frame = _fetch_frame(
+        [
+            (
+                source,
+                (
+                    lambda source=source: Market(source).equity(symbol).ohlcv(
+                        start=start, end=end, interval=iv
+                    )
+                ),
             )
-            if candidate is not None and len(candidate) > 0:
-                frame = candidate
-                break
-        except Exception:
-            continue
-    if frame is None or len(frame) == 0:
-        raise ProviderUnavailable(f"no candles for {symbol}")
+            for source in SRC_EQUITY
+        ],
+        f"candles {symbol}",
+    )
     try:
         rows: list[dict[str, Any]] = []
-        for ts, row in frame.iterrows():
+        for row in _records(frame):
             close = float(row.get("close", 0))
             if not math.isfinite(close) or close <= 0:
                 # A period with no session (the Tet week on 1W) comes back as a NaN row;
@@ -127,7 +148,7 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
                 continue
             rows.append(
                 {
-                    "t": _candle_day(row.get("time", ts)),
+                    "t": _candle_day(row.get("time")),
                     "o": float(row.get("open", 0)),
                     "h": float(row.get("high", 0)),
                     "l": float(row.get("low", 0)),
@@ -135,6 +156,9 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
                     "v": float(row.get("volume", 0)),
                 }
             )
+        # Gen-6 sources may return newest-first; the rolling indicators and the
+        # `rows[-days:]` window below both assume chronological order.
+        rows.sort(key=lambda r: r["t"])
         return rows[-max(days, 1) :]
     except Exception as exc:
         raise ProviderBadData(f"malformed vnstock frame for {symbol}") from exc
@@ -154,7 +178,7 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
 
     def _one(chunk: list[str]) -> list[dict[str, Any]]:
         try:
-            frame = Market().equity(chunk).quote()
+            frame = Market(SRC_QUOTE[0]).equity.quote(symbols=chunk)
         except Exception as exc:
             raise ProviderUnavailable(f"vnstock batch quote failed: {exc}") from exc
         try:
@@ -244,19 +268,30 @@ def equity_trades(
     from_date: str | None = None,
     to_date: str | None = None,
 ) -> list[dict[str, Any]]:
+    """Intraday trades. Gen 6 has no ``board`` param (silently dropped);
+    ``from_date``/``to_date`` map to v6 ``start``/``end``; ``limit`` defaults to
+    100 upstream when omitted."""
+    del board  # gen-6 trades has no board filter
     try:
         from vnstock import Market
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        kwargs: dict[str, Any] = {}
-        if board is not None:
-            kwargs["board"] = board
+        kwargs: dict[str, Any] = {"limit": max(int(limit), 1)}
         if from_date is not None:
-            kwargs["from_date"] = from_date
+            kwargs["start"] = from_date
         if to_date is not None:
-            kwargs["to_date"] = to_date
-        frame = Market().equity(symbol.upper()).trades(**kwargs)
+            kwargs["end"] = to_date
+        frame = _fetch_frame(
+            [
+                (
+                    source,
+                    (lambda source=source: Market(source).equity(symbol.upper()).trades(**kwargs)),
+                )
+                for source in SRC_EQUITY
+            ],
+            f"trades {symbol}",
+        )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock trades failed: {symbol}") from exc
     rows = _records(frame)
@@ -294,17 +329,26 @@ def listing_symbols(limit: int | None = None) -> list[dict[str, str]]:
 @guarded("vnstock")
 def _fetch_listing() -> list[dict[str, str]]:
     try:
-        from vnstock import Listing
+        from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    try:
-        frame = Listing().all_symbols()
-        return [
-            {"symbol": str(r.get("symbol", "")), "name": str(r.get("organ_name", ""))}
-            for r in frame.to_dict(orient="records")
-        ]
-    except Exception as exc:
-        raise ProviderUnavailable("vnstock listing failed") from exc
+    last: Exception | None = None
+    for source in SRC_LISTING:
+        try:
+            frame = Reference(source).equity.list()
+            rows = frame.to_dict(orient="records")
+            if rows:
+                return [
+                    {
+                        "symbol": str(r.get("symbol", "")),
+                        "name": str(r.get("organ_name", r.get("name", ""))),
+                    }
+                    for r in rows
+                ]
+        except Exception as exc:  # noqa: BLE001 - source fallback is the point
+            last = exc
+            continue
+    raise ProviderUnavailable("vnstock listing failed") from last
 
 
 def _records(frame: Any) -> list[dict[str, Any]]:
@@ -350,7 +394,20 @@ def index_ohlcv(
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().index(symbol.upper()).ohlcv(count=count, source="vci", resolution=interval)
+        frame = _fetch_frame(
+            [
+                (
+                    source,
+                    (
+                        lambda source=source: Market(source)
+                        .index(symbol.upper())
+                        .ohlcv(count_back=count, interval=interval)
+                    ),
+                )
+                for source in SRC_INDEX
+            ],
+            f"index bars {symbol}",
+        )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock index ohlcv failed: {symbol}") from exc
     rows = _records(frame)
@@ -366,8 +423,19 @@ def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[di
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = (
-            Market().equity(symbol.upper()).ohlcv(count=count, source="vci", resolution=interval)
+        frame = _fetch_frame(
+            [
+                (
+                    source,
+                    (
+                        lambda source=source: Market(source)
+                        .equity(symbol.upper())
+                        .ohlcv(count_back=count, interval=interval)
+                    ),
+                )
+                for source in SRC_EQUITY
+            ],
+            f"equity bars {symbol}",
         )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock equity ohlcv failed: {symbol}") from exc
@@ -386,7 +454,20 @@ def futures_ohlcv(
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().futures(symbol.upper()).ohlcv(count=count, resolution=interval)
+        frame = _fetch_frame(
+            [
+                (
+                    source,
+                    (
+                        lambda source=source: Market(source)
+                        .futures(symbol.upper())
+                        .ohlcv(count_back=count, interval=interval)
+                    ),
+                )
+                for source in SRC_DERIV
+            ],
+            f"futures bars {symbol}",
+        )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock futures ohlcv failed: {symbol}") from exc
     rows = _records(frame)
@@ -402,7 +483,20 @@ def forex_ohlcv(pair: str = "USDVND", count: int = 30) -> list[dict[str, Any]]:
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().forex(pair.upper()).ohlcv(count=count)
+        frame = _fetch_frame(
+            [
+                (
+                    source,
+                    (
+                        lambda source=source: Market(source)
+                        .forex(pair.upper())
+                        .ohlcv(count_back=count, interval="1D")
+                    ),
+                )
+                for source in SRC_DERIV
+            ],
+            f"forex bars {pair}",
+        )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock forex failed: {pair}") from exc
     return _records(frame)
@@ -415,7 +509,20 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        frame = Market().crypto(symbol.upper()).ohlcv(count=count)
+        frame = _fetch_frame(
+            [
+                (
+                    source,
+                    (
+                        lambda source=source: Market(source)
+                        .crypto(symbol.upper())
+                        .ohlcv(count_back=count, interval="1D")
+                    ),
+                )
+                for source in SRC_CRYPTO
+            ],
+            f"crypto bars {symbol}",
+        )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock crypto failed: {symbol}") from exc
     return _records(frame)
@@ -488,7 +595,20 @@ def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]
         raise ProviderUnavailable("vnstock not installed") from exc
     normalized = _normalize_global_symbol(symbol)
     try:
-        frame = Market().index(normalized, scope="global").ohlcv(count=count)
+        frame = _fetch_frame(
+            [
+                (
+                    source,
+                    (
+                        lambda source=source: Market(source)
+                        .global_index(normalized)
+                        .ohlcv(count_back=count, interval="1D")
+                    ),
+                )
+                for source in SRC_GLOBAL
+            ],
+            f"global index bars {normalized}",
+        )
     except Exception as exc:
         raise ProviderUnavailable(
             f"vnstock global index failed: {symbol} (→ {normalized}). "
@@ -921,22 +1041,22 @@ def reference_equity(
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
         if by == "group":
-            frame = Reference().equity.list_by_group(key or exchange)
+            frame = Reference("ssi").equity.list_by_group(key or exchange)
             return _records(frame)
         if by == "industry":
-            frame = Reference().equity.list_by_industry(key or exchange)
+            frame = Reference("ssi").equity.list_by_industry(key or exchange)
             return _records(frame)
         frame = None
-        for source in ("KBS",):
+        for source in SRC_LISTING:
             try:
-                candidate = Reference().equity.list_by_exchange(source=source)
+                candidate = Reference(source).equity.list_by_exchange()
                 if candidate is not None and len(candidate) > 0:
                     frame = candidate
                     break
             except Exception:
                 continue
         if frame is None:
-            frame = Reference().equity.list()
+            frame = Reference(SRC_LISTING[0]).equity.list()
     except Exception as exc:
         raise ProviderUnavailable("vnstock reference failed") from exc
     rows = _records(frame)
@@ -958,11 +1078,11 @@ def reference_equity(
 @guarded("vnstock")
 def company_info(symbol: str, detail: bool = False) -> dict[str, Any]:
     try:
-        from vnstock import Company
+        from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        client = Company(source="VCI", symbol=symbol.upper())
+        client = Reference(SRC_FUNDAMENTAL[0]).company(symbol.upper())
         info = client.info()
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock company failed: {symbol}") from exc
@@ -984,14 +1104,13 @@ def company_info(symbol: str, detail: bool = False) -> dict[str, Any]:
 @guarded("vnstock")
 def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
     try:
-        from vnstock import Company
+        from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     frame = None
-    for source in ("VCI", "KBS"):
+    for source in SRC_FUNDAMENTAL:
         try:
-            client = Company(source=source, symbol=symbol.upper())
-            candidate = client.insider_trading()
+            candidate = Reference(source).company(symbol.upper()).insider_trading()
             if candidate is not None:
                 frame = candidate
                 break
@@ -1005,18 +1124,18 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
 
 @guarded("vnstock")
 def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Corporate actions (cash dividends, share issues) via vnstock Company.
+    """Corporate actions (cash dividends, share issues) via vnstock Reference.company.
 
     Returns JSON-safe records, newest first as upstream orders them.
     """
     try:
-        from vnstock import Company
+        from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     frame = None
-    for source in ("VCI", "KBS"):
+    for source in SRC_FUNDAMENTAL:
         try:
-            candidate = Company(source=source, symbol=symbol.upper()).events()
+            candidate = Reference(source).company(symbol.upper()).events()
             if candidate is not None and len(candidate) > 0:
                 frame = candidate
                 break

@@ -128,7 +128,7 @@ def test_reference_equity_filters_by_exchange_field(monkeypatch):
 
     import vnstock as _vs
 
-    monkeypatch.setattr(_vs, "Reference", lambda: FakeRef())
+    monkeypatch.setattr(_vs, "Reference", lambda source=None: FakeRef())
     rows = vn_p.reference_equity("HOSE")
     symbols = [r["symbol"] for r in rows]
     # must filter by exchange field, NOT by substring "HOSE" in symbol
@@ -237,7 +237,7 @@ def test_reference_equity_fail_closed_no_exchange_key(monkeypatch):
 
     import vnstock as _vs
 
-    monkeypatch.setattr(_vs, "Reference", lambda: FakeRef())
+    monkeypatch.setattr(_vs, "Reference", lambda source=None: FakeRef())
     try:
         rows = vn_p.reference_equity("HOSE")
     except ProviderBadData:

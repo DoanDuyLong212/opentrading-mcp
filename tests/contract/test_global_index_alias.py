@@ -55,14 +55,14 @@ async def test_global_index_alias_reaches_vnstock(monkeypatch):
     seen: dict[str, Any] = {}
 
     class FakeMarket:
-        def __init__(self) -> None:
-            self.calls: list[str] = []
+        def __init__(self, source=None, **kwargs):
+            seen["source"] = source
 
-        def index(self, symbol: str, scope: str):
+        def global_index(self, symbol: str):
             seen["symbol"] = symbol
             return self
 
-        def ohlcv(self, count: int):
+        def ohlcv(self, *, count_back=None, interval=None, **kwargs):
             import pandas as pd
 
             return pd.DataFrame(
@@ -78,15 +78,13 @@ async def test_global_index_alias_reaches_vnstock(monkeypatch):
                 ]
             )
 
-    def fake_market():
-        return FakeMarket()
-
     import importlib
 
     vnstock_mod = importlib.import_module("vnstock")
-    monkeypatch.setattr(vnstock_mod, "Market", fake_market, raising=False)
+    monkeypatch.setattr(vnstock_mod, "Market", FakeMarket, raising=False)
     rows = vn_p.global_index("SPX", 5)
     assert seen["symbol"] == "INX"
+    assert seen["source"] == "fmp"
     assert rows and rows[-1]["close"] == 1.5
 
 
