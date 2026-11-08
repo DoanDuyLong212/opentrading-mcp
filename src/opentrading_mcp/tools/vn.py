@@ -229,46 +229,25 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_retail_gold(source: str = "btmc") -> dict[str, Any]:
         """SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.
 
-        source: retail source id (default 'btmc'). Direct BTMC https fetch
-        first (15s); vnstock lib fallback (its http URL hangs without timeout).
+        Gen 6 removed vnstock Retail gold entirely; this tool now always uses
+        the direct BTMC https fetch (the `source` argument is kept for cache-key
+        compatibility and ignored).
         """
         fp = f"{source}"
         hit = await cache_lookup("vn_retail_gold", fp)
         if hit is not None:
             return hit
-        if source.strip().lower() == "btmc":
-            try:
-                from opentrading_mcp.providers import vn_public as pub_p
+        try:
+            from opentrading_mcp.providers import vn_public as pub_p
 
-                rows = await run_blocking(pub_p.btmc_gold, "vn_retail_gold", timeout_secs=20.0)
-                keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
-                return await cache_store(
-                    "vn_retail_gold",
-                    fp,
-                    TTL_SECONDS["hour"],
-                    {"rows": keep or rows},
-                    source="btmc-direct",
-                )
-            except (ProviderUnavailable, ProviderBadData):
-                pass
-        try:
-            from vnstock import Retail
-        except ImportError:
-            return _na("vn_retail_gold", "vnstock not installed")
-        try:
-            frame = await run_blocking(
-                functools.partial(Retail().gold, source=source),
-                "vn_retail_gold",
-                timeout_secs=30.0,
-            )
-            rows = frame.to_dict(orient="records")
+            rows = await run_blocking(pub_p.btmc_gold, "vn_retail_gold", timeout_secs=20.0)
             keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
             return await cache_store(
                 "vn_retail_gold",
                 fp,
                 TTL_SECONDS["hour"],
                 {"rows": keep or rows},
-                source="vnstock-retail",
+                source="btmc-direct",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_retail_gold", str(exc))
@@ -277,22 +256,24 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_retail_fx() -> dict[str, Any]:
-        """VCB USD buy/sell rates. Use for currency conversion context."""
+        """USD/VND daily series from the gen-6 forex route. Use for currency conversion context.
+
+        Gen 6 has no bank retail bid/ask (vnstock Retail is removed); rows are
+        daily OHLC candles for USDVND from the fhsc source.
+        """
         hit = await cache_lookup("vn_retail_fx", "-")
         if hit is not None:
             return hit
         try:
-            from vnstock import Retail
-        except ImportError:
-            return _na("vn_retail_fx", "vnstock not installed")
-        try:
-            frame = await run_blocking(Retail().exchange_rate, "vn_retail_fx")
+            rows = await run_blocking(
+                functools.partial(vn_p.forex_ohlcv, "USDVND", 30), "vn_retail_fx"
+            )
             return await cache_store(
                 "vn_retail_fx",
                 "-",
                 TTL_SECONDS["hour"],
-                {"rows": frame.to_dict(orient="records")},
-                source="vnstock-retail",
+                {"rows": rows},
+                source="vnstock-forex",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_retail_fx", str(exc))

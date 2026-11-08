@@ -45,24 +45,23 @@ async def test_vn_fundamentals_accepts_report_type():
 
 
 async def test_vn_retail_gold_accepts_source(monkeypatch):
+    """Gen 6: Retail gold is gone — the tool always rides the direct BTMC fetch."""
+    from opentrading_mcp.providers import vn_public as pub_p
+
     seen: dict[str, Any] = {}
 
-    class FakeFrame:
-        def to_dict(self, orient="records"):
-            return [{"SJC 1L": 1}]
+    def fake_btmc_gold():
+        seen["called"] = True
+        return [{"SJC 1L": 1}, {"NHẪN trơn": 2}, {"other": 3}]
 
-    class FakeRetail:
-        def gold(self, source="sjc", **kwargs):
-            seen["source"] = source
-            return FakeFrame()
-
-    import vnstock as _vs
-
-    monkeypatch.setattr(_vs, "Retail", lambda: FakeRetail())
+    monkeypatch.setattr(pub_p, "btmc_gold", fake_btmc_gold)
     fn = _tool_fn("vn_retail_gold")
     env = await fn(source="sjc")
     _check_envelope(env, "vn_retail_gold")
-    assert seen["source"] == "sjc"
+    assert seen["called"] is True
+    assert seen and env["provenance"]["source"] == "btmc-direct"
+    rows = env["data"]["rows"]
+    assert rows and all("SJC" in str(r) or "NHẪN" in str(r) for r in rows)
 
 
 async def test_vn_index_ohlcv_accepts_interval(monkeypatch):
@@ -158,6 +157,26 @@ async def test_vn_company_detail_controls_extras(monkeypatch):
     assert calls == ["company", "info"]
     vn_p.company_info("VCB", detail=True)
     assert "shareholders" in calls and "officers" in calls
+
+
+async def test_vn_retail_fx_uses_v6_forex(monkeypatch):
+    """Gen 6: no bank bid/ask — the tool returns USDVND daily OHLC rows."""
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    calls: list[tuple] = []
+
+    def fake_forex(pair: str, count: int = 30):
+        calls.append((pair, count))
+        return [{"t": "2026-11-07", "o": 26100.0, "h": 26120.0, "l": 26080.0,
+                 "c": 26105.0, "v": 0.0}]
+
+    monkeypatch.setattr(vn_p, "forex_ohlcv", fake_forex)
+    fn = _tool_fn("vn_retail_fx")
+    env = await fn()
+    _check_envelope(env, "vn_retail_fx")
+    assert calls == [("USDVND", 30)]
+    assert env["provenance"]["source"] == "vnstock-forex"
+    assert env["data"]["rows"][0]["c"] == 26105.0
 
 
 async def test_vn_msn_fx_gold_accepts_symbols_days(monkeypatch):

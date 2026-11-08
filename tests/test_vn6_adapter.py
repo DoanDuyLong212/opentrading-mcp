@@ -351,6 +351,44 @@ def test_candles_range_raises_unavailable_when_empty(monkeypatch):
         vn_p.candles_range("FPT", "2026-11-01", "2026-11-08")
 
 
+# --- msn_fx_gold: v6 Market forex + commodity (explorer.msn is gone) --------------
+
+
+def test_msn_fx_gold_uses_v6_forex_and_commodity(monkeypatch):
+    seen: list[tuple] = []
+
+    class G:
+        def __init__(self, group, symbol):
+            self.group, self.symbol = group, symbol
+
+        def ohlcv(self, *, start=None, end=None, interval=None, **kw):
+            seen.append((self.group, self.symbol, start, end, interval))
+            close = 25000.0 if self.group == "forex" else 4000.0
+            return _Frame([{"time": "2026-11-07", "close": close}])
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            seen.append(("source", source))
+
+        def __getattr__(self, group):
+            def make(symbol=None):
+                return G(group, symbol)
+
+            return make
+
+    _install(monkeypatch, Market=Market)
+    out = vn_p.msn_fx_gold(days=35)
+    pairs = {(s[0], s[1]) for s in seen if s[0] != "source"}
+    assert ("forex", "USDVND") in pairs
+    assert ("commodity", "GC") in pairs  # XAUUSD rides the GC futures contract
+    sources = {s[1] for s in seen if s[0] == "source"}
+    assert sources <= {"fhsc", "fmp"}
+    assert all(s[2] and s[3] for s in seen if s[0] != "source")  # start/end always set
+    by_symbol = {row["symbol"]: row for row in out}
+    assert by_symbol["USDVND"]["points"] == 1
+    assert by_symbol["XAUUSD"]["points"] == 1
+
+
 # --- key helpers: v6 has no change_api_key/vnai; source keys decide "keyed" -------
 
 

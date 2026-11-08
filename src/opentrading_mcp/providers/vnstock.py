@@ -1084,29 +1084,54 @@ def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
 
 
 def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[str, Any]]:
+    """USDVND and international gold (GC futures) via gen-6 Market forex/commodity.
+
+    Name is historical (the MSN explorer is gone in gen 6). XAUUSD maps to the
+    GC commodity contract — the v6 Open API has no spot XAUUSD route.
+    """
     try:
-        from vnstock.explorer import msn
+        from vnstock import Market
     except ImportError as exc:
-        raise ProviderUnavailable("vnstock msn explorer not installed") from exc
+        raise ProviderUnavailable("vnstock not installed") from exc
     from datetime import date, timedelta
 
     end = date.today().isoformat()
     start = (date.today() - timedelta(days=max(days, 5))).isoformat()
     out: list[dict[str, Any]] = []
-    for symbol_id in symbols or ("USDVND", "XAUUSD"):
+    legs: list[tuple[str, str, str, tuple[str, ...]]] = [
+        # (returned symbol, v6 group, upstream symbol, source chain)
+        ("USDVND", "forex", "USDVND", SRC_DERIV),
+        ("XAUUSD", "commodity", "GC", SRC_DERIV),  # GC = gold futures contract
+    ]
+    for symbol, group, upstream, sources in legs:
+        if symbols and symbol not in symbols:
+            continue
         try:
-            frame = msn.Quote(symbol_id).history(start=start, end=end, interval="1D")
-            rows = frame.to_dict(orient="records")
-            out.append(
-                {
-                    "symbol": symbol_id,
-                    "points": len(rows),
-                    "last": rows[-1] if rows else None,
-                    "series": rows[-35:] if rows else [],
-                }
+            frame = _fetch_frame(
+                [
+                    (
+                        source,
+                        (
+                            lambda source=source, group=group, upstream=upstream: getattr(
+                                Market(source), group
+                            )(upstream).ohlcv(start=start, end=end, interval="1D")
+                        ),
+                    )
+                    for source in sources
+                ],
+                f"{group} bars {upstream}",
             )
         except Exception as exc:
-            raise ProviderUnavailable(f"vnstock msn failed: {symbol_id}: {exc}") from exc
+            raise ProviderUnavailable(f"vnstock {group} failed: {symbol}: {exc}") from exc
+        rows = _clean(_records(frame))
+        out.append(
+            {
+                "symbol": symbol,
+                "points": len(rows),
+                "last": rows[-1] if rows else None,
+                "series": rows[-35:] if rows else [],
+            }
+        )
     return out
 
 
