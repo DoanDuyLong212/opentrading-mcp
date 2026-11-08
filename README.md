@@ -45,10 +45,15 @@ liệu là một tài khoản Open API riêng, khoá đặt bằng biến môi t
 | `dnse` | Dự phòng cho nến, listing, phái sinh; nguồn duy nhất cho khớp lệnh (`equity_trades`) | `DNSE_API_KEY`, `DNSE_SECRET` (server tự chép sang `DNSE_API_SECRET` mà vnstock đọc) |
 | `binance` | Crypto (không cần khoá) | — |
 
-- **Không dùng `fhsc` và `fmp`** (quyết định của owner, 08/11/2026). Các route vnstock chỉ có ở
-  fhsc/fmp/tcbs — batch quote, BCTC + chỉ số `vnstock_quant.fa`, hồ sơ công ty, giao dịch nội bộ,
-  forex, hàng hoá, chỉ số thế giới — trả `unavailable` với `reason: not_configured` cho tới khi
-  chuyển sang nguồn khác (Vietstock / yfinance / DNSE riêng của dự án; xem issue #101).
+- **Không dùng `fhsc` và `fmp`** (quyết định của owner, 08/11/2026).
+  - Tỷ giá, vàng và chỉ số thế giới chuyển sang **yfinance**: `vn_forex_ohlcv` (cặp tiền
+    `<pair>=X`), `vn_global_index` (mã Yahoo, nhận cả tên thường gặp và mã MSN cũ),
+    `vn_msn_fx_gold` (USDVND + vàng **hợp đồng tương lai** COMEX `GC=F` — Yahoo không có vàng
+    spot). Tỷ giá ngân hàng `vn_retail_fx` lấy từ bảng công khai của **Vietcombank** (mua tiền
+    mặt / mua chuyển khoản / bán), cache 1 giờ vì Vietcombank chỉ cho 1 request mỗi 5 phút.
+  - Các route vnstock chỉ có ở fhsc/tcbs — batch quote, BCTC + chỉ số `vnstock_quant.fa`, hồ sơ
+    công ty, giao dịch nội bộ — trả `unavailable` với `reason: not_configured` cho tới khi chuyển
+    sang nguồn khác (Vietstock / DNSE riêng của dự án; xem issue #101).
 - `source_status` → `quota_info.chains` cho biết mỗi nhóm route còn nguồn nào trả lời được.
 - Đăng ký khoá: developers.ssi.com.vn và DNSE; lưu qua env (Render env vars hoặc `.env` local,
   gitignore sẵn).

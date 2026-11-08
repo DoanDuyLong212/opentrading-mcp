@@ -154,7 +154,10 @@ def history(ticker: str, count: int = 30) -> list[dict[str, Any]]:
     except Exception as exc:
         raise ProviderUnavailable(f"yfinance history failed: {ticker}: {exc}") from exc
     if frame is None or frame.empty:
-        raise ProviderUnavailable(f"yfinance has no bars for {ticker}")
+        # An unknown ticker answers with an empty frame. That is a bad argument, not an
+        # outage: ProviderBadData keeps it from opening the yfinance breaker every yf_*
+        # tool and the web-loop board share. Real outages still raise above.
+        raise ProviderBadData(f"Yahoo has no bars for {ticker}")
     rows = _history_rows(frame)
     if not rows:
         raise ProviderBadData(f"yfinance bars for {ticker} have no valid close")

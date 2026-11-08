@@ -107,10 +107,34 @@ def test_float32_noise_is_rounded_to_its_real_precision(monkeypatch):
     assert yf_p.fx_history("EURUSD", 1)[0]["close"] == 1.1228
 
 
-def test_empty_yahoo_frame_is_unavailable(monkeypatch):
+def test_unknown_ticker_does_not_open_the_shared_breaker(monkeypatch):
+    """An empty frame is a bad argument (^FOO), not an outage: repeated bad
+    tickers must not open the breaker every yf_* tool shares."""
+    from opentrading_mcp.providers import circuit
+
     _install_yahoo(monkeypatch, pd.DataFrame(), {})
-    with pytest.raises(ProviderUnavailable, match="no bars"):
+    circuit.reset("yfinance")
+    for _ in range(circuit.get_circuit("yfinance").failure_threshold + 2):
+        with pytest.raises(ProviderBadData, match="no bars"):
+            yf_p.global_index("^FOO", 5)
+    circuit.get_circuit("yfinance").call(lambda: None)  # still closed
+
+
+def test_yahoo_outage_is_unavailable(monkeypatch):
+    class Ticker:
+        def __init__(self, ticker):
+            pass
+
+        def history(self, **kw):
+            raise ConnectionError("yahoo down")
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=Ticker))
+    from opentrading_mcp.providers import circuit
+
+    circuit.reset("yfinance")
+    with pytest.raises(ProviderUnavailable, match="history failed"):
         yf_p.global_index("SPX", 5)
+    circuit.reset("yfinance")
 
 
 def test_docstring_lists_symbols():

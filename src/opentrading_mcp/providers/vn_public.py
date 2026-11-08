@@ -105,9 +105,12 @@ def vcb_exchange_rates(day: str | None = None) -> dict[str, Any]:
     transfer / SELL in VND per unit. Public, keyless. Vietcombank asks for at
     most one request every 5 minutes, so callers must cache (vn_retail_fx: 1h).
     """
-    from datetime import date as _date
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
 
-    params = {"date": day or _date.today().isoformat()}
+    # The board is dated in Vietnam time; Render runs in UTC, where 00:00-07:00
+    # VN would otherwise ask for yesterday's board.
+    params = {"date": day or datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()}
     try:
         resp = shared_client().get(
             VCB_RATES_URL, params=params, headers={"User-Agent": _BROWSER_UA}, timeout=15.0
