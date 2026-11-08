@@ -131,6 +131,19 @@ def test_cache_returns_copies_and_fetches_once(financeinfo):
     assert financeinfo.calls == [("FPT", "year")]
 
 
+def test_cache_expires_after_the_ttl(financeinfo, monkeypatch):
+    """Mutant G12: a cache that never expires would serve stale ratios forever."""
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(vs_ratios.time, "monotonic", lambda: clock["now"])
+    vs_ratios.equity_ratios("FPT", "year")
+    clock["now"] += vs_ratios._TTL - 1
+    vs_ratios.equity_ratios("FPT", "year")
+    assert financeinfo.calls == [("FPT", "year")]  # still fresh
+    clock["now"] += 2
+    vs_ratios.equity_ratios("FPT", "year")
+    assert financeinfo.calls == [("FPT", "year"), ("FPT", "year")]  # refetched
+
+
 def test_failures_are_not_cached(financeinfo):
     financeinfo.failing["FPT"] = ProviderUnavailable("vietstock timeout")
     for _ in range(2):
