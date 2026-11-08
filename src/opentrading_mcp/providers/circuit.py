@@ -18,6 +18,10 @@ from opentrading_mcp.providers.errors import ProviderAuthMissing, ProviderUnavai
 
 T = TypeVar("T")
 
+# failures.NOT_CONFIGURED / failures.AUTH_MISSING (literal: failures imports nothing
+# from providers, but keeping circuit import-free of it avoids any future cycle).
+_CONFIG_REASONS = frozenset({"not_configured", "auth_missing"})
+
 _lock = threading.Lock()
 _breakers: dict[str, CircuitBreaker] = {}
 
@@ -59,11 +63,14 @@ class CircuitBreaker:
             result = fn()
         except ProviderAuthMissing:
             raise
-        except ProviderUnavailable:
-            with self._state_lock:
-                self._failures += 1
-                if self._failures >= self.failure_threshold:
-                    self._opened_at = time.monotonic()
+        except ProviderUnavailable as exc:
+            # A missing key is configuration, not an outage: it must not open the
+            # breaker and take the upstream's other (keyed) routes down with it.
+            if getattr(exc, "reason", None) not in _CONFIG_REASONS:
+                with self._state_lock:
+                    self._failures += 1
+                    if self._failures >= self.failure_threshold:
+                        self._opened_at = time.monotonic()
             raise
         with self._state_lock:
             self._failures = 0

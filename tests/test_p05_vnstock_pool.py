@@ -15,6 +15,13 @@ from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers.errors import ProviderUnavailable
 
 
+@pytest.fixture(autouse=True)
+def _legacy_quote_chain(monkeypatch):
+    """fhsc (the only keyed batch-quote source) was discontinued on 2026-11-08.
+    These tests pin the pool/admission guards the replacement source keeps."""
+    monkeypatch.setattr(vn_p, "SRC_QUOTE", ("fhsc",))
+
+
 def test_expired_batches_do_not_accumulate_or_run_after_recovery(monkeypatch):
     pool = ThreadPoolExecutor(max_workers=3)
     slots = threading.BoundedSemaphore(3)

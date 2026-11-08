@@ -87,6 +87,9 @@ async def test_global_index_alias_reaches_vnstock(monkeypatch):
 
     vnstock_mod = importlib.import_module("vnstock")
     monkeypatch.setattr(vnstock_mod, "Market", FakeMarket, raising=False)
+    # fmp was discontinued 2026-11-08 (global_index moves to yfinance, #78); re-enable
+    # the old chain so the alias → upstream wiring stays tested until then.
+    monkeypatch.setattr(vn_p, "SRC_GLOBAL", ("fmp",))
     rows = vn_p.global_index("SPX", 5)
     assert seen["symbol"] == "INX"
     assert seen["source"] == "fmp"

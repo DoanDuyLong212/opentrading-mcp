@@ -35,8 +35,8 @@ services:
         sync: false
       - key: VNSTOCK_API_KEY
         sync: false
-      - key: FHSC_API_KEY
-        sync: false
+      # fhsc/fmp keys are not used (owner decision 2026-11-08): vnstock reads
+      # ssi first, then dnse (DNSE_SECRET doubles as vnstock's DNSE_API_SECRET).
       - key: SSI_API_KEY
         sync: false
       - key: SSI_API_SECRET

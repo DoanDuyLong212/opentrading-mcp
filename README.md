@@ -29,7 +29,7 @@ See `configs/` for opencode / Claude / Cursor / Codex / Antigravity snippets,
 ## Bảng chu kỳ (cycle_*, vn_asset_*, g_asset_*)
 
 - Các tool đọc lấy số từ Postgres (`DATABASE_URL`). Bảng chưa có dữ liệu thì tool trả `availability: unavailable` và `*_check` báo `needs_refresh: true` (không bao giờ báo "mới" khi bảng trống).
-- Seed/refresh toàn bộ **ngoài request**: `DATABASE_URL=... opentrading-mcp cycle-refresh` (giới hạn bằng `CYCLE_REFRESH_ONLY=cycle|vn|global`). Dữ liệu giá lấy qua vnstock thế hệ 6 (nguồn `fhsc`/`ssi`, khoá Open API riêng từng nguồn — xem [Khoá nguồn vnstock 6](#khoá-nguồn-vnstock-6)); tự lùi lại 65s khi nguồn báo giới hạn tần suất, `fhsc` chỉ phục vụ 06:00–21:00 giờ VN. Không tự chạy; chạy thủ công hoặc qua job theo lịch do người vận hành quyết định.
+- Seed/refresh toàn bộ **ngoài request**: `DATABASE_URL=... opentrading-mcp cycle-refresh` (giới hạn bằng `CYCLE_REFRESH_ONLY=cycle|vn|global`). Dữ liệu giá lấy qua vnstock thế hệ 6 (nguồn `ssi`, dự phòng `dnse`, khoá Open API riêng từng nguồn — xem [Khoá nguồn vnstock 6](#khoá-nguồn-vnstock-6)); khi nguồn báo giới hạn tần suất (`reason: upstream_rate_limited`) thì lùi lại 65s một lần rồi bỏ qua mã đó, và lỗi của job này không làm ngắt các tool tương tác (breaker riêng `vnstock-batch`). Không tự chạy; chạy thủ công hoặc qua job theo lịch do người vận hành quyết định.
 - Tool ghi (`*_refresh`, `*_finalize`) chạy từng lệnh một, mỗi lần rebuild là một transaction. `MCP_CYCLE_WRITE=0` ẩn các tool ghi khỏi server.
 - `opentrading-mcp verify` bỏ qua 4 tool ghi này (báo `skipped`) để không ghi lại bảng dùng chung trên server thật; chỉ đặt `OPENTRADING_VERIFY_WRITES=1` khi verify với database thử.
 - `vn_asset_anchors`, `vn_asset_chains`, `g_asset_outlook` là dữ liệu nhập tay (không có lệnh refresh nào ghi).
@@ -41,16 +41,18 @@ liệu là một tài khoản Open API riêng, khoá đặt bằng biến môi t
 
 | Nguồn | Cung cấp | Biến env |
 |---|---|---|
-| `fhsc` | BCTC, company profile/events/insider, batch quote, forex, hàng hoá (06:00–21:00 giờ VN) | `FHSC_API_KEY` |
-| `ssi` | Danh sách mã toàn sàn, rổ VN30, nến cổ phiếu/chỉ số | `SSI_API_KEY`, `SSI_API_SECRET` |
+| `ssi` | Danh sách mã toàn sàn, nến cổ phiếu/chỉ số/phái sinh (nguồn chính) | `SSI_API_KEY`, `SSI_API_SECRET` |
+| `dnse` | Dự phòng cho nến, listing, phái sinh; nguồn duy nhất cho khớp lệnh (`equity_trades`) | `DNSE_API_KEY`, `DNSE_SECRET` (server tự chép sang `DNSE_API_SECRET` mà vnstock đọc) |
 | `binance` | Crypto (không cần khoá) | — |
 
-- Đăng ký khoá: developers.fhsc.com.vn và developers.ssi.com.vn; lưu qua env (Render env vars hoặc
-  `.env` local, gitignore sẵn).
-- Chỉ số tài chính tính **tại máy** bằng `vnstock_quant.fa` từ ba BCTC — bản Community chỉ có
-  30 phép tính fa/ngày (provider đã có cache 6h); khoá tài khoản `VNSTOCK_API_KEY` (vnstocks.com)
-  giữ lại để mở bộ chỉ tiêu VAS đầy đủ.
-- Không còn hạn mức 60 request/phút phía Vnstock; giới hạn giờ phục vụ/tần suất do từng nguồn quyết định.
+- **Không dùng `fhsc` và `fmp`** (quyết định của owner, 08/11/2026). Các route vnstock chỉ có ở
+  fhsc/fmp/tcbs — batch quote, BCTC + chỉ số `vnstock_quant.fa`, hồ sơ công ty, giao dịch nội bộ,
+  forex, hàng hoá, chỉ số thế giới — trả `unavailable` với `reason: not_configured` cho tới khi
+  chuyển sang nguồn khác (Vietstock / yfinance / DNSE riêng của dự án; xem issue #101).
+- `source_status` → `quota_info.chains` cho biết mỗi nhóm route còn nguồn nào trả lời được.
+- Đăng ký khoá: developers.ssi.com.vn và DNSE; lưu qua env (Render env vars hoặc `.env` local,
+  gitignore sẵn).
+- Không còn hạn mức 60 request/phút phía Vnstock; giới hạn tần suất do từng nguồn quyết định.
 
 ## Kết nối tới MCP-server (dành cho team harness) — 3 bước là chạy
 

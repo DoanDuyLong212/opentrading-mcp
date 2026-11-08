@@ -19,6 +19,7 @@ from typing import Any
 
 
 async def run(batch: int = 12, only: str | None = None) -> dict[str, Any]:
+    from opentrading_mcp.failures import UPSTREAM_RATE_LIMITED
     from opentrading_mcp.tools import cycle_db as db
     from opentrading_mcp.tools.asset_cycle import refresh_global_assets, refresh_vn_assets
     from opentrading_mcp.tools.cycle_stats import ALL_SYMBOLS, TOOL, _finalize_compute, _refresh_one
@@ -41,8 +42,14 @@ async def run(batch: int = 12, only: str | None = None) -> dict[str, Any]:
                         break
                     except Exception as exc:
                         # gen 6 rate limits are per-source (the Vnstock-side 60/min
-                        # quota is gone): back off once, then give up on the symbol.
-                        if RATE_LIMITED in str(exc) and attempt == 0:
+                        # quota is gone). The adapter tags them with reason
+                        # upstream_rate_limited and the RATE_LIMITED text (#83):
+                        # back off once, then give up on the symbol.
+                        limited = (
+                            getattr(exc, "reason", None) == UPSTREAM_RATE_LIMITED
+                            or RATE_LIMITED in str(exc)
+                        )
+                        if limited and attempt == 0:
                             print("source rate limit: waiting 65s", file=sys.stderr)
                             await asyncio.sleep(65)
                             continue

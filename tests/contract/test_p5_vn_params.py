@@ -153,6 +153,8 @@ async def test_vn_company_detail_controls_extras(monkeypatch):
     import vnstock as _vs
 
     monkeypatch.setattr(_vs, "Reference", lambda source=None: FakeReference())
+    # fhsc was discontinued 2026-11-08; re-enable its chain to keep the parser tested
+    monkeypatch.setattr(vn_p, "SRC_FUNDAMENTAL", ("fhsc",))
     vn_p.company_info("VCB", detail=False)
     assert calls == ["company", "info"]
     vn_p.company_info("VCB", detail=True)
@@ -205,7 +207,7 @@ async def test_vn_trades_accepts_board_range(monkeypatch):
 
     class FakeMarket:
         def __init__(self, source=None, **kwargs):
-            assert source == "fhsc"
+            assert source == "dnse"  # trades: dnse/tcbs only once fhsc was dropped
 
         def equity(self, symbol):
             assert symbol == "VCB"

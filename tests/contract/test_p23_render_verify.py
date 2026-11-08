@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from opentrading_mcp.server import create_server, register_all
 
 
@@ -13,6 +15,18 @@ def _tool_fn(name: str):
     tool = server._tool_manager.get_tool(name)
     assert tool is not None, f"tool {name} not registered"
     return tool.fn
+
+
+@pytest.fixture(autouse=True)
+def _legacy_fhsc_chains(monkeypatch):
+    """fhsc was discontinued on 2026-11-08, leaving batch quote and cash flow with
+    no vnstock source. These tests pin the sub-batching/hang guards and the
+    cash-flow parser, which the replacement sources keep — so re-enable the
+    old chain here instead of deleting the coverage."""
+    import opentrading_mcp.providers.vnstock as vn_p
+
+    monkeypatch.setattr(vn_p, "SRC_QUOTE", ("fhsc",))
+    monkeypatch.setattr(vn_p, "SRC_FUNDAMENTAL", ("fhsc",))
 
 
 def _check_envelope(env: dict[str, Any], tool: str) -> None:
@@ -311,24 +325,27 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
 
 
 def test_vnstock_api_key_helpers(monkeypatch):
-    """Gen 6: per-source keys decide "keyed"; VNSTOCK_API_KEY unlocks the VAS set.
+    """Gen 6: a source's full credential set decides "keyed" (#87). VNSTOCK_API_KEY
+    only unlocked the VAS statement set on fhsc routes, which are discontinued.
     Never raises, no runtime registration call."""
     import opentrading_mcp.providers.vnstock as vn_p
 
-    for var in ("VNSTOCK_API_KEY", "FHSC_API_KEY", "SSI_API_KEY"):
+    for var in ("VNSTOCK_API_KEY", "FHSC_API_KEY", "SSI_API_KEY", "SSI_API_SECRET",
+                "DNSE_API_KEY", "DNSE_API_SECRET", "DNSE_SECRET"):
         monkeypatch.delenv(var, raising=False)
     assert vn_p.ensure_api_key() == "anonymous"
     assert vn_p.quota_info()["tier"] == "anonymous"
 
     monkeypatch.setenv("VNSTOCK_API_KEY", "vnstock_testkey123")
-    assert vn_p.ensure_api_key() == "keyed"
+    monkeypatch.setenv("FHSC_API_KEY", "fhsc_testkey")
+    assert vn_p.ensure_api_key() == "anonymous"  # neither serves a chain any more
     q = vn_p.quota_info()
     assert isinstance(q, dict) and "tier" in q
 
-    monkeypatch.delenv("VNSTOCK_API_KEY", raising=False)
-    monkeypatch.setenv("FHSC_API_KEY", "fhsc_testkey")
+    monkeypatch.setenv("DNSE_API_KEY", "dnse_key")
+    monkeypatch.setenv("DNSE_API_SECRET", "dnse_secret")
     assert vn_p.ensure_api_key() == "keyed"
-    assert vn_p.quota_info()["sources"]["fhsc"] is True
+    assert vn_p.quota_info()["sources"]["dnse"] is True
 
 
 def test_market_movers_vn30_default_no_ref_call(monkeypatch):

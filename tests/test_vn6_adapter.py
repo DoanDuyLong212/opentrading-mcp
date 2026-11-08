@@ -89,19 +89,26 @@ def test_quote_history_sorts_candles_ascending_and_uses_v6_sources(monkeypatch):
     assert any(c[0] == "FPT" and c[1] == "1D" for c in calls)
 
 
+def _legacy_chain(monkeypatch, **chains: tuple[str, ...]) -> None:
+    """Re-enable a discontinued fhsc chain so the route's PARSER stays tested
+    until its replacement lands (fhsc/fmp were dropped on 2026-11-08)."""
+    for name, chain in chains.items():
+        monkeypatch.setattr(vn_p, name, chain)
+
+
 def test_quote_history_falls_back_to_second_source(monkeypatch):
     attempts: list[str | None] = []
 
     class Equity:
         def ohlcv(self, **kw):
-            raise RuntimeError("fhsc down")
+            raise RuntimeError("ssi down")
 
     class Market:
         def __init__(self, source=None, **kw):
             attempts.append(source)
 
         def equity(self, symbol):
-            if attempts[-1] == "fhsc":
+            if attempts[-1] == "ssi":
                 return Equity()
             return types.SimpleNamespace(
                 ohlcv=lambda **kw: _Frame(
@@ -121,7 +128,7 @@ def test_quote_history_falls_back_to_second_source(monkeypatch):
     _install(monkeypatch, Market=Market)
     rows = vn_p.quote_history("FPT", days=1, interval="1D")
     assert rows and rows[0]["c"] == 2.0
-    assert "fhsc" in attempts and "ssi" in attempts
+    assert attempts == ["ssi", "dnse"]  # fhsc is no longer in any chain
 
 
 def test_quote_history_all_sources_dead_raises_unavailable(monkeypatch):
@@ -158,6 +165,7 @@ def test_equity_quote_batch_uses_group_quote(monkeypatch):
             return EquityGroup()
 
     _install(monkeypatch, Market=Market)
+    _legacy_chain(monkeypatch, SRC_QUOTE=("fhsc",))
     rows = vn_p.equity_quote_batch.__wrapped__(["FPT", "VCB"])
     assert seen["source"] == "fhsc"
     assert seen["symbols"] == ["FPT", "VCB"]
@@ -220,6 +228,7 @@ def test_company_info_uses_reference_company(monkeypatch):
             return Company()
 
     _install(monkeypatch, Reference=Reference)
+    _legacy_chain(monkeypatch, SRC_FUNDAMENTAL=("fhsc",))
     out = vn_p.company_info("FPT", detail=True)
     assert seen["source"] == "fhsc" and seen["symbol"] == "FPT"
     assert out["info"]["short_name"] == "FPT Corp"
@@ -247,6 +256,7 @@ def test_insider_and_events_use_reference_company(monkeypatch):
             return Company()
 
     _install(monkeypatch, Reference=Reference)
+    _legacy_chain(monkeypatch, SRC_FUNDAMENTAL=("fhsc",))
     assert len(vn_p.insider_trading("FPT", limit=5)) == 5
     assert vn_p.corp_events("FPT", limit=5)[0]["ex_date"] == "2026-11-05"
     assert seen == ["insider", "events"]
@@ -282,18 +292,56 @@ def test_alt_ohlcv_groups_use_count_back_and_named_interval(monkeypatch):
     vn_p.equity_ohlcv("FPT", count=30)
     vn_p.index_ohlcv("VNINDEX", count=30)
     vn_p.futures_ohlcv("VN30F1M", count=30)
-    vn_p.forex_ohlcv("USDVND", count=30)
     vn_p.crypto_ohlv("BTCUSDT", count=30)
-    vn_p.global_index("USA30", count=30)
     groups = [s[0] for s in seen if s[0] != "source"]
-    assert groups == ["equity", "index", "futures", "forex", "crypto", "global_index"]
+    assert groups == ["equity", "index", "futures", "crypto"]
     for _, _, kw in (s for s in seen if s[0] != "source"):
         assert "count" not in kw and "resolution" not in kw
         assert kw.get("count_back") == 30
         assert "interval" in kw
     sources = [s[1] for s in seen if s[0] == "source"]
-    assert "binance" in sources  # crypto must run keyless via binance
+    assert sources == ["ssi", "ssi", "ssi", "binance"]  # ssi first; crypto keyless
     assert all(s for s in sources)  # every call is source-explicit
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: vn_p.forex_ohlcv("USDVND", count=30),
+        lambda: vn_p.global_index("USA30", count=30),
+        lambda: vn_p.msn_fx_gold(days=35),
+        lambda: vn_p.equity_quote_batch(["FPT"]),
+        lambda: vn_p.company_info("FPT"),
+        lambda: vn_p.insider_trading("FPT"),
+        lambda: vn_p.corp_events("FPT"),
+        lambda: vn_p.cashflow("FPT"),
+        lambda: vn_p.equity_ratios("FPT", "year"),
+    ],
+    ids=["forex", "global", "fx_gold", "quote", "company", "insider", "events",
+         "cashflow", "ratios"],
+)
+def test_fhsc_only_routes_fail_as_not_configured(monkeypatch, call):
+    """Routes only fhsc/fmp/tcbs serve must say 'not configured' (not retryable)
+    without calling upstream, and must not open the shared vnstock breaker."""
+    calls: list[str] = []
+
+    class Anything:
+        def __init__(self, source=None, **kw):
+            calls.append(str(source))
+
+        def __getattr__(self, name):
+            raise AssertionError(f"upstream touched: {name}")
+
+    _install(monkeypatch, Market=Anything, Reference=Anything, Fundamental=Anything)
+    from opentrading_mcp.providers import circuit
+
+    circuit.reset("vnstock")
+    for _ in range(circuit.get_circuit("vnstock").failure_threshold + 1):
+        with pytest.raises(ProviderUnavailable) as info:
+            call()
+        assert info.value.reason == "not_configured", info.value
+    assert calls == []
+    circuit.get_circuit("vnstock").call(lambda: None)  # breaker still closed
 
 
 def test_candles_range_uses_v6_ohlcv_sorts_and_normalizes(monkeypatch):
@@ -377,6 +425,7 @@ def test_msn_fx_gold_uses_v6_forex_and_commodity(monkeypatch):
             return make
 
     _install(monkeypatch, Market=Market)
+    _legacy_chain(monkeypatch, SRC_FX=("fhsc",))
     out = vn_p.msn_fx_gold(days=35)
     pairs = {(s[0], s[1]) for s in seen if s[0] != "source"}
     assert ("forex", "USDVND") in pairs
@@ -498,13 +547,162 @@ def test_candles_range_drops_nan_close_rows(monkeypatch):
 # --- key helpers: v6 has no change_api_key/vnai; source keys decide "keyed" -------
 
 
-def test_ensure_api_key_reports_source_keys(monkeypatch):
-    for var in ("VNSTOCK_API_KEY", "FHSC_API_KEY", "SSI_API_KEY"):
+_KEY_VARS = (
+    "VNSTOCK_API_KEY", "FHSC_API_KEY", "FMP_API_KEY", "SSI_API_KEY", "SSI_API_SECRET",
+    "DNSE_API_KEY", "DNSE_API_SECRET", "DNSE_SECRET",
+)
+
+
+def _clear_keys(monkeypatch):
+    for var in _KEY_VARS:
         monkeypatch.delenv(var, raising=False)
+
+
+def test_ensure_api_key_reports_source_keys(monkeypatch):
+    _clear_keys(monkeypatch)
     assert vn_p.ensure_api_key() == "anonymous"
     assert vn_p.quota_info()["tier"] == "anonymous"
 
+    # #87: a discontinued source's key, or half of SSI's pair, unlocks nothing
     monkeypatch.setenv("FHSC_API_KEY", "k1")
+    monkeypatch.setenv("SSI_API_KEY", "k2")
+    assert vn_p.ensure_api_key() == "anonymous"
+    q = vn_p.quota_info()
+    assert q["sources"]["ssi"] is False and "fhsc" not in q["sources"]
+
+    monkeypatch.setenv("SSI_API_SECRET", "s2")
     assert vn_p.ensure_api_key() == "keyed"
     q = vn_p.quota_info()
-    assert isinstance(q, dict) and "tier" in q and q["sources"]["fhsc"] is True
+    assert q["tier"] == "source-keyed" and q["sources"]["ssi"] is True
+
+
+def test_quota_info_reports_which_route_chains_can_answer(monkeypatch):
+    _clear_keys(monkeypatch)
+    monkeypatch.setenv("SSI_API_KEY", "k")
+    monkeypatch.setenv("SSI_API_SECRET", "s")
+    chains = vn_p.quota_info()["chains"]
+    assert chains["equity"] == ["ssi"] and chains["index"] == ["ssi"]
+    assert chains["trades"] == []  # dnse only
+    assert chains["crypto"] == ["binance"]  # keyless
+    for route in ("quote", "fundamental", "forex", "global"):
+        assert chains[route] == [], route  # fhsc/fmp-only routes
+
+
+def test_dnse_secret_is_aliased_for_vnstock(monkeypatch):
+    _clear_keys(monkeypatch)
+    monkeypatch.setenv("DNSE_SECRET", "shared-secret")
+    vn_p._alias_dnse_secret()
+    import os
+
+    assert os.environ["DNSE_API_SECRET"] == "shared-secret"
+
+
+def test_dnse_alias_never_overrides_an_explicit_value(monkeypatch):
+    _clear_keys(monkeypatch)
+    monkeypatch.setenv("DNSE_SECRET", "project-secret")
+    monkeypatch.setenv("DNSE_API_SECRET", "vnstock-secret")
+    vn_p._alias_dnse_secret()
+    import os
+
+    assert os.environ["DNSE_API_SECRET"] == "vnstock-secret"
+
+
+# --- #83: per-source errors and a machine-readable reason ---------------------------
+
+
+class _VnstockError(Exception):
+    def __init__(self, msg, code=""):
+        super().__init__(msg)
+        self.code = code
+
+
+class RateLimitedError(_VnstockError):
+    pass
+
+
+class CredentialError(_VnstockError):
+    pass
+
+
+def _failing(errors: dict[str, Exception]):
+    return [(src, (lambda e=exc: (_ for _ in ()).throw(e))) for src, exc in errors.items()]
+
+
+def test_fetch_frame_rate_limit_is_not_hidden_by_a_later_auth_error():
+    """#83: v4 kept only the LAST error — fhsc's rate limit vanished behind
+    ssi's missing key. Every source's outcome survives now."""
+    with pytest.raises(ProviderUnavailable) as info:
+        vn_p._fetch_frame(
+            _failing({
+                "ssi": RateLimitedError("slow down", code="VNSTOCK_RATE_LIMITED"),
+                "dnse": CredentialError("Chưa có khoá", code="VNSTOCK_CREDENTIAL_MISSING"),
+            }),
+            "candles FPT",
+        )
+    assert info.value.reason == "upstream_rate_limited"
+    from opentrading_mcp.tools.shared import RATE_LIMITED
+
+    assert RATE_LIMITED in str(info.value)  # cycle-refresh back-off keys on this
+    assert "ssi: slow down" in str(info.value) and "dnse: Chưa có khoá" in str(info.value)
+
+
+def test_fetch_frame_all_keys_missing_is_not_configured():
+    with pytest.raises(ProviderUnavailable) as info:
+        vn_p._fetch_frame(
+            _failing({
+                "ssi": CredentialError("no ssi key", code="VNSTOCK_CREDENTIAL_MISSING"),
+                "dnse": CredentialError("no dnse key", code="VNSTOCK_CREDENTIAL_MISSING"),
+            }),
+            "candles FPT",
+        )
+    assert info.value.reason == "not_configured"
+
+
+def test_fetch_frame_empty_plus_auth_is_plain_no_data():
+    """One source answered (empty), so this is not a configuration problem."""
+    with pytest.raises(ProviderUnavailable) as info:
+        vn_p._fetch_frame(
+            [("ssi", lambda: _Frame([])), *_failing({"dnse": CredentialError("no key")})],
+            "candles VNMID",
+        )
+    assert info.value.reason is None
+    assert "ssi: empty" in str(info.value)
+
+
+def test_not_configured_does_not_open_the_breaker():
+    from opentrading_mcp.providers import circuit
+    from opentrading_mcp.providers.errors import ProviderUnavailable as PU
+
+    breaker = circuit.CircuitBreaker("test-config")
+    for _ in range(breaker.failure_threshold + 2):
+        with pytest.raises(PU):
+            breaker.call(lambda: (_ for _ in ()).throw(PU("no key", reason="not_configured")))
+    breaker.call(lambda: None)  # still closed
+
+
+def test_candles_range_has_its_own_breaker(monkeypatch):
+    """#83: cycle refresh must not open the breaker interactive tools share."""
+    from opentrading_mcp.providers import circuit
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            raise RuntimeError("upstream down")
+
+    _install(monkeypatch, Market=Market)
+    circuit.reset("vnstock")
+    circuit.reset("vnstock-batch")
+    for _ in range(circuit.get_circuit("vnstock-batch").failure_threshold):
+        with pytest.raises(ProviderUnavailable):
+            vn_p.candles_range("FPT", "2026-11-01", "2026-11-07")
+    circuit.get_circuit("vnstock").call(lambda: None)  # interactive breaker closed
+    circuit.reset("vnstock-batch")
+
+
+def test_redact_hides_vnstock_secret_names():
+    from opentrading_mcp.auth import redact
+
+    for name in ("DNSE_API_SECRET", "SSI_API_SECRET", "SSI_API_PRIVATE"):
+        assert redact(f"env {name}=abc") == "[REDACTED]"

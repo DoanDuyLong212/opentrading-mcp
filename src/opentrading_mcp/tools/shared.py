@@ -509,9 +509,12 @@ RATE_LIMITED = "upstream rate limit reached"
 
 
 def no_exit[T](fn: Callable[[], T]) -> T:
-    """vnai (vnstock) calls sys.exit() when its 60 req/min quota is hit. In a worker thread
-    the SystemExit travels through the future into the event loop and stops the server
-    (a 502 for every client). Turn it into an ordinary provider error."""
+    """Turn a SystemExit raised inside a provider call into an ordinary provider error.
+
+    vnstock 4 (vnai) called sys.exit() on its 60 req/min quota; gen 6 raises
+    RateLimitedError instead (the adapter tags it, #83). The guard stays because any
+    third-party exit in a worker thread would travel through the future into the event
+    loop and stop the server (a 502 for every client)."""
     from opentrading_mcp.providers.errors import ProviderUnavailable
 
     try:

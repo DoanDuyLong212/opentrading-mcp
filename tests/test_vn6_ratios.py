@@ -34,8 +34,13 @@ CAP = "BS_CHARTER_CAPITAL"
 
 
 @pytest.fixture(autouse=True)
-def _clear_fa_cache():
-    """The 6h in-process fa cache must not leak stubbed tables between tests."""
+def _clear_fa_cache(monkeypatch):
+    """The 6h in-process fa cache must not leak stubbed tables between tests.
+
+    fhsc (fa's only statement source) was discontinued on 2026-11-08 and the
+    ratio tools move to Vietstock; until then the fhsc chain is re-enabled here
+    so the fa translation code keeps its coverage."""
+    monkeypatch.setattr(vn_p, "SRC_FUNDAMENTAL", ("fhsc",))
     vn_p._fa_cache.clear()
     yield
     vn_p._fa_cache.clear()
