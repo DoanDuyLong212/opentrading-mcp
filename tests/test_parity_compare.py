@@ -67,6 +67,17 @@ def test_ratios_compare_values_on_shared_periods():
     assert parity.compare_ratios(v4, v6)[0] == "DIFF"
 
 
+def test_failing_ignores_explained_and_known_gaps():
+    rows = [
+        {"probe": "a", "status": "match"},
+        {"probe": "b", "status": "expected DIFF (spot -> futures)"},
+        {"probe": "c", "status": "not_configured"},
+        {"probe": "d", "status": "DIFF"},
+        {"probe": "e", "status": "error"},
+    ]
+    assert parity.failing(rows) == ["d", "e"]
+
+
 def test_render_writes_totals():
     text = parity.render([{"probe": "a", "status": "match", "detail": "x"},
                           {"probe": "b", "status": "match", "detail": "y"}])

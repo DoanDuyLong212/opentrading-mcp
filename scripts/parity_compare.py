@@ -182,6 +182,17 @@ def compare_none(v4: Any, v6: Any) -> tuple[str, str]:
 # --- probes ----------------------------------------------------------------------
 
 
+def _count_since(name: str, minimum: int) -> int:
+    """Bars to request so the window still reaches back to the baseline's first
+    day. The baseline is fixed (2026-08 to 2026-11); "the last N bars" would stop
+    overlapping it within weeks and the weekly smoke would fail for no reason."""
+    closes = _closes(_baseline(name))
+    if not closes:
+        return minimum
+    first = date.fromisoformat(min(closes))
+    return max(minimum, (date.today() - first).days + 10)  # calendar days ≥ sessions
+
+
 def _probes() -> list[tuple[str, tuple[str, ...], Callable[[], Any], Compare]]:
     from opentrading_mcp.providers import vnstock as vn
     from opentrading_mcp.providers import yfinance as yf
@@ -204,17 +215,31 @@ def _probes() -> list[tuple[str, tuple[str, ...], Callable[[], Any], Compare]]:
 
     candles: Compare = compare_candles
     chain = ("ssi", "dnse")
+
+    def n(name: str, minimum: int) -> int:
+        return _count_since(name, minimum)
+
     return [
-        ("quote_history_FPT", chain, lambda: vn.quote_history("FPT", days=60), candles),
-        ("quote_history_VCB", chain, lambda: vn.quote_history("VCB", days=60), candles),
-        ("quote_history_SSI", chain, lambda: vn.quote_history("SSI", days=60), candles),
-        ("quote_history_VNINDEX", chain, lambda: vn.quote_history("VNINDEX", 60), candles),
-        ("equity_ohlcv_FPT", chain, lambda: vn.equity_ohlcv("FPT", count=30), candles),
-        ("index_ohlcv_VNINDEX", chain, lambda: vn.index_ohlcv("VNINDEX", count=30), candles),
-        ("futures_ohlcv_VN30F1M", chain, lambda: vn.futures_ohlcv("VN30F1M", count=30), candles),
-        ("crypto_ohlv_BTCUSDT", (), lambda: vn.crypto_ohlv("BTCUSDT", count=30), compare_crypto),
-        ("forex_ohlcv_USDVND", (), lambda: yf.fx_history("USDVND", count=30), candles),
-        ("global_index_USA30", (), lambda: yf.global_index("USA30", count=30), candles),
+        ("quote_history_FPT", chain,
+         lambda: vn.quote_history("FPT", days=n("quote_history_FPT", 60)), candles),
+        ("quote_history_VCB", chain,
+         lambda: vn.quote_history("VCB", days=n("quote_history_VCB", 60)), candles),
+        ("quote_history_SSI", chain,
+         lambda: vn.quote_history("SSI", days=n("quote_history_SSI", 60)), candles),
+        ("quote_history_VNINDEX", chain,
+         lambda: vn.quote_history("VNINDEX", n("quote_history_VNINDEX", 60)), candles),
+        ("equity_ohlcv_FPT", chain,
+         lambda: vn.equity_ohlcv("FPT", count=n("equity_ohlcv_FPT", 30)), candles),
+        ("index_ohlcv_VNINDEX", chain,
+         lambda: vn.index_ohlcv("VNINDEX", count=n("index_ohlcv_VNINDEX", 30)), candles),
+        ("futures_ohlcv_VN30F1M", chain,
+         lambda: vn.futures_ohlcv("VN30F1M", count=n("futures_ohlcv_VN30F1M", 30)), candles),
+        ("crypto_ohlv_BTCUSDT", (),
+         lambda: vn.crypto_ohlv("BTCUSDT", count=n("crypto_ohlv_BTCUSDT", 30)), compare_crypto),
+        ("forex_ohlcv_USDVND", (),
+         lambda: yf.fx_history("USDVND", count=n("forex_ohlcv_USDVND", 30)), candles),
+        ("global_index_USA30", (),
+         lambda: yf.global_index("USA30", count=n("global_index_USA30", 30)), candles),
         ("listing_symbols", chain, lambda: vn.listing_symbols(), compare_listing),
         ("equity_ratios_FPT", ("vietstock",), ratios("FPT"), compare_ratios),
         ("equity_ratios_VCB", ("vietstock",), ratios("VCB"), compare_ratios),
@@ -303,20 +328,38 @@ def main(argv: list[str] | None = None) -> int:
         default=REPO / "plans" / f"vnstock-gen6-parity-report-{date.today()}.md",
     )
     parser.add_argument("--no-vietstock-login", action="store_true")
+    parser.add_argument(
+        "--fail-on-diff", action="store_true",
+        help="exit 1 when any probe is DIFF / NO OVERLAP / error / UNEXPECTED VALUE",
+    )
     args = parser.parse_args(argv)
     if BASELINE is None:
         print("no parity_v4_* fixture directory found", file=sys.stderr)
         return 1
     socket.setdefaulttimeout(45)
     _load_env(args.env, no_vietstock_login=args.no_vietstock_login)
-    report = render(run())
+    rows = run()
+    report = render(rows)
     if hasattr(sys.stdout, "reconfigure"):  # Windows consoles default to cp1252
         sys.stdout.reconfigure(encoding="utf-8")
     print(report)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(report, encoding="utf-8")
     print(f"report written to {args.out}", file=sys.stderr)
+    bad = failing(rows)
+    if args.fail_on_diff and bad:
+        print(f"unexpected parity results: {', '.join(bad)}", file=sys.stderr)
+        return 1
     return 0
+
+
+def failing(rows: list[dict[str, str]]) -> list[str]:
+    """Probes whose status is not a match, an explained difference or a known gap."""
+    ok = {"match", "not_configured", "skipped", "v4 empty", "no baseline"}
+    return [
+        r["probe"] for r in rows
+        if r["status"] not in ok and not r["status"].startswith("expected")
+    ]
 
 
 if __name__ == "__main__":
