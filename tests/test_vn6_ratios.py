@@ -463,6 +463,12 @@ async def test_financial_ratios_main_symbol_without_periods_is_unavailable(monke
     assert out["availability"] == "unavailable"
 
 
+async def test_vn_fundamentals_without_periods_is_unavailable(monkeypatch):
+    _patch_fa_load(monkeypatch, frames=_empty_year_for("FPT"))
+    out = await _tool("vn_fundamentals")(symbol="FPT", period="year")
+    assert out["availability"] == "unavailable"
+
+
 async def test_vn_fundamentals_returns_fa_table(monkeypatch):
     _patch_fa_load(monkeypatch)
     from opentrading_mcp.tools import vn as vn_tools
