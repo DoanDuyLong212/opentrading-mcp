@@ -22,8 +22,6 @@ from pandas.api.types import is_bool
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
-_API_KEY_DONE = False
-
 # Gen-6 source chains (first non-empty frame wins). fhsc serves fundamentals,
 # company profile and group batch quotes; ssi serves listing and domestic index
 # candles; binance is keyless crypto; fmp is the only global-index source.
@@ -87,6 +85,13 @@ def quota_info() -> dict[str, Any]:
         return {"tier": "unknown", "note": str(exc)[:100]}
 
 
+def _ascending_by_time(rows: list[dict[str, Any]], key: str = "time") -> list[dict[str, Any]]:
+    """Chronological order for frame rows. Gen-6 profiles flip row order between
+    functions; consumers (market_timing rows[-1], corp.py closes[-1], msn_fx_gold
+    series[-35:]) all assume ascending, so every raw ohlcv path normalizes here."""
+    return sorted(rows, key=lambda r: str(r.get(key, ""))[:24])
+
+
 def _candle_day(value: Any) -> str:
     """ISO date of a candle. vnstock keeps the date in a ``time`` column under a RangeIndex,
     so the index alone gave "15", "16", ... and models wrote "T-15" instead of dates."""
@@ -101,11 +106,40 @@ def _candle_day(value: Any) -> str:
         return text
 
 
+# Index codes served by the index group only (cycle refresh feeds these).
+_VN_INDEX_SYMBOLS = frozenset(
+    {"VNINDEX", "VN30", "VNFIN", "VNFINLEAD", "VNMAT", "VNREAL", "VNUTI", "VNIT",
+     "VNSI", "HNXINDEX", "HNX30"}
+)
+
+
+def _candle_fetchers(symbol: str, **ohlcv_kwargs: Any) -> list[tuple[str, Any]]:
+    """Source fetchers for daily candles — index codes ride the index group."""
+    from vnstock import Market
+
+    symbol = symbol.upper()
+    if symbol in _VN_INDEX_SYMBOLS:
+        return [
+            (
+                source,
+                (lambda source=source: Market(source).index(symbol).ohlcv(**ohlcv_kwargs)),
+            )
+            for source in SRC_INDEX
+        ]
+    return [
+        (
+            source,
+            (lambda source=source: Market(source).equity(symbol).ohlcv(**ohlcv_kwargs)),
+        )
+        for source in SRC_EQUITY
+    ]
+
+
 @guarded("vnstock")
 def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[dict[str, Any]]:
     """Daily/weekly/monthly candles; interval 1D|1W|1M. Gen-6 Market().equity().ohlcv."""
     try:
-        from vnstock import Market
+        from vnstock import Market  # noqa: F401 — presence check before building fetchers
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     symbol = symbol.upper()
@@ -124,17 +158,7 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
     end = date.today().isoformat()
     start = (date.today() - timedelta(days=span)).isoformat()
     frame = _fetch_frame(
-        [
-            (
-                source,
-                (
-                    lambda source=source: (
-                        Market(source).equity(symbol).ohlcv(start=start, end=end, interval=iv)
-                    )
-                ),
-            )
-            for source in SRC_EQUITY
-        ],
+        _candle_fetchers(symbol, start=start, end=end, interval=iv),
         f"candles {symbol}",
     )
     try:
@@ -167,23 +191,11 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
 def candles_range(symbol: str, start: str, end: str, interval: str = "1D") -> list[dict[str, Any]]:
     """Daily candles for an explicit date range, ascending by day (cycle refresh)."""
     try:
-        from vnstock import Market
+        from vnstock import Market  # noqa: F401 — presence check before building fetchers
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     frame = _fetch_frame(
-        [
-            (
-                source,
-                (
-                    lambda source=source: (
-                        Market(source)
-                        .equity(symbol.upper())
-                        .ohlcv(start=start, end=end, interval=interval)
-                    )
-                ),
-            )
-            for source in SRC_EQUITY
-        ],
+        _candle_fetchers(symbol, start=start, end=end, interval=interval),
         f"candles {symbol}",
     )
     rows: list[dict[str, Any]] = []
@@ -192,13 +204,18 @@ def candles_range(symbol: str, start: str, end: str, interval: str = "1D") -> li
         if len(t) != 10 or t[4] != "-":
             raise ProviderBadData(f"bad candle time {t!r} for {symbol}")
         try:
+            close = float(row.get("close", 0) or 0)
+            if not math.isfinite(close) or close <= 0:
+                # A no-session row (Tet week on 1W) is NaN here too: one NaN row
+                # poisons the cycle statistics the same way it poisons indicators.
+                continue
             rows.append(
                 {
                     "t": t,
                     "o": float(row.get("open", 0) or 0),
                     "h": float(row.get("high", 0) or 0),
                     "l": float(row.get("low", 0) or 0),
-                    "c": float(row.get("close", 0) or 0),
+                    "c": close,
                     "v": float(row.get("volume", 0) or 0),
                 }
             )
@@ -336,7 +353,7 @@ def equity_trades(
         )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock trades failed: {symbol}") from exc
-    rows = _records(frame)
+    rows = sorted(_records(frame), key=lambda r: str(r.get("time", ""))[:24], reverse=True)
     return rows[: max(limit, 1)]
 
 
@@ -457,7 +474,7 @@ def index_ohlcv(
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no index bars for {symbol}")
-    return rows
+    return _ascending_by_time(rows)
 
 
 @guarded("vnstock")
@@ -488,7 +505,7 @@ def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[di
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no equity bars for {symbol}")
-    return rows
+    return _ascending_by_time(rows)
 
 
 @guarded("vnstock")
@@ -521,7 +538,7 @@ def futures_ohlcv(
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no futures bars for {symbol}")
-    return rows
+    return _ascending_by_time(rows)
 
 
 @guarded("vnstock")
@@ -549,7 +566,7 @@ def forex_ohlcv(pair: str = "USDVND", count: int = 30) -> list[dict[str, Any]]:
         )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock forex failed: {pair}") from exc
-    return _records(frame)
+    return _ascending_by_time(_records(frame))
 
 
 @guarded("vnstock")
@@ -577,7 +594,7 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
         )
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock crypto failed: {symbol}") from exc
-    return _records(frame)
+    return _ascending_by_time(_records(frame))
 
 
 # Common spellings → the MSN-style codes vnstock's global index accepts
@@ -669,7 +686,7 @@ def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]
             f"Valid symbols: {VALID_GLOBAL_SYMBOLS}. "
             f"For indices not listed here (e.g. Nasdaq-100 NDX) use yf_global_indices."
         ) from exc
-    return _records(frame)
+    return _ascending_by_time(_records(frame))
 
 
 # --- vnstock_quant.fa table (gen 6) -------------------------------------------------
@@ -773,7 +790,7 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
             "unit": "VNDbn",
             "periods": periods,
             "rows": rows,
-            "source": "vnstock_quant.fa/statements",
+            "source": "gen6.fundamental.cash_flow",
         }
     except Exception as exc:
         raise ProviderBadData(f"malformed vnstock cashflow for {symbol}: {exc}") from exc
@@ -869,11 +886,17 @@ def _fa_to_v4_table(symbol: str, period: str, long_frame: Any) -> dict[str, Any]
             if value is None and reason:
                 entry["quality_note"] = f"{rt_id}: {reason}"
     ordered = sorted(periods, key=_period_sort_key, reverse=True)
+    discarded = sorted(p for p in periods if _period_sort_key(p) == (0, 0))
+    ordered = [p for p in ordered if p not in set(discarded)]
     ratios: list[dict[str, Any]] = []
     for v4_id, entry in rows_by_id.items():
         entry["values"] = {p: entry["values"].get(p) for p in ordered}
         if v4_id in _RATIO_METRIC_BASIS:
-            entry["basis"] = _RATIO_METRIC_BASIS[v4_id]
+            # fa quarter rows are trailing four quarters; year rows are the
+            # audited annual figures — never label the annual number TTM.
+            entry["basis"] = (
+                _RATIO_METRIC_BASIS[v4_id] if period == "quarter" else "reported_period_ratio"
+            )
         ratios.append(entry)
     for v4_id in _FA_GAP_IDS:
         ratios.append(
@@ -895,7 +918,7 @@ def _fa_to_v4_table(symbol: str, period: str, long_frame: Any) -> dict[str, Any]
         "period_basis": "computed_from_statements",
         "periods": ordered,
         "ratios": ratios,
-        "discarded_period_labels": [],
+        "discarded_period_labels": discarded,
         "source": "vnstock_quant.fa",
     }
 
@@ -1123,7 +1146,7 @@ def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[s
             )
         except Exception as exc:
             raise ProviderUnavailable(f"vnstock {group} failed: {symbol}: {exc}") from exc
-        rows = _clean(_records(frame))
+        rows = _ascending_by_time(_clean(_records(frame)))
         out.append(
             {
                 "symbol": symbol,

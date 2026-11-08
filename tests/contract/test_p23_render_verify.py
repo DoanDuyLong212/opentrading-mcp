@@ -272,7 +272,7 @@ def test_financial_detail_lctt_vnstock_fallback(monkeypatch):
 
 
 def test_cashflow_parser_skips_metadata_columns(monkeypatch):
-    """vnstock cashflow frames carry item_en/item_id columns — only period cols become values."""
+    """Gen-6 wide cashflow frames carry item_en/item_id columns — only period cols become values."""
     import sys
     import types
 
@@ -280,11 +280,8 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
 
     import opentrading_mcp.providers.vnstock as vn_p
 
-    class FakeFinance:
-        def __init__(self, symbol: str = "", source: str = "VCI"):
-            pass
-
-        def cash_flow(self, period: str = "quarter") -> Any:
+    class FakeEquity:
+        def cash_flow(self, period: str = "quarter", format: str = "wide", **kwargs: Any) -> Any:
             return pd.DataFrame(
                 [
                     {
@@ -297,8 +294,15 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
                 ]
             )
 
+    class FakeFundamental:
+        def __init__(self, source=None, **kwargs):
+            assert source == "fhsc"
+
+        def equity(self, symbol: str) -> FakeEquity:
+            return FakeEquity()
+
     fake_vnstock = types.ModuleType("vnstock")
-    fake_vnstock.Finance = FakeFinance
+    fake_vnstock.Fundamental = FakeFundamental
     monkeypatch.setitem(sys.modules, "vnstock", fake_vnstock)
     out = vn_p.cashflow("FPT")
     assert out["periods"] == ["2026-Q1", "2026-Q2"], out["periods"]
@@ -307,22 +311,24 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
 
 
 def test_vnstock_api_key_helpers(monkeypatch):
-    """VNSTOCK_API_KEY from Trading_Agents .env → 60 req/min tier; never raises."""
+    """Gen 6: per-source keys decide "keyed"; VNSTOCK_API_KEY unlocks the VAS set.
+    Never raises, no runtime registration call."""
     import opentrading_mcp.providers.vnstock as vn_p
 
-    monkeypatch.delenv("VNSTOCK_API_KEY", raising=False)
-    vn_p._API_KEY_DONE = False
+    for var in ("VNSTOCK_API_KEY", "FHSC_API_KEY", "SSI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
     assert vn_p.ensure_api_key() == "anonymous"
     assert vn_p.quota_info()["tier"] == "anonymous"
 
-    # with key: registration attempted (network may fail in sandbox — swallowed),
-    # return contract holds and quota_info never raises
     monkeypatch.setenv("VNSTOCK_API_KEY", "vnstock_testkey123")
-    vn_p._API_KEY_DONE = False
     assert vn_p.ensure_api_key() == "keyed"
     q = vn_p.quota_info()
     assert isinstance(q, dict) and "tier" in q
-    vn_p._API_KEY_DONE = False
+
+    monkeypatch.delenv("VNSTOCK_API_KEY", raising=False)
+    monkeypatch.setenv("FHSC_API_KEY", "fhsc_testkey")
+    assert vn_p.ensure_api_key() == "keyed"
+    assert vn_p.quota_info()["sources"]["fhsc"] is True
 
 
 def test_market_movers_vn30_default_no_ref_call(monkeypatch):

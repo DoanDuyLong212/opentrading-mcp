@@ -39,16 +39,21 @@ def test_alias_ignores_spaces_hyphens_and_dots():
 
 
 def test_aliases_and_listed_codes_exist_in_vnstock():
-    # vnstock's own table is the source of truth; aliases and the error list must match it.
-    from vnstock.explorer.msn.const import _GLOBAL_INDICES
-
-    assert set(vn_p.GLOBAL_INDEX_ALIASES.values()) <= set(_GLOBAL_INDICES)
+    # gen 6: the v4 msn const table is gone from the package — pin the accepted
+    # codes to this frozen snapshot (recorded from the v4 table on 2026-11-08;
+    # gen-6 global indices are fmp-served). Live re-verification goes through
+    # scripts/parity_compare.py once an fmp key exists.
+    frozen_v6_global_codes = {
+        "INX", "USA30", "DJI", "COMP", "RUT", "NYA", "RUI", "RUA", "UKX", "DAX",
+        "PX1", "N225", "000001", "HSI", "SENSEX", "VNI",
+    }
+    assert set(vn_p.GLOBAL_INDEX_ALIASES.values()) <= frozen_v6_global_codes
     listed = {
         code
         for part in vn_p.VALID_GLOBAL_SYMBOLS.split(", ")
         for code in part.split(" ")[0].split("/")
     }
-    assert listed <= set(_GLOBAL_INDICES), listed - set(_GLOBAL_INDICES)
+    assert listed <= frozen_v6_global_codes, listed - frozen_v6_global_codes
 
 
 async def test_global_index_alias_reaches_vnstock(monkeypatch):

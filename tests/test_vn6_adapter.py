@@ -389,19 +389,122 @@ def test_msn_fx_gold_uses_v6_forex_and_commodity(monkeypatch):
     assert by_symbol["XAUUSD"]["points"] == 1
 
 
+# --- fix-pass contracts from the whole-branch review -------------------------------
+
+
+def test_quote_history_routes_index_symbols_to_the_index_group(monkeypatch):
+    """Cycle refresh feeds VNINDEX/VN30/... — the equity group cannot serve them."""
+    seen: list[str] = []
+
+    class Equity:
+        def ohlcv(self, **kw):
+            seen.append("equity")
+            raise RuntimeError("index code is not an equity")
+
+    class IndexG:
+        def ohlcv(self, **kw):
+            seen.append("index")
+            return _Frame(
+                [{"time": "2026-11-05", "open": 1, "high": 1, "low": 1,
+                  "close": 1300.0, "volume": 5}]
+            )
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            return Equity()
+
+        def index(self, symbol):
+            return IndexG()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.quote_history("VNINDEX", days=5)
+    assert seen == ["index"]
+    assert rows and rows[0]["c"] == 1300.0
+
+
+def test_index_ohlcv_sorts_ascending(monkeypatch):
+    class IndexG:
+        def ohlcv(self, **kw):
+            return _Frame(
+                [
+                    {"time": "2026-11-05", "close": 2.0},
+                    {"time": "2026-11-04", "close": 1.0},
+                ]
+            )
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def index(self, symbol):
+            return IndexG()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.index_ohlcv("VNINDEX", count=5)
+    assert [r["time"] for r in rows] == ["2026-11-04", "2026-11-05"]
+
+
+def test_equity_trades_returns_newest_first(monkeypatch):
+    """v4 contract: newest-first. Gen-6 profiles flip row order — normalize here."""
+    class Equity:
+        def trades(self, **kw):
+            return _Frame(
+                [
+                    {"time": "09:15:00", "volume": 100},
+                    {"time": "14:45:00", "volume": 300},
+                    {"time": "11:00:00", "volume": 200},
+                ]
+            )
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            return Equity()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.equity_trades("FPT", limit=2)
+    assert [r["time"] for r in rows] == ["14:45:00", "11:00:00"]
+
+
+def test_candles_range_drops_nan_close_rows(monkeypatch):
+    class Equity:
+        def ohlcv(self, **kw):
+            return _Frame(
+                [
+                    {"time": "2026-11-04", "open": 1, "high": 1, "low": 1,
+                     "close": float("nan"), "volume": 0},
+                    {"time": "2026-11-05", "open": 1, "high": 1, "low": 1,
+                     "close": 2.0, "volume": 5},
+                ]
+            )
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            return Equity()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.candles_range("FPT", "2026-11-01", "2026-11-08")
+    assert [r["t"] for r in rows] == ["2026-11-05"]
+
+
 # --- key helpers: v6 has no change_api_key/vnai; source keys decide "keyed" -------
 
 
 def test_ensure_api_key_reports_source_keys(monkeypatch):
     for var in ("VNSTOCK_API_KEY", "FHSC_API_KEY", "SSI_API_KEY"):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setattr(vn_p, "_API_KEY_DONE", False)
     assert vn_p.ensure_api_key() == "anonymous"
     assert vn_p.quota_info()["tier"] == "anonymous"
 
     monkeypatch.setenv("FHSC_API_KEY", "k1")
-    monkeypatch.setattr(vn_p, "_API_KEY_DONE", False)
     assert vn_p.ensure_api_key() == "keyed"
     q = vn_p.quota_info()
-    assert isinstance(q, dict) and "tier" in q
-    monkeypatch.setattr(vn_p, "_API_KEY_DONE", False)
+    assert isinstance(q, dict) and "tier" in q and q["sources"]["fhsc"] is True

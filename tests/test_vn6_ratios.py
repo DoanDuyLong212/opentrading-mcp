@@ -1,14 +1,20 @@
 """vnstock_quant.fa replaces the upstream ratio() table (Task 4, plan 2026-11-08).
 
 The gen-6 Open API has no ``ratio()`` (VNSTOCK_ROUTE_UNSUPPORTED): ratios are
-computed locally by ``vnstock_quant.fa`` from the three fhsc statements. These
-tests drive the REAL fa Rust core on synthetic statements (offline) and assert
-the provider still emits the v4 ``{periods, ratios: [{item_id, item, values}]}``
-table the screener/valuation tools consume — percent scaling included.
+computed locally by ``vnstock_quant.fa`` from the three fhsc statements.
+
+Honesty note: these tests stub ``fa.Dataset.load`` AND ``fa.ratios`` with a
+long frame whose shape was captured from REAL fa computes on 2026-11-08
+(synthetic statements + prices, Rust core) — they pin the adapter's
+translation/scaling/cache contracts WITHOUT burning the 30/day community trial
+quota. They cannot catch fa output drift. The Rust core itself is exercised
+only by ``test_real_fa_compute_shape`` below (quota-gated, opt-in) and by the
+live parity harness (scripts/parity_compare.py, needs fhsc keys).
 """
 
 from __future__ import annotations
 
+import os
 import sys
 import types
 
@@ -216,6 +222,71 @@ def test_equity_ratios_caches_fa_computes(monkeypatch):
     second = vn_p.equity_ratios("FPT", "quarter")
     assert calls == ["fhsc"]  # second call served from the in-process cache
     assert first is second
+
+
+def test_fa_period_unknown_labels_are_disclosed(monkeypatch):
+    """A period label that is not YYYY or YYYY-QN must not silently be 'newest'."""
+    long = _fa_long()
+    long.loc[len(long)] = {
+        "symbol": "FPT", "period": "weird-label", "id": "RT_PRT_ROE",
+        "value": 9.9, "unit": "ratio", "reason": "",
+    }
+    out = vn_p._fa_to_v4_table("FPT", "quarter", long)
+    assert "weird-label" not in out["periods"]
+    assert "weird-label" in out["discarded_period_labels"]
+    assert out["periods"][0] == "2025-Q4"
+
+
+def test_fa_basis_is_reported_period_for_year_table(monkeypatch):
+    """fa year rows are audited periods — the trailing basis only fits quarters."""
+    _patch_fa_load(monkeypatch)
+    long = _fa_long()
+    long = long[long["period"] == "2025-Q4"].assign(period="2025")
+    out = vn_p._fa_to_v4_table("FPT", "year", long)
+    by_id = {r["item_id"]: r for r in out["ratios"]}
+    assert by_id["trailing_eps"].get("basis") == "reported_period_ratio"
+    assert by_id["roe_trailling"].get("basis") == "reported_period_ratio"
+    # quarter tables keep the TTM basis
+    out_q = vn_p._fa_to_v4_table("FPT", "quarter", _fa_long())
+    by_id_q = {r["item_id"]: r for r in out_q["ratios"]}
+    assert by_id_q["trailing_eps"].get("basis") == "trailing_four_quarters"
+    assert by_id_q["roe_trailling"].get("basis") == "trailing_four_quarters"
+
+
+def test_cashflow_provenance_names_fundamental_route(monkeypatch):
+    class Equity:
+        def cash_flow(self, period=None, format=None, **kwargs):
+            return pd.DataFrame({"item": ["x"], "2025-Q4": [1e9]})
+
+    class Fundamental:
+        def __init__(self, source=None, **kwargs):
+            pass
+
+        def equity(self, symbol):
+            return Equity()
+
+    monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Fundamental=Fundamental))
+    out = vn_p.cashflow("FPT", period="quarter")
+    assert out["source"] == "gen6.fundamental.cash_flow"
+
+
+@pytest.mark.skipif(
+    not os.environ.get("VN6_LIVE_FA"),
+    reason="burns the 30/day vnstock_quant trial quota — set VN6_LIVE_FA=1 to run",
+)
+def test_real_fa_compute_shape():
+    """Real Rust fa on synthetic statements: pins the long-frame contract the
+    stubbed tests encode (columns, period labels, decimal ratio units)."""
+    ds = fa.Dataset.from_frames(
+        {"FPT": _statements()}, prices={"FPT": _prices()}, estimate_shares=True
+    )
+    out = fa.ratios(ds, period="quarter", format="long")
+    assert list(out.columns) == ["symbol", "period", "id", "value", "unit", "reason"]
+    assert set(out["period"].astype(str)) <= {"2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4"}
+    roe = out[out["id"] == "RT_PRT_ROE"]
+    assert set(roe["unit"]) <= {"ratio"}
+    computed = roe[roe["value"].notna()]
+    assert computed["value"].between(0, 1).all()
 
 
 def _tool(name: str, preset: str = "all"):
