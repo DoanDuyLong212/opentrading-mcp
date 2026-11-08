@@ -8,7 +8,6 @@ plans/vnstock-gen6-migration-2026-11-08.md; measured API in the SDD workspace.
 
 from __future__ import annotations
 
-import itertools
 import math
 import os
 import re
@@ -53,7 +52,7 @@ def _fetch_frame(fetchers: list[tuple[str, Any]], label: str) -> Any:
             except TypeError:
                 pass  # frame without __len__ — trust it and let the caller parse
             return candidate
-        except Exception as exc:  # noqa: BLE001 - source fallback is the point
+        except Exception as exc:
             last = exc
             continue
     detail = f" (last error: {last})" if last else ""
@@ -129,8 +128,8 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
             (
                 source,
                 (
-                    lambda source=source: Market(source).equity(symbol).ohlcv(
-                        start=start, end=end, interval=iv
+                    lambda source=source: (
+                        Market(source).equity(symbol).ohlcv(start=start, end=end, interval=iv)
                     )
                 ),
             )
@@ -162,6 +161,51 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
         return rows[-max(days, 1) :]
     except Exception as exc:
         raise ProviderBadData(f"malformed vnstock frame for {symbol}") from exc
+
+
+@guarded("vnstock")
+def candles_range(symbol: str, start: str, end: str, interval: str = "1D") -> list[dict[str, Any]]:
+    """Daily candles for an explicit date range, ascending by day (cycle refresh)."""
+    try:
+        from vnstock import Market
+    except ImportError as exc:
+        raise ProviderUnavailable("vnstock not installed") from exc
+    frame = _fetch_frame(
+        [
+            (
+                source,
+                (
+                    lambda source=source: (
+                        Market(source)
+                        .equity(symbol.upper())
+                        .ohlcv(start=start, end=end, interval=interval)
+                    )
+                ),
+            )
+            for source in SRC_EQUITY
+        ],
+        f"candles {symbol}",
+    )
+    rows: list[dict[str, Any]] = []
+    for row in _records(frame):
+        t = _candle_day(row.get("time"))
+        if len(t) != 10 or t[4] != "-":
+            raise ProviderBadData(f"bad candle time {t!r} for {symbol}")
+        try:
+            rows.append(
+                {
+                    "t": t,
+                    "o": float(row.get("open", 0) or 0),
+                    "h": float(row.get("high", 0) or 0),
+                    "l": float(row.get("low", 0) or 0),
+                    "c": float(row.get("close", 0) or 0),
+                    "v": float(row.get("volume", 0) or 0),
+                }
+            )
+        except (TypeError, ValueError) as exc:
+            raise ProviderBadData(f"malformed candle for {symbol}: {exc}") from exc
+    rows.sort(key=lambda r: r["t"])
+    return rows
 
 
 @guarded("vnstock")
@@ -244,9 +288,7 @@ def _shared_batch_pool(min_workers: int) -> ThreadPoolExecutor:
     global _VN_BATCH_POOL
     with _VN_BATCH_POOL_LOCK:
         if _VN_BATCH_POOL is None:
-            _VN_BATCH_POOL = ThreadPoolExecutor(
-                max_workers=3, thread_name_prefix="vnstock-batch"
-            )
+            _VN_BATCH_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="vnstock-batch")
         return _VN_BATCH_POOL
 
 
@@ -345,7 +387,7 @@ def _fetch_listing() -> list[dict[str, str]]:
                     }
                     for r in rows
                 ]
-        except Exception as exc:  # noqa: BLE001 - source fallback is the point
+        except Exception as exc:
             last = exc
             continue
     raise ProviderUnavailable("vnstock listing failed") from last
@@ -399,9 +441,11 @@ def index_ohlcv(
                 (
                     source,
                     (
-                        lambda source=source: Market(source)
-                        .index(symbol.upper())
-                        .ohlcv(count_back=count, interval=interval)
+                        lambda source=source: (
+                            Market(source)
+                            .index(symbol.upper())
+                            .ohlcv(count_back=count, interval=interval)
+                        )
                     ),
                 )
                 for source in SRC_INDEX
@@ -428,9 +472,11 @@ def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[di
                 (
                     source,
                     (
-                        lambda source=source: Market(source)
-                        .equity(symbol.upper())
-                        .ohlcv(count_back=count, interval=interval)
+                        lambda source=source: (
+                            Market(source)
+                            .equity(symbol.upper())
+                            .ohlcv(count_back=count, interval=interval)
+                        )
                     ),
                 )
                 for source in SRC_EQUITY
@@ -459,9 +505,11 @@ def futures_ohlcv(
                 (
                     source,
                     (
-                        lambda source=source: Market(source)
-                        .futures(symbol.upper())
-                        .ohlcv(count_back=count, interval=interval)
+                        lambda source=source: (
+                            Market(source)
+                            .futures(symbol.upper())
+                            .ohlcv(count_back=count, interval=interval)
+                        )
                     ),
                 )
                 for source in SRC_DERIV
@@ -488,9 +536,11 @@ def forex_ohlcv(pair: str = "USDVND", count: int = 30) -> list[dict[str, Any]]:
                 (
                     source,
                     (
-                        lambda source=source: Market(source)
-                        .forex(pair.upper())
-                        .ohlcv(count_back=count, interval="1D")
+                        lambda source=source: (
+                            Market(source)
+                            .forex(pair.upper())
+                            .ohlcv(count_back=count, interval="1D")
+                        )
                     ),
                 )
                 for source in SRC_DERIV
@@ -514,9 +564,11 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
                 (
                     source,
                     (
-                        lambda source=source: Market(source)
-                        .crypto(symbol.upper())
-                        .ohlcv(count_back=count, interval="1D")
+                        lambda source=source: (
+                            Market(source)
+                            .crypto(symbol.upper())
+                            .ohlcv(count_back=count, interval="1D")
+                        )
                     ),
                 )
                 for source in SRC_CRYPTO
@@ -600,9 +652,11 @@ def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]
                 (
                     source,
                     (
-                        lambda source=source: Market(source)
-                        .global_index(normalized)
-                        .ohlcv(count_back=count, interval="1D")
+                        lambda source=source: (
+                            Market(source)
+                            .global_index(normalized)
+                            .ohlcv(count_back=count, interval="1D")
+                        )
                     ),
                 )
                 for source in SRC_GLOBAL
@@ -618,122 +672,76 @@ def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]
     return _records(frame)
 
 
-def _norm_label(value: Any) -> str:
-    """Normalize a frame label for exact matching: lower + non-alnum → '_'."""
-    import re
-
-    text = str(value).lower().strip()
-    norm = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
-    return norm or text
-
-
-# Canonical alias sets (normalized form). Exact match only — never substring,
-# so "pe" must NOT match "open" and "roe" must NOT match "growth".
-PE_ALIASES = {"pe", "p_e", "pe_ttm", "pe_ratio", "price_earnings"}
-ROE_ALIASES = {"roe", "roe_ttm", "return_on_equity"}
-MARKET_CAP_ALIASES = {
-    "market_cap",
-    "marketcap",
-    "total_market_cap",
-    "market_capitalization",
-    "von_hoa",
-    "vonhoa",
-    "v_n_h_a",
+# --- vnstock_quant.fa table (gen 6) -------------------------------------------------
+# The gen-6 Open API has no ratio(): ratios are computed locally by
+# vnstock_quant.fa from the three fhsc statements. fa emits RT_* codes with
+# decimal "ratio" units; consumers (screener, valuation tools) still speak the
+# v4 item_id table (percent ratios, P/E as a multiple), so translate here.
+_RT_TO_V4: dict[str, tuple[str, ...]] = {
+    "RT_VALUE_EPS": ("trailing_eps",),
+    "RT_VALUE_BVPS": ("book_value_per_share_bvps",),
+    "RT_VALUE_PE": ("p_e",),
+    "RT_VALUE_PB": ("p_b",),
+    "RT_VALUE_PS": ("p_s",),
+    "RT_VALUE_EV_EBIT": ("ev_ebit",),
+    "RT_VALUE_EV_EBITDA": ("ev_ebitda",),
+    "RT_PRT_ROE": ("roe", "roe_trailling"),
+    "RT_PRT_ROA": ("roa",),
+    "RT_PRT_GROSS_MARGIN": ("gross_profit_margin",),
+    "RT_PRT_NET_MARGIN": ("net_profit_margin",),
+    "RT_PRT_EBIT_MARGIN": ("ebit_margin",),
 }
-
-
-def _expand_aliases(want: set[str]) -> set[str]:
-    out = set(want)
-    if out & {"pe", "p_e"}:
-        out |= PE_ALIASES
-    if out & ROE_ALIASES:
-        out |= ROE_ALIASES
-    if out & MARKET_CAP_ALIASES:
-        out |= MARKET_CAP_ALIASES
-    return out
-
-
-def _pick_ratio_number(frame: Any, *needles: str) -> float | None:
-    """Best-effort numeric pick from a vnstock ratio DataFrame.
-
-    Handles both layouts: indicator as column or as index row.
-    Label matching is exact on the normalized label (lower, non-alnum → '_')
-    against the needle alias set — never substring, so e.g. "pe" does not
-    match an "open" column. Returns the last non-null numeric value, else None.
-    """
-    want = _expand_aliases({_norm_label(n) for n in needles})
-    try:
-        norm_cols = {_norm_label(c): c for c in frame.columns}
-        for alias in want:
-            col = norm_cols.get(alias)
-            if col is None:
-                continue
-            try:
-                series = frame[col].dropna()
-            except Exception:
-                continue
-            if len(series):
-                try:
-                    value = series.iloc[-1]
-                    if is_bool(value):
-                        continue
-                    num = float(value)
-                except (TypeError, ValueError):
-                    continue
-                if math.isfinite(num):  # ±inf passes dropna() and every range bound
-                    return num
-        try:
-            norm_idx = {_norm_label(i): i for i in frame.index}
-        except Exception:
-            return None
-        for alias in want:
-            ix = norm_idx.get(alias)
-            if ix is None:
-                continue
-            try:
-                row = frame.loc[ix].dropna()
-            except Exception:
-                continue
-            if len(row):
-                try:
-                    value = row.iloc[-1]
-                    if is_bool(value):
-                        continue
-                    num = float(value)
-                except (TypeError, ValueError):
-                    continue
-                if math.isfinite(num):
-                    return num
-    except Exception:
-        return None
-    return None
+_V4_RATIO_LABELS = {
+    "trailing_eps": "Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS)",
+    "book_value_per_share_bvps": "Giá trị sổ sách của cổ phiếu (BVPS)",
+    "p_e": "Chỉ số giá thị trường trên thu nhập (P/E)",
+    "p_b": "Chỉ số giá thị trường trên giá trị sổ sách (P/B)",
+    "p_s": "Chỉ số giá thị trường trên doanh thu (P/S)",
+    "ev_ebit": "EV/EBIT",
+    "ev_ebitda": "EV/EBITDA",
+    "roe": "Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA)",
+    "roe_trailling": "ROE bình quân 4 quý gần nhất",
+    "roa": "Tỷ suất lợi nhuận trên tổng tài sản bình quân (ROAA)",
+    "gross_profit_margin": "Tỷ suất lợi nhuận gộp biên",
+    "net_profit_margin": "Tỷ suất lợi nhuận ròng biên",
+    "ebit_margin": "Tỷ suất lợi nhuận EBIT biên",
+    "dividend_yield": "Tỷ suất cổ tức",
+    "roic": "Tỷ suất sinh lời trên vốn đầu tư (ROIC)",
+    "beta": "Hệ số beta",
+}
+# v4 table ids with no vnstock_quant.fa equivalent (RT_PRT_ROIC, RT_VALUE_BETA
+# and RT_VALUE_DIVIDEND_YIELD are not in fa.catalog()); rows stay all-None.
+_FA_GAP_IDS = ("dividend_yield", "roic", "beta")
+_RATIO_METRIC_BASIS = {
+    "trailing_eps": "trailing_four_quarters",
+    "roe_trailling": "trailing_four_quarters",
+}
 
 
 @guarded("vnstock")
 def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
-    """Cash-flow statement via vnstock Finance (fallback when Vietstock LCTT
-    norms are empty upstream). Best-effort parse, VND billions.
+    """Cash-flow statement via gen-6 Fundamental (wide format) — fallback when
+    Vietstock LCTT norms are empty upstream. Best-effort parse, VND billions.
 
     Returns {symbol, period, periods, rows: [{name, values}]}.
     """
     try:
-        from vnstock import Finance
+        from vnstock import Fundamental
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    frame = None
-    for source in ("VCI", "KBS"):
-        try:
-            candidate = Finance(symbol=symbol.upper(), source=source).cash_flow(period=period)
-            if candidate is not None and len(candidate) > 0:
-                frame = candidate
-                break
-        except Exception:
-            continue
-    if frame is None or len(frame) == 0:
-        raise ProviderUnavailable(f"no cashflow for {symbol}")
+    try:
+        frame = (
+            Fundamental(SRC_FUNDAMENTAL[0])
+            .equity(symbol.upper())
+            .cash_flow(period=period, format="wide")
+        )
+    except Exception as exc:
+        raise ProviderUnavailable(f"no cashflow for {symbol}: {exc}") from exc
     try:
         import pandas as pd
 
+        if hasattr(frame, "index") and getattr(frame.index, "name", None):
+            frame = frame.reset_index()
         rows: list[dict[str, Any]] = []
         periods: list[str] = []
         if isinstance(frame, pd.DataFrame):
@@ -754,7 +762,7 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
                 for c in period_cols:
                     try:
                         v = row[c]
-                        # vnstock returns raw VND — normalize to VND billions
+                        # statements are raw VNĐ — normalize to VND billions
                         vals.append(None if pd.isna(v) else round(float(v) / 1e9, 1))
                     except (TypeError, ValueError):
                         vals.append(None)
@@ -765,266 +773,195 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
             "unit": "VNDbn",
             "periods": periods,
             "rows": rows,
+            "source": "vnstock_quant.fa/statements",
         }
     except Exception as exc:
         raise ProviderBadData(f"malformed vnstock cashflow for {symbol}: {exc}") from exc
 
 
-# Evidence registry for the item/item_id + clean period-column schema only.
-# Observation is insufficient to replace values with None; keep zeros for auditing.
-_SUSPECT_ZERO_RATIO_ITEMS = {
-    "roe_trailling": "all-zero source row; FPT fixture 2026-10-23; missing semantics unverified",
-}
-_RATIO_PERIOD = re.compile(r"^(\d{4})(?:-Q([1-4]))?$")
-_RATIO_METRIC_BASIS = {
-    "trailing_eps": "trailing_four_quarters",
-    "roe_trailling": "trailing_four_quarters",
-    "roe": "reported_period_ratio",
-}
-# vnstock appends _1, _2 ... when two upstream periods share one label.
-_RATIO_DUP_PERIOD = re.compile(r"^\d{4}(?:-Q[1-4])?_\d+$")
+# --- fa → v4 table translation ------------------------------------------------------
 
 
-def _check_ratio_periods(frame: Any) -> None:
-    """Raise ProviderBadData when a ratio frame's period columns cannot be trusted.
+def _load_fa_dataset(symbol: str) -> Any:
+    """fa.Dataset for one symbol: 3 statements x (year, quarter) via fhsc.
 
-    Live 24/10/2026 (FPT, VCB, HPG), the KBS quarterly CSTC header restarts its ID
-    every year and lists "2025 Quý 4" two or three times, and its ValueN columns
-    do not follow the header (FPT Value1 = 37.89 is Vietstock's Q3/2025 gross
-    margin, labelled 2026-Q2). vnstock then sorts the header by that ID, so the
-    frame comes back as 2026-Q2, 2025-Q4, 2026-Q1, 2025-Q4_1. No column can be
-    matched to its real quarter, so the whole frame is refused: a duplicated
-    label (the _N suffix) or period columns that are not strictly ordered in
-    either direction. Frames without the item_id layout are left to the callers.
+    ``estimate_shares`` lets valuation ratios (P/E, P/B…) run from charter
+    capital when the source does not send shares outstanding.
     """
-    names = [str(c) for c in getattr(frame, "columns", [])]
-    if "item_id" not in names:
-        return
-    keys = []
-    for name in names:
-        if _RATIO_DUP_PERIOD.match(name):
-            raise ProviderBadData(f"vnstock ratios repeat period {name.rsplit('_', 1)[0]}")
-        match = _RATIO_PERIOD.match(name)
-        if match:
-            keys.append((int(match.group(1)), int(match.group(2) or 0)))
-    pairs = list(itertools.pairwise(keys))
-    if not (all(a > b for a, b in pairs) or all(a < b for a, b in pairs)):
-        raise ProviderBadData("vnstock ratio periods are out of order")
+    from vnstock_quant import fa
+
+    return fa.Dataset.load([symbol], period="both", source=SRC_FUNDAMENTAL[0], estimate_shares=True)
 
 
-def _long_ratio_values(frame: Any) -> tuple[dict[str, float], str] | None:
-    """{item_id: value} at the newest period of a long-format ratio frame, plus that period.
-
-    vnstock now returns ratios as rows: columns item, item_id, then one column per
-    period ('2025', '2024', ... or '2026-Q2', ...). Every value comes from the same
-    vnstock now returns ratios as rows: columns item, item_id, then one column per
-    period ('2025', '2024', ... or '2026-Q2', ...). Every value comes from the same
-    newest period so a PE and an EPS never mix years. Placeholder rows are ignored
-    (see _long_ratio_table), and non-finite cells come back None. None when the
-    frame is not in this layout; callers run _check_ratio_periods first.
-    """
-    table = _long_ratio_table(frame)
-    if table is None:
-        return None
-    periods, rows = table
-    newest = periods[0]
-    values = {
-        r["item_id"]: r["values"][newest]
-        for r in rows
-        if r["values"].get(newest) is not None
-    }
-    return values, newest
+_FA_TTL = 6 * 3600.0
+_fa_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+_fa_cache_lock = threading.Lock()
 
 
-def _long_ratio_table(frame: Any) -> tuple[list[str], list[dict[str, Any]]] | None:
-    """Every clean period of a long-format ratio frame, newest first, and its rows.
-
-    Returns (periods, [{item_id, item, values: {period: value or None}}]); None when
-    the frame is not in the item/item_id + period-column layout. Cells that do not
-    parse, or are NaN/±Infinity, come back as None; a finite number is kept as-is,
-    0 included (a single 0, or a 0 next to other values, is data).
-
-    All-zero rows remain source data. The retained FPT fixture (2026-10-23,
-    vnstock_ratio_fpt_20261023.json) shows roe_trailling all-zero alongside
-    nonzero roe, but does not prove those cells mean missing. Flag that known
-    candidate as suspected only; never null it or infer other metric IDs.
-    """
-    try:
-        if "item_id" not in [str(c) for c in frame.columns]:
+def _fa_cache_get(symbol: str, period: str) -> dict[str, Any] | None:
+    with _fa_cache_lock:
+        hit = _fa_cache.get((symbol.upper(), period))
+        if hit is None:
             return None
-        cols = []
-        for col in frame.columns:
-            match = _RATIO_PERIOD.match(str(col))
-            if match:
-                cols.append(((int(match.group(1)), int(match.group(2) or 0)), col))
-        if not cols:
+        at, table = hit
+        if time.monotonic() - at > _FA_TTL:
+            del _fa_cache[(symbol.upper(), period)]
             return None
-        cols.sort(reverse=True)
-        periods = [str(col) for _, col in cols]
-        rows: list[dict[str, Any]] = []
-        for _, row in frame.iterrows():
-            key = str(row.get("item_id") or "").strip()
-            if not key:
-                continue
-            values: dict[str, float | None] = {}
-            for (_, col), label in zip(cols, periods, strict=True):
-                try:
-                    value = row[col]
-                    num = float("nan") if is_bool(value) else float(value)
-                except (TypeError, ValueError):
-                    num = float("nan")
-                values[label] = num if math.isfinite(num) else None
-            entry: dict[str, Any] = {
-                "item_id": key, "item": str(row.get("item") or "").strip(), "values": values,
+        return table
+
+
+def _fa_cache_put(symbol: str, period: str, table: dict[str, Any]) -> None:
+    with _fa_cache_lock:
+        _fa_cache[(symbol.upper(), period)] = (time.monotonic(), table)
+
+
+def _period_sort_key(label: str) -> tuple[int, int]:
+    match = re.match(r"^(\d{4})(?:-Q([1-4]))?$", str(label))
+    if not match:
+        return (0, 0)
+    return (int(match.group(1)), int(match.group(2) or 0))
+
+
+def _fa_to_v4_table(symbol: str, period: str, long_frame: Any) -> dict[str, Any]:
+    """Translate ``fa.ratios`` long output into the v4 ``{periods, ratios}`` table.
+
+    fa decimals ("ratio" unit) are scaled x100 to the v4 percent convention;
+    NaN/±Infinity cells and MISSING_INPUT/MISSING_MARKET reasons become None
+    plus a quality_note. RT_PRT_ROE feeds both the v4 ``roe`` and
+    ``roe_trailling`` ids: fa's quarterly ROE is already the trailing four
+    quarters (annual rows are the audited year).
+    """
+    rows_by_id: dict[str, dict[str, Any]] = {}
+    periods: set[str] = set()
+    for row in _records(long_frame):
+        rt_id = str(row.get("id", "")).strip()
+        v4_ids = _RT_TO_V4.get(rt_id)
+        if not v4_ids:
+            continue
+        try:
+            value = float(row.get("value"))
+        except (TypeError, ValueError):
+            value = None
+        if is_bool(row.get("value")):  # defensive: fa emits numerics, never bools
+            value = None
+        if value is not None and not math.isfinite(value):
+            value = None
+        unit = str(row.get("unit", "")).strip().lower()
+        if value is not None and unit in ("ratio", "decimal", "fraction"):
+            value *= 100.0  # fa decimals → v4 percent table
+        period_label = str(row.get("period", "")).strip()
+        if not period_label:
+            continue
+        periods.add(period_label)
+        reason = str(row.get("reason") or "").strip() or None
+        for v4_id in v4_ids:
+            entry = rows_by_id.setdefault(
+                v4_id,
+                {
+                    "item_id": v4_id,
+                    "item": _V4_RATIO_LABELS.get(v4_id, v4_id),
+                    "rt_id": rt_id,
+                    "unit": str(row.get("unit", "")),
+                    "values": {},
+                },
+            )
+            entry["values"][period_label] = value
+            if value is None and reason:
+                entry["quality_note"] = f"{rt_id}: {reason}"
+    ordered = sorted(periods, key=_period_sort_key, reverse=True)
+    ratios: list[dict[str, Any]] = []
+    for v4_id, entry in rows_by_id.items():
+        entry["values"] = {p: entry["values"].get(p) for p in ordered}
+        if v4_id in _RATIO_METRIC_BASIS:
+            entry["basis"] = _RATIO_METRIC_BASIS[v4_id]
+        ratios.append(entry)
+    for v4_id in _FA_GAP_IDS:
+        ratios.append(
+            {
+                "item_id": v4_id,
+                "item": _V4_RATIO_LABELS.get(v4_id, v4_id),
+                "values": {p: None for p in ordered},
+                "quality_note": (
+                    "not in vnstock_quant.fa — compute from prices or the annual report"
+                ),
             }
-            if key in _RATIO_METRIC_BASIS:
-                entry["basis"] = _RATIO_METRIC_BASIS[key]
-            if (
-                key in _SUSPECT_ZERO_RATIO_ITEMS and len(values) >= 2
-                and all(v == 0.0 for v in values.values())
-            ):
-                entry["suspected_placeholder"] = True
-                entry["quality_note"] = _SUSPECT_ZERO_RATIO_ITEMS[key]
-            rows.append(entry)
-        return periods, rows
-    except Exception:
-        return None
-
-
-def _discarded_ratio_period_labels(frame: Any) -> list[str]:
-    """Period-like columns excluded by the strict ratio period parser.
-
-    Duplicate pandas suffixes such as ``2025-Q4_1`` have no verified period
-    meaning, so expose them as diagnostics without treating them as quarters.
-    """
-    try:
-        return [
-            str(col) for col in frame.columns
-            if re.match(r"^\d{4}(?:-Q[1-4])?_\d+$", str(col))
-            and _RATIO_PERIOD.fullmatch(str(col)) is None
-        ]
-    except (AttributeError, TypeError):
-        return []
+        )
+    return {
+        "symbol": symbol.upper(),
+        "period": period,
+        "frequency": (
+            "annual" if period == "year" else "quarterly" if period == "quarter" else None
+        ),
+        "period_basis": "computed_from_statements",
+        "periods": ordered,
+        "ratios": ratios,
+        "discarded_period_labels": [],
+        "source": "vnstock_quant.fa",
+    }
 
 
 @guarded("vnstock")
 def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
-    """Full vnstock ratio table: {symbol, period, periods (newest first), ratios}.
+    """Full ratio table computed by vnstock_quant.fa, v4 table shape.
 
-    Ratios are rows {item_id, item, values: {period: value}}: margins, returns and
-    growth in percent (roe 28.3 = 28.3%), EPS/BVPS/CPS in dong, multiples as plain
-    numbers. Finite values the source returns are kept as-is (0 stays 0); cells
-    that do not parse or are NaN/±Infinity are None. Raises ProviderBadData when
-    vnstock returns another layout, or periods that cannot be matched to their
-    values (see _check_ratio_periods; today every KBS quarterly table).
+    {symbol, period, periods (newest first), ratios}: rows {item_id, item,
+    values: {period: value}} — margins/returns in percent (roe 14.29 = 14.29%),
+    EPS/BVPS in dong, multiples as plain numbers. Cells fa could not compute
+    (MISSING_INPUT, MISSING_MARKET without prices) are None with a quality_note.
+    Results are cached in-process for 6h: the community tier allows 30 fa
+    computes/day, and screener enrichment fans out over many symbols.
     """
+    cached = _fa_cache_get(symbol, period)
+    if cached is not None:
+        return cached
     try:
-        from vnstock import Fundamental
+        from vnstock_quant import fa
     except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
+        raise ProviderUnavailable("vnstock_quant not installed") from exc
     try:
-        data = Fundamental().equity(symbol.upper()).ratio(period=period)
+        ds = _load_fa_dataset(symbol)
+        long_frame = fa.ratios(ds, period=period, format="long")
     except Exception as exc:
-        raise ProviderUnavailable(f"vnstock ratios failed: {symbol}") from exc
-    try:
-        _check_ratio_periods(data)
-    except ProviderBadData as exc:
-        raise ProviderBadData(
-            f"{exc} ({symbol.upper()}, {period}): values cannot be matched to their period;"
-            " use period='year', or financial_detail for quarterly figures"
-        ) from exc
-    table = _long_ratio_table(data) if hasattr(data, "columns") else None
-    if table is None:
-        raise ProviderBadData(f"vnstock ratios for {symbol} are not in the item/period layout")
-    periods, rows = table
-    return {
-        "symbol": symbol.upper(), "period": period,
-        "frequency": "annual" if period == "year" else "quarterly" if period == "quarter" else None,
-        "period_basis": "reported_period_label",
-        "periods": periods, "ratios": rows,
-        "discarded_period_labels": _discarded_ratio_period_labels(data),
-    }
+        raise ProviderUnavailable(f"vnstock ratios failed: {symbol}: {exc}") from exc
+    table = _fa_to_v4_table(symbol, period, long_frame)
+    _fa_cache_put(symbol, period, table)
+    return table
 
 
 @guarded("vnstock")
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
-    """Per-symbol PE/ROE/market-cap (+ trailing EPS/BVPS) via vnstock Fundamental ratio.
+    """Per-symbol PE/ROE/EPS/BVPS from the fa table (v4 semantics: ROE fraction).
 
-    Best-effort parse: missing metrics come back as None. Raises
-    ProviderUnavailable when the upstream call itself fails or vnstock is
-    missing, and ProviderBadData when the period columns cannot be matched to
-    their values (see _check_ratio_periods). `period_label` names
-    the report period the numbers belong to ('2025' = year-end 2025), so a
-    year-end PE is never mistaken for today's PE.
+    Missing metrics come back as None. ``period_label`` names the report period
+    the numbers belong to ('2025' = year-end 2025), so a year-end PE is never
+    mistaken for today's multiple.
     """
-    try:
-        from vnstock import Fundamental
-    except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
-    try:
-        data = Fundamental().equity(symbol.upper()).ratio(period=period)
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock fundamentals failed: {symbol}") from exc
-    _check_ratio_periods(data)  # never pick numbers out of a mislabelled frame
-    pe: float | None = None
-    roe: float | None = None
-    market_cap: float | None = None
-    long = _long_ratio_values(data) if hasattr(data, "columns") else None
-    if long is not None:
-        values, period_label = long
-        # Long-format ratios are in percent (ROE 28.3 = 28.3%). A finite 0 is
-        # kept as returned — it is a source value, not evidence of missing data;
-        # a metric the source does not report is simply absent from `values`.
-        roe_pct = values.get("roe")
-        return {
-            "symbol": symbol.upper(),
-            "pe": values.get("p_e"),
-            "roe": roe_pct / 100.0 if roe_pct is not None else None,
-            "market_cap": None,
-            "market_cap_status": "missing_from_ratio_table",
-            "eps": values.get("trailing_eps"),
-            "bvps": values.get("book_value_per_share_bvps"),
-            "period_label": period_label,
-            "frequency": (
-                "annual" if period == "year" else "quarterly" if period == "quarter" else None
-            ),
-            "eps_basis": "trailing_four_quarters",
-            "discarded_period_labels": _discarded_ratio_period_labels(data),
-        }
-    try:
-        import pandas as pd
+    table = equity_ratios(symbol, period)
+    by_id = {r["item_id"]: r for r in table["ratios"]}
 
-        if isinstance(data, pd.DataFrame) and len(data):
-            pe = _pick_ratio_number(data, "pe", "p/e")
-            roe = _pick_ratio_number(data, "roe")
-            market_cap = _pick_ratio_number(data, "market_cap", "market cap", "von hoa", "vốn hóa")
-    except Exception:
-        pass
-    if isinstance(data, dict):
-        for raw_key, val in data.items():
-            if is_bool(val):
-                continue
-            try:
-                num = float(val)
-            except (TypeError, ValueError):
-                continue
-            if not math.isfinite(num):  # NaN passes every range bound in apply_filters
-                continue
-            norm = _norm_label(raw_key)
-            if pe is None and norm in PE_ALIASES:
-                pe = num
-            elif roe is None and norm in ROE_ALIASES:
-                roe = num
-            elif market_cap is None and norm in MARKET_CAP_ALIASES:
-                market_cap = num
-    if roe is not None and abs(roe) > 1:
-        roe = roe / 100.0
+    def _newest(item_id: str) -> float | None:
+        row = by_id.get(item_id)
+        if not row:
+            return None
+        for p in table["periods"]:
+            if row["values"].get(p) is not None:
+                return row["values"][p]
+        return None
+
+    roe_pct = _newest("roe")
     return {
-        "symbol": symbol.upper(), "pe": pe, "roe": roe,
-        "market_cap": market_cap,
-        # The legacy layout can expose a numeric field but has no verified
-        # VND unit, observation date, or shares basis for screening.
-        "market_cap_status": "unverified_unit_time_basis" if market_cap is not None else "missing",
+        "symbol": symbol.upper(),
+        "pe": _newest("p_e"),
+        "roe": roe_pct / 100.0 if roe_pct is not None else None,
+        "market_cap": None,
+        "market_cap_status": "missing_from_ratio_table",
+        "eps": _newest("trailing_eps"),
+        "bvps": _newest("book_value_per_share_bvps"),
+        "period_label": table["periods"][0] if table["periods"] else None,
+        "frequency": table["frequency"],
+        "eps_basis": "trailing_four_quarters",
+        "discarded_period_labels": [],
+        "source": "vnstock_quant.fa",
     }
 
 

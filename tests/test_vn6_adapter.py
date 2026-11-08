@@ -47,9 +47,30 @@ def test_quote_history_sorts_candles_ascending_and_uses_v6_sources(monkeypatch):
             # Upstream returned DESCENDING — the adapter must re-sort by day.
             return _Frame(
                 [
-                    {"time": "2026-11-05 07:00+07:00", "open": 3, "high": 3, "low": 3, "close": 3.0, "volume": 100},
-                    {"time": "2026-11-03 07:00+07:00", "open": 1, "high": 1, "low": 1, "close": 1.0, "volume": 100},
-                    {"time": "2026-11-04 07:00+07:00", "open": 2, "high": 2, "low": 2, "close": 2.0, "volume": 100},
+                    {
+                        "time": "2026-11-05 07:00+07:00",
+                        "open": 3,
+                        "high": 3,
+                        "low": 3,
+                        "close": 3.0,
+                        "volume": 100,
+                    },
+                    {
+                        "time": "2026-11-03 07:00+07:00",
+                        "open": 1,
+                        "high": 1,
+                        "low": 1,
+                        "close": 1.0,
+                        "volume": 100,
+                    },
+                    {
+                        "time": "2026-11-04 07:00+07:00",
+                        "open": 2,
+                        "high": 2,
+                        "low": 2,
+                        "close": 2.0,
+                        "volume": 100,
+                    },
                 ]
             )
 
@@ -84,7 +105,16 @@ def test_quote_history_falls_back_to_second_source(monkeypatch):
                 return Equity()
             return types.SimpleNamespace(
                 ohlcv=lambda **kw: _Frame(
-                    [{"time": "2026-11-04 07:00+07:00", "open": 1, "high": 1, "low": 1, "close": 2.0, "volume": 5}]
+                    [
+                        {
+                            "time": "2026-11-04 07:00+07:00",
+                            "open": 1,
+                            "high": 1,
+                            "low": 1,
+                            "close": 2.0,
+                            "volume": 5,
+                        }
+                    ]
                 )
             )
 
@@ -234,7 +264,9 @@ def test_alt_ohlcv_groups_use_count_back_and_named_interval(monkeypatch):
 
         def ohlcv(self, **kw):
             seen.append((self.group, self.symbol, kw))
-            return _Frame([{"time": "2026-11-07", "open": 1, "high": 1, "low": 1, "close": 1.0, "volume": 1}])
+            return _Frame(
+                [{"time": "2026-11-07", "open": 1, "high": 1, "low": 1, "close": 1.0, "volume": 1}]
+            )
 
     class Market:
         def __init__(self, source=None, **kw):
@@ -262,6 +294,61 @@ def test_alt_ohlcv_groups_use_count_back_and_named_interval(monkeypatch):
     sources = [s[1] for s in seen if s[0] == "source"]
     assert "binance" in sources  # crypto must run keyless via binance
     assert all(s for s in sources)  # every call is source-explicit
+
+
+def test_candles_range_uses_v6_ohlcv_sorts_and_normalizes(monkeypatch):
+    seen: dict = {}
+
+    class Equity:
+        def ohlcv(self, *, start=None, end=None, interval=None, **kw):
+            seen.update({"start": start, "end": end, "interval": interval})
+            return _Frame(
+                [
+                    {
+                        "time": "2026-11-05 07:00+07:00",
+                        "open": 2,
+                        "high": 2,
+                        "low": 2,
+                        "close": 2.0,
+                        "volume": 200,
+                    },
+                    {
+                        "time": "2026-11-04 07:00+07:00",
+                        "open": 1,
+                        "high": 1,
+                        "low": 1,
+                        "close": 1.0,
+                        "volume": 100,
+                    },
+                ]
+            )
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            return Equity()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.candles_range("FPT", "2026-11-01", "2026-11-08")
+    assert [r["t"] for r in rows] == ["2026-11-04", "2026-11-05"]
+    assert rows[0]["c"] == 1.0 and rows[0]["v"] == 100.0
+    assert seen["start"] == "2026-11-01" and seen["end"] == "2026-11-08"
+    assert seen["interval"] == "1D"
+
+
+def test_candles_range_raises_unavailable_when_empty(monkeypatch):
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            return types.SimpleNamespace(ohlcv=lambda **kw: _Frame([]))
+
+    _install(monkeypatch, Market=Market)
+    with pytest.raises(ProviderUnavailable):
+        vn_p.candles_range("FPT", "2026-11-01", "2026-11-08")
 
 
 # --- key helpers: v6 has no change_api_key/vnai; source keys decide "keyed" -------

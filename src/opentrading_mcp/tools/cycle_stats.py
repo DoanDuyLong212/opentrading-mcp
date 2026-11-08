@@ -134,38 +134,19 @@ ALL_SYMBOLS = INDICES + sorted({s for v in BASKETS.values() for s in v})
 
 
 def _fetch_range(sym: str, start: str, end: str) -> list[dict[str, Any]]:
-    try:
-        from vnstock.api.quote import Quote
-    except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
+    from opentrading_mcp.providers import vnstock as vn_p
+
     last: Exception | None = None
     for attempt in range(3):
         try:
-            q = Quote(symbol=sym.upper(), source="VCI")
-            df = q.history(start=start, end=end, interval="1D")
-            if df is None or len(df) == 0:
+            rows = vn_p.candles_range(sym, start, end, interval="1D")
+            if not rows:
                 raise ValueError("empty frame")
-            import pandas as _pd
-            if isinstance(df.index, _pd.DatetimeIndex):
-                times, recs = df.index, [r for _, r in df.iterrows()]
-            else:
-                tcol = "time" if "time" in df.columns else df.columns[0]
-                times, recs = _pd.to_datetime(df[tcol]), [r for _, r in df.iterrows()]
-            out = []
-            for ts, row in zip(times, recs, strict=False):
-                t = str(ts)[:10]
-                if len(t) != 10 or t[4] != "-":
-                    raise ValueError(f"bad time {t!r}")
-                out.append({"t": t, "o": float(row.get("open", 0) or 0),
-                            "h": float(row.get("high", 0) or 0),
-                            "l": float(row.get("low", 0) or 0),
-                            "c": float(row.get("close", 0) or 0),
-                            "v": float(row.get("volume", 0) or 0)})
-            return sorted(out, key=lambda r: r["t"])
+            return rows
         except Exception as exc:
             last = exc
             time.sleep(2 * (attempt + 1))
-    raise ProviderUnavailable(f"VCI fetch failed for {sym}: {last}")
+    raise ProviderUnavailable(f"candle fetch failed for {sym}: {last}")
 
 
 def _refresh_one(conn: Any, sym: str, today: str) -> dict[str, Any]:

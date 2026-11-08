@@ -21,7 +21,8 @@ async def test_empty_range_is_not_a_required_metric(monkeypatch):
 
     monkeypatch.setattr(vn_p, "listing_symbols", lambda: [{"symbol": "AAA"}, {"symbol": "BBB"}])
     monkeypatch.setattr(
-        vn_p, "equity_fundamentals",
+        vn_p,
+        "equity_fundamentals",
         lambda symbol, period="year": {"symbol": symbol, "roe": 0.2, "period_label": "2025"},
     )
     server = create_server("scan")
@@ -37,29 +38,30 @@ async def test_empty_range_is_not_a_required_metric(monkeypatch):
 # --- #44 mục 4: nhánh dữ liệu kiểu cũ không trả NaN/inf ------------------------------
 
 
-def test_legacy_ratio_paths_skip_non_finite(monkeypatch):
-    import sys
-    import types
-
+def test_fa_table_treats_non_finite_and_boolean_cells_as_missing():
+    """fa cells that are NaN/±Infinity/boolean are never financial numbers."""
     import pandas as pd
 
     from opentrading_mcp.providers import vnstock as vn_p
+    from opentrading_mcp.providers.screener import apply_filters
 
-    frame = pd.DataFrame({"P/E": [12.0, float("inf")], "ROE": [0.18, 0.2]})
-    assert vn_p._pick_ratio_number(frame, "pe") is None  # newest is inf: not a value
-    assert vn_p._pick_ratio_number(frame, "roe") == 0.2
-
-    class _Equity:
-        def ratio(self, period: str = "year"):
-            return {"pe": float("nan"), "roe": 0.15, "market_cap": 1000}
-
-    fundamental = types.SimpleNamespace(equity=lambda s: _Equity())
-    fake = types.SimpleNamespace(Fundamental=lambda: fundamental)
-    monkeypatch.setitem(sys.modules, "vnstock", fake)
-    out = vn_p.equity_fundamentals("AAA")
-    assert out["pe"] is None and out["roe"] == 0.15
-    assert out["market_cap"] == 1000
-    assert out["market_cap_status"] == "unverified_unit_time_basis"
+    for value in (float("inf"), float("nan"), True, False):
+        assert apply_filters([{"roe": pd.Series([value]).iloc[0]}], {"roe": [0, 2]}) == []
+        long = pd.DataFrame(
+            [
+                {
+                    "symbol": "AAA",
+                    "period": "2025-Q4",
+                    "id": "RT_PRT_ROE",
+                    "value": value,
+                    "unit": "ratio",
+                    "reason": "",
+                },
+            ]
+        )
+        table = vn_p._fa_to_v4_table("AAA", "quarter", long)
+        roe = next(r for r in table["ratios"] if r["item_id"] == "roe")
+        assert roe["values"]["2025-Q4"] is None
 
 
 # --- #44 mục 5: valuation_run hiển thị EPS/BVPS bằng 0 -------------------------------
@@ -150,10 +152,10 @@ async def test_noop_filters_normalized_before_shortcuts_and_coverage(
     assert not any("pe missing" in w for w in env["warnings"])
 
 
-@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"),
-                                 "nan", "inf", "not-a-number", True, False])
-@pytest.mark.parametrize("field,bound", [("roe", 0), ("roe", 1),
-                                          ("market_cap", 0), ("pe", 1)])
+@pytest.mark.parametrize(
+    "bad", [float("nan"), float("inf"), -float("inf"), "nan", "inf", "not-a-number", True, False]
+)
+@pytest.mark.parametrize("field,bound", [("roe", 0), ("roe", 1), ("market_cap", 0), ("pe", 1)])
 def test_direct_range_rejects_invalid_bound_even_without_rows(bad, field, bound):
     from opentrading_mcp.providers.screener import apply_filters
 
@@ -193,15 +195,18 @@ def test_nonfilterable_price_fields_ignore_invalid_numeric_conditions():
     assert apply_filters(rows, ignored) == rows
 
 
-@pytest.mark.parametrize("kwargs,field", [
-    ({"filters": {"roe": ["nan", 1]}}, "roe"),
-    ({"filters": {"roe": [0, float("inf")]}}, "roe"),
-    ({"filters": {"market_cap": [2, 1]}}, "market_cap"),
-    ({"filters": {"pe": [True, 10]}}, "pe"),
-    ({"max_pe": "nan"}, "max_pe"),
-    ({"min_roe": False}, "min_roe"),
-    ({"filters": {"pe": [0, 10]}, "max_pe": float("nan")}, "max_pe"),
-])
+@pytest.mark.parametrize(
+    "kwargs,field",
+    [
+        ({"filters": {"roe": ["nan", 1]}}, "roe"),
+        ({"filters": {"roe": [0, float("inf")]}}, "roe"),
+        ({"filters": {"market_cap": [2, 1]}}, "market_cap"),
+        ({"filters": {"pe": [True, 10]}}, "pe"),
+        ({"max_pe": "nan"}, "max_pe"),
+        ({"min_roe": False}, "min_roe"),
+        ({"filters": {"pe": [0, 10]}, "max_pe": float("nan")}, "max_pe"),
+    ],
+)
 async def test_invalid_filter_fails_before_cache_and_listing(monkeypatch, kwargs, field):
     from opentrading_mcp.server import create_server, register_preset
     from opentrading_mcp.tools import scan
@@ -237,20 +242,30 @@ async def test_market_cap_missing_has_no_evaluated_conclusion_and_cap_is_visible
     monkeypatch.setattr(scan, "run_blocking", fake_run)
     monkeypatch.setattr(scan, "cache_lookup", fake_lookup)
     monkeypatch.setattr(scan, "cache_store", fake_store)
-    monkeypatch.setattr(vn_p, "listing_symbols", lambda: [
-        {"symbol": f"S{i:03d}"} for i in range(35)
-    ])
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {
-        "symbol": symbol, "pe": 10, "roe": 0.2, "market_cap": None,
-    })
+    monkeypatch.setattr(
+        vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:03d}"} for i in range(35)]
+    )
+    monkeypatch.setattr(
+        vn_p,
+        "equity_fundamentals",
+        lambda symbol: {
+            "symbol": symbol,
+            "pe": 10,
+            "roe": 0.2,
+            "market_cap": None,
+        },
+    )
     server = create_server("scan")
     register_preset(server, "scan")
     env = await server._tool_manager.get_tool("stock_screener").fn(
-        filters={"market_cap": [0, None]}, limit=20,
+        filters={"market_cap": [0, None]},
+        limit=20,
     )
     coverage = env["data"]["coverage"]
     assert coverage["fundamentals"] == {
-        "limit": 30, "attempted": 30, "metric_available": {"market_cap": 0},
+        "limit": 30,
+        "attempted": 30,
+        "metric_available": {"market_cap": 0},
         "unsupported_metrics": ["market_cap"],
     }
     assert coverage["eligible"] == 35
@@ -282,21 +297,25 @@ async def test_market_cap_legacy_value_is_not_evaluated_without_basis(monkeypatc
     monkeypatch.setattr(scan, "cache_lookup", fake_lookup)
     monkeypatch.setattr(scan, "cache_store", fake_store)
     monkeypatch.setattr(vn_p, "listing_symbols", lambda: [{"symbol": "AAA"}])
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {
-        "symbol": symbol, "market_cap": 1000,
-    })
+    monkeypatch.setattr(
+        vn_p,
+        "equity_fundamentals",
+        lambda symbol: {
+            "symbol": symbol,
+            "market_cap": 1000,
+        },
+    )
     server = create_server("scan")
     register_preset(server, "scan")
     env = await server._tool_manager.get_tool("stock_screener").fn(
-        filters={"market_cap": [500, 1500]}, limit=1,
+        filters={"market_cap": [500, 1500]},
+        limit=1,
     )
     assert env["data"]["coverage"]["evaluated"] == 0
     assert env["data"]["coverage"]["fundamentals"]["metric_available"] == {
         "market_cap": 0,
     }
-    assert env["data"]["coverage"]["fundamentals"]["unsupported_metrics"] == [
-        "market_cap"
-    ]
+    assert env["data"]["coverage"]["fundamentals"]["unsupported_metrics"] == ["market_cap"]
     assert env["availability"] == "partial"
     assert not env["data"]["candidates"]
     assert any("unit/as-of/shares basis unverified" in w for w in env["warnings"])
@@ -352,16 +371,22 @@ async def test_enrichment_cap_marks_partial_even_when_first_30_valid(monkeypatch
     monkeypatch.setattr(scan, "run_blocking", fake_run)
     monkeypatch.setattr(scan, "cache_lookup", fake_lookup)
     monkeypatch.setattr(scan, "cache_store", fake_store)
-    monkeypatch.setattr(vn_p, "listing_symbols", lambda: [
-        {"symbol": f"S{i:03d}"} for i in range(35)
-    ])
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {
-        "symbol": symbol, "pe": 10,
-    })
+    monkeypatch.setattr(
+        vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:03d}"} for i in range(35)]
+    )
+    monkeypatch.setattr(
+        vn_p,
+        "equity_fundamentals",
+        lambda symbol: {
+            "symbol": symbol,
+            "pe": 10,
+        },
+    )
     server = create_server("scan")
     register_preset(server, "scan")
     env = await server._tool_manager.get_tool("stock_screener").fn(
-        filters={"pe": [None, 20]}, limit=20,
+        filters={"pe": [None, 20]},
+        limit=20,
     )
     assert env["availability"] == "partial"
     assert env["data"]["coverage"]["evaluated"] == 30
@@ -393,25 +418,3 @@ async def test_valuation_warning_distinguishes_missing_from_nonpositive(
     assert "per" not in env["data"] and "pb" not in env["data"]
     if eps is not None:
         assert env["data"]["eps"] == eps and env["data"]["bvps"] == bvps
-
-
-@pytest.mark.parametrize("value", [True, False])
-def test_dataframe_boolean_metrics_are_not_financial_numbers(monkeypatch, value):
-    import sys
-    import types
-
-    import pandas as pd
-
-    from opentrading_mcp.providers import vnstock as vn_p
-    from opentrading_mcp.providers.screener import apply_filters
-
-    # Boolean dtype yields a NumPy scalar from .iloc, not Python bool.
-    frame = pd.DataFrame({"pe": [value]})
-    assert vn_p._pick_ratio_number(frame, "pe") is None
-    assert apply_filters([{"roe": frame["pe"].iloc[0]}], {"roe": [0, 2]}) == []
-    long = pd.DataFrame([{"item_id": "roe", "2025": value, "2024": value}])
-    assert vn_p._long_ratio_table(long)[1][0]["values"] == {"2025": None, "2024": None}
-    equity = types.SimpleNamespace(ratio=lambda **kwargs: {"pe": value})
-    fake = types.SimpleNamespace(Fundamental=lambda: types.SimpleNamespace(equity=lambda _: equity))
-    monkeypatch.setitem(sys.modules, "vnstock", fake)
-    assert vn_p.equity_fundamentals("AAA")["pe"] is None

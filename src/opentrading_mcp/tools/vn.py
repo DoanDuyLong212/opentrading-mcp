@@ -90,8 +90,12 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             if summary:
                 s = _summarize(symbol, candles)
                 return await cache_store(
-                    "vn_quote_history", fp, price_ttl(),
-                    s, source="vnstock", data_time=s.get("last_t"),
+                    "vn_quote_history",
+                    fp,
+                    price_ttl(),
+                    s,
+                    source="vnstock",
+                    data_time=s.get("last_t"),
                 )
             return await cache_store(
                 "vn_quote_history",
@@ -133,9 +137,14 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             if summary:
                 # the `_missing` sentinel row is not a quote
                 return await cache_store(
-                    "vn_equity_quote_batch", fp, price_ttl(),
-                    {"count": len(quotes), "symbols": [q.get("symbol") for q in quotes],
-                     **({"missing": missing} if missing else {})},
+                    "vn_equity_quote_batch",
+                    fp,
+                    price_ttl(),
+                    {
+                        "count": len(quotes),
+                        "symbols": [q.get("symbol") for q in quotes],
+                        **({"missing": missing} if missing else {}),
+                    },
                     source="vnstock",
                     warnings=(
                         [f"batch partial: {len(missing)} symbols missing"] if missing else None
@@ -145,8 +154,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "vn_equity_quote_batch",
                 fp,
                 price_ttl(),
-                {"quotes": _project(quotes, columns),
-                 **({"missing": missing} if missing else {})},
+                {"quotes": _project(quotes, columns), **({"missing": missing} if missing else {})},
                 source="vnstock",
                 warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
             )
@@ -179,49 +187,38 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_fundamentals(
         symbol: str, period: str = "year", report_type: str = "ttm"
     ) -> dict[str, Any]:
-        """Chỉ số và BCTC qua vnstock Fundamental và Finance. Dùng khi định giá nhanh 1 mã.
+        """Chỉ số tài chính tính bằng vnstock_quant.fa từ ba BCTC (gen 6). Định giá nhanh 1 mã.
 
         Dùng khi: "PE/PB/ROE của FPT", snapshot định giá nhanh.
         Không dùng khi: cần vùng giá trị hợp lý theo ensemble PER/PB (dùng valuation_run); cần đọc
             từng dòng BCTC (dùng financial_detail); cần BCTC không cần JWT (dùng
             financial_statements hoặc vs_financeinfo).
 
-        period: 'year' hoặc 'quarter'. report_type: 'ttm' (12 tháng gần nhất) hoặc 'latest'.
+        period: 'year' hoặc 'quarter'. report_type chỉ còn tác dụng phân biệt cache
+            ('ttm'/'latest') — gen 6 tính chỉ số từ BCTC đã chuẩn hoá, quý là TTM.
         """
         fp = f"{symbol}|{period}|{report_type}"
         hit = await cache_lookup("vn_fundamentals", fp)
         if hit is not None:
             return hit
         try:
-            from vnstock import Fundamental
-        except ImportError:
-            return _na("vn_fundamentals", "vnstock not installed")
-        try:
             data = await run_blocking(
-                functools.partial(
-                    Fundamental().equity(symbol.upper()).ratio,
-                    period=period,
-                    report_type=report_type,
-                ),
+                functools.partial(vn_p.equity_ratios, symbol.upper(), period),
                 "vn_fundamentals",
             )
-            to_records = getattr(data, "to_dict", None)
-            if callable(to_records):
-                try:
-                    ratios = to_records(orient="records")
-                except Exception:
-                    try:
-                        ratios = to_records()
-                    except Exception:
-                        ratios = str(data)
-            else:
-                ratios = data
             return await cache_store(
                 "vn_fundamentals",
                 fp,
                 TTL_SECONDS["financeinfo"],  # quarterly ratios, not prices
-                {"symbol": symbol.upper(), "ratios": ratios},
-                source="vnstock",
+                {
+                    "symbol": symbol.upper(),
+                    "period": period,
+                    "report_type": report_type,
+                    "periods": data.get("periods", []),
+                    "ratios": data.get("ratios", []),
+                    "source": data.get("source", "vnstock_quant.fa"),
+                },
+                source="vnstock_quant.fa",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_fundamentals", str(exc))
@@ -246,8 +243,11 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 rows = await run_blocking(pub_p.btmc_gold, "vn_retail_gold", timeout_secs=20.0)
                 keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
                 return await cache_store(
-                    "vn_retail_gold", fp, TTL_SECONDS["hour"],
-                    {"rows": keep or rows}, source="btmc-direct",
+                    "vn_retail_gold",
+                    fp,
+                    TTL_SECONDS["hour"],
+                    {"rows": keep or rows},
+                    source="btmc-direct",
                 )
             except (ProviderUnavailable, ProviderBadData):
                 pass
@@ -257,14 +257,18 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vn_retail_gold", "vnstock not installed")
         try:
             frame = await run_blocking(
-                functools.partial(Retail().gold, source=source), "vn_retail_gold",
+                functools.partial(Retail().gold, source=source),
+                "vn_retail_gold",
                 timeout_secs=30.0,
             )
             rows = frame.to_dict(orient="records")
             keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
             return await cache_store(
-                "vn_retail_gold", fp, TTL_SECONDS["hour"],
-                {"rows": keep or rows}, source="vnstock-retail",
+                "vn_retail_gold",
+                fp,
+                TTL_SECONDS["hour"],
+                {"rows": keep or rows},
+                source="vnstock-retail",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_retail_gold", str(exc))
@@ -284,8 +288,11 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             frame = await run_blocking(Retail().exchange_rate, "vn_retail_fx")
             return await cache_store(
-                "vn_retail_fx", "-", TTL_SECONDS["hour"],
-                {"rows": frame.to_dict(orient="records")}, source="vnstock-retail",
+                "vn_retail_fx",
+                "-",
+                TTL_SECONDS["hour"],
+                {"rows": frame.to_dict(orient="records")},
+                source="vnstock-retail",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_retail_fx", str(exc))

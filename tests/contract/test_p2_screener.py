@@ -99,6 +99,7 @@ async def test_stock_screener_does_not_break(monkeypatch):
     # backward-compat max_pe/min_roe
     env2 = await fn(max_pe=20, min_roe=0.1, limit=20)
     assert len(env2["data"]["candidates"]) == 1
+
     # fundamentals failure must not break whole batch
     def boom(symbol: str, period: str = "year"):
         raise RuntimeError("upstream down")
@@ -170,55 +171,6 @@ def test_price_fields_non_filterable_catalog():
     # price filters are ignored (no live price enrichment) → all rows kept
     assert len(apply_filters(rows, {"close": [None, 100]})) == 2
     assert len(apply_filters(rows, {"change_pct": [0, 10]})) == 2
-
-
-def test_pick_ratio_number_exact_no_substring():
-    import pandas as pd
-
-    from opentrading_mcp.providers.vnstock import (
-        _pick_ratio_number,
-    )
-
-    # "pe" must NOT match an "open" column (old substring bug)
-    frame = pd.DataFrame({"open": [100.0, 101.0], "close": [102.0, 103.0]})
-    assert _pick_ratio_number(frame, "pe", "p/e") is None
-    assert _pick_ratio_number(frame, "roe") is None
-    # exact + alias match still works (column layout and P/E spelling)
-    frame2 = pd.DataFrame({"P/E": [12.5, 13.5], "ROE": [0.18, 0.20]})
-    assert _pick_ratio_number(frame2, "pe", "p/e") == 13.5
-    assert _pick_ratio_number(frame2, "roe") == 0.20
-    # index-row layout with alias price_earnings
-    frame3 = pd.DataFrame(
-        [[10.0, 11.0]], index=["price_earnings"], columns=["2023", "2024"]
-    )
-    assert _pick_ratio_number(frame3, "pe", "p/e") == 11.0
-    # dict fallback: "open" must not feed pe
-    import opentrading_mcp.providers.vnstock as vn_p
-
-    real_fund = None
-    try:
-
-        class _FakeEq:
-            def ratio(self, period="year"):
-                return {"open": 999.0, "close": 50.0}
-
-        class _FakeF:
-            def equity(self, symbol):
-                return _FakeEq()
-
-        import vnstock as _vs
-
-        real_fund = _vs.Fundamental
-        _vs.Fundamental = _FakeF
-        out = vn_p.equity_fundamentals("VCB")
-        assert out["pe"] is None
-        assert out["roe"] is None
-        assert out["market_cap"] is None
-    finally:
-        if real_fund is not None:
-            import vnstock as _vs2
-
-            _vs2.Fundamental = real_fund
 
 
 def test_reference_equity_fail_closed_no_exchange_key(monkeypatch):

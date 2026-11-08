@@ -74,29 +74,19 @@ def _yf_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
 
 
 def _vci_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
-    try:
-        from vnstock.api.quote import Quote
-    except ImportError as exc:
-        raise ProviderUnavailable("vnstock not installed") from exc
+    from opentrading_mcp.providers import vnstock as vn_p
+
     last: Exception | None = None
     for attempt in range(3):
         try:
-            q = Quote(symbol=symbol.upper(), source="VCI")
-            df = q.history(start=start, end=end, interval="1D")
-            if df is None or len(df) == 0:
+            rows = vn_p.candles_range(symbol, start, end, interval="1D")
+            if not rows:
                 raise ValueError("empty frame")
-            import pandas as _pd
-            if isinstance(df.index, _pd.DatetimeIndex):
-                times = df.index
-            else:
-                tcol = "time" if "time" in df.columns else df.columns[0]
-                times = _pd.to_datetime(df[tcol])
-            return [{"t": str(ts)[:10], "c": float(row.get("close", 0) or 0)}
-                    for ts, (_, row) in zip(times, df.iterrows(), strict=False)]
+            return [{"t": r["t"], "c": r["c"]} for r in rows]
         except Exception as exc:
             last = exc
             time.sleep(2 * (attempt + 1))
-    raise ProviderUnavailable(f"VCI fetch failed for {symbol}: {last}")
+    raise ProviderUnavailable(f"candle fetch failed for {symbol}: {last}")
 
 
 def _petrol_ron95(start: str, end: str) -> list[dict[str, Any]]:

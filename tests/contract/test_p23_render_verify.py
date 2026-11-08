@@ -105,7 +105,8 @@ def test_quant_backtest_has_equity_curve(monkeypatch):
     from opentrading_mcp.providers import vnstock as vn_p
 
     monkeypatch.setattr(
-        vn_p, "quote_history",
+        vn_p,
+        "quote_history",
         lambda *a, **k: [{"c": 100.0 + i} for i in range(50)],
     )
     import asyncio
@@ -124,10 +125,13 @@ def test_geo_intel_empty_filter_falls_back(monkeypatch):
     from opentrading_mcp.tools import intel as tools_intel
 
     def fake_gdelt(query: str = "x", max_records: int = 20):
-        return {"query": query, "articles": [
-            {"title": "football final", "url": "http://x.com/1"},
-            {"title": "tennis results", "url": "http://x.com/2"},
-        ]}
+        return {
+            "query": query,
+            "articles": [
+                {"title": "football final", "url": "http://x.com/1"},
+                {"title": "tennis results", "url": "http://x.com/2"},
+            ],
+        }
 
     async def fake_call(*a: Any, **k: Any) -> Any:
         return fake_gdelt()
@@ -173,8 +177,7 @@ def test_crypto_spot_coingecko_last_resort(monkeypatch):
 
     def fake_get(url: str, params: Any) -> Any:
         if "coingecko" in url:
-            return {"bitcoin": {"usd": 82000.0, "usd_24h_change": -1.0,
-                                "usd_24h_vol": 100.0}}
+            return {"bitcoin": {"usd": 82000.0, "usd_24h_change": -1.0, "usd_24h_vol": 100.0}}
         raise ProviderUnavailable("binance GET failed: 418")
 
     monkeypatch.setattr(bn_p, "_get_json", fake_get)
@@ -193,8 +196,17 @@ def test_crypto_spot_vision_fallback(monkeypatch):
         calls.append(url)
         if "api.binance.com" in url:
             raise ProviderUnavailable("binance GET failed: 418")
-        return [{"symbol": "BTCUSDT", "lastPrice": "85000", "priceChangePercent": "1.0",
-                 "highPrice": "86000", "lowPrice": "84000", "volume": "100", "quoteVolume": "1"}]
+        return [
+            {
+                "symbol": "BTCUSDT",
+                "lastPrice": "85000",
+                "priceChangePercent": "1.0",
+                "highPrice": "86000",
+                "lowPrice": "84000",
+                "volume": "100",
+                "quoteVolume": "1",
+            }
+        ]
 
     monkeypatch.setattr(bn_p, "_get_json", fake_get)
     rows = bn_p.spot_board(["BTCUSDT"])
@@ -236,9 +248,13 @@ def test_financial_detail_lctt_vnstock_fallback(monkeypatch):
         raise ProviderBadData(f"vietstock no norms for {symbol} {statement}")
 
     def fake_cf(symbol: str, period: str = "quarter") -> dict:
-        return {"symbol": symbol, "period": period, "unit": "VNDbn",
-                "periods": ["Q1/2026", "Q2/2026"],
-                "rows": [{"name": "Test flow", "values": [1.0, 2.0]}]}
+        return {
+            "symbol": symbol,
+            "period": period,
+            "unit": "VNDbn",
+            "periods": ["Q1/2026", "Q2/2026"],
+            "rows": [{"name": "Test flow", "values": [1.0, 2.0]}],
+        }
 
     monkeypatch.setattr(vs_p, "financial_detail", boom_detail)
     monkeypatch.setattr(vn_p, "cashflow", fake_cf)
@@ -269,10 +285,17 @@ def test_cashflow_parser_skips_metadata_columns(monkeypatch):
             pass
 
         def cash_flow(self, period: str = "quarter") -> Any:
-            return pd.DataFrame([
-                {"item": "Test flow", "item_en": "x", "item_id": 1,
-                 "2026-Q1": 1_000_000_000.0, "2026-Q2": 2_000_000_000.0},
-            ])
+            return pd.DataFrame(
+                [
+                    {
+                        "item": "Test flow",
+                        "item_en": "x",
+                        "item_id": 1,
+                        "2026-Q1": 1_000_000_000.0,
+                        "2026-Q2": 2_000_000_000.0,
+                    },
+                ]
+            )
 
     fake_vnstock = types.ModuleType("vnstock")
     fake_vnstock.Finance = FakeFinance
@@ -342,8 +365,10 @@ def test_market_movers_sorts_by_percent_change():
     import opentrading_mcp.providers.vnstock as vn_p
 
     def fake_batch(symbols):
-        return [{"symbol": s, "percent_change": float(i), "volume_accumulated": 100 - i}
-                for i, s in enumerate(symbols[:5])]
+        return [
+            {"symbol": s, "percent_change": float(i), "volume_accumulated": 100 - i}
+            for i, s in enumerate(symbols[:5])
+        ]
 
     async def go():
         with mock.patch.object(vn_p, "equity_quote_batch", fake_batch):
@@ -355,4 +380,3 @@ def test_market_movers_sorts_by_percent_change():
     # fake assigns percent_change=idx (ACB=0…); desc sort → highest idx first
     assert gainers[0] == "CTG" and gainers[1] == "BVH", gainers
     assert env["data"]["universe"] == 5  # = quotes count (fake returns 5 rows)
-

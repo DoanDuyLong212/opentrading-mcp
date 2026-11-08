@@ -8,62 +8,48 @@ got pe/roe = None.
 
 from __future__ import annotations
 
-import json
 import sys
 import types
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import pytest
 
 from opentrading_mcp.providers import vnstock as vn
-from opentrading_mcp.providers.errors import ProviderBadData
 
-RATIOS = json.loads(
-    (Path(__file__).parent / "fixtures" / "vnstock_ratio_fpt_20261023.json").read_text(
-        encoding="utf-8"
+
+def _fa_table(
+    pe: float | None,
+    roe_pct: float | None,
+    eps: float | None,
+    bvps: float | None,
+    periods: tuple[str, ...] = ("2025",),
+) -> dict[str, Any]:
+    """A provider-shaped ratio table (what equity_fundamentals projects from)."""
+    return {
+        "symbol": "FPT",
+        "period": "year",
+        "frequency": "annual",
+        "periods": list(periods),
+        "ratios": [
+            {"item_id": "p_e", "values": {p: pe for p in periods}},
+            {"item_id": "roe", "values": {p: roe_pct for p in periods}},
+            {"item_id": "trailing_eps", "values": {p: eps for p in periods}},
+            {"item_id": "book_value_per_share_bvps", "values": {p: bvps for p in periods}},
+        ],
+    }
+
+
+def test_equity_fundamentals_reads_the_fa_table(monkeypatch):
+    monkeypatch.setattr(
+        vn, "equity_ratios", lambda symbol, period="year": _fa_table(15.91, 28.3, 6021.21, 25679.55)
     )
-)
-
-
-def _fake_fundamental(monkeypatch, frame: pd.DataFrame) -> None:
-    class _Equity:
-        def ratio(self, period: str = "year") -> pd.DataFrame:
-            return frame
-
-    class Fundamental:
-        def equity(self, symbol: str) -> _Equity:
-            return _Equity()
-
-    monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Fundamental=Fundamental))
-
-
-def test_long_ratio_picks_the_newest_year():
-    values, label = vn._long_ratio_values(pd.DataFrame(RATIOS["year"]))
-    assert label == "2025"
-    assert values["p_e"] == 15.91
-    assert values["trailing_eps"] == 6021.21
-
-
-def test_long_ratio_quarter_mislabelled_frame_is_refused():
-    # columns: 2026-Q2, 2025-Q4, 2026-Q1, 2025-Q4_1 (as returned). The 15.53 this
-    # used to read as the 2026-Q2 P/E belongs to another quarter.
-    with pytest.raises(ProviderBadData):
-        vn._check_ratio_periods(pd.DataFrame(RATIOS["quarter"]))
-
-
-def test_long_ratio_returns_none_for_other_layouts():
-    assert vn._long_ratio_values(pd.DataFrame({"P/E": [12.5], "ROE": [0.18]})) is None
-
-
-def test_equity_fundamentals_reads_long_format(monkeypatch):
-    _fake_fundamental(monkeypatch, pd.DataFrame(RATIOS["year"]))
     out = vn.equity_fundamentals("fpt")
-    assert {key: out[key] for key in (
-        "symbol", "pe", "roe", "market_cap", "eps", "bvps", "period_label"
-    )} == {
+    assert {
+        key: out[key]
+        for key in ("symbol", "pe", "roe", "market_cap", "eps", "bvps", "period_label")
+    } == {
         "symbol": "FPT",
         "pe": 15.91,
         "roe": pytest.approx(0.283),
@@ -74,29 +60,23 @@ def test_equity_fundamentals_reads_long_format(monkeypatch):
     }
     assert out["frequency"] == "annual"
     assert out["eps_basis"] == "trailing_four_quarters"
-    assert out["discarded_period_labels"] == []
     assert out["market_cap_status"] == "missing_from_ratio_table"
 
 
 def test_equity_fundamentals_small_roe_is_still_percent(monkeypatch):
-    rows = [dict(r) for r in RATIOS["year"]]
-    for r in rows:
-        if r["item_id"] == "roe":
-            r["2025"] = 0.9  # 0.9% — the old >1 heuristic would read this as 90%
-    _fake_fundamental(monkeypatch, pd.DataFrame(rows))
+    # 0.9% ROE → 0.009 fraction; the old >1 heuristic would read this as 90%.
+    monkeypatch.setattr(
+        vn, "equity_ratios", lambda symbol, period="year": _fa_table(15.91, 0.9, 6021.21, 25679.55)
+    )
     assert vn.equity_fundamentals("X")["roe"] == pytest.approx(0.009)
 
 
 def test_equity_fundamentals_keeps_valid_zeros(monkeypatch):
-    # A finite 0 from the source is a value, not missing data (a break-even
-    # company reports EPS/ROE 0). Only an absent row or a non-finite cell is None.
-    rows = [dict(r) for r in RATIOS["year"]]
-    for r in rows:
-        if r["item_id"] in ("p_e", "roe"):
-            r["2025"] = 0
-        elif r["item_id"] == "book_value_per_share_bvps":
-            r["2025"] = "0"  # string zero still parses to a finite 0
-    _fake_fundamental(monkeypatch, pd.DataFrame(rows))
+    # A finite 0 computed by fa is a value, not missing data (a break-even
+    # company reports EPS/ROE 0). Only a missing row/cell is None.
+    monkeypatch.setattr(
+        vn, "equity_ratios", lambda symbol, period="year": _fa_table(0.0, 0.0, 6021.21, 0.0)
+    )
     out = vn.equity_fundamentals("FPT")
     assert out["pe"] == 0
     assert out["roe"] == 0
@@ -164,8 +144,11 @@ async def test_valuation_run_uses_trailing_eps_not_price_over_pe(monkeypatch):
             return [{"symbol": "FPT", "close_price": 57400}]
         if fn is comp_fin.vn_p.equity_fundamentals:
             return {
-                "pe": 15.91, "eps": 6021.21, "bvps": 25679.55,
-                "period_label": "2025", "frequency": "annual",
+                "pe": 15.91,
+                "eps": 6021.21,
+                "bvps": 25679.55,
+                "period_label": "2025",
+                "frequency": "annual",
                 "eps_basis": "trailing_four_quarters",
             }
         raise AssertionError(fn)
