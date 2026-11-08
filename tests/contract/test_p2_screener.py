@@ -124,7 +124,7 @@ def test_reference_equity_filters_by_exchange_field(monkeypatch):
     class FakeRef:
         class equity:
             @staticmethod
-            def list():
+            def list_by_exchange(exchange=None):  # gen-6 shape (see test_vnstock_signatures)
                 return FakeFrame()
 
     import vnstock as _vs
@@ -184,7 +184,7 @@ def test_reference_equity_fail_closed_no_exchange_key(monkeypatch):
     class FakeRef:
         class equity:
             @staticmethod
-            def list():
+            def list_by_exchange(exchange=None):  # gen-6 shape (see test_vnstock_signatures)
                 return FakeFrame()
 
     import vnstock as _vs
