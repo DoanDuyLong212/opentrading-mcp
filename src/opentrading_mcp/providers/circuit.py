@@ -7,6 +7,7 @@ they never count toward the threshold.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections.abc import Callable
@@ -47,8 +48,13 @@ class CircuitBreaker:
     def call(self, fn: Callable[[], T]) -> T:
         now = time.monotonic()
         with self._state_lock:
-            if self._is_open(now):
-                raise CircuitOpenError(f"circuit {self.name!r} is open")
+            if self._opened_at is not None and self._is_open(now):
+                wait = self.recovery_timeout - (now - self._opened_at)
+                raise CircuitOpenError(
+                    f"circuit {self.name!r} is open",
+                    reason="upstream_down",
+                    retry_after_s=max(1, math.ceil(wait)),
+                )
         try:
             result = fn()
         except ProviderAuthMissing:
