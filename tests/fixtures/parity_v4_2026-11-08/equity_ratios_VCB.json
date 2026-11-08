@@ -1,0 +1,345 @@
+{
+  "ok": true,
+  "elapsed_s": 3.92,
+  "rows": null,
+  "data": {
+    "symbol": "VCB",
+    "period": "year",
+    "frequency": "annual",
+    "period_basis": "reported_period_label",
+    "periods": [
+      "2025",
+      "2024",
+      "2023",
+      "2022"
+    ],
+    "ratios": [
+      {
+        "item_id": "trailing_eps",
+        "item": "Thu nhập trên mỗi cổ phần của 4 quý gần nhất (EPS)",
+        "values": {
+          "2025": 4542.23,
+          "2024": 6053.11,
+          "2023": 6507.05,
+          "2022": 6334.29
+        },
+        "basis": "trailing_four_quarters"
+      },
+      {
+        "item_id": "book_value_per_share_bvps",
+        "item": "Giá trị sổ sách của cổ phiếu (BVPS)",
+        "values": {
+          "2025": 26874.99,
+          "2024": 35105.74,
+          "2023": 29524.06,
+          "2022": 28662.57
+        }
+      },
+      {
+        "item_id": "p_e",
+        "item": "Chỉ số giá thị trường trên thu nhập (P/E)",
+        "values": {
+          "2025": 12.66,
+          "2024": 15.07,
+          "2023": 12.34,
+          "2022": 12.63
+        }
+      },
+      {
+        "item_id": "p_b",
+        "item": "Chỉ số giá thị trường trên giá trị sổ sách (P/B)",
+        "values": {
+          "2025": 2.14,
+          "2024": 2.6,
+          "2023": 2.72,
+          "2022": 2.79
+        }
+      },
+      {
+        "item_id": "dividend_yield",
+        "item": "Tỷ suất cổ tức",
+        "values": {
+          "2025": 0.78,
+          "2024": 0.0,
+          "2023": 0.0,
+          "2022": 0.0
+        }
+      },
+      {
+        "item_id": "beta",
+        "item": "Beta",
+        "values": {
+          "2025": 0.67,
+          "2024": 0.65,
+          "2023": 0.75,
+          "2022": 0.84
+        }
+      },
+      {
+        "item_id": "roe",
+        "item": "Tỷ suất lợi nhuận trên vốn chủ sở hữu bình quân (ROEA)",
+        "values": {
+          "2025": 16.73,
+          "2024": 18.74,
+          "2023": 21.99,
+          "2022": 24.44
+        },
+        "basis": "reported_period_ratio"
+      },
+      {
+        "item_id": "roa",
+        "item": "Tỷ suất sinh lợi trên tổng tài sản bình quân (ROAA)",
+        "values": {
+          "2025": 1.55,
+          "2024": 1.72,
+          "2023": 1.81,
+          "2022": 1.85
+        }
+      },
+      {
+        "item_id": "yield_on_earning_assets_yoea",
+        "item": "Tỷ suất sinh lợi của Tài sản Có sinh lãi (YOEA)",
+        "values": {
+          "2025": 4.72,
+          "2024": 4.84,
+          "2023": 6.05,
+          "2022": 5.61
+        }
+      },
+      {
+        "item_id": "cost_of_funding_earning_assets_cof",
+        "item": "Tỷ lệ chi phí hình thành Tài sản Có sinh lãi (COF)",
+        "values": {
+          "2025": 2.3,
+          "2024": 2.2,
+          "2023": 3.41,
+          "2022": 2.45
+        }
+      },
+      {
+        "item_id": "net_interest_margin_nim",
+        "item": "Tỷ lệ thu nhập lãi thuần (NIM)",
+        "values": {
+          "2025": 2.67,
+          "2024": 2.91,
+          "2023": 3.0,
+          "2022": 3.39
+        }
+      },
+      {
+        "item_id": "cost_income_ratio_cir",
+        "item": "Tỷ lệ chi phí hoạt động/Tổng thu nhập HĐKD trước dự phòng (CIR)",
+        "values": {
+          "2025": 34.84,
+          "2024": 33.58,
+          "2023": 32.36,
+          "2022": 31.21
+        }
+      },
+      {
+        "item_id": "roe_trailling",
+        "item": "ROE bình quân 4 quý gần nhất",
+        "values": {
+          "2025": 0.0,
+          "2024": 0.0,
+          "2023": 0.0,
+          "2022": 0.0
+        },
+        "basis": "trailing_four_quarters",
+        "suspected_placeholder": true,
+        "quality_note": "all-zero source row; FPT fixture 2026-10-23; missing semantics unverified"
+      },
+      {
+        "item_id": "roa_trailling",
+        "item": "ROA bình quân 4 quý gần nhất",
+        "values": {
+          "2025": 0.0,
+          "2024": 0.0,
+          "2023": 0.0,
+          "2022": 0.0
+        }
+      },
+      {
+        "item_id": "profit_before_tax",
+        "item": "Tăng trưởng lợi nhuận trước thuế",
+        "values": {
+          "2025": 4.22,
+          "2024": 2.41,
+          "2023": 10.37,
+          "2022": 35.95
+        }
+      },
+      {
+        "item_id": "profit_after_tax_for_shareholders_of_the_parent_company",
+        "item": "Tăng trưởng lợi nhuận sau thuế của CĐ ngân hàng mẹ",
+        "values": {
+          "2025": 3.98,
+          "2024": 2.42,
+          "2023": 10.48,
+          "2022": 35.93
+        }
+      },
+      {
+        "item_id": "total_assets",
+        "item": "Tăng trưởng tổng tài sản",
+        "values": {
+          "2025": 17.09,
+          "2024": 13.39,
+          "2023": 1.42,
+          "2022": 28.19
+        }
+      },
+      {
+        "item_id": "owners_equity",
+        "item": "Tăng trưởng vốn chủ sở hữu",
+        "values": {
+          "2025": 14.45,
+          "2024": 18.91,
+          "2023": 21.65,
+          "2022": 24.23
+        }
+      },
+      {
+        "item_id": "charter_capital",
+        "item": "Tăng trưởng vốn điều lệ",
+        "values": {
+          "2025": 49.5,
+          "2024": 0.0,
+          "2023": 18.1,
+          "2022": 27.6
+        }
+      },
+      {
+        "item_id": "deposits_from_customers",
+        "item": "Tăng trưởng dư nợ cho vay",
+        "values": {
+          "2025": 15.48,
+          "2024": 14.08,
+          "2023": 10.94,
+          "2022": 19.18
+        }
+      },
+      {
+        "item_id": "deposits_from_customers_2",
+        "item": "Tăng trưởng huy động vốn khách hàng",
+        "values": {
+          "2025": 10.42,
+          "2024": 8.52,
+          "2023": 12.24,
+          "2022": 9.53
+        }
+      },
+      {
+        "item_id": "net_interest_income",
+        "item": "Tăng trưởng thu nhập lãi thuần",
+        "values": {
+          "2025": 6.07,
+          "2024": 3.33,
+          "2023": 0.7,
+          "2022": 25.96
+        }
+      },
+      {
+        "item_id": "provisions_for_loan_losses",
+        "item": "Tăng trưởng dự phòng rủi ro tín dụng",
+        "values": {
+          "2025": -3.7,
+          "2024": -27.38,
+          "2023": -51.77,
+          "2022": -17.55
+        }
+      },
+      {
+        "item_id": "net_fee_and_commission_income",
+        "item": "Tăng trưởng thu phí dịch vụ thuần",
+        "values": {
+          "2025": -32.45,
+          "2024": -11.13,
+          "2023": -15.49,
+          "2022": -7.67
+        }
+      },
+      {
+        "item_id": "operating_profit_before_provision_for_credit_losses",
+        "item": "Tăng trưởng tổng thu nhập HĐKD trước dự phòng",
+        "values": {
+          "2025": 3.65,
+          "2024": -0.56,
+          "2023": -2.19,
+          "2022": 20.19
+        }
+      },
+      {
+        "item_id": "operating_expenses",
+        "item": "Tăng trưởng tổng chi phí HĐKD",
+        "values": {
+          "2025": 9.62,
+          "2024": 5.08,
+          "2023": 3.13,
+          "2022": 20.29
+        }
+      },
+      {
+        "item_id": "outstanding_loans_customer_deposits",
+        "item": "Dư nợ cho vay khách hàng/Tổng vốn huy động (LDR)",
+        "values": {
+          "2025": 76.73,
+          "2024": 78.27,
+          "2023": 77.88,
+          "2022": 73.0
+        }
+      },
+      {
+        "item_id": "outstanding_loans_total_assets",
+        "item": "Dư nợ cho vay/Tổng tài sản Có",
+        "values": {
+          "2025": 68.52,
+          "2024": 69.48,
+          "2023": 69.06,
+          "2022": 63.13
+        }
+      },
+      {
+        "item_id": "equity_deposits_from_customers",
+        "item": "Vốn chủ sở hữu/Tổng vốn huy động",
+        "values": {
+          "2025": 10.3,
+          "2024": 10.6,
+          "2023": 10.12,
+          "2022": 8.65
+        }
+      },
+      {
+        "item_id": "equity_total_assets",
+        "item": "Vốn chủ sở hữu/Tổng tài sản Có",
+        "values": {
+          "2025": 9.19,
+          "2024": 9.41,
+          "2023": 8.97,
+          "2022": 7.48
+        }
+      },
+      {
+        "item_id": "loan_loss_provision_ratio",
+        "item": "Dự phòng rủi ro tín dụng/Tổng dư nợ",
+        "values": {
+          "2025": -1.52,
+          "2024": -2.2,
+          "2023": -2.31,
+          "2022": -2.21
+        }
+      },
+      {
+        "item_id": "earning_assets_total_assets",
+        "item": "Tài sản Có sinh lãi/Tổng tài sản Có",
+        "values": {
+          "2025": 98.22,
+          "2024": 98.62,
+          "2023": 98.75,
+          "2022": 96.94
+        }
+      }
+    ],
+    "discarded_period_labels": []
+  }
+}

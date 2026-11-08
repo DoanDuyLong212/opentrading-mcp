@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "elapsed_s": 5.4,
+  "rows": null,
+  "data": {
+    "symbol": "FPT",
+    "pe": 15.91,
+    "roe": 0.28300000000000003,
+    "market_cap": null,
+    "market_cap_status": "missing_from_ratio_table",
+    "eps": 6021.21,
+    "bvps": 25679.55,
+    "period_label": "2025",
+    "frequency": "annual",
+    "eps_basis": "trailing_four_quarters",
+    "discarded_period_labels": []
+  }
+}

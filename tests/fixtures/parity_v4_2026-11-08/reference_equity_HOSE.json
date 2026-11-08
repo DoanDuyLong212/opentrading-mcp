@@ -1,0 +1,407 @@
+{
+  "ok": true,
+  "elapsed_s": 3.91,
+  "total_rows": 772,
+  "rows": [
+    {
+      "symbol": "TN1",
+      "organ_name": "CTCP Rox Key Holdings",
+      "en_organ_name": "Rox Key Holdings Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "HU1",
+      "organ_name": "CTCP Đầu tư và Xây dựng HUD1",
+      "en_organ_name": "HUD1 Investment and Construction Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "BCE",
+      "organ_name": "CTCP Xây dựng và Giao thông Bình Dương",
+      "en_organ_name": "Becamex Construction & Civil Engineering Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "PHR",
+      "organ_name": "CTCP Cao su Phước Hòa",
+      "en_organ_name": "Phuoc Hoa Rubber Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "VPS",
+      "organ_name": "CTCP Thuốc sát trùng Việt Nam ",
+      "en_organ_name": "Vietnam Pesticide Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "C32",
+      "organ_name": "CTCP Đầu tư và Xây dựng 3-2",
+      "en_organ_name": "3-2 Investment and Construction Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "SJD",
+      "organ_name": "CTCP Thủy điện Cần Đơn",
+      "en_organ_name": "Candon HydroPower Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "VIX",
+      "organ_name": "CTCP Chứng khoán VIX",
+      "en_organ_name": "VIX Securities Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "ACB",
+      "organ_name": "Ngân hàng TMCP Á Châu",
+      "en_organ_name": "Asia Commercial Joint Stock Bank",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "VSI",
+      "organ_name": "CTCP Đầu tư và Xây dựng Cấp thoát nước",
+      "en_organ_name": "Water Supply Sewerage Construction and Investment Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "HAS",
+      "organ_name": "CTCP Hacisco",
+      "en_organ_name": "Hacisco Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "ELC",
+      "organ_name": "CTCP Công Nghệ - Viễn Thông Elcom",
+      "en_organ_name": "Elcom Technology Communications Corporation",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "TVB",
+      "organ_name": "CTCP Chứng khoán T-Cap",
+      "en_organ_name": "T-Cap Securities Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "MIG",
+      "organ_name": "Tổng Công ty cổ phần Bảo hiểm Quân Đội",
+      "en_organ_name": "Military Insurance Corporation",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "VCB",
+      "organ_name": "Ngân hàng TMCP Ngoại thương Việt Nam",
+      "en_organ_name": "Joint Stock Commercial Bank for Foreign Trade of Vietnam",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "DXG",
+      "organ_name": "CTCP Bluemarq Group",
+      "en_organ_name": "Bluemarq Group Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "LM8",
+      "organ_name": "CTCP Lilama 18",
+      "en_organ_name": "Lilama 18 Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "VPI",
+      "organ_name": "CTCP Phát triển Bất động sản Văn Phú",
+      "en_organ_name": "Van Phu Real Estate Development Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "EVE",
+      "organ_name": "CTCP Everpia",
+      "en_organ_name": "Everpia Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "TLH",
+      "organ_name": "CTCP Tập đoàn Thép Tiến Lên",
+      "en_organ_name": "Tien Len Steel Corporation Joint - Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "CKG",
+      "organ_name": "CTCP Tập đoàn CIC",
+      "en_organ_name": "CIC Group Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "HNA",
+      "organ_name": "CTCP Thủy điện Hủa Na",
+      "en_organ_name": "Hua Na Hydropower Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "GSP",
+      "organ_name": "CTCP Vận tải Sản Phẩm Khí Quốc tế",
+      "en_organ_name": "International Gas Product Shipping Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "BVB",
+      "organ_name": "Ngân hàng TMCP Bản Việt",
+      "en_organ_name": "Viet Capital Commercial Joint Stock Bank",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "SJS",
+      "organ_name": "CTCP SJ Group",
+      "en_organ_name": "SJ Group Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "NTL",
+      "organ_name": "CTCP Phát triển Đô thị Từ Liêm",
+      "en_organ_name": "Tu Liem Urban Development Joint-Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "TMS",
+      "organ_name": "CTCP Transimex",
+      "en_organ_name": "Transimex Corporation",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "PVT",
+      "organ_name": "Tổng Công ty cổ phần Vận tải Dầu khí",
+      "en_organ_name": "PetroVietnam Transportation Corporation",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "TCB",
+      "organ_name": "Ngân hàng TMCP Kỹ thương Việt Nam",
+      "en_organ_name": "Vietnam Technological and Commercial Joint Stock Bank",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "VPB",
+      "organ_name": "Ngân hàng TMCP Việt Nam Thịnh Vượng",
+      "en_organ_name": "Vietnam Prosperity Joint Stock Commercial Bank",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "MSH",
+      "organ_name": "CTCP May Sông Hồng",
+      "en_organ_name": "Song Hong Garment Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "CLC",
+      "organ_name": "CTCP Cát Lợi",
+      "en_organ_name": "Cat Loi Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "DXS",
+      "organ_name": "CTCP Dịch vụ Bất động sản Đất Xanh",
+      "en_organ_name": "Dat Xanh Real Estate Services Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "JVC",
+      "organ_name": "CTCP Đầu tư và Phát triển Y tế Việt Nhật",
+      "en_organ_name": "Japan Vietnam Medical Investment and Development Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "OPC",
+      "organ_name": "CTCP Dược phẩm OPC",
+      "en_organ_name": "OPC Pharmaceutical Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "VDP",
+      "organ_name": "CTCP Dược phẩm Trung ương VIDIPHA",
+      "en_organ_name": "VIDIPHA Central Pharmaceutical Joint - Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "TSA",
+      "organ_name": "CTCP Đầu tư và Xây lắp Trường Sơn",
+      "en_organ_name": "Truong Son Investment And Construction Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "CIG",
+      "organ_name": "CTCP COMA 18",
+      "en_organ_name": "COMA 18 Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "DBD",
+      "organ_name": "CTCP Dược - Trang thiết bị Y tế Bình Định (Bidiphar)",
+      "en_organ_name": "Binh Dinh Pharmaceutical and Medical Equipment Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "POW",
+      "organ_name": "Tổng Công ty Điện lực Dầu khí Việt Nam - CTCP",
+      "en_organ_name": "PetroVietnam Power Corporation",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "DLG",
+      "organ_name": "CTCP Tập đoàn Đức Long Gia Lai",
+      "en_organ_name": "Duc Long Gia Lai Group Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "GHC",
+      "organ_name": "CTCP Thủy điện Gia Lai",
+      "en_organ_name": "Gia Lai Hydropower Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "HTV",
+      "organ_name": "CTCP Logistics Vicem",
+      "en_organ_name": "Logistics Vicem Joint Stock Company ",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "TNT",
+      "organ_name": "CTCP Tập đoàn TNT",
+      "en_organ_name": "TNT Group Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "CLL",
+      "organ_name": "CTCP Cảng Cát Lái",
+      "en_organ_name": "Cat Lai Port Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "TDG",
+      "organ_name": "CTCP Đầu tư TDG Global",
+      "en_organ_name": "TDG Global Investment Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "SSB",
+      "organ_name": "Ngân hàng TMCP Đông Nam Á",
+      "en_organ_name": "Southeast Asia Commercial Joint Stock Bank",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "HAG",
+      "organ_name": "CTCP Hoàng Anh Gia Lai",
+      "en_organ_name": "Hoang Anh Gia Lai Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "PJT",
+      "organ_name": "CTCP Vận tải Xăng dầu Đường Thủy Petrolimex",
+      "en_organ_name": "Petrolimex Joint Stock Tanker Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    },
+    {
+      "symbol": "HVN",
+      "organ_name": "Tổng Công ty Hàng không Việt Nam - CTCP",
+      "en_organ_name": "Vietnam Airlines Joint Stock Company",
+      "exchange": "HOSE",
+      "type": "stock",
+      "id": 1
+    }
+  ]
+}

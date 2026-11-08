@@ -1,0 +1,9 @@
+{
+  "captured_at": "2026-11-08T08:37:43.819397+00:00",
+  "vnstock_version": "4.0.2",
+  "python_version": "3.12.3",
+  "git_sha": "ed934aebd0ee6f9271512150a9bb3971089d7460",
+  "api_key_state": "set",
+  "probe_count": 23,
+  "ok_count": 23
+}

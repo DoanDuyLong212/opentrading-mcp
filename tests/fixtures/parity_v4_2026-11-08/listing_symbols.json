@@ -1,0 +1,207 @@
+{
+  "ok": true,
+  "elapsed_s": 1.19,
+  "total_rows": 1516,
+  "rows": [
+    {
+      "symbol": "MGC",
+      "name": "CTCP Địa chất mỏ - TKV"
+    },
+    {
+      "symbol": "GVT",
+      "name": "CTCP Giấy Việt Trì"
+    },
+    {
+      "symbol": "SWC",
+      "name": "Tổng Công ty cổ phần Đường sông Miền Nam"
+    },
+    {
+      "symbol": "VID",
+      "name": "CTCP Đầu tư Phát triển Thương mại Viễn Đông"
+    },
+    {
+      "symbol": "SLD",
+      "name": "CTCP Địa ốc Sacom"
+    },
+    {
+      "symbol": "GEG",
+      "name": "CTCP Điện Gia Lai"
+    },
+    {
+      "symbol": "PSL",
+      "name": "CTCP Chăn nuôi Phú Sơn"
+    },
+    {
+      "symbol": "TTZ",
+      "name": "CTCP Đầu tư Xây dựng và Công nghệ Tiến Trung"
+    },
+    {
+      "symbol": "CX8",
+      "name": "CTCP Đầu tư và Xây lắp Constrexim Số 8"
+    },
+    {
+      "symbol": "PNJ",
+      "name": "CTCP Vàng bạc Đá quý Phú Nhuận"
+    },
+    {
+      "symbol": "TMB",
+      "name": "CTCP Kinh doanh Than Miền Bắc - Vinacomin"
+    },
+    {
+      "symbol": "NTH",
+      "name": "CTCP Thủy điện Nước Trong"
+    },
+    {
+      "symbol": "CVT",
+      "name": "CTCP CMC"
+    },
+    {
+      "symbol": "POV",
+      "name": "CTCP Xăng dầu Dầu khí Vũng Áng"
+    },
+    {
+      "symbol": "SAM",
+      "name": "CTCP SAM Holdings"
+    },
+    {
+      "symbol": "SDV",
+      "name": "CTCP Dịch vụ Sonadezi"
+    },
+    {
+      "symbol": "MTH",
+      "name": "CTCP Môi trường Đô thị Hà Đông"
+    },
+    {
+      "symbol": "KHG",
+      "name": "CTCP Tập đoàn Khải Hoàn Land"
+    },
+    {
+      "symbol": "NWT",
+      "name": "CTCP Vận tải Newway"
+    },
+    {
+      "symbol": "BAX",
+      "name": "CTCP Thống Nhất"
+    },
+    {
+      "symbol": "SMT",
+      "name": "CTCP Onesphere"
+    },
+    {
+      "symbol": "FHN",
+      "name": "CTCP Xuất nhập khẩu Lương thực - Thực phẩm Hà Nội"
+    },
+    {
+      "symbol": "FIT",
+      "name": "CTCP Tập đoàn F.I.T"
+    },
+    {
+      "symbol": "DBM",
+      "name": "CTCP Dược - Vật tư Y Tế Đăk Lăk"
+    },
+    {
+      "symbol": "NQB",
+      "name": "CTCP Cấp nước Quảng Bình"
+    },
+    {
+      "symbol": "HHS",
+      "name": "CTCP Đầu tư Dịch vụ Hoàng Huy"
+    },
+    {
+      "symbol": "CNG",
+      "name": "CTCP CNG Việt Nam"
+    },
+    {
+      "symbol": "LBM",
+      "name": "CTCP Khoáng sản và Vật liệu Xây dựng Lâm Đồng"
+    },
+    {
+      "symbol": "LPS",
+      "name": "CTCP Chứng khoán LPS"
+    },
+    {
+      "symbol": "NBC",
+      "name": "CTCP Than Núi Béo - Vinacomin"
+    },
+    {
+      "symbol": "HAM",
+      "name": "CTCP Vật tư Hậu Giang"
+    },
+    {
+      "symbol": "HMD",
+      "name": "CTCP Hóa chất Minh Đức"
+    },
+    {
+      "symbol": "HTE",
+      "name": "CTCP Đầu tư Kinh doanh Điện lực Thành phố Hồ Chí Minh"
+    },
+    {
+      "symbol": "S12",
+      "name": "CTCP Sông Đà 12"
+    },
+    {
+      "symbol": "SC5",
+      "name": "CTCP Xây dựng Số 5"
+    },
+    {
+      "symbol": "BIO",
+      "name": "CTCP Vắc xin và Sinh phẩm Nha Trang"
+    },
+    {
+      "symbol": "TD6",
+      "name": "CTCP Than Đèo Nai - Cọc Sáu - TKV"
+    },
+    {
+      "symbol": "DAE",
+      "name": "CTCP Sách Giáo dục tại Thành phố Đà Nẵng"
+    },
+    {
+      "symbol": "ATG",
+      "name": "CTCP ATG Planet"
+    },
+    {
+      "symbol": "ELC",
+      "name": "CTCP Công Nghệ - Viễn Thông Elcom"
+    },
+    {
+      "symbol": "SDN",
+      "name": "CTCP Sơn Đồng Nai"
+    },
+    {
+      "symbol": "SFN",
+      "name": "CTCP Dệt lưới Sài Gòn"
+    },
+    {
+      "symbol": "NNT",
+      "name": "CTCP Cấp nước Ninh Thuận"
+    },
+    {
+      "symbol": "LSS",
+      "name": "CTCP Mía Đường Lam Sơn"
+    },
+    {
+      "symbol": "SIV",
+      "name": "CTCP SIVICO"
+    },
+    {
+      "symbol": "PRC",
+      "name": "CTCP Logistics Portserco"
+    },
+    {
+      "symbol": "VRC",
+      "name": "CTCP Bất động sản và Đầu tư VRC"
+    },
+    {
+      "symbol": "FRT",
+      "name": "CTCP Bán lẻ Kỹ thuật số FPT"
+    },
+    {
+      "symbol": "SKH",
+      "name": "CTCP Nước giải khát Sanest Khánh Hòa"
+    },
+    {
+      "symbol": "PMG",
+      "name": "CTCP Đầu tư và Sản xuất Petro Miền Trung"
+    }
+  ]
+}

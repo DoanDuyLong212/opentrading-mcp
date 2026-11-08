@@ -1,0 +1,600 @@
+{
+  "ok": true,
+  "elapsed_s": 1.31,
+  "rows": null,
+  "data": {
+    "symbol": "FPT",
+    "info": {
+      "symbol": "FPT",
+      "organ_code": "FPT",
+      "current_price": 50800.0,
+      "market_cap": 95794964518400.0,
+      "issue_share": 1885727648,
+      "tag": null,
+      "rating": "BUY",
+      "rating_as_of": "16-Oct-26",
+      "organ_name": "Công ty Cổ phần FPT",
+      "organ_short_name": "FPT Corp",
+      "com_type_code": "CT",
+      "com_group_code": "VNINDEX",
+      "sector": "Technology",
+      "average_match_value1_month": 457945532893.4783,
+      "average_match_volume1_month": 8288093.0,
+      "highest_price1_year": 97475.0,
+      "lowest_price1_year": 49550.0,
+      "foreigner_percentage": 0.26695644,
+      "maximum_foreign_percentage": 0.49,
+      "state_percentage": 0.05634122,
+      "analyst": "Ngan Ly",
+      "upside_to_target_percent": 0.531496063,
+      "dividend_per_share_tsr": 2000.0,
+      "projected_tsr_percentage": 0.5708661417,
+      "target_price": 77800.0,
+      "company_profile": "Công ty Cổ phần FPT (FPT) có tiền thân là Công ty Công nghệ Thực phẩm được thành lập năm 1988. Công ty hoạt động chính trong lĩnh vực phần mềm, công nghệ thông tin, tích hợp hệ thống, viễn thông, và giáo dục đào tạo. FPT chính thức hoạt động theo mô hình công ty cổ phần từ năm 2002. FPT là tập đoàn công nghệ và dịch vụ CNTT có hiện diện tại hơn 30 quốc gia và vùng lãnh thổ trên 4 châu lục. Doanh nghiệp tập trung vào các mảng công nghệ chiến lược như AI, điện toán đám mây, bán dẫn, an ninh mạng và dữ liệu, đồng thời vận hành trung tâm dữ liệu quy mô 10.000 m² cùng các nhà máy AI tại Việt Nam và Nhật Bản. FPT cũng tham gia nhiều dự án chuyển đổi số quy mô lớn cho khối Chính phủ, bộ ngành, địa phương và khách hàng toàn cầu. FPT được niêm yết trên Sở Giao dịch Chứng khoán Thành phố Hồ Chí Minh (HOSE) từ tháng 12/2006.",
+      "in_cu": true,
+      "icb_code_lv2": "9500",
+      "icb_code_lv4": "9537",
+      "free_float": 1602868500,
+      "free_float_percentage": 0.8499999996,
+      "listing_date": "2006-12-13T00:00:00",
+      "first_price": 400000,
+      "first_volume": 0,
+      "prev_insight": {
+        "targetPrice": 90300.0,
+        "rating": "BUY",
+        "ratingAsOf": "08-Jun-26",
+        "analyst": "Ngan Ly",
+        "version": "20261015"
+      },
+      "fund_info": null,
+      "is_bank": false,
+      "listing": true,
+      "bank": false
+    },
+    "shareholders": [
+      {
+        "symbol": "FPT",
+        "share_holder": "Trương Gia Bình",
+        "quantity": 117347966,
+        "share_own_percent": 0.0689,
+        "update_date": "2026-08-03T10:25:12.523"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Tổng Công ty Đầu Tư Và Kinh Doanh Vốn Nhà Nước - Công ty TNHH",
+        "quantity": 96585637,
+        "share_own_percent": 0.0567,
+        "update_date": "2026-08-03T10:31:11.007"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Công ty TNHH QT",
+        "quantity": 54303923,
+        "share_own_percent": 0.0369,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Deutsche Bank Aktiengesellchaft, London Branch",
+        "quantity": 9604598,
+        "share_own_percent": 0.0241605875,
+        "update_date": "2015-06-15T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Vinacapital Vietnam Opportunity Fund Ltd.",
+        "quantity": 22791922,
+        "share_own_percent": 0.0155,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Bùi Quang Ngọc",
+        "quantity": 25255715,
+        "share_own_percent": 0.0148,
+        "update_date": "2026-08-03T10:25:12.553"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Trương Thị Thanh Thanh",
+        "quantity": 25095835,
+        "share_own_percent": 0.0147,
+        "update_date": "2026-08-03T10:33:32.58"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Hoàng Minh Châu",
+        "quantity": 5610790,
+        "share_own_percent": 0.0141169968,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Phan Ngô Tống Hưng",
+        "quantity": 5344531,
+        "share_own_percent": 0.0134470773,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Schroder International Selection Fund",
+        "quantity": 19460017,
+        "share_own_percent": 0.0132,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Macquarie Bank Limited Obu",
+        "quantity": 17107235,
+        "share_own_percent": 0.0116,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Vietnam Holding Ltd",
+        "quantity": 8557812,
+        "share_own_percent": 0.0109168978,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Ntasian Discovery Master Fund",
+        "quantity": 16000000,
+        "share_own_percent": 0.0109,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Government Of Singapore",
+        "quantity": 15162887,
+        "share_own_percent": 0.0103,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Thành Nam",
+        "quantity": 3747323,
+        "share_own_percent": 0.009428431,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Đỗ Cao Bảo",
+        "quantity": 15868500,
+        "share_own_percent": 0.0093,
+        "update_date": "2026-08-03T10:25:12.597"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Vietnam Equity Holding",
+        "quantity": 3636506,
+        "share_own_percent": 0.0091477146,
+        "update_date": "2015-06-15T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Vietnam Dragon Fund Limited",
+        "quantity": 3589550,
+        "share_own_percent": 0.0090295957,
+        "update_date": "2015-06-15T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Vietnam Enterprise Investments Limited",
+        "quantity": 9710183,
+        "share_own_percent": 0.007646,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Lê Quang Tiến",
+        "quantity": 2500001,
+        "share_own_percent": 0.0062901135,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Norges Bank",
+        "quantity": 7501021,
+        "share_own_percent": 0.005906,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "DC Developing Markets Strategies Public Limited Company",
+        "quantity": 7150000,
+        "share_own_percent": 0.00563,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Wareham Group Limited",
+        "quantity": 7085261,
+        "share_own_percent": 0.005579,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Deutsche Asset Management (Asia) Limited",
+        "quantity": 2190196,
+        "share_own_percent": 0.0055094885,
+        "update_date": "2015-06-15T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Hanoi Investments Holdings Limited",
+        "quantity": 6058066,
+        "share_own_percent": 0.00477,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Thế Phương",
+        "quantity": 6450955,
+        "share_own_percent": 0.0038,
+        "update_date": "2026-08-03T10:27:20.47"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Grinling International Limited",
+        "quantity": 4773298,
+        "share_own_percent": 0.003759,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Văn Khoa",
+        "quantity": 5842978,
+        "share_own_percent": 0.0034,
+        "update_date": "2026-08-03T10:27:20.493"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Minh Sơn",
+        "quantity": 993710,
+        "share_own_percent": 0.0025002184,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Venner Group Limited",
+        "quantity": 2682813,
+        "share_own_percent": 0.002113,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Phạm Minh Tuấn",
+        "quantity": 3447930,
+        "share_own_percent": 0.002,
+        "update_date": "2026-08-03T10:27:20.513"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Trần Quốc Hoài",
+        "quantity": 782690,
+        "share_own_percent": 0.0019692828,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Khải Hoàn",
+        "quantity": 2807004,
+        "share_own_percent": 0.0017,
+        "update_date": "2026-08-03T10:30:16.9"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Hoàng Nam Tiến",
+        "quantity": 644986,
+        "share_own_percent": 0.0016228134,
+        "update_date": "2022-05-11T16:09:42.013"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Điệp Tùng",
+        "quantity": 600406,
+        "share_own_percent": 0.0015106481,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Balestrand Limited",
+        "quantity": 1907185,
+        "share_own_percent": 0.001502,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Thị Phương",
+        "quantity": 415250,
+        "share_own_percent": 0.0010447874,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Samsung Vietnam Securities Master Investment Trust",
+        "quantity": 1166751,
+        "share_own_percent": 0.000919,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Đỗ Thị Ngọc Mai",
+        "quantity": 1507397,
+        "share_own_percent": 0.0009,
+        "update_date": "2026-08-03T10:32:05.33"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Thị Dư",
+        "quantity": 1189852,
+        "share_own_percent": 0.0007,
+        "update_date": "2026-08-03T10:32:16.947"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Saigon Investments Limited",
+        "quantity": 768760,
+        "share_own_percent": 0.0007,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Amersham Industries Limited",
+        "quantity": 780440,
+        "share_own_percent": 0.000615,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Lợi Thế Cạnh Tranh Bền Vững SSI",
+        "quantity": 480741,
+        "share_own_percent": 0.0006132643,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Đỗ Bảo Dương",
+        "quantity": 1081011,
+        "share_own_percent": 0.0006,
+        "update_date": "2026-08-03T10:31:56.51"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Hoàng Hữu Chiến",
+        "quantity": 1057299,
+        "share_own_percent": 0.0006,
+        "update_date": "2026-08-03T10:29:42.3"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "KB Vietnam Focus Balanced Fund",
+        "quantity": 681740,
+        "share_own_percent": 0.000536,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Công ty TNHH MTV Đầu Tư SCIC",
+        "quantity": 750000,
+        "share_own_percent": 0.00044,
+        "update_date": "2026-05-26T10:15:09.37"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Cổ phiếu Techcom",
+        "quantity": 278249,
+        "share_own_percent": 0.0003549524,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Cân bằng Bản Việt",
+        "quantity": 272550,
+        "share_own_percent": 0.0003476824,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Trương Ngọc Anh",
+        "quantity": 476242,
+        "share_own_percent": 0.0003,
+        "update_date": "2026-08-03T10:33:01.397"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Cân bằng Manulife",
+        "quantity": 228303,
+        "share_own_percent": 0.0002912381,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Năng động Eastspring Investments Việt Nam",
+        "quantity": 227725,
+        "share_own_percent": 0.0002905007,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Cổ phiếu Manulife",
+        "quantity": 149380,
+        "share_own_percent": 0.0001905588,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Công ty TNHH Quản lý Quỹ Bảo Việt",
+        "quantity": 75042,
+        "share_own_percent": 0.0001887698,
+        "update_date": "2015-06-15T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ ETF SSIAM VNX50",
+        "quantity": 118826,
+        "share_own_percent": 0.0001515821,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Danang Investments Limited",
+        "quantity": 151000,
+        "share_own_percent": 0.000138,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Cổ phiếu Triển vọng Bảo Việt",
+        "quantity": 98877,
+        "share_own_percent": 0.0001261339,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Việt Thắng",
+        "quantity": 173666,
+        "share_own_percent": 0.0001,
+        "update_date": "2026-08-03T10:26:52.813"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Tăng trưởng DFVN",
+        "quantity": 67000,
+        "share_own_percent": 8.54695e-05,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Quỹ Đầu tư Cổ phiếu Năng động Bảo Việt",
+        "quantity": 63313,
+        "share_own_percent": 8.07662e-05,
+        "update_date": "2020-07-14T15:05:24.437"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Công ty TNHH MTV Quản Lý Quỹ Ngân Hàng Thương Mại Cổ phần Công Thương Việt Nam",
+        "quantity": 30000,
+        "share_own_percent": 7.54656e-05,
+        "update_date": "2015-06-15T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Trương Đình Anh",
+        "quantity": 21428,
+        "share_own_percent": 5.39137e-05,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Chu Thị Thanh Hà",
+        "quantity": 17869,
+        "share_own_percent": 4.49591e-05,
+        "update_date": "2015-09-14T00:00:00"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Bùi Ngọc Minh",
+        "quantity": 30417,
+        "share_own_percent": 2e-05,
+        "update_date": "2026-08-03T10:32:48.41"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Đức Tiến",
+        "quantity": 24069,
+        "share_own_percent": 6e-06,
+        "update_date": "2026-08-03T10:33:13.13"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Đỗ Hữu Binh",
+        "quantity": 9843,
+        "share_own_percent": 6e-06,
+        "update_date": "2025-10-05T12:54:27.52"
+      },
+      {
+        "symbol": "FPT",
+        "share_holder": "Nguyễn Thị Huế",
+        "quantity": 4575,
+        "share_own_percent": 3e-06,
+        "update_date": "2026-08-03T10:31:29.75"
+      }
+    ],
+    "officers": [
+      {
+        "symbol": "FPT",
+        "officer_name": "Trương Gia Bình",
+        "officer_position": "Chủ tịch Hội đồng Quản trị",
+        "officer_own_percent": 0.0689,
+        "officer_own_quantity": 117347966,
+        "update_date": "2026-08-03T10:25:12.523"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Bùi Quang Ngọc",
+        "officer_position": "Phó Chủ tịch Hội đồng Quản trị",
+        "officer_own_percent": 0.0148,
+        "officer_own_quantity": 25255715,
+        "update_date": "2026-08-03T10:25:12.553"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Đỗ Cao Bảo",
+        "officer_position": "Thành viên Hội đồng Quản trị",
+        "officer_own_percent": 0.0093,
+        "officer_own_quantity": 15868500,
+        "update_date": "2026-08-03T10:25:12.597"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Nguyễn Thế Phương",
+        "officer_position": "Phó Tổng Giám đốc/Người phụ trách quản trị công ty",
+        "officer_own_percent": 0.0038,
+        "officer_own_quantity": 6450955,
+        "update_date": "2026-08-03T10:27:20.47"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Nguyễn Văn Khoa",
+        "officer_position": "Tổng Giám đốc",
+        "officer_own_percent": 0.0034,
+        "officer_own_quantity": 5842978,
+        "update_date": "2026-08-03T10:27:20.493"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Phạm Minh Tuấn",
+        "officer_position": "Phó Tổng Giám đốc",
+        "officer_own_percent": 0.002,
+        "officer_own_quantity": 3447930,
+        "update_date": "2026-08-03T10:27:20.513"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Nguyễn Khải Hoàn",
+        "officer_position": "Thành viên Ban kiểm soát",
+        "officer_own_percent": 0.0017,
+        "officer_own_quantity": 2807004,
+        "update_date": "2026-08-03T10:30:16.9"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Hoàng Hữu Chiến",
+        "officer_position": "Kế toán trưởng",
+        "officer_own_percent": 0.0006,
+        "officer_own_quantity": 1057299,
+        "update_date": "2026-08-03T10:29:42.3"
+      },
+      {
+        "symbol": "FPT",
+        "officer_name": "Nguyễn Việt Thắng",
+        "officer_position": "Trưởng Ban kiểm soát",
+        "officer_own_percent": 0.0001,
+        "officer_own_quantity": 173666,
+        "update_date": "2026-08-03T10:26:52.813"
+      }
+    ]
+  }
+}
