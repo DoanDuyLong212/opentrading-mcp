@@ -96,7 +96,7 @@ def _petrol_ron95(start: str, end: str) -> list[dict[str, Any]]:
 
 def _fetch_vn_asset(asset: str, start: str, end: str) -> list[dict[str, Any]]:
     prov, sym = VN_FETCH[asset]
-    if prov == "vnstock":
+    if prov == "vnstock" and sym is not None:
         return _vnstock_close(sym, start, end)
     if prov == "yf":
         return _yf_close(sym, start, end)
