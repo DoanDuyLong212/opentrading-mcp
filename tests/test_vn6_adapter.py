@@ -769,6 +769,34 @@ def test_equity_trades_asks_dnse_for_big_pages(monkeypatch):
     assert [r["price"] for r in rows] == [59.0, 58.0, 57.0]  # newest first, sliced
 
 
+def test_dnse_trade_volumes_are_scaled_to_shares(monkeypatch):
+    """dnse counts lots of 10: the 2026-11-06 FPT session summed to 1,216,220
+    while 12,162,200 shares traded (v4 and the DNSE board agree on the latter)."""
+    import pandas as pd
+
+    class Equity:
+        def trades(self, **kw):
+            return pd.DataFrame([
+                {"time": "2026-11-06T14:45:02+07:00", "price": 50.8, "volume": 20,
+                 "match_type": "ATC", "accumulated_volume": 1216220},
+                {"time": "2026-11-06T14:27:52+07:00", "price": 50.9, "volume": 620,
+                 "match_type": "sell", "accumulated_volume": 1100000},
+            ])
+
+    class Market:
+        def __init__(self, source=None, **kw):
+            pass
+
+        def equity(self, symbol):
+            return Equity()
+
+    _install(monkeypatch, Market=Market)
+    rows = vn_p.equity_trades("FPT", limit=5)
+    assert [r["volume"] for r in rows] == [200, 6200]  # v4 shows the 6,200-share print
+    assert rows[0]["accumulated_volume"] == 12162200
+    assert rows[0]["price"] == 50.8  # prices are already thousand dong, as in v4
+
+
 def test_redact_hides_vnstock_secret_names():
     from opentrading_mcp.auth import redact
 

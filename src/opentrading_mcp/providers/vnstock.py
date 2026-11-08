@@ -459,20 +459,32 @@ def equity_trades(
             kwargs["start"] = from_date
         if to_date is not None:
             kwargs["end"] = to_date
+        def _tagged(source: str) -> Any:
+            frame = Market(source).equity(symbol.upper()).trades(**kwargs)
+            if frame is not None and hasattr(frame, "attrs"):
+                frame.attrs["ot_source"] = source
+            return frame
+
         frame = _fetch_frame(
-            [
-                (
-                    source,
-                    (lambda source=source: Market(source).equity(symbol.upper()).trades(**kwargs)),
-                )
-                for source in SRC_TRADES
-            ],
+            [(source, (lambda source=source: _tagged(source))) for source in SRC_TRADES],
             f"trades {symbol}",
         )
     except ProviderUnavailable as exc:
         raise _rewrap(exc, f"vnstock trades failed: {symbol}") from exc
     rows = sorted(_records(frame), key=lambda r: str(r.get("time", ""))[:24], reverse=True)
+    lot = _TRADE_LOT.get(str(getattr(frame, "attrs", {}).get("ot_source", "")), 1)
+    if lot != 1:
+        for row in rows:
+            for key in ("volume", "accumulated_volume"):
+                if isinstance(row.get(key), (int, float)):
+                    row[key] = row[key] * lot
     return rows[: max(limit, 1)]
+
+
+# dnse trades count lots of 10 shares: the 2026-11-06 FPT session sums to 1,216,220
+# while the session traded 12,162,200 shares (v4 and the DNSE board agree on the
+# latter). Scale to shares so vn_trades means the same as before gen 6.
+_TRADE_LOT = {"dnse": 10}
 
 
 # The symbol list changes a few times a year; symbol_lookup used to fetch all ~1,600
