@@ -1,8 +1,8 @@
 # Đối chiếu parity v4 (fixture parity_v4_2026-11-08) vs vnstock 6.0.0rc4
 
 > **ĐÃ THAY THẾ (09/11/2026)** — xem `vnstock-gen6-parity-report-2026-11-09.md`, chạy bằng harness
-> so sánh GIÁ TRỊ (#89) với khoá ssi/dnse thật: 14 khớp, 2 lệch đã giải thích (vàng spot → futures;
-> crypto VND → USDT), 5 route không còn nguồn (fhsc/fmp ngừng dùng). Đính chính báo cáo dưới đây:
+> so sánh GIÁ TRỊ (#89) với khoá ssi/dnse thật trên bản gộp mọi PR: 17 khớp, 2 lệch đã giải thích (vàng spot → futures;
+> crypto VND → USDT), 4 route không còn nguồn (fhsc/fmp ngừng dùng). Đính chính báo cáo dưới đây:
 > - "match (shape)" ở đây KHÔNG so giá trị — harness cũ chỉ kiểm danh sách không rỗng.
 > - Số test: `test_vn6_adapter.py` có 16 test (không phải 12), `test_vn6_ratios.py` có 13 (không phải 9).
 > - "v4 cũng tăng dần nên không đổi consumer" sai cho `equity_trades`: adapter sắp xếp MỚI NHẤT TRƯỚC.
