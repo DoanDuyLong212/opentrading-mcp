@@ -67,6 +67,22 @@ def test_ratios_compare_values_on_shared_periods():
     assert parity.compare_ratios(v4, v6)[0] == "DIFF"
 
 
+def test_trades_catch_a_volume_unit_change():
+    """dnse counts lots of 10: an unscaled tape must not pass as a match."""
+    v4 = [{"time": "2026-11-06 14:27:52", "price": 50.9, "volume": 6200}]
+    scaled = [{"time": "2026-11-06T14:27:52.120+07:00", "price": 50.9, "volume": 6200}]
+    lots = [{"time": "2026-11-06T14:27:52.120+07:00", "price": 50.9, "volume": 620}]
+    assert parity.compare_trades(v4, scaled)[0] == "match"
+    status, detail = parity.compare_trades(v4, lots)
+    assert status == "DIFF" and "0/1" in detail
+
+
+def test_reference_checks_symbols_and_exchange():
+    v4 = [{"symbol": "TN1", "exchange": "HOSE"}]
+    assert parity.compare_reference(v4, [{"symbol": "TN1", "exchange": "HOSE"}])[0] == "match"
+    assert parity.compare_reference(v4, [{"symbol": "TN1", "exchange": "HNX"}])[0] == "DIFF"
+
+
 def test_failing_ignores_explained_and_known_gaps():
     rows = [
         {"probe": "a", "status": "match"},
