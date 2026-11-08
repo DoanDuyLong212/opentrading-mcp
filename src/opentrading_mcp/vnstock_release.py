@@ -1,15 +1,19 @@
 """Expiry of the pinned vnstock release candidate (#80).
 
-vnstock 6 release candidates stop working on a fixed date: the team's measured
-API notes (plans/vnstock-gen6-api-notes-2026-11-08.md) record "vnstock 6.0.0rc4
-dùng được đến 07/12/2026", and vnstock_quant ships a ``ReleaseExpiredError``.
-After that date every vnstock-backed tool fails — candles, indices, futures and
-the listing included, even on the ssi/dnse chains. ``vnstock.status()`` would
-say so itself, but it requires a registered device, so the date is pinned here.
+vnstock 6 release candidates stop working on a fixed date. ``vnstock doctor``
+(which reads the date from vnstocks.com) printed on 2026-11-09: "Bản vnstock
+6.0.0rc4 — Dùng được đến hết ngày 07/12/2026" (usable through 07/12/2026), and
+vnstock_quant ships a ``ReleaseExpiredError``. After that date every
+vnstock-backed tool fails — candles, indices, futures and the listing included,
+even on the ssi/dnse chains. ``vnstock.status()`` needs a registered device and
+``doctor`` is an interactive CLI, so the date is pinned here instead.
 
-When uv.lock moves to another vnstock version, add its expiry (or nothing, for
-a final release) to ``RELEASE_EXPIRY``; an unknown release candidate is flagged
-as such rather than reported healthy.
+The official upgrade path is the newest pre-release from the vnstocks.com index
+(``pip install -U --pre --extra-index-url https://vnstocks.com/api/packages
+"vnstock>=6.0.0rc1,<7"``); here that is ``uv lock --upgrade-package vnstock``.
+When uv.lock moves to another vnstock version, add its expiry (``vnstock
+doctor`` shows it), or nothing for a final release, to ``RELEASE_EXPIRY``; an
+unknown release candidate is flagged as such rather than reported healthy.
 """
 
 from __future__ import annotations
