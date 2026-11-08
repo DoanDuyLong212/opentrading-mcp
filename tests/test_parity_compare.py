@@ -67,14 +67,31 @@ def test_ratios_compare_values_on_shared_periods():
     assert parity.compare_ratios(v4, v6)[0] == "DIFF"
 
 
+def test_trades_compare_volume_per_price_not_prints():
+    """v4 aggregated a second's fills (and ran ~1 s early); dnse lists each fill."""
+    v4 = [{"time": "2026-11-06 14:27:52", "price": 50.9, "volume": 6200}]
+    fills = [{"time": "2026-11-06T14:27:53.488+07:00", "price": 50.9, "volume": 700},
+             {"time": "2026-11-06T14:27:53.489+07:00", "price": 50.9, "volume": 5500}]
+    assert parity.compare_trades(v4, fills)[0] == "match"
+
+
 def test_trades_catch_a_volume_unit_change():
     """dnse counts lots of 10: an unscaled tape must not pass as a match."""
     v4 = [{"time": "2026-11-06 14:27:52", "price": 50.9, "volume": 6200}]
-    scaled = [{"time": "2026-11-06T14:27:52.120+07:00", "price": 50.9, "volume": 6200}]
-    lots = [{"time": "2026-11-06T14:27:52.120+07:00", "price": 50.9, "volume": 620}]
-    assert parity.compare_trades(v4, scaled)[0] == "match"
+    lots = [{"time": "2026-11-06T14:27:53.488+07:00", "price": 50.9, "volume": 620}]
     status, detail = parity.compare_trades(v4, lots)
-    assert status == "DIFF" and "0/1" in detail
+    assert status == "DIFF" and "620" in detail
+
+
+def test_board_compares_only_the_same_session():
+    v4 = [{"symbol": "FPT", "time": 1793953988824, "close_price": 50800, "bid_vol_1": 122300}]
+    same = [{"symbol": "FPT", "time": "2026-11-06T14:45:02.813+07:00", "close_price": 50800.0,
+             "bid_vol_1": 122300}]
+    assert parity.compare_board(v4, same)[0] == "match"
+    off = [{**same[0], "bid_vol_1": 12230}]
+    assert parity.compare_board(v4, off)[0] == "DIFF"
+    later = [{**same[0], "time": "2026-11-10T14:45:00+07:00"}]
+    assert parity.compare_board(v4, later)[0] == "expected DIFF (different session)"
 
 
 def test_reference_checks_symbols_and_exchange():

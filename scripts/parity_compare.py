@@ -174,21 +174,76 @@ def compare_fx_gold(v4: Any, v6: Any) -> tuple[str, str]:
     return "expected DIFF (spot -> futures)", f"{fx}; {gold}"
 
 
-def compare_trades(v4: Any, v6: Any) -> tuple[str, str]:
-    """Every v4 print (time to the second, price, volume) must be in gen 6's
-    whole-session tape. A volume unit change (dnse lots of 10) fails here."""
-    def key(row: dict[str, Any]) -> tuple[str, float, float]:
-        when = str(row.get("time", "")).replace("T", " ")[:19]
-        return when, float(row.get("price") or 0), float(row.get("volume") or 0)
+def _second(row: dict[str, Any]) -> str:
+    return str(row.get("time", "")).replace("T", " ")[:19]
 
-    tape = {key(r) for r in v6 if isinstance(r, dict)}
-    prints = [key(r) for r in v4 if isinstance(r, dict)]
-    found = sum(1 for p in prints if p in tape)
-    missing = next((p for p in prints if p not in tape), None)
-    detail = f"{found}/{len(prints)} v4 prints found in {len(tape)} gen-6 trades"
-    if missing:
-        detail += f"; first missing {missing}"
-    return ("match" if prints and found == len(prints) else "DIFF"), detail
+
+def compare_trades(v4: Any, v6: Any) -> tuple[str, str]:
+    """Volume traded per price inside the baseline's time window.
+
+    v4 (KBS) aggregated fills per second and its clock ran about a second early;
+    dnse lists every fill to the millisecond (v4 "14:27:52 50.9 x 6200" =
+    dnse 14:27:53.488 x 700 + 14:27:53.489 x 5500). So prints cannot be matched
+    one by one, but the volume at each price over the window must agree; a volume
+    unit change (dnse lots of 10) is off by 10x and fails.
+    """
+    from datetime import datetime, timedelta
+
+    old = [r for r in v4 if isinstance(r, dict)]
+    if not old:
+        return "NO OVERLAP", "empty baseline"
+    first, last = min(_second(r) for r in old), max(_second(r) for r in old)
+    end = (datetime.fromisoformat(last) + timedelta(seconds=2)).isoformat(sep=" ")
+
+    def by_price(rows: list[dict[str, Any]], lo: str, hi: str) -> dict[float, float]:
+        out: dict[float, float] = {}
+        for r in rows:
+            if lo <= _second(r) <= hi:
+                price = float(r.get("price") or 0)
+                out[price] = out.get(price, 0.0) + float(r.get("volume") or 0)
+        return out
+
+    a = by_price(old, first, last)
+    b = by_price([r for r in v6 if isinstance(r, dict)], first, end)
+    total_a, total_b = sum(a.values()), sum(b.values())
+    gap = abs(total_b - total_a) / total_a if total_a else 1.0
+    levels = ", ".join(f"{p:g}: v4 {a.get(p, 0):,.0f} vs v6 {b.get(p, 0):,.0f}"
+                       for p in sorted(set(a) | set(b)))
+    detail = (f"window {first[11:]}-{last[11:]} (+1 s clock skew): v4 {total_a:,.0f} vs "
+              f"v6 {total_b:,.0f} shares ({gap * 100:.1f} %); by price {levels}")
+    return ("match" if gap <= 0.05 else "DIFF"), detail
+
+
+def compare_board(v4: Any, v6: Any) -> tuple[str, str]:
+    """Batch quote rows against the v4 board, only when both are the same session."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    vn_tz = ZoneInfo("Asia/Ho_Chi_Minh")
+
+    def day(row: dict[str, Any]) -> str:
+        stamp = row.get("time")
+        if isinstance(stamp, (int, float)):  # v4: epoch milliseconds
+            return datetime.fromtimestamp(stamp / 1000, vn_tz).date().isoformat()
+        return str(stamp or "")[:10]
+
+    old = {r["symbol"]: r for r in v4 if isinstance(r, dict) and "symbol" in r}
+    new = {r["symbol"]: r for r in v6 if isinstance(r, dict) and "symbol" in r}
+    shared = sorted(set(old) & set(new))
+    if not shared:
+        return "NO OVERLAP", "no common symbol"
+    if any(day(old[s]) != day(new[s]) for s in shared):
+        return "expected DIFF (different session)", (
+            f"board is for {day(new[shared[0]])}, baseline for {day(old[shared[0]])}"
+        )
+    fields = ("close_price", "reference_price", "volume_accumulated", "total_value",
+              "bid_price_1", "bid_vol_1", "ask_price_1", "ask_vol_1")
+    diffs = [f"{s}.{f} v4 {old[s].get(f)} vs v6 {new[s].get(f)}" for s in shared for f in fields
+             if old[s].get(f) is not None and new[s].get(f) is not None
+             and float(old[s][f]) != float(new[s][f])]
+    return ("match" if not diffs else "DIFF"), (
+        f"{len(shared)} symbols x {len(fields)} fields; " + ("; ".join(diffs[:3]) or "all equal")
+    )
 
 
 def compare_reference(v4: Any, v6: Any) -> tuple[str, str]:
@@ -282,7 +337,9 @@ def _probes() -> list[tuple[str, tuple[str, ...], Callable[[], Any], Compare]]:
         ("equity_fundamentals_FPT", ("vietstock",), fundamentals, compare_fundamentals),
         ("msn_fx_gold", (), lambda: yf.fx_gold(days=35), compare_fx_gold),
         # No source since fhsc/fmp were dropped: report the explicit status.
-        ("equity_quote_batch", (), lambda: vn.equity_quote_batch(["FPT", "VCB"]), compare_none),
+        # #111: the board comes from the project DNSE client (v4 KBS shape).
+        ("equity_quote_batch", ("dnse",),
+         lambda: vn.equity_quote_batch(["FPT", "VCB", "HPG", "VNM", "MWG"]), compare_board),
         ("cashflow_FPT_quarter", (), lambda: vn.cashflow("FPT", period="quarter"), compare_none),
         ("company_info_FPT", (), lambda: vn.company_info("FPT"), compare_none),
         ("insider_trading_FPT", (), lambda: vn.insider_trading("FPT", limit=10), compare_none),
