@@ -7,6 +7,7 @@ never-cache-failures rule, memory-fallback bound, and last-bar extraction.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -273,12 +274,21 @@ def test_run_blocking_sheds_when_queue_full(monkeypatch):
     monkeypatch.setenv("MCP_QUEUE_SHED", "1")
 
     async def main():
+        # #95: synchronise on events, not sleep lengths — under CPU load a fixed
+        # 0.05s wait could outlast the 0.4s background call and nothing was shed.
+        release = threading.Event()
         bg = asyncio.create_task(
-            shared.run_blocking(lambda: time.sleep(0.4) or "done", "bg", 5.0)
+            shared.run_blocking(lambda: release.wait(10) and "done", "bg", 15.0)
         )
-        await asyncio.sleep(0.05)
-        with pytest.raises(ProviderUnavailable, match="shed"):
-            await shared.run_blocking(lambda: 1, "x", 5.0)
+        deadline = time.monotonic() + 10
+        while shared._pending < 1:
+            assert time.monotonic() < deadline, "background call never admitted"
+            await asyncio.sleep(0.01)
+        try:
+            with pytest.raises(ProviderUnavailable, match="shed"):
+                await shared.run_blocking(lambda: 1, "x", 5.0)
+        finally:
+            release.set()
         assert await bg == "done"
         assert shared._pending == 0
 

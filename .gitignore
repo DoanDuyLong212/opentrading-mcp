@@ -8,3 +8,8 @@ __pycache__/
 *.egg-info/
 .venv/
 docs/*.har
+
+# pytest-cov
+.coverage
+.coverage.*
+coverage.xml

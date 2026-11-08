@@ -1,0 +1,65 @@
+# Known mypy errors (scripts/mypy_baseline.py). Never add lines by hand:
+# fix errors, then run `uv run python scripts/mypy_baseline.py --update`.
+5 src/opentrading_mcp/forensic_models.py|index|Value of type "Any | None" is not indexable
+2 src/opentrading_mcp/forensic_models.py|no-untyped-call|Call to untyped function "cfo_ratio" in typed context
+2 src/opentrading_mcp/forensic_models.py|no-untyped-call|Call to untyped function (unknown) in typed context
+14 src/opentrading_mcp/forensic_models.py|no-untyped-def|Function is missing a return type annotation
+2 src/opentrading_mcp/forensic_models.py|union-attr|Item "None" of "Any | None" has no attribute "get"
+1 src/opentrading_mcp/providers/dnse.py|no-any-return|Returning Any from function declared to return "dict[str, Any]"
+1 src/opentrading_mcp/providers/forensic.py|arg-type|Argument 1 to "get" of "dict" has incompatible type "Any | None"; expected "int"
+1 src/opentrading_mcp/providers/forensic.py|index|Invalid index type "Any | None" for "dict[int, Any]"; expected type "int"
+1 src/opentrading_mcp/providers/forensic.py|operator|Unsupported operand types for + ("int" and "None")
+1 src/opentrading_mcp/providers/geo.py|no-any-return|Returning Any from function declared to return "list[dict[str, Any]]"
+1 src/opentrading_mcp/providers/technicals.py|arg-type|Argument 1 to "float" has incompatible type "Series[float]"; expected "str | Buffer | SupportsFloat | SupportsIndex"
+1 src/opentrading_mcp/providers/technicals.py|arg-type|Argument 1 to "min" has incompatible type "int"; expected "Series[Any]"
+1 src/opentrading_mcp/providers/technicals.py|arg-type|Argument 2 to "min" has incompatible type "int"; expected "Series[Any]"
+1 src/opentrading_mcp/providers/technicals.py|arg-type|Argument 3 to "min" has incompatible type "int"; expected "Series[Any]"
+3 src/opentrading_mcp/providers/technicals.py|assignment|Incompatible types in assignment (expression has type "bool", variable has type "Series[float]")
+2 src/opentrading_mcp/providers/technicals.py|assignment|Incompatible types in assignment (expression has type "int", variable has type "Series[Any]")
+1 src/opentrading_mcp/providers/technicals.py|call-overload|No overload variant of "__getitem__" of "list" matches argument type "Series[Any]"
+1 src/opentrading_mcp/providers/technicals.py|var-annotated|Need type annotation for "levels" (hint: "levels: dict[<type>, <type>] = ...")
+1 src/opentrading_mcp/providers/technicals.py|var-annotated|Need type annotation for "v"
+1 src/opentrading_mcp/providers/vietstock.py|assignment|Incompatible types in assignment (expression has type "tuple[str, Any | None, Any | None]", variable has type "tuple[Any | None, Any | None]")
+2 src/opentrading_mcp/providers/vietstock.py|type-arg|Missing type arguments for generic type "tuple"
+1 src/opentrading_mcp/providers/vnstock.py|arg-type|Argument 1 to "float" has incompatible type "Any | None"; expected "str | Buffer | SupportsFloat | SupportsIndex"
+1 src/opentrading_mcp/providers/vnstock.py|no-any-return|Returning Any from function declared to return "float | None"
+1 src/opentrading_mcp/tools/asset_cycle.py|arg-type|Argument 1 to "_vci_close" has incompatible type "str | None"; expected "str"
+1 src/opentrading_mcp/tools/asset_cycle.py|arg-type|Argument 1 to "_yf_close" has incompatible type "str | None"; expected "str"
+1 src/opentrading_mcp/tools/asset_cycle.py|assignment|Incompatible types in assignment (expression has type "str", variable has type "int")
+2 src/opentrading_mcp/tools/asset_cycle.py|index|Invalid index type "int" for "dict[str, bool]"; expected type "str"
+2 src/opentrading_mcp/tools/asset_cycle.py|index|Value of type "int" is not indexable
+2 src/opentrading_mcp/tools/asset_cycle.py|no-any-return|Returning Any from function declared to return "dict[str, Any]"
+4 src/opentrading_mcp/tools/asset_cycle.py|no-untyped-call|Call to untyped function "run_blocking" in typed context
+1 src/opentrading_mcp/tools/asset_cycle.py|no-untyped-def|Function is missing a type annotation
+1 src/opentrading_mcp/tools/compute_financial.py|no-untyped-def|Function is missing a return type annotation
+1 src/opentrading_mcp/tools/cycle_stats.py|attr-defined|"Index[Any]" has no attribute "to_period"
+1 src/opentrading_mcp/tools/cycle_stats.py|no-any-return|Returning Any from function declared to return "dict[str, Any]"
+2 src/opentrading_mcp/tools/cycle_stats.py|no-untyped-call|Call to untyped function "run_blocking" in typed context
+1 src/opentrading_mcp/tools/cycle_stats.py|no-untyped-def|Function is missing a type annotation
+1 src/opentrading_mcp/tools/market.py|unused-ignore|Unused "type: ignore" comment
+1 src/opentrading_mcp/tools/market.py|var-annotated|Need type annotation for "out2" (hint: "out2: dict[<type>, <type>] = ...")
+1 src/opentrading_mcp/tools/market_timing.py|arg-type|Argument "highs" to "_follow_through" has incompatible type "list[float]"; expected "list[float | None] | None"
+1 src/opentrading_mcp/tools/market_timing.py|operator|Unsupported operand types for + ("None" and "float")
+1 src/opentrading_mcp/tools/market_timing.py|return-value|Incompatible return value type (got "tuple[list[float], list[float], list[float], list[float | None], list[str]]", expected "tuple[list[float], list[float], list[float], list[float], list[str]] | None")
+6 src/opentrading_mcp/tools/quant_backtest.py|no-untyped-call|Call to untyped function "run_blocking" in typed context
+1 src/opentrading_mcp/tools/quant_backtest.py|no-untyped-def|Function is missing a type annotation
+2 src/opentrading_mcp/tools/quant_shared.py|index|Value of type "list[float] | None" is not indexable
+1 src/opentrading_mcp/tools/quant_shared.py|operator|Unsupported operand types for / ("None" and "float")
+6 src/opentrading_mcp/tools/quant_stats.py|no-untyped-call|Call to untyped function "run_blocking" in typed context
+1 src/opentrading_mcp/tools/quant_stats.py|no-untyped-def|Function is missing a type annotation
+1 src/opentrading_mcp/tools/scan.py|arg-type|Argument 1 to "float" has incompatible type "Any | None"; expected "str | Buffer | SupportsFloat | SupportsIndex"
+1 src/opentrading_mcp/tools/shared.py|no-any-return|Returning Any from function declared to return "bool"
+1 src/opentrading_mcp/tools/shared.py|no-untyped-def|Function is missing a return type annotation
+4 src/opentrading_mcp/tools/shared.py|type-arg|Missing type arguments for generic type "Future"
+1 src/opentrading_mcp/tools/shared.py|type-arg|Missing type arguments for generic type "Task"
+1 src/opentrading_mcp/tools/vn_predictions.py|type-arg|Missing type arguments for generic type "tuple"
+1 src/opentrading_mcp/tools/vn_reversal.py|type-arg|Missing type arguments for generic type "dict"
+1 src/opentrading_mcp/tools/vn_reversal.py|type-arg|Missing type arguments for generic type "tuple"
+1 src/opentrading_mcp/tools/vn_screener.py|type-arg|Missing type arguments for generic type "tuple"
+1 src/opentrading_mcp/tools/vnindex_scenarios.py|arg-type|Argument 1 to "append" of "list" has incompatible type "int"; expected "str"
+1 src/opentrading_mcp/tools/vnindex_scenarios.py|type-arg|Missing type arguments for generic type "tuple"
+1 src/opentrading_mcp/tools/watchlist.py|no-untyped-call|Call to untyped function "_pg_create" in typed context
+2 src/opentrading_mcp/tools/watchlist.py|no-untyped-def|Function is missing a return type annotation
+2 src/opentrading_mcp/tools/yf.py|arg-type|Argument 1 to "run_blocking" has incompatible type "partial[list[dict[str, Any]]]"; expected "Callable[[], dict[Any, Any]]"
+1 src/opentrading_mcp/units.py|arg-type|Argument 1 to "__call__" of "_Wrapper" has incompatible type "def wrapped_async(*args: Any, Any = ..., str = ..., **kwargs: Any) -> Coroutine[Any, Any, Any]"; expected "def (*args: Any, Any = ..., str = ..., **kwargs: Any) -> Coroutine[Any, Any, Any]"
+1 src/opentrading_mcp/units.py|arg-type|Argument 1 to "__call__" of "_Wrapper" has incompatible type "def wrapped_sync(*args: Any, Any = ..., str = ..., **kwargs: Any) -> Any"; expected "def (*args: Any, Any = ..., str = ..., **kwargs: Any) -> Any"
