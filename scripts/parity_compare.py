@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
 from opentrading_mcp.providers import vnstock as vn  # noqa: E402
+from opentrading_mcp.providers import yfinance as yf  # noqa: E402
 from opentrading_mcp.providers.circuit import reset as _reset_circuit  # noqa: E402
 
 FIXTURE_DIRS = sorted((REPO / "tests" / "fixtures").glob("parity_v4_*"))
@@ -120,9 +121,9 @@ def main() -> int:
         ("equity_ohlcv_FPT", {"fhsc", "ssi"}, lambda: vn.equity_ohlcv("FPT", count=30)),
         ("index_ohlcv_VNINDEX", {"ssi", "fhsc"}, lambda: vn.index_ohlcv("VNINDEX", count=30)),
         ("futures_ohlcv_VN30F1M", {"fhsc"}, lambda: vn.futures_ohlcv("VN30F1M", count=30)),
-        ("forex_ohlcv_USDVND", {"fhsc"}, lambda: vn.forex_ohlcv("USDVND", count=30)),
+        ("forex_ohlcv_USDVND", set(), lambda: yf.fx_history("USDVND", count=30)),
         ("crypto_ohlv_BTCUSDT", set(), lambda: vn.crypto_ohlv("BTCUSDT", count=30)),
-        ("global_index_USA30", {"fmp"}, lambda: vn.global_index("USA30", count=30)),
+        ("global_index_USA30", set(), lambda: yf.global_index("USA30", count=30)),
         ("equity_trades_FPT", {"fhsc", "ssi"}, lambda: vn.equity_trades("FPT", limit=20)),
         ("listing_symbols", {"ssi", "fhsc"}, lambda: vn.listing_symbols(limit=50)),
         ("equity_ratios_FPT", {"fhsc"}, lambda: vn.equity_ratios("FPT", period="quarter")),
@@ -132,7 +133,7 @@ def main() -> int:
         ("company_info_FPT", {"fhsc"}, lambda: vn.company_info("FPT")),
         ("insider_trading_FPT", {"fhsc"}, lambda: vn.insider_trading("FPT", limit=10)),
         ("corp_events_FPT", {"fhsc"}, lambda: vn.corp_events("FPT", limit=10)),
-        ("msn_fx_gold", {"fhsc"}, lambda: vn.msn_fx_gold(days=35)),
+        ("msn_fx_gold", set(), lambda: yf.fx_gold(days=35)),
     ]
     for name, required, fn in probes:
         v4 = json.loads((OUT / f"{name}.json").read_text())

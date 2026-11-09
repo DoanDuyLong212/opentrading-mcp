@@ -64,6 +64,64 @@ def _table_rows(table: Any) -> list[list[str]]:
     return rows
 
 
+VCB_RATES_URL = "https://www.vietcombank.com.vn/api/exchangerates"
+
+
+def _vcb_number(value: Any) -> float | None:
+    """Vietcombank rate cell → float; "-" / blank (no quote for that leg) → None."""
+    text = str(value if value is not None else "").replace(",", "").strip()
+    if text in ("", "-"):
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _parse_vcb(payload: Any) -> dict[str, Any]:
+    try:
+        items = payload["Data"]
+    except (KeyError, TypeError) as exc:
+        raise ProviderBadData("Vietcombank payload malformed") from exc
+    rows = [
+        {
+            "currency_code": str(item.get("currencyCode", "")).strip(),
+            "currency_name": str(item.get("currencyName", "")).strip(),
+            "buy_cash": _vcb_number(item.get("cash")),
+            "buy_transfer": _vcb_number(item.get("transfer")),
+            "sell": _vcb_number(item.get("sell")),
+        }
+        for item in items or []
+        if isinstance(item, dict) and item.get("currencyCode")
+    ]
+    if not rows:
+        raise ProviderBadData("Vietcombank returned no rates")
+    return {"updated_at": payload.get("UpdatedDate"), "rows": rows}
+
+
+@guarded("vietcombank")
+def vcb_exchange_rates(day: str | None = None) -> dict[str, Any]:
+    """Vietcombank retail FX board (#85): per currency, bank BUY cash / BUY
+    transfer / SELL in VND per unit. Public, keyless. Vietcombank asks for at
+    most one request every 5 minutes, so callers must cache (vn_retail_fx: 1h).
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    # The board is dated in Vietnam time; Render runs in UTC, where 00:00-07:00
+    # VN would otherwise ask for yesterday's board.
+    params = {"date": day or datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()}
+    try:
+        resp = shared_client().get(
+            VCB_RATES_URL, params=params, headers={"User-Agent": _BROWSER_UA}, timeout=15.0
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        raise ProviderUnavailable(f"Vietcombank rates fetch failed: {exc}") from exc
+    return _parse_vcb(payload)
+
+
 BTMC_URL = "https://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v"
 
 

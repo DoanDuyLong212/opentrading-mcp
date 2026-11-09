@@ -48,6 +48,7 @@ ALLOWED_SOURCES = frozenset(
         "msn",
         "btmc-direct",
         "vnstock-retail",
+        "vietcombank",
     }
 )
 

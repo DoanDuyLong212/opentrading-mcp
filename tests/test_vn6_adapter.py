@@ -309,9 +309,6 @@ def test_alt_ohlcv_groups_use_count_back_and_named_interval(monkeypatch):
 @pytest.mark.parametrize(
     "call",
     [
-        lambda: vn_p.forex_ohlcv("USDVND", count=30),
-        lambda: vn_p.global_index("USA30", count=30),
-        lambda: vn_p.msn_fx_gold(days=35),
         lambda: vn_p.equity_quote_batch(["FPT"]),
         lambda: vn_p.company_info("FPT"),
         lambda: vn_p.insider_trading("FPT"),
@@ -319,8 +316,7 @@ def test_alt_ohlcv_groups_use_count_back_and_named_interval(monkeypatch):
         lambda: vn_p.cashflow("FPT"),
         lambda: vn_p.equity_ratios("FPT", "year"),
     ],
-    ids=["forex", "global", "fx_gold", "quote", "company", "insider", "events",
-         "cashflow", "ratios"],
+    ids=["quote", "company", "insider", "events", "cashflow", "ratios"],
 )
 def test_fhsc_only_routes_fail_as_not_configured(monkeypatch, call):
     """Routes only fhsc/fmp/tcbs serve must say 'not configured' (not retryable)
@@ -399,45 +395,6 @@ def test_candles_range_raises_unavailable_when_empty(monkeypatch):
     _install(monkeypatch, Market=Market)
     with pytest.raises(ProviderUnavailable):
         vn_p.candles_range("FPT", "2026-11-01", "2026-11-08")
-
-
-# --- msn_fx_gold: v6 Market forex + commodity (explorer.msn is gone) --------------
-
-
-def test_msn_fx_gold_uses_v6_forex_and_commodity(monkeypatch):
-    seen: list[tuple] = []
-
-    class G:
-        def __init__(self, group, symbol):
-            self.group, self.symbol = group, symbol
-
-        def ohlcv(self, *, start=None, end=None, interval=None, **kw):
-            seen.append((self.group, self.symbol, start, end, interval))
-            close = 25000.0 if self.group == "forex" else 4000.0
-            return _Frame([{"time": "2026-11-07", "close": close}])
-
-    class Market:
-        def __init__(self, source=None, **kw):
-            seen.append(("source", source))
-
-        def __getattr__(self, group):
-            def make(symbol=None):
-                return G(group, symbol)
-
-            return make
-
-    _install(monkeypatch, Market=Market)
-    _legacy_chain(monkeypatch, SRC_FX=("fhsc",))
-    out = vn_p.msn_fx_gold(days=35)
-    pairs = {(s[0], s[1]) for s in seen if s[0] != "source"}
-    assert ("forex", "USDVND") in pairs
-    assert ("commodity", "GC") in pairs  # XAUUSD rides the GC futures contract
-    sources = {s[1] for s in seen if s[0] == "source"}
-    assert sources <= {"fhsc", "fmp"}
-    assert all(s[2] and s[3] for s in seen if s[0] != "source")  # start/end always set
-    by_symbol = {row["symbol"]: row for row in out}
-    assert by_symbol["USDVND"]["points"] == 1
-    assert by_symbol["XAUUSD"]["points"] == 1
 
 
 # --- fix-pass contracts from the whole-branch review -------------------------------
@@ -652,8 +609,9 @@ def test_quota_info_reports_which_route_chains_can_answer(monkeypatch):
     assert chains["equity"] == ["ssi"] and chains["index"] == ["ssi"]
     assert chains["trades"] == []  # dnse only
     assert chains["crypto"] == ["binance"]  # keyless
-    for route in ("quote", "fundamental", "forex", "global"):
-        assert chains[route] == [], route  # fhsc/fmp-only routes
+    for route in ("quote", "fundamental"):
+        assert chains[route] == [], route  # fhsc/tcbs-only routes
+    assert "forex" not in chains and "global" not in chains  # moved to yfinance
 
 
 def test_dnse_secret_is_aliased_for_vnstock(monkeypatch):

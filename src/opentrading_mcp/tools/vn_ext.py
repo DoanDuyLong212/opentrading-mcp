@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from opentrading_mcp.cache import TTL_SECONDS
 from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.tools.shared import (
     CLOSE_KEYS,
@@ -169,27 +170,29 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary: bool = False,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
-        """FX bars. Use for currency context.
+        """FX daily bars (Yahoo). Use for currency context.
 
-        pair like 'USDVND'. summary/columns: summary returns {count,last,high,low}
-        only; columns keeps named fields.
+        pair: six letters like 'USDVND' or 'EURUSD' (interbank rate, not a bank's buy/sell —
+            for Vietcombank buy/sell use vn_retail_fx). summary/columns: summary returns
+            {count,last,high,low} only; columns keeps named fields.
         """
-        fp = f"{pair}|{count}|{summary}|{columns}"
+        # v2: yfinance replaces the discontinued vnstock fhsc/fmp forex route.
+        fp = f"v2|{pair}|{count}|{summary}|{columns}"
         hit = await cache_lookup("vn_forex_ohlcv", fp)
         if hit is not None:
             return hit
         try:
-            rows = await _call("f", vn_p.forex_ohlcv, pair, count)
+            rows = await _call("f", yf_p.fx_history, pair, count)
             if summary:
                 s = _summarize(pair, rows)
                 return await cache_store(
                     "vn_forex_ohlcv", fp, TTL_SECONDS["market"],  # 24/7 FX: fixed 60s
-                    s, source="vnstock", data_time=s.get("last_t"),
+                    s, source="yfinance", data_time=s.get("last_t"),
                 )
             return await cache_store(
                 "vn_forex_ohlcv", fp, TTL_SECONDS["market"],
                 {"pair": pair.upper(), "bars": _project(rows, columns)},
-                source="vnstock",
+                source="yfinance",
                 data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -234,32 +237,36 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary: bool = False,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Global index bars. Use as yfinance fallback.
+        """Global index daily bars (Yahoo). Use for one world index's history.
 
-        Symbol spellings are aliased (Yahoo codes and names with spaces work too):
-        S&P 500 = INX (SPX/GSPC/SP500), Dow Jones = USA30 (DJI/Dow),
-        Nasdaq Composite = COMP (IXIC/NASDAQ),
-        CAC 40 = PX1 (CAC/CAC40), FTSE 100 = UKX (FTSE/FTSE100), plus DAX,
-        N225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX, VNI.
-        Nasdaq-100 (NDX) is NOT in this source — use yf_global_indices.
+        Symbol spellings are aliased (names with spaces work too): S&P 500 (SPX/INX/^GSPC),
+        Dow Jones (DJI/USA30), Nasdaq Composite (IXIC/COMP), Nasdaq-100 (NDX), Russell
+        2000/1000/3000 (RUT/RUI/RUA), NYSE (NYA), FTSE 100 (FTSE/UKX), DAX, CAC 40 (CAC/PX1),
+        N225 (Nikkei), HSI (Hang Seng), 000001 (Shanghai), SENSEX; any other Yahoo index
+        ticker starting with ^ passes through. VN-Index: use vn_index_ohlcv.
         summary/columns: summary returns {count,last,high,low} only; columns keeps named fields.
         """
-        fp = f"{symbol}|{count}|{summary}|{columns}"
+        # v2: yfinance replaces the discontinued vnstock fmp route (#78).
+        fp = f"v2|{symbol}|{count}|{summary}|{columns}"
         hit = await cache_lookup("vn_global_index", fp)
         if hit is not None:
             return hit
         try:
-            rows = await _call("g", vn_p.global_index, symbol, count)
+            rows = await _call("g", yf_p.global_index, symbol, count)
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
                     "vn_global_index", fp, TTL_SECONDS["market"],  # world trades 24/7
-                    s, source="vnstock", data_time=s.get("last_t"),
+                    s, source="yfinance", data_time=s.get("last_t"),
                 )
             return await cache_store(
                 "vn_global_index", fp, TTL_SECONDS["market"],
-                {"symbol": symbol.upper(), "bars": _project(rows, columns)},
-                source="vnstock",
+                {
+                    "symbol": symbol.upper(),
+                    "ticker": yf_p.normalize_global_symbol(symbol),
+                    "bars": _project(rows, columns),
+                },
+                source="yfinance",
                 data_time=last_bar_time(rows),
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
@@ -312,19 +319,25 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
     @server.tool(annotations=READ_ONLY)
     async def vn_msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> dict[str, Any]:
-        """USDVND and XAUUSD via MSN. Use for gold-basis math.
+        """USD/VND and world gold daily series (Yahoo). Use for gold-basis math.
 
-        symbols: subset to fetch (default both); days: history depth.
+        Two legs: USDVND (interbank, VND per USD) and gold = COMEX GC=F FUTURES, front month,
+        in USD per troy ounce — NOT spot XAUUSD (no spot source is available; futures sit above
+        spot by the carry and roll between contracts). Each leg carries instrument/unit/note.
+        symbols: subset — USDVND and/or XAUUSD/GOLD/GC (all map to GC=F); other symbols are
+        refused (use vn_forex_ohlcv for other pairs). days: history depth. The name is
+        historical (MSN is gone).
         """
-        fp = f"{symbols}|{days}"
+        # v2: yfinance legs; the gold leg is labelled futures (#79).
+        fp = f"v2|{symbols}|{days}"
         hit = await cache_lookup("vn_msn_fx_gold", fp)
         if hit is not None:
             return hit
         try:
-            data = await _call("m", vn_p.msn_fx_gold, symbols, days)
+            data = await _call("m", yf_p.fx_gold, symbols, days)
             return await cache_store(
                 "vn_msn_fx_gold", fp, TTL_SECONDS["market"],  # FX legs trade 24/7
-                {"series": data}, source="msn",
+                {"series": data}, source="yfinance",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_msn_fx_gold", str(exc))
