@@ -379,7 +379,7 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     # contract), not 45s per chunk.
     pool = _shared_batch_pool(len(chunks))
     deadline = time.monotonic() + _VN_BATCH_WAIT_SECONDS
-    futs = {}
+    futs: dict[Any, list[str]] = {}  # Future -> its chunk
     try:
         for chunk in chunks:
             # A shared executor alone has an unbounded queue. Admit at most
