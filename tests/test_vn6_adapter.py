@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import sys
 import types
+from typing import ClassVar
 
 import pytest
 
 from opentrading_mcp.providers import vnstock as vn_p
-from opentrading_mcp.providers.errors import ProviderUnavailable
+from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.units import INDEX_SYMBOLS
 
 
 class _Frame:
@@ -423,6 +425,72 @@ def test_quote_history_routes_index_symbols_to_the_index_group(monkeypatch):
     rows = vn_p.quote_history("VNINDEX", days=5)
     assert seen == ["index"]
     assert rows and rows[0]["c"] == 1300.0
+
+
+class _ScalingMarket:
+    """Live behaviour measured 2026-11-08 (ssi): the equity group DOES answer
+    for an index code, but in thousand-dong scaling (VN100 1764.3 → 1.76);
+    only the index group returns points. A fake that raises on the equity
+    group hides exactly that silent mis-scaling."""
+
+    seen: ClassVar[list[tuple[str, str]]] = []
+
+    def __init__(self, source=None, **kw):
+        pass
+
+    def _group(self, name, symbol, close):
+        seen = self.seen
+
+        class G:
+            def ohlcv(self, **kw):
+                seen.append((name, symbol))
+                return _Frame(
+                    [{"time": "2026-11-06", "open": close, "high": close, "low": close,
+                      "close": close, "volume": 5}]
+                )
+
+        return G()
+
+    def equity(self, symbol):
+        return self._group("equity", symbol, 1.76)
+
+    def index(self, symbol):
+        return self._group("index", symbol, 1764.3)
+
+
+@pytest.mark.parametrize("code", sorted(INDEX_SYMBOLS))
+def test_every_index_symbol_rides_the_index_group(monkeypatch, code):
+    """#77: route on units.INDEX_SYMBOLS (26 codes), not a hand-copied subset."""
+    _ScalingMarket.seen = []
+    _install(monkeypatch, Market=_ScalingMarket)
+    rows = vn_p.quote_history(code, days=5)
+    assert {group for group, _ in _ScalingMarket.seen} == {"index"}
+    assert rows[-1]["c"] == 1764.3  # points, not the equity group's /1000 figure
+
+
+@pytest.mark.parametrize("code", ["vn100", " VNMID ", "UpcomIndex"])
+def test_index_routing_normalises_the_code(monkeypatch, code):
+    _ScalingMarket.seen = []
+    _install(monkeypatch, Market=_ScalingMarket)
+    vn_p.candles_range(code, "2026-11-01", "2026-11-07")
+    assert _ScalingMarket.seen == [("index", code.strip().upper())]
+
+
+def test_stock_symbols_stay_on_the_equity_group(monkeypatch):
+    _ScalingMarket.seen = []
+    _install(monkeypatch, Market=_ScalingMarket)
+    vn_p.quote_history("FPT", days=5)
+    assert _ScalingMarket.seen == [("equity", "FPT")]
+
+
+def test_equity_ohlcv_refuses_index_codes(monkeypatch):
+    """vn_equity_ohlcv is labelled thousand dong: an index code would come back
+    /1000 from the equity group. Point the caller at vn_index_ohlcv instead."""
+    _ScalingMarket.seen = []
+    _install(monkeypatch, Market=_ScalingMarket)
+    with pytest.raises(ProviderBadData, match="vn_index_ohlcv"):
+        vn_p.equity_ohlcv("VN100", count=5)
+    assert _ScalingMarket.seen == []
 
 
 def test_index_ohlcv_sorts_ascending(monkeypatch):

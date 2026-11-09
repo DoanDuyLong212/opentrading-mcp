@@ -21,6 +21,7 @@ from pandas.api.types import is_bool
 
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.units import INDEX_SYMBOLS
 
 # Gen-6 source chains (first non-empty frame wins). fhsc serves fundamentals,
 # company profile and group batch quotes; ssi serves listing and domestic index
@@ -106,19 +107,18 @@ def _candle_day(value: Any) -> str:
         return text
 
 
-# Index codes served by the index group only (cycle refresh feeds these).
-_VN_INDEX_SYMBOLS = frozenset(
-    {"VNINDEX", "VN30", "VNFIN", "VNFINLEAD", "VNMAT", "VNREAL", "VNUTI", "VNIT",
-     "VNSI", "HNXINDEX", "HNX30"}
-)
-
-
 def _candle_fetchers(symbol: str, **ohlcv_kwargs: Any) -> list[tuple[str, Any]]:
-    """Source fetchers for daily candles — index codes ride the index group."""
+    """Source fetchers for daily candles — index codes ride the index group.
+
+    ``units.INDEX_SYMBOLS`` is the one index list (it also drives the points
+    unit label). The equity group answers for an index code too, but in
+    thousand-dong scaling (VN100 1764.3 → 1.76, measured 2026-11-08), so a
+    code missing from the set silently returns numbers 1000x too small.
+    """
     from vnstock import Market
 
-    symbol = symbol.upper()
-    if symbol in _VN_INDEX_SYMBOLS:
+    symbol = symbol.strip().upper()
+    if symbol in INDEX_SYMBOLS:
         return [
             (
                 source,
@@ -479,6 +479,11 @@ def index_ohlcv(
 
 @guarded("vnstock")
 def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[dict[str, Any]]:
+    if symbol.strip().upper() in INDEX_SYMBOLS:
+        # The equity group would answer in thousand-dong scaling (VN100 → 1.76).
+        raise ProviderBadData(
+            f"{symbol.strip().upper()} is an index code: use vn_index_ohlcv (points)"
+        )
     try:
         from vnstock import Market
     except ImportError as exc:
