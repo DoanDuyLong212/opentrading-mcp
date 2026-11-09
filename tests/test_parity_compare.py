@@ -115,3 +115,19 @@ def test_render_writes_totals():
     text = parity.render([{"probe": "a", "status": "match", "detail": "x"},
                           {"probe": "b", "status": "match", "detail": "y"}])
     assert "| a | match | x |" in text and "Totals: match 2" in text
+
+
+def test_corp_events_compare_matches_ssi_against_the_v4_bonus_issue():
+    v4 = [
+        {"event_code": "AIS", "exright_date": None, "event_title_vi": "Niêm yết bổ sung"},
+        {"event_code": "ISS", "exright_date": "2026-09-21T00:00:00", "exercise_ratio": 0.1,
+         "value_per_share": None},
+        {"event_code": "DDIND", "exright_date": None},
+    ]
+    v6 = [{"event_code": "ISS", "exright_date": "2026-09-21", "exercise_ratio": 0.1,
+           "value_per_share": None},
+          {"event_code": "DIV", "exright_date": "2026-05-28", "value_per_share": 1000.0}]
+    assert parity.compare_corp_events(v4, v6)[0] == "match"
+    wrong = [{**v6[0], "exercise_ratio": 0.2}]
+    assert parity.compare_corp_events(v4, wrong)[0] == "UNEXPECTED VALUE"
+    assert parity.compare_corp_events(v4, [])[0] == "UNEXPECTED VALUE"
