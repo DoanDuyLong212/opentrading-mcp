@@ -94,6 +94,7 @@ def _chain_error(
     machine-readable ``reason`` (#83) — a rate limit anywhere wins, then
     'every source lacks its keys'."""
     from opentrading_mcp.failures import NOT_CONFIGURED, UPSTREAM_RATE_LIMITED
+    from opentrading_mcp.providers.errors import ProviderNoData
     from opentrading_mcp.tools.shared import RATE_LIMITED
 
     if not errors and not empty:
@@ -112,6 +113,8 @@ def _chain_error(
         return ProviderUnavailable(
             f"no data for {label}: source keys not set ({detail})", reason=NOT_CONFIGURED
         )
+    if empty and not errors:
+        return ProviderNoData(f"no data for {label} ({detail})")
     return ProviderUnavailable(f"no data for {label} ({detail})")
 
 
@@ -143,8 +146,12 @@ def _fetch_frame(fetchers: list[tuple[str, Any]], label: str) -> Any:
 
 
 def _rewrap(exc: Exception, message: str) -> ProviderUnavailable:
-    """Add caller context to a chain error without losing its reason."""
-    return ProviderUnavailable(
+    """Add caller context to a chain error without losing its reason or its class
+    (a ProviderNoData must stay one, or the circuit breaker counts it)."""
+    from opentrading_mcp.providers.errors import ProviderNoData
+
+    cls = ProviderNoData if isinstance(exc, ProviderNoData) else ProviderUnavailable
+    return cls(
         f"{message}: {exc}",
         reason=getattr(exc, "reason", None),
         retry_after_s=getattr(exc, "retry_after_s", None),

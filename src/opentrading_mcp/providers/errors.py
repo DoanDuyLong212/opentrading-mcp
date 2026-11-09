@@ -18,6 +18,13 @@ class ProviderUnavailable(Exception):
         self.retry_after_s = retry_after_s
 
 
+class ProviderNoData(ProviderUnavailable):
+    """Every source answered, and none had rows (e.g. no trade yet in the session, an
+    illiquid symbol, an empty window). An answer, not an outage: circuit breakers do
+    not count it, so a run of empty answers cannot take the upstream's other routes
+    down. Everything else treats it as ProviderUnavailable."""
+
+
 class ProviderAuthMissing(Exception):
     """Credentials absent (not retryable without config)."""
 
