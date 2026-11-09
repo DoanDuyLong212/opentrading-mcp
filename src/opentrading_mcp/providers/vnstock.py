@@ -20,7 +20,7 @@ from typing import Any
 from pandas.api.types import is_bool
 
 from opentrading_mcp.providers.circuit import guarded
-from opentrading_mcp.providers.errors import ProviderBadData, ProviderNoData, ProviderUnavailable
+from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 
 # Gen-6 source chains (first non-empty frame wins). The owner stopped using the
 # fhsc and fmp keys on 2026-11-08, so ssi is primary and dnse the fallback;
@@ -93,6 +93,7 @@ def _chain_error(
     machine-readable ``reason`` (#83) — a rate limit anywhere wins, then
     'every source lacks its keys'."""
     from opentrading_mcp.failures import NOT_CONFIGURED, UPSTREAM_RATE_LIMITED
+    from opentrading_mcp.providers.errors import ProviderNoData
     from opentrading_mcp.tools.shared import RATE_LIMITED
 
     if not errors and not empty:
@@ -146,6 +147,8 @@ def _fetch_frame(fetchers: list[tuple[str, Any]], label: str) -> Any:
 def _rewrap(exc: Exception, message: str) -> ProviderUnavailable:
     """Add caller context to a chain error without losing its reason or its class
     (a ProviderNoData must stay one, or the circuit breaker counts it)."""
+    from opentrading_mcp.providers.errors import ProviderNoData
+
     cls = ProviderNoData if isinstance(exc, ProviderNoData) else ProviderUnavailable
     return cls(
         f"{message}: {exc}",
