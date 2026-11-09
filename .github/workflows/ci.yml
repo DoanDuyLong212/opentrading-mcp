@@ -41,5 +41,35 @@ jobs:
           python-version: "3.12"
       - run: uv sync --frozen --extra dev
       - run: uv run ruff check src tests scripts
+      # strict mypy with a baseline: fails on NEW errors only (#98).
+      - run: uv run python scripts/mypy_baseline.py
       # The full live matrix calls real upstreams (and needs their keys): run it by hand.
-      - run: uv run pytest -q -p no:cacheprovider --deselect tests/contract/test_verify_matrix.py::test_full_matrix_stdio
+      - run: >-
+          uv run pytest -q -p no:cacheprovider
+          --deselect tests/contract/test_verify_matrix.py::test_full_matrix_stdio
+          --cov=opentrading_mcp --cov-report=term:skip-covered
+      - name: Coverage summary
+        if: always()
+        run: uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+  docker:
+    # The image Render runs is otherwise never built before deploy (#98).
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t opentrading-mcp:ci .
+      - name: Boot the image as Render does and wait for /healthz
+        run: |
+          # The server refuses HTTP without MCP_ALLOWED_HOSTS (DNS-rebinding guard).
+          docker run -d --name mcp -e PORT=8102 -e MCP_LOOPS=0 \
+            -e MCP_ALLOWED_HOSTS=127.0.0.1:8102,localhost:8102 -p 8102:8102 opentrading-mcp:ci
+          start=$(date +%s)
+          for _ in $(seq 1 120); do
+            if curl -fsS -m 3 http://127.0.0.1:8102/healthz >/dev/null; then
+              echo "healthy after $(( $(date +%s) - start ))s"; exit 0
+            fi
+            sleep 1
+          done
+          docker logs mcp | tail -50
+          exit 1

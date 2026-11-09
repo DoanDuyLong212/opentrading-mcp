@@ -24,6 +24,10 @@ async def _started(event):
     assert await asyncio.to_thread(event.wait, 2), "worker did not start"
 
 
+# Longer than _started's 2s wait, so the timeout can only fire on a running thread.
+_RUNNING_TIMEOUT = 2.5
+
+
 @pytest.mark.asyncio
 async def test_completion_releases(executor):
     baseline = shared_mod._pending
@@ -41,9 +45,17 @@ async def test_running_thread_retains_admission(executor, cancel):
         started.set()
         assert release.wait(10)
 
-    task = asyncio.create_task(shared_mod.run_blocking(work, "p01", 0.5 if not cancel else 10))
+    # #95: with a 0.5s timeout a loaded runner could time out before the worker
+    # thread even started; run_blocking then cancelled the queued job, `work`
+    # never ran and the test failed with "worker did not start". The timeout
+    # under test is run_blocking's own, so keep it, but long enough that the
+    # worker always starts first (the thread stays blocked on `release`).
+    timeout = _RUNNING_TIMEOUT if not cancel else 10
+    task = asyncio.create_task(shared_mod.run_blocking(work, "p01", timeout))
     try:
         await _started(started)
+        if not cancel:
+            assert not task.done(), "timed out before the worker was seen running"
         if cancel:
             task.cancel()
         with pytest.raises(asyncio.CancelledError if cancel else ProviderUnavailable):
