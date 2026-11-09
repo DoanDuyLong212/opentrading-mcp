@@ -127,7 +127,8 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         summary/columns: summary chỉ trả {count,symbols}; columns giữ
         trường nêu tên từng báo giá.
         """
-        fp = f"{symbols}|{summary}|{columns}"
+        # v2: rows from the project DNSE client (#84), ISO times, closed-market notes.
+        fp = f"v2|{symbols}|{summary}|{columns}"
         hit = await cache_lookup("vn_equity_quote_batch", fp)
         if hit is not None:
             return hit
@@ -148,7 +149,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "symbols": [q.get("symbol") for q in quotes],
                         **({"missing": missing} if missing else {}),
                     },
-                    source="vnstock",
+                    source="dnse-rest",
                     warnings=(
                         [f"batch partial: {len(missing)} symbols missing"] if missing else None
                     ),
@@ -158,7 +159,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 fp,
                 price_ttl(),
                 {"quotes": _project(quotes, columns), **({"missing": missing} if missing else {})},
-                source="vnstock",
+                source="dnse-rest",
                 warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
             )
         except (ProviderUnavailable, ProviderBadData) as exc:

@@ -149,7 +149,7 @@ def snapshot_once(day: str | None = None) -> dict[str, Any]:
             "nk39_t2": vs_p.macro_report_data(2, 39),
         },
     )
-    _run("vn30_quotes", lambda: vn_p.equity_quote_batch(vn_p.VN30))
+    _run("vn30_quotes", lambda: vn_p.quote_batch_or_vn30(None))
     from opentrading_mcp.providers import intel as intel_p
 
     _run("news_feed", lambda: intel_p.fireant_posts(None, 50))

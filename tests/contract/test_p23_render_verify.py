@@ -363,6 +363,7 @@ def test_market_movers_vn30_default_no_ref_call(monkeypatch):
 
     monkeypatch.setattr(vn_p, "equity_quote_batch", fake_batch)
     monkeypatch.setattr(vn_p, "reference_equity", boom_ref)
+    monkeypatch.setattr(vn_p, "vn30_symbols", lambda: list(vn_p.VN30))
     import asyncio
 
     server = create_server()
@@ -394,12 +395,14 @@ def test_market_movers_sorts_by_percent_change():
         ]
 
     async def go():
-        with mock.patch.object(vn_p, "equity_quote_batch", fake_batch):
+        with mock.patch.object(vn_p, "equity_quote_batch", fake_batch), \
+                mock.patch.object(vn_p, "vn30_symbols", lambda: list(vn_p.VN30)):
             return await fn(top_n=2)
 
     env = asyncio.new_event_loop().run_until_complete(go())
     assert env["availability"] == "available", env
     gainers = [g["symbol"] for g in env["data"]["gainers"]]
-    # fake assigns percent_change=idx (ACB=0…); desc sort → highest idx first
-    assert gainers[0] == "CTG" and gainers[1] == "BVH", gainers
+    # fake assigns percent_change=idx over the basket's first 5; desc sort → highest idx first
+    first_five = vn_p.VN30[:5]
+    assert gainers == [first_five[4], first_five[3]], gainers
     assert env["data"]["universe"] == 5  # = quotes count (fake returns 5 rows)
