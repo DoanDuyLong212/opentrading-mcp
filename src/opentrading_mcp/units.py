@@ -35,7 +35,8 @@ _BARS = {"open, high, low, close, last": THOUSAND_DONG, "volume": SHARES}
 _BOARD = {
     "ceiling_price, floor_price, reference_price, open_price, high_price, low_price, "
     "close_price, average_price, price_change, bid_price_N, ask_price_N": DONG,
-    "volume_accumulated, bid_vol_N, ask_vol_N, foreign_buy_volume, foreign_sell_volume": SHARES,
+    "volume_accumulated, bid_vol_N, ask_vol_N, foreign_buy_volume, foreign_sell_volume, "
+    "foreign_room": SHARES,
     "total_value": "đồng",
     "percent_change": "%",
 }
