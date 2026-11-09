@@ -20,7 +20,7 @@ from typing import Any
 from pandas.api.types import is_bool
 
 from opentrading_mcp.providers.circuit import guarded
-from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
+from opentrading_mcp.providers.errors import ProviderBadData, ProviderNoData, ProviderUnavailable
 
 # Gen-6 source chains (first non-empty frame wins). The owner stopped using the
 # fhsc and fmp keys on 2026-11-08, so ssi is primary and dnse the fallback;
@@ -111,6 +111,8 @@ def _chain_error(
         return ProviderUnavailable(
             f"no data for {label}: source keys not set ({detail})", reason=NOT_CONFIGURED
         )
+    if empty and not errors:
+        return ProviderNoData(f"no data for {label} ({detail})")
     return ProviderUnavailable(f"no data for {label} ({detail})")
 
 
@@ -142,8 +144,10 @@ def _fetch_frame(fetchers: list[tuple[str, Any]], label: str) -> Any:
 
 
 def _rewrap(exc: Exception, message: str) -> ProviderUnavailable:
-    """Add caller context to a chain error without losing its reason."""
-    return ProviderUnavailable(
+    """Add caller context to a chain error without losing its reason or its class
+    (a ProviderNoData must stay one, or the circuit breaker counts it)."""
+    cls = ProviderNoData if isinstance(exc, ProviderNoData) else ProviderUnavailable
+    return cls(
         f"{message}: {exc}",
         reason=getattr(exc, "reason", None),
         retry_after_s=getattr(exc, "retry_after_s", None),
