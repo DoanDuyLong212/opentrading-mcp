@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from opentrading_mcp.providers import vs_ratios as vsr_mod
 from opentrading_mcp.server import create_server, register_preset
 
 
@@ -123,25 +124,25 @@ async def test_screener_reports_scope_and_fundamentals_period(monkeypatch):
     def fake_fund(symbol: str, period: str = "year") -> dict[str, Any]:
         return {"symbol": symbol, "pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     env = await _tool("stock_screener")(max_pe=10, limit=5)
     data = env["data"]
     assert data["universe"] == 40
-    assert data["screened"] == 20
+    assert data["screened"] == 15
     assert _coverage_core(data) == {
         "stage": "fundamentals",
         "eligible": 40,
-        "attempted": 20,
-        "evaluated": 20,
+        "attempted": 15,
+        "evaluated": 15,
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 20},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 15},
         "unsupported_metrics": [],
     }
     assert data["candidates"][0]["fundamentals_period"] == "2025"
-    assert any("first 20 of 40" in w for w in env["warnings"])
+    assert any("first 15 of 40" in w for w in env["warnings"])
     assert env["availability"] == "partial"  # 20/40 were checked; the cap leaves unknowns
 
 
@@ -160,19 +161,19 @@ async def test_screener_evaluated_excludes_missing_required_metric(monkeypatch):
             return {"symbol": symbol, "roe": 0.2, "period_label": "2025"}
         return {"symbol": symbol, "pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     env = await _tool("stock_screener")(max_pe=10, limit=5)
     data = env["data"]
     assert _coverage_core(data) == {
         "stage": "fundamentals",
         "eligible": 40,
-        "attempted": 20,
-        "evaluated": 15,  # S00-S04 lack pe, the exact metric the filter needs
+        "attempted": 15,
+        "evaluated": 10,  # S00-S04 lack pe, the exact metric the filter needs
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 15},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 10},
         "unsupported_metrics": [],
     }
     assert any("S00" in w and "pe" in w for w in env["warnings"])
@@ -206,7 +207,7 @@ async def test_screener_technical_stage_reports_true_scope(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(40)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
     calls: list[str] = []
 
     def fake_history(symbol: str, days: int) -> list[dict[str, Any]]:
@@ -238,7 +239,7 @@ async def test_screener_technical_unavailable_is_not_a_reject(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(5)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
 
     def fake_history(symbol: str, days: int) -> list[dict[str, Any]]:
         if symbol == "S03":
@@ -284,7 +285,7 @@ async def test_screener_technical_eligible_follows_prefilter(monkeypatch):
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(40)]
     )
     monkeypatch.setattr(
-        vn_p,
+        vsr_mod,
         "equity_fundamentals",
         lambda symbol: {"pe": 8.0 if int(symbol[1:]) < 10 else 30.0, "roe": 0.2},
     )
@@ -306,9 +307,9 @@ async def test_screener_technical_eligible_follows_prefilter(monkeypatch):
         "evaluated": 5,
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 20},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 15},
         "unsupported_metrics": [],
     }
     assert len(calls) == 5
@@ -323,7 +324,7 @@ async def test_screener_technical_empty_dict_is_no_technical_stage(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(40)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
     calls: list[str] = []
 
     def fake_history(symbol: str, days: int) -> list[dict[str, Any]]:
@@ -358,7 +359,7 @@ async def test_screener_all_technical_rejects_is_not_partial(monkeypatch):
     monkeypatch.setattr(
         vn_p, "listing_symbols", lambda: [{"symbol": f"S{i:02d}"} for i in range(5)]
     )
-    monkeypatch.setattr(vn_p, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", lambda symbol: {"pe": 8.0, "roe": 0.2})
     monkeypatch.setattr(vn_p, "quote_history", lambda symbol, days: _falling_history_sync(days))
     env = await _tool("stock_screener")(technical={"above_sma20": True}, limit=5)
     data = env["data"]
@@ -388,28 +389,28 @@ async def test_screener_valuation_coverage_survives_cache_hit(monkeypatch):
         fund_calls.append(symbol)
         return {"pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     fn = _tool("stock_screener")
     env = await fn(max_pe=10, limit=5)
-    assert env["data"]["screened"] == 20
+    assert env["data"]["screened"] == 15
     assert _coverage_core(env["data"]) == {
         "stage": "fundamentals",
         "eligible": 40,
-        "attempted": 20,
-        "evaluated": 20,
+        "attempted": 15,
+        "evaluated": 15,
     }
     assert env["data"]["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 20},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 15},
         "unsupported_metrics": [],
     }
-    assert len(fund_calls) == 20
+    assert len(fund_calls) == 15
     env2 = await fn(max_pe=10, limit=5)
     assert env2["provenance"]["cached"] is True
     assert env2["data"]["coverage"] == env["data"]["coverage"]
-    assert env2["data"]["screened"] == 20
-    assert any("first 20 of 40" in w for w in env2["warnings"])
+    assert env2["data"]["screened"] == 15
+    assert any("first 15 of 40" in w for w in env2["warnings"])
     assert env2["availability"] == env["availability"]
 
 
@@ -427,7 +428,7 @@ async def test_screener_fundamentals_failure_warns_per_symbol(monkeypatch):
             raise RuntimeError("upstream down")
         return {"pe": 8.0, "roe": 0.2}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     env = await _tool("stock_screener")(max_pe=10, limit=5)
     data = env["data"]
     assert _coverage_core(data) == {
@@ -437,7 +438,7 @@ async def test_screener_fundamentals_failure_warns_per_symbol(monkeypatch):
         "evaluated": 2,
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
+        "limit": 15,
         "attempted": 3,
         "metric_available": {"pe": 2},
         "unsupported_metrics": [],

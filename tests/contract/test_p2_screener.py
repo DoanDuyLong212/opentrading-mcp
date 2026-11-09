@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from opentrading_mcp.providers import vs_ratios as vsr_mod
 from opentrading_mcp.server import create_server, register_all, register_preset
 
 
@@ -87,7 +88,7 @@ async def test_stock_screener_does_not_break(monkeypatch):
     def fake_ratio(symbol: str, period: str = "year"):
         return {"symbol": symbol, "pe": 10.0 if symbol == "VCB" else 30.0, "roe": 0.20}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_ratio)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_ratio)
 
     fn = _scan_tool_fn("stock_screener")
     # new-style filters
@@ -104,7 +105,7 @@ async def test_stock_screener_does_not_break(monkeypatch):
     def boom(symbol: str, period: str = "year"):
         raise RuntimeError("upstream down")
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", boom)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", boom)
     env3 = await fn(limit=5)
     _check_envelope(env3, "stock_screener")
     assert env3["data"]["universe"] == 2
@@ -210,7 +211,7 @@ async def test_stock_screener_bounded_enrich_no_valuation_filter(monkeypatch):
         calls.append(symbol)
         return {"symbol": symbol, "pe": 10.0, "roe": 0.2, "market_cap": 1000.0}
 
-    monkeypatch.setattr(vn_p, "equity_fundamentals", fake_ratio)
+    monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_ratio)
     fn = _scan_tool_fn("stock_screener")
     # no valuation filter → enrich capped at 10
     env = await fn(limit=5)
@@ -218,7 +219,7 @@ async def test_stock_screener_bounded_enrich_no_valuation_filter(monkeypatch):
     assert len(calls) <= 10, f"unbounded enrich: {len(calls)} calls"
     assert env["data"]["universe"] == 20
 
-    # valuation filter → wider enrich (up to 30, here 20 rows, limit 5 → 20)
+    # valuation filter → wider enrich (up to 15, here 20 rows, limit 5 → 15)
     calls.clear()
     env2 = await fn(filters={"pe": [None, 20]}, limit=5)
     assert len(calls) > 10, "valuation filter should enrich beyond the no-filter cap"

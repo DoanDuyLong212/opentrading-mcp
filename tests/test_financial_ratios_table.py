@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 
 from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.providers import vs_ratios as vsr_mod
 from opentrading_mcp.server import create_server, register_preset
 from opentrading_mcp.tools import compute_financial as comp_fin
 
@@ -62,7 +63,7 @@ def _table(period: str) -> dict[str, Any]:
 
 def _install(monkeypatch, calls: list[tuple[str, str]]) -> None:
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        assert fn is vn_p.equity_ratios
+        assert fn is vsr_mod.equity_ratios
         symbol, period = args
         calls.append((symbol, period))
         return _table(period)
@@ -246,7 +247,7 @@ async def test_peer_compare_warns_on_a_metric_the_table_lacks(monkeypatch):
     _install(monkeypatch, [])
     env = await _tool("peer_compare")(symbol="FPT", peers=[], metrics=["pe", "market_cap"])
     assert env["data"]["rows"][0]["p_e"] == 15.91
-    assert "metric 'market_cap' is not in the vnstock ratio table" in env["warnings"]
+    assert "metric 'market_cap' is not in the Vietstock ratio table" in env["warnings"]
 
 
 async def test_peer_compare_keeps_zero_values(monkeypatch):
@@ -255,7 +256,7 @@ async def test_peer_compare_keeps_zero_values(monkeypatch):
     monkeypatch.setattr(store, "_memory", {})
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        assert fn is vn_p.equity_ratios
+        assert fn is vsr_mod.equity_ratios
         symbol, period = args
         return {
             "symbol": symbol.upper(),
