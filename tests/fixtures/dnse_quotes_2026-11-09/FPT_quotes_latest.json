@@ -1,0 +1,78 @@
+{
+ "quotes": [
+  {
+   "marketId": "STO",
+   "boardId": "G1",
+   "isin": "VN000000FPT1",
+   "symbol": "FPT",
+   "bid": [
+    {
+     "price": 51,
+     "quantity": 930
+    },
+    {
+     "price": 50.9,
+     "quantity": 1300
+    },
+    {
+     "price": 50.8,
+     "quantity": 3300
+    }
+   ],
+   "offer": [
+    {
+     "price": 51.1,
+     "quantity": 510
+    },
+    {
+     "price": 51.2,
+     "quantity": 1500
+    },
+    {
+     "price": 51.3,
+     "quantity": 940
+    }
+   ],
+   "totalOfferQtty": 0,
+   "totalBidQtty": 0,
+   "time": "2026-11-09 09:17:49.839"
+  },
+  {
+   "marketId": "STO",
+   "boardId": "G4",
+   "isin": "VN000000FPT1",
+   "symbol": "FPT",
+   "bid": [
+    {
+     "price": 51.2,
+     "quantity": 248
+    },
+    {
+     "price": 51.1,
+     "quantity": 317
+    },
+    {
+     "price": 51,
+     "quantity": 770
+    }
+   ],
+   "offer": [
+    {
+     "price": 51.3,
+     "quantity": 88
+    },
+    {
+     "price": 51.4,
+     "quantity": 68
+    },
+    {
+     "price": 51.5,
+     "quantity": 68
+    }
+   ],
+   "totalOfferQtty": 0,
+   "totalBidQtty": 0,
+   "time": "2026-11-09 09:17:49.456"
+  }
+ ]
+}

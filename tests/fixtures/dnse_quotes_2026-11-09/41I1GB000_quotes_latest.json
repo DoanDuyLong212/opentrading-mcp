@@ -1,0 +1,97 @@
+{
+ "quotes": [
+  {
+   "marketId": "DVX",
+   "boardId": "G1",
+   "isin": "VN41I1GB0001",
+   "symbol": "41I1GB000",
+   "bid": [
+    {
+     "price": 1850,
+     "quantity": 15
+    },
+    {
+     "price": 1849.8,
+     "quantity": 5
+    },
+    {
+     "price": 1849.7,
+     "quantity": 2
+    },
+    {
+     "price": 1849.6,
+     "quantity": 6
+    },
+    {
+     "price": 1849.5,
+     "quantity": 22
+    },
+    {
+     "price": 1849.4,
+     "quantity": 11
+    },
+    {
+     "price": 1849.3,
+     "quantity": 13
+    },
+    {
+     "price": 1849.2,
+     "quantity": 16
+    },
+    {
+     "price": 1849.1,
+     "quantity": 70
+    },
+    {
+     "price": 1849,
+     "quantity": 123
+    }
+   ],
+   "offer": [
+    {
+     "price": 1850.1,
+     "quantity": 15
+    },
+    {
+     "price": 1850.3,
+     "quantity": 4
+    },
+    {
+     "price": 1850.4,
+     "quantity": 3
+    },
+    {
+     "price": 1850.5,
+     "quantity": 38
+    },
+    {
+     "price": 1850.6,
+     "quantity": 11
+    },
+    {
+     "price": 1850.7,
+     "quantity": 15
+    },
+    {
+     "price": 1850.8,
+     "quantity": 59
+    },
+    {
+     "price": 1850.9,
+     "quantity": 28
+    },
+    {
+     "price": 1851,
+     "quantity": 66
+    },
+    {
+     "price": 1851.1,
+     "quantity": 6
+    }
+   ],
+   "totalOfferQtty": 3584,
+   "totalBidQtty": 3404,
+   "time": "2026-11-09 09:18:54.697"
+  }
+ ]
+}

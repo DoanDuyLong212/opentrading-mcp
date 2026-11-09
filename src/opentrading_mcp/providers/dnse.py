@@ -148,16 +148,18 @@ def latest_trade(symbols: list[str]) -> list[dict[str, Any]]:
 
 
 def orderbook(symbol: str, depth: int = 3) -> dict[str, Any]:
-    for path in (f"/price/{symbol}/quotes/latest", f"/price/{symbol}/quotes"):
-        try:
-            body = _get(path)
-        except (ProviderUnavailable, ProviderBadData):
-            continue
-        if isinstance(body, dict) and body:
-            bids = body.get("bids") or body.get("bid") or []
-            asks = body.get("asks") or body.get("ask") or []
-            return {"symbol": symbol, "bids": bids[:depth], "asks": asks[:depth]}
-    raise ProviderUnavailable(f"no orderbook for {symbol}")
+    """Main-board depth. DNSE answers ``{"quotes": [{boardId, bid: [...], offer: [...]}]}``;
+    the old reader looked for top-level ``bids``/``asks`` and always returned empty
+    sides. Parsing and units live in ``dnse_board.order_book``."""
+    from opentrading_mcp.providers.dnse_board import order_book
+
+    sym = symbol.strip().upper()
+    book = order_book(_get(f"/price/{sym}/quotes/latest"), depth)
+    if book is None:
+        raise ProviderUnavailable(
+            f"no DNSE order book for {sym} (futures use the contract code, e.g. 41I1GB000)"
+        )
+    return {"symbol": sym, **book}
 
 
 def _coerce_foreign(body: Any) -> Any:

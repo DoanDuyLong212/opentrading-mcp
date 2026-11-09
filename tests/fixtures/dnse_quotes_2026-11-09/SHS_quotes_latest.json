@@ -1,0 +1,190 @@
+{
+ "quotes": [
+  {
+   "marketId": "STX",
+   "boardId": "G4",
+   "isin": "VN000000SHS3",
+   "symbol": "SHS",
+   "bid": [
+    {
+     "price": 13.4,
+     "quantity": 83
+    },
+    {
+     "price": 13.3,
+     "quantity": 36
+    },
+    {
+     "price": 13.2,
+     "quantity": 8
+    },
+    {
+     "price": 13.1,
+     "quantity": 52
+    },
+    {
+     "price": 13,
+     "quantity": 164
+    },
+    {
+     "price": 12.9,
+     "quantity": 5
+    },
+    {
+     "price": 12.8,
+     "quantity": 11
+    },
+    {
+     "price": 12.7,
+     "quantity": 110
+    },
+    {
+     "price": 12.5,
+     "quantity": 137
+    },
+    {
+     "price": 12.4,
+     "quantity": 40
+    }
+   ],
+   "offer": [
+    {
+     "price": 13.7,
+     "quantity": 60
+    },
+    {
+     "price": 13.8,
+     "quantity": 30
+    },
+    {
+     "price": 13.9,
+     "quantity": 10
+    },
+    {
+     "price": 14,
+     "quantity": 52
+    },
+    {
+     "price": 14.1,
+     "quantity": 17
+    },
+    {
+     "price": 14.2,
+     "quantity": 5
+    },
+    {
+     "price": 14.3,
+     "quantity": 6
+    },
+    {
+     "price": 14.4,
+     "quantity": 29
+    },
+    {
+     "price": 14.5,
+     "quantity": 10
+    },
+    {
+     "price": 14.6,
+     "quantity": 21
+    }
+   ],
+   "totalOfferQtty": 519,
+   "totalBidQtty": 1083,
+   "time": "2026-11-09 09:17:36.806"
+  },
+  {
+   "marketId": "STX",
+   "boardId": "G1",
+   "isin": "VN000000SHS3",
+   "symbol": "SHS",
+   "bid": [
+    {
+     "price": 13.4,
+     "quantity": 12390
+    },
+    {
+     "price": 13.3,
+     "quantity": 27530
+    },
+    {
+     "price": 13.2,
+     "quantity": 32230
+    },
+    {
+     "price": 13.1,
+     "quantity": 46630
+    },
+    {
+     "price": 13,
+     "quantity": 63170
+    },
+    {
+     "price": 12.9,
+     "quantity": 33470
+    },
+    {
+     "price": 12.8,
+     "quantity": 36140
+    },
+    {
+     "price": 12.7,
+     "quantity": 9540
+    },
+    {
+     "price": 12.6,
+     "quantity": 16480
+    },
+    {
+     "price": 12.5,
+     "quantity": 20760
+    }
+   ],
+   "offer": [
+    {
+     "price": 13.5,
+     "quantity": 12720
+    },
+    {
+     "price": 13.6,
+     "quantity": 84910
+    },
+    {
+     "price": 13.7,
+     "quantity": 61500
+    },
+    {
+     "price": 13.8,
+     "quantity": 97060
+    },
+    {
+     "price": 13.9,
+     "quantity": 69130
+    },
+    {
+     "price": 14,
+     "quantity": 48820
+    },
+    {
+     "price": 14.1,
+     "quantity": 25860
+    },
+    {
+     "price": 14.2,
+     "quantity": 62740
+    },
+    {
+     "price": 14.3,
+     "quantity": 63960
+    },
+    {
+     "price": 14.4,
+     "quantity": 26260
+    }
+   ],
+   "totalOfferQtty": 667370,
+   "totalBidQtty": 341900,
+   "time": "2026-11-09 09:17:49.345"
+  }
+ ]
+}
