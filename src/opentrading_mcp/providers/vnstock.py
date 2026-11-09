@@ -381,7 +381,7 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
         for chunk in chunks:
             # A shared executor alone has an unbounded queue. Admit at most
             # three physical legs, including work retained after caller timeout.
-            if not _VN_BATCH_SLOTS.acquire(blocking=False):
+            if not _admit_chunk(list(futs), deadline):
                 missing.extend(chunk)
                 continue
             try:
@@ -413,6 +413,23 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     if missing:
         out.append({"_missing": sorted(set(missing))})
     return out
+
+
+def _admit_chunk(own: list[Any], deadline: float) -> bool:
+    """Take a batch slot for the next chunk. Wait only for slots THIS batch's own
+    running legs will free, and only inside its budget: a batch of more than three
+    chunks (market_movers HOSE: 60 symbols) used to drop chunks 4+ to ``missing``
+    at once, while a batch blocked by hung legs of earlier calls still fails fast
+    (the P05 contract)."""
+    while True:
+        if _VN_BATCH_SLOTS.acquire(timeout=0.05):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        if all(f.done() for f in own):
+            # Our legs are done (their release callback may still be running):
+            # one last short try, then the slots belong to someone else.
+            return _VN_BATCH_SLOTS.acquire(timeout=0.05)
 
 
 _VN_BATCH_POOL: ThreadPoolExecutor | None = None

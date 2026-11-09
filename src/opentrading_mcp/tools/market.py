@@ -339,6 +339,17 @@ async def _vnstock_quota() -> Any:
         return {"error": str(exc)[:160]}
 
 
+def _is_stock(row: dict[str, Any]) -> bool:
+    """A listing row that is a share. The HOSE listing (2026-11-09: 803 rows) also
+    carries 340 covered warrants, 21 ETFs and 3 fund certificates; 31 rows have no
+    type, among them stocks (AMY), an ETF (FUEVCDIV) and an index (VN100). VN share
+    codes are three characters."""
+    kind = row.get("type")
+    if kind is None:
+        return len(str(row.get("symbol") or "")) == 3
+    return str(kind).lower() == "stock"
+
+
 def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def market_snapshot(
@@ -779,7 +790,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                         functools.partial(vn_p.reference_equity, "HOSE"),
                         "market_movers",
                         timeout_secs=30.0,
-                    ) if isinstance(r, dict) and r.get("symbol")][:60]
+                    ) if isinstance(r, dict) and r.get("symbol")
+                        and _is_stock(r)][:60]
                 except (ProviderUnavailable, ProviderBadData):
                     syms = []
             quotes = await run_blocking(
