@@ -217,6 +217,99 @@ def _candle_day(value: Any) -> str:
         return text
 
 
+# --- Q4 (owner decision 2026-11-09): today's daily bar during the session ---------
+# vnstock 4 returned today's running daily bar during the session; the gen-6 ssi and
+# dnse daily routes publish today's bar only after the session (checked 2026-11-09
+# 09:31 with end=today, end=tomorrow and no end, for FPT and VNINDEX). The bar is
+# built from today's 1m bars on the same source chain (FPT/PVS/SHS 1m on ssi matched
+# the DNSE board's open/high/low/close and accumulated volume to the share), so it
+# works for stocks and indices alike, and is flagged ``partial``.
+_PARTIAL_TTL_S = 60.0
+_partial_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_partial_lock = threading.Lock()
+
+
+def _vn_today() -> date:
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+
+
+def _today_partial_bar(symbol: str) -> dict[str, Any] | None:
+    """Today's O/H/L/C/V from today's 1m bars, or None (weekend, holiday, before the
+    first match, no source). Never raises: the daily answer must not depend on it."""
+    sym = symbol.upper()
+    today = _vn_today()
+    if today.weekday() >= 5:
+        return None
+    key = f"{sym}|{today.isoformat()}"
+    now = time.monotonic()
+    with _partial_lock:
+        hit = _partial_cache.get(key)
+        if hit is not None and now - hit[0] <= _PARTIAL_TTL_S:
+            return hit[1]
+    bar: dict[str, Any] | None = None
+    try:
+        day = today.isoformat()
+        frame = _fetch_frame(
+            _candle_fetchers(sym, start=day, end=day, interval="1m"), f"1m candles {sym}"
+        )
+        rows = [r for r in _records(frame) if _candle_day(r.get("time")) == day]
+        rows.sort(key=lambda r: str(r.get("time")))
+        closes = [float(r["close"]) for r in rows if _finite_positive(r.get("close"))]
+        if rows and closes:
+            bar = {
+                "day": day,
+                "open": float(rows[0]["open"]),
+                "high": max(float(r["high"]) for r in rows),
+                "low": min(float(r["low"]) for r in rows),
+                "close": closes[-1],
+                "volume": sum(float(r.get("volume") or 0) for r in rows),
+                "last_bar": str(rows[-1].get("time")),
+            }
+    except Exception:
+        bar = None
+    with _partial_lock:
+        _partial_cache[key] = (now, bar)
+    return bar
+
+
+def _finite_positive(value: Any) -> bool:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(number) and number > 0
+
+
+_PARTIAL_NOTE = "today's session so far, built from 1m bars (daily bar not published yet)"
+
+
+def _with_today_history(symbol: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """quote_history rows (t/o/h/l/c/v) + today's partial bar when it is missing."""
+    if rows and str(rows[-1].get("t")) >= _vn_today().isoformat():
+        return rows
+    bar = _today_partial_bar(symbol)
+    if bar is None:
+        return rows
+    return [*rows, {"t": bar["day"], "o": bar["open"], "h": bar["high"], "l": bar["low"],
+                    "c": bar["close"], "v": bar["volume"], "partial": True,
+                    "partial_note": _PARTIAL_NOTE}]
+
+
+def _with_today_bars(symbol: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """equity/index ohlcv rows (time/open/.../volume) + today's partial bar."""
+    today = _vn_today().isoformat()
+    if rows and _candle_day(rows[-1].get("time")) >= today:
+        return rows
+    bar = _today_partial_bar(symbol)
+    if bar is None:
+        return rows
+    return [*rows, {"time": f"{today}T07:00:00+07:00", "open": bar["open"],
+                    "high": bar["high"], "low": bar["low"], "close": bar["close"],
+                    "volume": bar["volume"], "partial": True, "partial_note": _PARTIAL_NOTE}]
+
+
 # Index codes served by the index group only (cycle refresh feeds these).
 _VN_INDEX_SYMBOLS = frozenset(
     {"VNINDEX", "VN30", "VNFIN", "VNFINLEAD", "VNMAT", "VNREAL", "VNUTI", "VNIT",
@@ -293,9 +386,11 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
         # Gen-6 sources may return newest-first; the rolling indicators and the
         # `rows[-days:]` window below both assume chronological order.
         rows.sort(key=lambda r: r["t"])
-        return rows[-max(days, 1) :]
     except Exception as exc:
         raise ProviderBadData(f"malformed vnstock frame for {symbol}") from exc
+    if iv == "1D":
+        rows = _with_today_history(symbol, rows)
+    return rows[-max(days, 1) :]
 
 
 # Own breaker: cycle refresh fetches ~150 symbols through here, and a batch run
@@ -642,7 +737,10 @@ def index_ohlcv(
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no index bars for {symbol}")
-    return _ascending_by_time(rows)
+    rows = _ascending_by_time(rows)
+    if interval.strip().upper() == "1D":
+        rows = _with_today_bars(symbol, rows)[-max(count, 1) :]
+    return rows
 
 
 @guarded("vnstock")
@@ -673,7 +771,10 @@ def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[di
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no equity bars for {symbol}")
-    return _ascending_by_time(rows)
+    rows = _ascending_by_time(rows)
+    if interval.strip().upper() == "1D":
+        rows = _with_today_bars(symbol, rows)[-max(count, 1) :]
+    return rows
 
 
 @guarded("vnstock")
@@ -1157,16 +1258,20 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
 
 @guarded("vnstock")
 def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Corporate actions (cash dividends, share issues) via vnstock Reference.company.
+    """Corporate actions (cash dividends, share issues), newest first.
 
-    Returns JSON-safe records, newest first as upstream orders them.
+    With no keyed per-symbol source (fhsc dropped), rows come from the ssi
+    market-wide events calendar, cached per year (providers/events_calendar.py,
+    owner decision Q1): this year and last year.
     """
+    if not SRC_FUNDAMENTAL:
+        from opentrading_mcp.providers import events_calendar
+
+        return events_calendar.events_for(symbol, limit)
     try:
         from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    if not SRC_FUNDAMENTAL:
-        raise _no_source("corporate events")
     frame = None
     for source in SRC_FUNDAMENTAL:
         try:

@@ -302,6 +302,9 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             tên/sàn/mô tả ngắn (dùng vs_company_info).
 
         detail: false chỉ trả hồ sơ; true thêm cổ đông và lãnh đạo (nặng hơn).
+        Hiện KHÔNG có nguồn: fhsc (nguồn duy nhất của hồ sơ chi tiết/cổ đông/lãnh đạo) đã
+        ngừng → trả unavailable not_configured, alternatives=[vs_company_info] (tên, sàn,
+        loại hình).
         """
         fp = f"{symbol}|{detail}"
         hit = await cache_lookup("vn_company", fp)
