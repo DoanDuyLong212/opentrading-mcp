@@ -1,0 +1,58 @@
+name: Live parity smoke
+
+# Real upstream calls with the owner's source keys (#93 part 2). Weekly and on
+# demand only, never per PR: it spends real quotas and depends on third parties.
+# It compares the current adapter with the vnstock v4 baseline by VALUE
+# (scripts/parity_compare.py) and fails on any unexplained difference.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   SSI_API_KEY, SSI_API_SECRET, DNSE_API_KEY, DNSE_SECRET   — price routes
+#   VIETSTOCK_COOKIE_LOGIN                                   — ratio routes (JWT only)
+# The job is skipped while SSI_API_KEY is unset. It never logs in to Vietstock
+# (--no-vietstock-login): a login from GitHub's IP could unseat prod's session.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"  # Monday 10:00 Asia/Ho_Chi_Minh, during the session
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-smoke
+  cancel-in-progress: false
+
+jobs:
+  parity:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEYS: ${{ secrets.SSI_API_KEY != '' }}
+    steps:
+      - name: Skip without source keys
+        if: env.HAS_KEYS != 'true'
+        run: echo "SSI_API_KEY secret not set; nothing to check." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v7
+        if: env.HAS_KEYS == 'true'
+      - uses: astral-sh/setup-uv@v10.3.3
+        if: env.HAS_KEYS == 'true'
+        with:
+          python-version: "3.12"
+      - if: env.HAS_KEYS == 'true'
+        run: uv sync --frozen
+      - name: Value parity against the v4 baseline
+        if: env.HAS_KEYS == 'true'
+        env:
+          VNSTOCK_TELEMETRY: "0"
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+          DNSE_API_KEY: ${{ secrets.DNSE_API_KEY }}
+          DNSE_SECRET: ${{ secrets.DNSE_SECRET }}
+          VIETSTOCK_COOKIE_LOGIN: ${{ secrets.VIETSTOCK_COOKIE_LOGIN }}
+        run: >-
+          uv run python scripts/parity_compare.py --no-vietstock-login --fail-on-diff
+          --out parity-report.md
+      - name: Publish the report
+        if: always() && env.HAS_KEYS == 'true'
+        run: cat parity-report.md >> "$GITHUB_STEP_SUMMARY" || true
