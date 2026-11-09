@@ -258,6 +258,33 @@ def compare_reference(v4: Any, v6: Any) -> tuple[str, str]:
     )
 
 
+def compare_corp_events(v4: Any, v6: Any) -> tuple[str, str]:
+    """Q1: v4's dividend/share-issue rows (DIV/ISS with an ex-right date) must be in
+    the ssi calendar answer on the same ex-right date with the same amount/ratio.
+    v4 (fhsc) also listed insider registrations and listings, which ssi does not."""
+    def key(row: dict[str, Any]) -> tuple[str, str]:
+        return str(row.get("event_code")), str(row.get("exright_date") or "")[:10]
+
+    wanted = [r for r in v4 if r.get("event_code") in ("DIV", "ISS") and r.get("exright_date")]
+    got = {key(r): r for r in v6}
+    if not wanted:
+        return "match", "no dividend/issue rows in the baseline window"
+    missing, diffs = [], []
+    for row in wanted:
+        hit = got.get(key(row))
+        if hit is None:
+            missing.append(key(row))
+            continue
+        for field in ("value_per_share", "exercise_ratio"):
+            a, b = row.get(field), hit.get(field)
+            if a is not None and (b is None or abs(float(a) - float(b)) > 1e-9):
+                diffs.append(f"{key(row)} {field}: v4 {a} vs v6 {b}")
+    if missing or diffs:
+        return "UNEXPECTED VALUE", f"missing {missing}; {diffs}"
+    return "match", (f"{len(wanted)}/{len(wanted)} dividend/issue events equal "
+                     f"(e.g. {key(wanted[0])}); v4-only insider/listing rows not compared")
+
+
 def compare_none(v4: Any, v6: Any) -> tuple[str, str]:
     """Routes without a source: a value means something answered unexpectedly."""
     return "UNEXPECTED VALUE", f"route answered {type(v6).__name__}; update this probe"
@@ -343,8 +370,19 @@ def _probes() -> list[tuple[str, tuple[str, ...], Callable[[], Any], Compare]]:
         ("cashflow_FPT_quarter", (), lambda: vn.cashflow("FPT", period="quarter"), compare_none),
         ("company_info_FPT", (), lambda: vn.company_info("FPT"), compare_none),
         ("insider_trading_FPT", (), lambda: vn.insider_trading("FPT", limit=10), compare_none),
-        ("corp_events_FPT", (), lambda: vn.corp_events("FPT", limit=10), compare_none),
+        # Q1: the ssi calendar (whole market, ~4 min per year) is loaded first.
+        ("corp_events_FPT", ("ssi",), corp_events, compare_corp_events),
     ]
+
+
+def corp_events() -> Any:
+    from datetime import date
+
+    from opentrading_mcp.providers import events_calendar
+    from opentrading_mcp.providers import vnstock as vn
+
+    events_calendar.warm([date.today().year])
+    return vn.corp_events("FPT", limit=50)
 
 
 def _baseline(name: str) -> Any:

@@ -109,6 +109,7 @@ def _daily(n: int) -> pd.DataFrame:
 
 
 def test_daily_window_asks_far_enough_back_for_the_candle_count(monkeypatch):
+    monkeypatch.setattr(vn, "_today_partial_bar", lambda symbol: None)  # Q4, tested apart
     seen: dict[str, Any] = {}
     _fake_quote(monkeypatch, _daily(400), seen)
     rows = vn.quote_history("FPT", 365)

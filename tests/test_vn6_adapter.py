@@ -99,6 +99,7 @@ def _legacy_chain(monkeypatch, **chains: tuple[str, ...]) -> None:
 
 
 def test_quote_history_falls_back_to_second_source(monkeypatch):
+    monkeypatch.setattr(vn_p, "_today_partial_bar", lambda symbol: None)  # Q4, tested apart
     attempts: list[str | None] = []
 
     class Equity:
@@ -291,6 +292,7 @@ def test_alt_ohlcv_groups_use_count_back_and_named_interval(monkeypatch):
             return make
 
     _install(monkeypatch, Market=Market)
+    monkeypatch.setattr(vn_p, "_today_partial_bar", lambda symbol: None)  # Q4, tested apart
     vn_p.equity_ohlcv("FPT", count=30)
     vn_p.index_ohlcv("VNINDEX", count=30)
     vn_p.futures_ohlcv("VN30F1M", count=30)
@@ -402,6 +404,7 @@ def test_candles_range_raises_unavailable_when_empty(monkeypatch):
 
 def test_quote_history_routes_index_symbols_to_the_index_group(monkeypatch):
     """Cycle refresh feeds VNINDEX/VN30/... — the equity group cannot serve them."""
+    monkeypatch.setattr(vn_p, "_today_partial_bar", lambda symbol: None)  # Q4, tested apart
     seen: list[str] = []
 
     class Equity:

@@ -58,6 +58,8 @@ _DOWN_TYPES = frozenset({"ConnectionError", "ConnectError", "TransportError"})
 # Which upstream serves each tool named in ALTERNATIVES, read from its provider call.
 UPSTREAMS: dict[str, str] = {
     "dnse_indices": "dnse-ws",
+    "vn_company": "vnstock",
+    "vs_company_info": "vietstock",
     "vn_fundamentals": "vnstock",
     "vn_retail_fx": "vietcombank",
     "vs_currency": "vietstock",
@@ -70,6 +72,9 @@ UPSTREAMS: dict[str, str] = {
 # that is not certain: a wrong suggestion costs the caller a wasted call.
 ALTERNATIVES: dict[str, tuple[str, ...]] = {
     "dnse_indices": ("vs_market_index",),  # index levels
+    # Q2 (owner decision 2026-11-09): no detailed profile source since fhsc was dropped;
+    # vs_company_info has name/exchange/type. One way: vn_company is not configured.
+    "vn_company": ("vs_company_info",),
     "vn_fundamentals": ("vs_trading_info",),  # PE, PB, EPS
     # vs_currency rows carry no currency names (checked 2026-11-09), so it is not a
     # usable stand-in for vn_retail_fx; the reverse holds (same Vietcombank figures,

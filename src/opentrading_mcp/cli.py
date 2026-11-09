@@ -197,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
         from opentrading_mcp.loops import start_in_web_loops
 
         start_in_web_loops()
+        from opentrading_mcp.providers import events_calendar
+
+        events_calendar.start_warm()
         uvicorn.run(app, host="0.0.0.0", port=args.port)
     else:
         server.run(transport="stdio")

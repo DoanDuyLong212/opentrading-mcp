@@ -65,10 +65,13 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         Không dùng khi: cần lịch cổ tức/niêm yết/họp toàn thị trường theo ngày (dùng
             event_calendar_vn); cần feed công bố gốc (dùng corporate_calendar).
 
-        region: 'vn' (sự kiện Company của vnstock: DIV tiền mặt, ISS thưởng/phát hành riêng lẻ) hoặc
-        'world' (actions của yfinance). limit: số sự kiện tối đa.
+        region: 'vn' (lịch sự kiện toàn thị trường của ssi, năm nay + năm trước: DIV cổ tức
+        tiền mặt, ISS cổ phiếu thưởng/cổ tức bằng cổ phiếu/quyền mua; value_per_share đồng/cp,
+        exercise_ratio 0.1 = 10 cp mới/100 cp) hoặc 'world' (actions của yfinance). Lần gọi
+        đầu sau khi server khởi động có thể báo "đang tải" (~4 phút/năm) — gọi lại sau.
+        limit: số sự kiện tối đa.
         """
-        fp = f"{symbol}|{region}|{limit}"
+        fp = f"v2|{symbol}|{region}|{limit}"  # v2: ssi events calendar (Q1)
         hit = await cache_lookup("dividends_splits", fp)
         if hit is not None:
             return hit
@@ -93,6 +96,12 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "exercise_ratio": r.get("exercise_ratio"),
                         "is_cash_dividend": r.get("event_code") == "DIV",
                         "is_share_issue": r.get("event_code") == "ISS",
+                        **({"event_type": r["event_type"]} if r.get("event_type") else {}),
+                        **(
+                            {"dividend_percent": r["dividend_percent"]}
+                            if r.get("dividend_percent") is not None
+                            else {}
+                        ),
                     }
                     for r in rows
                 ]
@@ -122,7 +131,7 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             fp,
             TTL_SECONDS["documents"],
             {"symbol": symbol.upper(), "region": area, "events": events},
-            source="vnstock" if area == "vn" else "yfinance",
+            source="ssi.events.calendar" if area == "vn" else "yfinance",
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -134,7 +143,8 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Shareholder and institutional holder tables. Use for ownership reads.
 
-        region: 'vn' (vnstock shareholders) or 'world' (yfinance).
+        region: 'vn' (vnstock shareholders — NO source since fhsc was dropped: answers
+        unavailable not_configured) or 'world' (yfinance).
         kind: 'major'|'institutional'|'mutualfund'|'all' (world only;
         vn returns shareholders for any kind).
         """
