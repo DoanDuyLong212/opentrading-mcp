@@ -110,7 +110,7 @@ def _fetch_year(year: int) -> list[dict[str, Any]]:
     return [row for row in (compact(r) for r in records) if row is not None]
 
 
-def _from_store(year: int) -> list[dict[str, Any]] | None:
+def _from_store(year: int) -> tuple[float, list[dict[str, Any]]] | None:
     from opentrading_mcp.providers.store import cache_get
 
     try:
@@ -120,10 +120,16 @@ def _from_store(year: int) -> list[dict[str, Any]] | None:
     if not raw:
         return None
     try:
-        rows = json.loads(raw)
+        entry = json.loads(raw)
     except ValueError:
         return None
-    return rows if isinstance(rows, list) else None
+    if not isinstance(entry, dict) or not isinstance(entry.get("rows"), list):
+        return None
+    try:
+        fetched_at = float(entry["fetched_at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return fetched_at, entry["rows"]
 
 
 def _rows_for(year: int, now: float | None = None) -> tuple[list[dict[str, Any]] | None, bool]:
@@ -133,12 +139,12 @@ def _rows_for(year: int, now: float | None = None) -> tuple[list[dict[str, Any]]
         hit = _years.get(year)
     if hit is not None:
         return hit[1], now - hit[0] > _ttl(year)
-    rows = _from_store(year)
-    if rows is not None:
+    stored = _from_store(year)
+    if stored is not None:
         with _lock:
-            # the store entry expires on its own TTL; treat it as fresh until then
-            _years[year] = (now, rows)
-        return rows, False
+            # keep the FETCH time, so a 23 h old entry is not taken as fresh for 24 h more
+            _years[year] = stored
+        return stored[1], now - stored[0] > _ttl(year)
     return None, True
 
 
@@ -164,10 +170,11 @@ def warm(years: list[int] | None = None) -> None:
             continue
         with _lock:
             _failed_at.pop(year, None)
+        fetched_at = time.time()
         with _lock:
-            _years[year] = (time.time(), fresh)
+            _years[year] = (fetched_at, fresh)
         try:
-            payload = json.dumps(fresh, ensure_ascii=False)
+            payload = json.dumps({"fetched_at": fetched_at, "rows": fresh}, ensure_ascii=False)
             cache_set(_STORE_KEY.format(year=year), payload, _ttl(year))
         except Exception as exc:
             log.warning("events calendar %s: store write failed: %s", year, exc)
@@ -232,6 +239,9 @@ def events_for(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
         raise ProviderNoData(
             "corporate events calendar is still loading (ssi serves the whole market, "
             f"about 4 minutes per year; years {missing}): retry in a few minutes",
+            # an existing retryable reason, so the envelope carries retryable and
+            # retry_after_s (without one it classified as "unknown" and dropped both)
+            reason="busy",
             retry_after_s=RETRY_AFTER_S,
         )
     loaded.sort(key=lambda r: r.get("exright_date") or "", reverse=True)

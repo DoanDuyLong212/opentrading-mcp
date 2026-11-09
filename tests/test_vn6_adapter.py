@@ -97,6 +97,7 @@ def _legacy_chain(monkeypatch, **chains: tuple[str, ...]) -> None:
 
 
 def test_quote_history_falls_back_to_second_source(monkeypatch):
+    monkeypatch.setattr(vn_p, "_today_partial_bar", lambda symbol: None)  # Q4, tested apart
     attempts: list[str | None] = []
 
     class Equity:

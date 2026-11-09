@@ -180,3 +180,27 @@ def test_a_failed_year_is_not_refetched_for_ten_minutes(monkeypatch):
     monkeypatch.setitem(ec._failed_at, 2026, ec._failed_at[2026] - ec.RETRY_BACKOFF_S - 1)
     ec.warm([2026])
     assert calls == [2026, 2026]
+
+
+async def test_loading_envelope_tells_clients_when_to_retry(monkeypatch):
+    from opentrading_mcp.server import create_server, register_preset
+
+    monkeypatch.setattr(ec, "_warm_in_background", lambda delay_s=0.0: False)
+    srv = create_server("all")
+    register_preset(srv, "all")
+    env = await srv._tool_manager.get_tool("dividends_splits").fn(symbol="FPT", region="vn")
+    assert env["availability"] == "unavailable"
+    assert env["reason"] == "busy"
+    assert env["retryable"] is True
+    assert env["retry_after_s"] == ec.RETRY_AFTER_S
+
+
+def test_store_entry_keeps_its_fetch_time(monkeypatch):
+    _fake_fetch(monkeypatch, {2026: FPT_2026, 2025: []})
+    ec.warm()
+    ec._years.clear()
+    import time as _time
+
+    # the store entry is still there (its own TTL); a day later it must read as stale
+    rows, stale = ec._rows_for(2026, now=_time.time() + ec.CURRENT_TTL_S + 60)
+    assert rows and stale  # read back a day later: stale, so it gets refreshed
