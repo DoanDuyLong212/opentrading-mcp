@@ -219,7 +219,7 @@ async def test_stock_screener_bounded_enrich_no_valuation_filter(monkeypatch):
     assert len(calls) <= 10, f"unbounded enrich: {len(calls)} calls"
     assert env["data"]["universe"] == 20
 
-    # valuation filter → wider enrich (up to 30, here 20 rows, limit 5 → 20)
+    # valuation filter → wider enrich (up to 15, here 20 rows, limit 5 → 15)
     calls.clear()
     env2 = await fn(filters={"pe": [None, 20]}, limit=5)
     assert len(calls) > 10, "valuation filter should enrich beyond the no-filter cap"

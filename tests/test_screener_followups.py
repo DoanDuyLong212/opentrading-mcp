@@ -265,18 +265,18 @@ async def test_market_cap_missing_has_no_evaluated_conclusion_and_cap_is_visible
     )
     coverage = env["data"]["coverage"]
     assert coverage["fundamentals"] == {
-        "limit": 30,
-        "attempted": 30,
+        "limit": 15,
+        "attempted": 15,
         "metric_available": {"market_cap": 0},
         "unsupported_metrics": ["market_cap"],
     }
     assert coverage["eligible"] == 35
-    assert coverage["attempted"] == 30
+    assert coverage["attempted"] == 15
     assert coverage["evaluated"] == 0
     assert env["availability"] == "partial"
     assert not env["data"]["candidates"]
     assert any("market_cap unavailable" in w for w in env["warnings"])
-    assert any("enrichment cap 30" in w for w in env["warnings"])
+    assert any("enrichment cap 15" in w for w in env["warnings"])
 
 
 async def test_market_cap_legacy_value_is_not_evaluated_without_basis(monkeypatch):
@@ -354,7 +354,7 @@ async def test_nonfilterable_invalid_price_condition_does_not_block_tool(monkeyp
     assert [row["symbol"] for row in env["data"]["candidates"]] == ["AAA"]
 
 
-async def test_enrichment_cap_marks_partial_even_when_first_30_valid(monkeypatch):
+async def test_enrichment_cap_marks_partial_even_when_first_15_valid(monkeypatch):
     from opentrading_mcp.providers import vnstock as vn_p
     from opentrading_mcp.server import create_server, register_preset
     from opentrading_mcp.tools import scan
@@ -391,9 +391,9 @@ async def test_enrichment_cap_marks_partial_even_when_first_30_valid(monkeypatch
         limit=20,
     )
     assert env["availability"] == "partial"
-    assert env["data"]["coverage"]["evaluated"] == 30
+    assert env["data"]["coverage"]["evaluated"] == 15
     assert env["data"]["coverage"]["eligible"] == 35
-    assert any("enrichment cap 30" in w for w in env["warnings"])
+    assert any("enrichment cap 15" in w for w in env["warnings"])
 
 
 @pytest.mark.parametrize(

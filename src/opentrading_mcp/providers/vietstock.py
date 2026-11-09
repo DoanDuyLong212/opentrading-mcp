@@ -14,6 +14,7 @@ import base64
 import json
 import os
 import re
+import threading
 import time
 import unicodedata
 from typing import Any
@@ -996,14 +997,37 @@ def selftrading() -> Any:
     return selftrading_chart()
 
 
+# financeinfo fans out: stock_screener enriches up to 15 symbols, a quarterly read
+# is 3 pages, and every page rides the ONE shared Vietstock login that
+# financial_statements and the other Vietstock tools use. Vietstock's rate limit is
+# unknown (not measurable without logging in from a second machine), so stay
+# conservative: at most 2 pages in flight process-wide, starts at least 0.5 s apart.
+FINANCEINFO_CONCURRENCY = 2
+FINANCEINFO_MIN_GAP_S = 0.5
+_financeinfo_slots = threading.BoundedSemaphore(FINANCEINFO_CONCURRENCY)
+_financeinfo_gap_lock = threading.Lock()
+_financeinfo_last_start = 0.0
+
+
+def _financeinfo_post(body: dict[str, Any]) -> Any:
+    """One financeinfo page under the process-wide limit above."""
+    global _financeinfo_last_start
+    with _financeinfo_slots:
+        with _financeinfo_gap_lock:
+            wait = _financeinfo_last_start + FINANCEINFO_MIN_GAP_S - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            _financeinfo_last_start = time.monotonic()
+        return _post("/data/financeinfo", body)
+
+
 def financeinfo(symbol: str, period: str = "quarter") -> dict[str, Any]:
     term = 2 if period == "quarter" else 1
     pages = 3 if period == "quarter" else 1
     sections: list[Any] = []
     for page in range(1, pages + 1):
         sections.append(
-            _post(
-                "/data/financeinfo",
+            _financeinfo_post(
                 {
                     "Code": symbol,
                     "Page": page,

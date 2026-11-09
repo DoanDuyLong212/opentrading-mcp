@@ -47,6 +47,10 @@ _ALERT_OP_ALIASES = {
 }
 
 
+# Symbols stock_screener reads fundamentals for when a valuation filter is active.
+SCREENER_ENRICH_CAP = 15
+
+
 def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
     @server.tool(annotations=READ_ONLY)
     async def stock_screener(
@@ -81,7 +85,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             evaluated: số mã đủ dữ liệu để có kết luận pass/reject. Một mã history/compute
             lỗi hoặc indicator bắt buộc là None thì unavailable: evaluated không tăng,
             warning nêu mã và lý do, envelope mang partial. Khi số mã vượt giới hạn
-            enrichment 30, kết quả cũng mang partial và chỉ kết luận trên số mã đã thử.
+            enrichment 15, kết quả cũng mang partial và chỉ kết luận trên số mã đã thử.
             coverage.fundamentals cho biết giới hạn, số mã thử và số mã có từng metric.
         """
         technical = technical or None  # {} means "no technical stage", not a rule set
@@ -122,14 +126,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         warnings: list[str] = []
-        # Bounded enrich: full width (≤30) only when a valuation filter needs
+        # Bounded enrich: full width (≤15) only when a valuation filter needs
         # fundamentals; otherwise cap at 10 for display. Concurrent via
         # asyncio.gather + semaphore matched to blocking slots (10s per symbol
         # run_blocking timeout starts at submission, so an oversized semaphore
         # would only amplify queue timeouts).
         needs_valuation = any(k in eff for k in ("pe", "roe", "market_cap"))
         if needs_valuation:
-            enrich_n = min(len(rows), max(max(limit, 1) * 2, 20), 30)
+            # 15, not 30: each symbol is a Vietstock financeinfo read on the shared
+            # login (providers/vietstock.py FINANCEINFO_* limits the rate).
+            enrich_n = min(len(rows), max(max(limit, 1) * 2, 20), SCREENER_ENRICH_CAP)
         else:
             enrich_n = min(len(rows), 10)
         enriched = 0
@@ -210,7 +216,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             # Only these symbols carry pe/roe; every other row fails the filter.
             warnings.append(
                 f"Fundamentals checked for the first {enrich_n} of {len(rows)} "
-                "listed symbols only (enrichment cap 30)"
+                f"listed symbols only (enrichment cap {SCREENER_ENRICH_CAP})"
             )
         partial = bool(warnings)
         try:
@@ -335,7 +341,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "attempted": attempted_n,
                     "evaluated": evaluated_n,
                     "fundamentals": {
-                        "limit": 30,
+                        "limit": SCREENER_ENRICH_CAP,
                         "attempted": enrich_n,
                         "metric_available": metric_counts,
                         "unsupported_metrics": ["market_cap"] if "market_cap" in eff else [],

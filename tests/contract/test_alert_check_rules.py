@@ -128,21 +128,21 @@ async def test_screener_reports_scope_and_fundamentals_period(monkeypatch):
     env = await _tool("stock_screener")(max_pe=10, limit=5)
     data = env["data"]
     assert data["universe"] == 40
-    assert data["screened"] == 20
+    assert data["screened"] == 15
     assert _coverage_core(data) == {
         "stage": "fundamentals",
         "eligible": 40,
-        "attempted": 20,
-        "evaluated": 20,
+        "attempted": 15,
+        "evaluated": 15,
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 20},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 15},
         "unsupported_metrics": [],
     }
     assert data["candidates"][0]["fundamentals_period"] == "2025"
-    assert any("first 20 of 40" in w for w in env["warnings"])
+    assert any("first 15 of 40" in w for w in env["warnings"])
     assert env["availability"] == "partial"  # 20/40 were checked; the cap leaves unknowns
 
 
@@ -167,13 +167,13 @@ async def test_screener_evaluated_excludes_missing_required_metric(monkeypatch):
     assert _coverage_core(data) == {
         "stage": "fundamentals",
         "eligible": 40,
-        "attempted": 20,
-        "evaluated": 15,  # S00-S04 lack pe, the exact metric the filter needs
+        "attempted": 15,
+        "evaluated": 10,  # S00-S04 lack pe, the exact metric the filter needs
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 15},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 10},
         "unsupported_metrics": [],
     }
     assert any("S00" in w and "pe" in w for w in env["warnings"])
@@ -307,9 +307,9 @@ async def test_screener_technical_eligible_follows_prefilter(monkeypatch):
         "evaluated": 5,
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 20},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 15},
         "unsupported_metrics": [],
     }
     assert len(calls) == 5
@@ -392,25 +392,25 @@ async def test_screener_valuation_coverage_survives_cache_hit(monkeypatch):
     monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     fn = _tool("stock_screener")
     env = await fn(max_pe=10, limit=5)
-    assert env["data"]["screened"] == 20
+    assert env["data"]["screened"] == 15
     assert _coverage_core(env["data"]) == {
         "stage": "fundamentals",
         "eligible": 40,
-        "attempted": 20,
-        "evaluated": 20,
+        "attempted": 15,
+        "evaluated": 15,
     }
     assert env["data"]["coverage"]["fundamentals"] == {
-        "limit": 30,
-        "attempted": 20,
-        "metric_available": {"pe": 20},
+        "limit": 15,
+        "attempted": 15,
+        "metric_available": {"pe": 15},
         "unsupported_metrics": [],
     }
-    assert len(fund_calls) == 20
+    assert len(fund_calls) == 15
     env2 = await fn(max_pe=10, limit=5)
     assert env2["provenance"]["cached"] is True
     assert env2["data"]["coverage"] == env["data"]["coverage"]
-    assert env2["data"]["screened"] == 20
-    assert any("first 20 of 40" in w for w in env2["warnings"])
+    assert env2["data"]["screened"] == 15
+    assert any("first 15 of 40" in w for w in env2["warnings"])
     assert env2["availability"] == env["availability"]
 
 
@@ -438,7 +438,7 @@ async def test_screener_fundamentals_failure_warns_per_symbol(monkeypatch):
         "evaluated": 2,
     }
     assert data["coverage"]["fundamentals"] == {
-        "limit": 30,
+        "limit": 15,
         "attempted": 3,
         "metric_available": {"pe": 2},
         "unsupported_metrics": [],
