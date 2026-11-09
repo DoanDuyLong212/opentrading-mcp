@@ -22,7 +22,12 @@ so its reference is not the traded session's. Then the traded session's
 reference is the previous close (from candles; equal to the exchange reference
 except on ex-rights days), ceiling/floor are None, and the next session's
 values move to ``next_session`` — rather than reporting a 0 % change.
-Foreign buy/sell volumes have no realtime source here and stay None.
+Foreign flows come from ``/price/{sym}/foreign-trading`` (from/to = the traded
+day): the latest G1 row's cumulative ``totalBuyVolume``/``totalSellVolume`` and
+``foreignerOrderLimitQuantity`` are v4's foreign_buy_volume/foreign_sell_volume/
+foreign_room, in SHARES (not lots). Measured in session 2026-11-09 09:33 against
+v4 read in the same second: FPT 44,800/252,500, HPG 255,700/843,962, SSI
+190,200/282,400, SHS 0/37,700 — all equal. Without that payload they stay None.
 """
 
 from __future__ import annotations
@@ -70,6 +75,7 @@ def build_row(
     trades: Any,
     quotes: Any,
     previous_close: Callable[[str, str], float | None],
+    foreign: Any = None,
 ) -> dict[str, Any]:
     """One v4 board row from the three DNSE payloads.
 
@@ -99,8 +105,7 @@ def build_row(
         "total_value": (
             round(v * VALUE) if (v := _num(trade.get("grossTradeAmount"))) is not None else None
         ),
-        "foreign_buy_volume": None,
-        "foreign_sell_volume": None,
+        **foreign_fields(foreign),
         "source": "dnse",
     }
     sec_at = str((sec or {}).get("time") or "")
@@ -114,7 +119,8 @@ def build_row(
         row["ceiling_price"] = None
         row["floor_price"] = None
         row["quote_note"] = (
-            "market closed: reference is the previous close; ceiling/floor of the traded "
+            "last trade is from an earlier session (market closed, or no match yet in "
+            "today's session): reference is the previous close; ceiling/floor of the traded "
             "session are unknown, next_session holds the coming session's"
         )
         if sec is not None:
@@ -181,6 +187,37 @@ def order_book(quotes: Any, depth: int = 3) -> dict[str, Any] | None:
     }
 
 
+def foreign_fields(body: Any) -> dict[str, int | None]:
+    """v4 foreign_* fields from a ``/foreign-trading`` body: the LATEST main-board
+    row (rows are snapshots; totals are cumulative for the day), shares as sent."""
+    rows = body.get("foreigners") if isinstance(body, dict) else None
+    main = [r for r in rows or [] if isinstance(r, dict) and r.get("boardId") == _MAIN_BOARD]
+    last = max(main, key=lambda r: str(r.get("time") or "")) if main else {}
+
+    def _int(key: str) -> int | None:
+        value = _num(last.get(key))
+        return round(value) if value is not None else None
+
+    return {
+        "foreign_buy_volume": _int("totalBuyVolume"),
+        "foreign_sell_volume": _int("totalSellVolume"),
+        "foreign_room": _int("foreignerOrderLimitQuantity"),
+    }
+
+
+def _day_window(day: str) -> dict[str, int] | None:
+    """from/to epoch seconds covering ``day`` (YYYY-MM-DD) in Vietnam time."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    try:
+        start = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+    except ValueError:
+        return None
+    first = int(start.timestamp())
+    return {"from": first, "to": first + 86399}
+
+
 def _previous_close(symbol: str, traded_day: str) -> float | None:
     """Close (dong) of the session before ``traded_day``, from ssi/dnse candles."""
     from opentrading_mcp.providers import vnstock as vn_p
@@ -207,7 +244,15 @@ def quote_row(symbol: str) -> dict[str, Any]:
         quotes = dnse._get(f"/price/{sym}/quotes/latest")
     except (ProviderUnavailable, ProviderBadData):
         quotes = None  # a row without depth beats no row
-    return build_row(sym, secdef, trades, quotes, _previous_close)
+    foreign = None
+    trade = _board(trades, "trades")
+    window = _day_window(str((trade or {}).get("time") or "")[:10])
+    if window is not None:
+        try:
+            foreign = dnse._get(f"/price/{sym}/foreign-trading", window)
+        except (ProviderUnavailable, ProviderBadData):
+            foreign = None  # a row without foreign flows beats no row
+    return build_row(sym, secdef, trades, quotes, _previous_close, foreign)
 
 
 def quote_rows(symbols: list[str]) -> list[dict[str, Any]]:

@@ -7,6 +7,9 @@ Payloads are trimmed copies of the live DNSE answers for FPT captured on
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from opentrading_mcp.providers import dnse_board
@@ -57,9 +60,9 @@ def test_off_hours_row_matches_the_v4_baseline():
     assert row["percent_change"] == pytest.approx(-3.9698, abs=1e-4)
     assert row["ceiling_price"] is None and row["floor_price"] is None
     assert row["next_session"]["reference_price"] == 50800
-    assert "market closed" in row["quote_note"]
+    assert "earlier session" in row["quote_note"]
     assert row["time"] == "2026-11-06T14:45:02.813+07:00"
-    assert row["foreign_buy_volume"] is None  # no realtime source
+    assert row["foreign_buy_volume"] is None  # no foreign payload passed
 
 
 def test_in_session_row_uses_secdef_limits():
@@ -156,11 +159,80 @@ async def test_batch_quote_tool_serves_dnse_rows(monkeypatch):
     from opentrading_mcp.server import create_server, register_preset
 
     payloads = {"/price/FPT/trades/latest": TRADES, "/price/FPT/secdef": SECDEF_NEXT,
-                "/price/FPT/quotes/latest": QUOTES}
-    monkeypatch.setattr(dnse, "_get", lambda path, params=None, timeout=20: payloads[path])
+                "/price/FPT/quotes/latest": QUOTES,
+                "/price/FPT/foreign-trading": _foreign("FPT")}
+    seen: dict = {}
+
+    def fake_get(path, params=None, timeout=20):
+        seen[path] = params
+        return payloads[path]
+
+    monkeypatch.setattr(dnse, "_get", fake_get)
     monkeypatch.setattr(dnse_board, "_previous_close", lambda s, d: 52900.0)
     server = create_server("all")
     register_preset(server, "all")
     env = await server._tool_manager.get_tool("vn_equity_quote_batch").fn(symbols=["FPT"])
     rows = env["data"]["quotes"] if "quotes" in env["data"] else env["data"]["rows"]
     assert rows[0]["close_price"] == 50800 and rows[0]["percent_change"] < 0
+    # foreign flows are asked for the TRADED day (06/11 here), Vietnam midnight to midnight
+    assert seen["/price/FPT/foreign-trading"] == {"from": 1793898000, "to": 1793984399}
+    assert rows[0]["foreign_buy_volume"] == 44800
+
+
+FOREIGN = Path(__file__).parent / "fixtures" / "dnse_foreign_2026-11-09"
+
+
+def _foreign(symbol: str):
+    return json.loads((FOREIGN / f"{symbol}_foreign_trading.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("symbol", "buy", "sell", "room"),
+    [  # v4 (vnstock 4.0.2) batch quote read in the same second, 2026-11-09 09:33
+        ("FPT", 44800, 252500, 420508367),
+        ("HPG", 255700, 843962, 2290200440),
+    ],
+)
+def test_foreign_fields_match_v4_in_session(symbol, buy, sell, room):
+    out = dnse_board.foreign_fields(_foreign(symbol))
+    assert out == {"foreign_buy_volume": buy, "foreign_sell_volume": sell, "foreign_room": room}
+
+
+def test_foreign_fields_take_the_latest_main_board_row():
+    body = {"foreigners": [
+        {"boardId": "G1", "time": "2026-11-09 09:16:00.000", "totalBuyVolume": 1,
+         "totalSellVolume": 1, "foreignerOrderLimitQuantity": 9},
+        {"boardId": "G4", "time": "2026-11-09 09:40:00.000", "totalBuyVolume": 777,
+         "totalSellVolume": 777, "foreignerOrderLimitQuantity": 777},
+        {"boardId": "G1", "time": "2026-11-09 09:33:00.000", "totalBuyVolume": 5,
+         "totalSellVolume": 6, "foreignerOrderLimitQuantity": 7},
+    ]}
+    assert dnse_board.foreign_fields(body) == {
+        "foreign_buy_volume": 5, "foreign_sell_volume": 6, "foreign_room": 7}
+
+
+def test_foreign_fields_absent_or_error_stay_none():
+    none = {"foreign_buy_volume": None, "foreign_sell_volume": None, "foreign_room": None}
+    assert dnse_board.foreign_fields(None) == none
+    assert dnse_board.foreign_fields({"errorCode": 400, "message": "missing 'from'"}) == none
+
+
+def test_traded_day_window_is_vietnam_midnight():
+    window = dnse_board._day_window("2026-11-09")
+    assert window == {"from": 1794157200, "to": 1794243599}  # the window DNSE answered live
+    assert dnse_board._day_window("") is None
+
+
+def test_foreign_failure_keeps_the_row(monkeypatch):
+    from opentrading_mcp.providers import dnse
+
+    def fake_get(path, params=None, timeout=20):
+        if path.endswith("/foreign-trading"):
+            raise ProviderUnavailable("dnse timeout")
+        return {"/price/FPT/trades/latest": TRADES, "/price/FPT/secdef": SECDEF_NEXT,
+                "/price/FPT/quotes/latest": QUOTES}[path]
+
+    monkeypatch.setattr(dnse, "_get", fake_get)
+    monkeypatch.setattr(dnse_board, "_previous_close", lambda s, d: 52900.0)
+    row = dnse_board.quote_row("FPT")
+    assert row["close_price"] == 50800 and row["foreign_buy_volume"] is None
