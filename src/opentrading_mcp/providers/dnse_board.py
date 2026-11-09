@@ -205,6 +205,9 @@ def foreign_fields(body: Any) -> dict[str, int | None]:
     }
 
 
+_FOREIGN_ROWS = 20
+
+
 def _day_window(day: str) -> dict[str, int] | None:
     """from/to epoch seconds covering ``day`` (YYYY-MM-DD) in Vietnam time."""
     from datetime import datetime
@@ -215,7 +218,10 @@ def _day_window(day: str) -> dict[str, int] | None:
     except ValueError:
         return None
     first = int(start.timestamp())
-    return {"from": first, "to": first + 86399}
+    # DNSE pages foreign-trading NEWEST first, 100 rows a page (G1 and G4 snapshots
+    # interleave about once a minute each): 20 rows hold the latest G1 snapshot at
+    # ~1/5 of the bytes of a full page (HPG 2026-11-09 09:46: 42.7 KB for 100 rows).
+    return {"from": first, "to": first + 86399, "limit": _FOREIGN_ROWS}
 
 
 def _previous_close(symbol: str, traded_day: str) -> float | None:
