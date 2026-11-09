@@ -175,7 +175,7 @@ async def test_batch_quote_tool_serves_dnse_rows(monkeypatch):
     rows = env["data"]["quotes"] if "quotes" in env["data"] else env["data"]["rows"]
     assert rows[0]["close_price"] == 50800 and rows[0]["percent_change"] < 0
     # foreign flows are asked for the TRADED day (06/11 here), Vietnam midnight to midnight
-    assert seen["/price/FPT/foreign-trading"] == {"from": 1793898000, "to": 1793984399}
+    assert seen["/price/FPT/foreign-trading"] == {"from": 1793898000, "to": 1793984399, "limit": 20}
     assert rows[0]["foreign_buy_volume"] == 44800
 
 
@@ -219,7 +219,7 @@ def test_foreign_fields_absent_or_error_stay_none():
 
 def test_traded_day_window_is_vietnam_midnight():
     window = dnse_board._day_window("2026-11-09")
-    assert window == {"from": 1794157200, "to": 1794243599}  # the window DNSE answered live
+    assert window == {"from": 1794157200, "to": 1794243599, "limit": 20}  # live-tested
     assert dnse_board._day_window("") is None
 
 
