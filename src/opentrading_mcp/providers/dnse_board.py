@@ -142,6 +142,45 @@ def build_row(
     return row
 
 
+_DERIVATIVE_MARKET = "DVX"  # futures: index points and contracts, no scaling
+MAX_DEPTH = 10  # HNX/UPCoM and futures publish 10 levels, HOSE 3
+
+
+def order_book(quotes: Any, depth: int = 3) -> dict[str, Any] | None:
+    """Main-board (G1) depth from a ``/quotes/latest`` body, or None when DNSE has
+    no G1 book for the code (e.g. the ``VN30F1M`` alias: futures books live under
+    the contract code such as ``41I1GB000``).
+
+    Stock levels come back in dong and shares like the board rows (DNSE sends
+    thousand dong and lots of 10); futures levels (market ``DVX``) stay in index
+    points and contracts. Odd-lot (G4) and other boards are ignored."""
+    book = _board(quotes, "quotes")
+    if book is None:
+        return None
+    derivative = book.get("marketId") == _DERIVATIVE_MARKET
+    keep = max(1, min(int(depth), MAX_DEPTH))
+    sides: dict[str, list[dict[str, float]]] = {}
+    for side, key in (("bids", "bid"), ("asks", "offer")):
+        levels: list[dict[str, float]] = []
+        for level in (book.get(key) or [])[:keep]:
+            if not isinstance(level, dict):
+                continue
+            price, qty = _num(level.get("price")), _num(level.get("quantity"))
+            if price is None or price <= 0 or qty is None:
+                continue
+            if derivative:
+                levels.append({"price": price, "volume": qty})
+            else:
+                levels.append({"price": round(price * PRICE, 2), "volume": float(round(qty * LOT))})
+        sides[side] = levels
+    return {
+        "board": _MAIN_BOARD,
+        "time": book.get("time"),
+        "unit": "index points / contracts" if derivative else "dong / shares",
+        **sides,
+    }
+
+
 def _previous_close(symbol: str, traded_day: str) -> float | None:
     """Close (dong) of the session before ``traded_day``, from ssi/dnse candles."""
     from opentrading_mcp.providers import vnstock as vn_p

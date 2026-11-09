@@ -34,8 +34,9 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def dnse_orderbook(symbol: str, depth: int = 3) -> dict[str, Any]:
         """Bid/ask depth. Use for microstructure reads.
 
-        depth: levels per side (default 3). Equity symbols return live depth;
-        VN30F1M futures book is usually empty upstream — use vn_trades tape.
+        depth: levels per side (default 3; HOSE publishes 3, HNX/UPCoM/futures up to 10).
+        Stocks: price in dong, volume in shares. Futures: use the contract code (e.g.
+        41I1GB000; points/contracts) — the VN30F1M alias has no book upstream.
         """
         fp = f"{symbol}|{depth}"
         hit = await cache_lookup("dnse_orderbook", fp)
