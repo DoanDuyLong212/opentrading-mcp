@@ -40,6 +40,7 @@ from opentrading_mcp.tools.shared import (
     run_blocking,
     summarize_rows,
 )
+from opentrading_mcp.vnstock_release import release_status
 
 
 def _norm_text(text: str) -> str:
@@ -410,6 +411,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             vnstock_state = "unavailable"
         except Exception:
             vnstock_state = "unavailable"
+        # #80: the pinned vnstock release candidate stops working on a fixed date.
+        release = release_status()
         return await cache_store(
             "source_status",
             "-",
@@ -418,6 +421,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "upstreams": {
                     "vietstock": vs_p.auth_status(),
                     "vnstock": vnstock_state,
+                    "vnstock_release": release,
                     # First use imports vnstock (seconds of CPU): never on the event loop.
                     "vnstock_quota": await _vnstock_quota(),
                     "dnse_ws": "worker"
@@ -428,6 +432,7 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "ttl": TTL_SECONDS,
             },
             source="local",
+            warnings=[release["warning"]] if release.get("warning") else None,
         )
 
     @server.tool(annotations=READ_ONLY)

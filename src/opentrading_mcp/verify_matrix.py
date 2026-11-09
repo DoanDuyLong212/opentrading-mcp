@@ -106,6 +106,11 @@ MATRIX: list[tuple[str, dict[str, Any], float]] = [
     ("vnindex_scenarios_latest", {}, 30.0),
     ("vnindex_scenarios_history", {"horizon": 20}, 30.0),
     ("vnindex_risk_heads", {}, 30.0),
+    # vn_reversal (#69/#70, read-only on the shared signals table)
+    ("vn_reversal_check", {}, 30.0),
+    ("vn_reversal_signals", {}, 30.0),
+    ("vn_reversal_dashboard", {}, 30.0),
+    ("vn_reversal_history", {"symbol": "VNINDEX", "days": 5}, 30.0),
     ("cycle_stats_refresh", {"symbols": ["VCB"]}, 120.0),
     ("vn_asset_refresh", {}, 120.0),
     ("g_asset_refresh", {}, 120.0),

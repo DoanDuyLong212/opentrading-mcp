@@ -1,7 +1,8 @@
 """Benchmark cold (no cache) vs warm (Redis-hit) for read tools.
 
 Usage:
-  .venv/bin/python scripts/bench_cold_warm.py --tools market_snapshot,money_flow --out perf/bench.jsonl
+  .venv/bin/python scripts/bench_cold_warm.py \
+      --tools market_snapshot,money_flow --out perf/bench.jsonl
   .venv/bin/python scripts/bench_cold_warm.py --all-reads --out perf/bench.jsonl
 
 For each tool: flush its mcp: keys (Redis + memory), call once (cold),
@@ -61,7 +62,7 @@ def sample_args(schema: dict, tool: str = "") -> dict | None:
     for name in required:
         spec = props.get(name, {}) or {}
         low = name.lower()
-        if "enum" in spec and spec["enum"]:
+        if spec.get("enum"):
             args[name] = spec["enum"][0]
             continue
         if spec.get("type") == "integer":
@@ -196,7 +197,11 @@ async def main() -> None:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
             flag = "OK " if row["cold_ok"] else "FAIL"
-            print(f"[{i+1}/{len(names)}] {flag} {name}: cold={row['cold_s']}s warm={row['warm_s']}s {row['cold_note']}", flush=True)
+            print(
+                f"[{i+1}/{len(names)}] {flag} {name}: cold={row['cold_s']}s "
+                f"warm={row['warm_s']}s {row['cold_note']}",
+                flush=True,
+            )
             await asyncio.sleep(GAP_SECONDS)
 
 
