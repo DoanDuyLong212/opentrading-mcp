@@ -26,6 +26,14 @@ def test_rc4_expiry_windows(today, status, days_left):
     assert ("warning" in out) is (status != "ok")
 
 
+def test_rc5_expiry_from_vnstock_doctor():
+    out = rel.release_status(today=date(2026, 11, 9), version="6.0.0rc5")
+    assert out["expires"] == "2026-12-09"
+    assert out["days_left"] == 30
+    assert out["status"] == "expiring"  # rc5 ships inside the 30-day warning window
+    assert rel.release_status(today=date(2026, 12, 10), version="6.0.0rc5")["status"] == "expired"
+
+
 def test_unknown_release_candidate_is_flagged_not_healthy():
     out = rel.release_status(today=date(2026, 11, 9), version="6.0.0rc9")
     assert out["status"] == "unknown_expiry"
