@@ -80,3 +80,66 @@ async def test_reported_nonpositive_values_remain_visible_without_multiple(monke
     data = env["data"]
     assert data["eps"] == value and data["bvps"] == value
     assert "per" not in data and "pb" not in data
+
+
+async def _valuation_by_period(monkeypatch, by_period: dict[str, Any]):
+    seen: list[str] = []
+
+    async def fake_call(tool, fn, *args, **kwargs):
+        if fn is cf.vs_p.overview_trading:
+            return {}
+        if fn is cf.vn_p.equity_quote_batch:
+            return [{"symbol": "FPT", "close_price": 50900}]
+        if fn is cf.vs_ratios.equity_fundamentals:
+            period = args[1]
+            seen.append(period)
+            got = by_period[period]
+            if isinstance(got, Exception):
+                raise got
+            return got
+        raise AssertionError(fn)
+
+    async def cache_miss(*args):
+        return None
+
+    async def cache_write(tool, fingerprint, ttl, data, **kwargs):
+        return make_envelope(data, source="test", warnings=kwargs.get("warnings"))
+
+    monkeypatch.setattr(cf, "_call", fake_call)
+    monkeypatch.setattr(cf, "cache_lookup", cache_miss)
+    monkeypatch.setattr(cf, "cache_store", cache_write)
+    server = create_server("scan")
+    register_preset(server, "scan")
+    env = await server._tool_manager.get_tool("valuation_run").fn(symbol="FPT")
+    return env, seen
+
+
+QUARTER = {"eps": 6030.0, "bvps": 26100.0, "period_label": "Q3/2026", "frequency": "quarterly",
+           "eps_basis": "trailing_four_quarters"}
+YEAR = {"eps": 6021.21, "bvps": 25679.55, "period_label": "2025", "frequency": "annual",
+        "eps_basis": "trailing_four_quarters"}
+
+
+async def test_q3_valuation_uses_the_newest_quarter_ttm_eps(monkeypatch):
+    env, seen = await _valuation_by_period(monkeypatch, {"quarter": QUARTER, "year": YEAR})
+    data = env["data"]
+    assert seen == ["quarter"]  # the annual table is not read when the quarter answers
+    assert data["eps"] == 6030.0 and data["eps_period"] == "Q3/2026"
+    assert data["eps_frequency"] == "quarterly"
+    assert data["eps_basis"] == "trailing_four_quarters"
+    assert data["per"] == round(50900 / 6030.0, 2)
+    assert data["bvps_period"] == "Q3/2026"
+    assert "not restated" in data["eps_note"]
+
+
+async def test_q3_falls_back_to_the_annual_table(monkeypatch):
+    from opentrading_mcp.providers.errors import ProviderUnavailable
+
+    empty_quarter = {"eps": None, "bvps": None, "period_label": None}
+    env, seen = await _valuation_by_period(monkeypatch, {"quarter": empty_quarter, "year": YEAR})
+    assert seen == ["quarter", "year"] and env["data"]["eps_period"] == "2025"
+
+    env, seen = await _valuation_by_period(
+        monkeypatch, {"quarter": ProviderUnavailable("vietstock timeout"), "year": YEAR})
+    assert seen == ["quarter", "year"] and env["data"]["eps_period"] == "2025"
+    assert not any("(quarter) unavailable" in w for w in env["warnings"] or [])

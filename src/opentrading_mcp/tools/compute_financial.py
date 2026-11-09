@@ -279,7 +279,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         # v6: EPS/BVPS from one fa period, eps_basis from that period (gen 6, #76).
         # v7: EPS/BVPS from Vietstock financeinfo (fhsc/fa discontinued).
-        fp = f"v7|{symbol}|{btype}|{method}"
+        # v8: EPS/BVPS from the newest QUARTER (trailing four quarters) first (Q3).
+        fp = f"v8|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -331,11 +332,31 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             # The trading overview carries no EPS/BVPS: take the trailing EPS and BVPS
             # vnstock reports for its newest period. Not price / PE: that PE is priced at
             # the period end, so it would give a wrong EPS for today's price.
-            try:
-                fund = await _call("f", vs_ratios.equity_fundamentals, symbol.upper(), secs=45.0)
-            except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
-                fund = None
-                warnings.append(f"Vietstock fundamentals unavailable: {exc}")
+            # Newest quarter first: its EPS is the trailing four quarters up to that
+            # quarter, closer to today's price than the last annual report (FPT on
+            # 2026-11-09: Q3/2026 TTM 6,030 vs 2025 6,021). The annual table is the
+            # fallback when the quarter has no EPS/BVPS or cannot be read.
+            fund = None
+            for fund_period in ("quarter", "year"):
+                try:
+                    got = await _call(
+                        "f", vs_ratios.equity_fundamentals, symbol.upper(), fund_period,
+                        secs=45.0,
+                    )
+                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
+                    warnings.append(f"Vietstock fundamentals ({fund_period}) unavailable: {exc}")
+                    continue
+                if isinstance(got, dict) and (
+                    got.get("eps") is not None or got.get("bvps") is not None
+                ):
+                    fund = got
+                    break
+                fund = fund or got
+            if isinstance(fund, dict) and (
+                fund.get("eps") is not None or fund.get("bvps") is not None
+            ):
+                # recovered from the quarter error by the annual table: not a gap
+                warnings[:] = [w for w in warnings if "fundamentals (quarter)" not in w]
             if isinstance(fund, dict):
                 label = fund.get("period_label")
                 if eps is None and fund.get("eps") is not None:
@@ -350,6 +371,11 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                         out["eps_period"] = label
                         out["eps_frequency"] = fund.get("frequency") or "unverified"
                         out["eps_basis"] = basis
+                        out["eps_note"] = (
+                            "EPS as Vietstock reports it for that period; not restated "
+                            "for share issues (bonus/rights) after the period end, which "
+                            "would lower EPS and raise PER"
+                        )
                 if bvps is None and fund.get("bvps") is not None:
                     bvps = _finite_metric(fund["bvps"])
                     if bvps is None:
