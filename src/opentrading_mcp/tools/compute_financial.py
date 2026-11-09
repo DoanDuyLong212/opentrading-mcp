@@ -276,8 +276,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         5 bảo hiểm → per_pb. btype lạ → cảnh báo + method auto.
         method: 'auto' (mặc định, chọn theo btype) hoặc ép 'per'/'pb'/'ensemble'.
         """
-        # v5: expose observation and measurement limits alongside raw values.
-        fp = f"v5|{symbol}|{btype}|{method}"
+        # v6: EPS/BVPS from one fa period, eps_basis from that period (gen 6, #76).
+        fp = f"v6|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -469,7 +469,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         # gen 6: period labels come from fa (computed locally), no upstream frame
         # parsing to refuse; rejected labels surface via discarded_period_labels.
-        fp = f"v7|{symbol}|{set}|{period}|{peers}"
+        # v8: fa-computed values replace cached v4 (KBS) payloads (#86).
+        fp = f"v8|{symbol}|{set}|{period}|{peers}"
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -553,7 +554,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
         # v7: retain reported frequency, metric basis and rejected period labels.
-        fp = f"v7|{symbol}|{peers}|{metrics}"
+        # v8: fa-computed values replace cached v4 (KBS) payloads (#86).
+        fp = f"v8|{symbol}|{peers}|{metrics}"
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit

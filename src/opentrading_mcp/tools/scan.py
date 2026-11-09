@@ -106,7 +106,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[f"filter error: {exc}"], availability="unavailable",
             )
         # v6: reject malformed bounds before cache/upstream; expose metric coverage.
-        fp = f"v6|{eff}|{limit}|{technical}"
+        # v7: pe/roe and fundamentals_period from one fa period (#76).
+        fp = f"v7|{eff}|{limit}|{technical}"
         hit = await cache_lookup("stock_screener", fp)
         if hit is not None:
             return hit
