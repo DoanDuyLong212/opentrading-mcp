@@ -20,7 +20,10 @@ def is_authorized(presented: str | None) -> bool:
 
 
 def redact(text: str) -> str:
-    markers = ("Bearer ", "token=", "password=", "VIETSTOCK_COOKIE_LOGIN", "DNSE_SECRET")
+    markers = (
+        "Bearer ", "token=", "password=", "VIETSTOCK_COOKIE_LOGIN",
+        "DNSE_SECRET", "DNSE_API_SECRET", "SSI_API_SECRET", "SSI_API_PRIVATE",
+    )
     for marker in markers:
         if marker in text:
             return "[REDACTED]"

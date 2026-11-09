@@ -23,65 +23,172 @@ from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.units import INDEX_SYMBOLS
 
-# Gen-6 source chains (first non-empty frame wins). fhsc serves fundamentals,
-# company profile and group batch quotes; ssi serves listing and domestic index
-# candles; binance is keyless crypto; fmp is the only global-index source.
-SRC_EQUITY = ("fhsc", "ssi")
-SRC_QUOTE = ("fhsc",)
-SRC_LISTING = ("ssi", "fhsc")
-SRC_INDEX = ("ssi", "fhsc")
-SRC_DERIV = ("fhsc",)
-SRC_GLOBAL = ("fmp",)
+# Gen-6 source chains (first non-empty frame wins). The owner stopped using the
+# fhsc and fmp keys on 2026-11-08, so ssi is primary and dnse the fallback;
+# both return the same closes in the same units (equity, index and futures,
+# measured live 2026-11-08). vnstock routes only fhsc/fmp/tcbs serve have an
+# empty chain and fail as not configured: batch quote, statements/fa, company
+# profile, insider trades, forex, commodity and global indices.
+SRC_EQUITY = ("ssi", "dnse")
+SRC_QUOTE: tuple[str, ...] = ()  # market.equity.quote: fhsc/tcbs only
+SRC_TRADES = ("dnse",)  # market.equity.trades: dnse/tcbs only
+SRC_LISTING = ("ssi", "dnse")
+SRC_INDEX = ("ssi", "dnse")
+SRC_DERIV = ("ssi", "dnse")
+SRC_FX: tuple[str, ...] = ()  # market.forex / market.commodity: fhsc/fmp only
+SRC_GLOBAL: tuple[str, ...] = ()  # market.global_index: fhsc/fmp only
 SRC_CRYPTO = ("binance",)
-SRC_FUNDAMENTAL = ("fhsc",)
-SOURCE_KEY_VARS = ("FHSC_API_KEY", "SSI_API_KEY", "DNSE_API_KEY", "TCBS_API_KEY", "FMP_API_KEY")
+SRC_FUNDAMENTAL: tuple[str, ...] = ()  # fundamental.* and reference.company.*: fhsc only
+
+# Every variable a source needs (vnstock's names). binance is keyless.
+SOURCE_CREDENTIALS: dict[str, tuple[str, ...]] = {
+    "ssi": ("SSI_API_KEY", "SSI_API_SECRET"),
+    "dnse": ("DNSE_API_KEY", "DNSE_API_SECRET"),
+    "binance": (),
+}
+SOURCE_CHAINS: dict[str, tuple[str, ...]] = {
+    "equity": SRC_EQUITY,
+    "index": SRC_INDEX,
+    "listing": SRC_LISTING,
+    "futures": SRC_DERIV,
+    "trades": SRC_TRADES,
+    "crypto": SRC_CRYPTO,
+    "quote": SRC_QUOTE,
+    "fundamental": SRC_FUNDAMENTAL,
+    "forex": SRC_FX,
+    "global": SRC_GLOBAL,
+}
+
+
+def _alias_dnse_secret() -> None:
+    """The project's own DNSE client (and Render) use ``DNSE_SECRET``; vnstock
+    reads ``DNSE_API_SECRET``. Fill the vnstock name when it is unset, so one
+    secret serves both. An explicit ``DNSE_API_SECRET`` always wins."""
+    secret = os.environ.get("DNSE_SECRET", "").strip()
+    if secret and not os.environ.get("DNSE_API_SECRET", "").strip():
+        os.environ["DNSE_API_SECRET"] = secret
+
+
+_alias_dnse_secret()
+
+
+def _source_ready(source: str) -> bool:
+    if source not in SOURCE_CREDENTIALS:
+        return False
+    return all(str(os.environ.get(var, "")).strip() for var in SOURCE_CREDENTIALS[source])
+
+
+def _error_kind(exc: BaseException) -> str:
+    """'rate' / 'auth' / 'error' for one source's failure (vnstock 6 class names
+    and ``code`` strings, matched by name so no vnstock import is needed)."""
+    names = {cls.__name__ for cls in type(exc).__mro__}
+    code = str(getattr(exc, "code", "") or "")
+    if names & {"RateLimitedError", "RateLimitError"} or "RATE_LIMIT" in code:
+        return "rate"
+    if names & {"CredentialError", "AccessDeniedError"} or "CREDENTIAL" in code:
+        return "auth"
+    return "error"
+
+
+def _chain_error(
+    label: str, errors: list[tuple[str, BaseException]], empty: list[str]
+) -> ProviderUnavailable:
+    """One error for a whole source chain: every source's outcome, plus a
+    machine-readable ``reason`` (#83) — a rate limit anywhere wins, then
+    'every source lacks its keys'."""
+    from opentrading_mcp.failures import NOT_CONFIGURED, UPSTREAM_RATE_LIMITED
+    from opentrading_mcp.tools.shared import RATE_LIMITED
+
+    if not errors and not empty:
+        return ProviderUnavailable(
+            f"no source configured for {label} (fhsc/fmp discontinued)", reason=NOT_CONFIGURED
+        )
+    parts = [f"{src}: {str(exc)[:160]}" for src, exc in errors]
+    parts += [f"{src}: empty" for src in empty]
+    detail = "; ".join(parts)
+    kinds = {_error_kind(exc) for _, exc in errors}
+    if "rate" in kinds:
+        return ProviderUnavailable(
+            f"{RATE_LIMITED}: {label} ({detail})", reason=UPSTREAM_RATE_LIMITED
+        )
+    if kinds == {"auth"} and not empty:
+        return ProviderUnavailable(
+            f"no data for {label}: source keys not set ({detail})", reason=NOT_CONFIGURED
+        )
+    return ProviderUnavailable(f"no data for {label} ({detail})")
 
 
 def _fetch_frame(fetchers: list[tuple[str, Any]], label: str) -> Any:
-    """Try ``(source, callable)`` pairs in order; return the first non-empty frame."""
-    last: Exception | None = None
-    for _source, call in fetchers:
+    """Try ``(source, callable)`` pairs in order; return the first non-empty frame.
+
+    Keeps every source's outcome: a missing key on one source must not hide a
+    rate limit on another (the error and its ``reason`` cover the whole chain).
+    """
+    errors: list[tuple[str, BaseException]] = []
+    empty: list[str] = []
+    for source, call in fetchers:
         try:
             candidate = call()
-            if candidate is None:
-                continue
-            try:
-                if len(candidate) == 0:
-                    continue
-            except TypeError:
-                pass  # frame without __len__ — trust it and let the caller parse
-            return candidate
         except Exception as exc:
-            last = exc
+            errors.append((source, exc))
             continue
-    detail = f" (last error: {last})" if last else ""
-    raise ProviderUnavailable(f"no data for {label}{detail}")
+        if candidate is None:
+            empty.append(source)
+            continue
+        try:
+            if len(candidate) == 0:
+                empty.append(source)
+                continue
+        except TypeError:
+            pass  # frame without __len__ — trust it and let the caller parse
+        return candidate
+    raise _chain_error(label, errors, empty)
+
+
+def _rewrap(exc: Exception, message: str) -> ProviderUnavailable:
+    """Add caller context to a chain error without losing its reason."""
+    return ProviderUnavailable(
+        f"{message}: {exc}",
+        reason=getattr(exc, "reason", None),
+        retry_after_s=getattr(exc, "retry_after_s", None),
+    )
+
+
+def _no_source(route: str) -> ProviderUnavailable:
+    """A vnstock route whose only sources were fhsc/fmp/tcbs (discontinued)."""
+    from opentrading_mcp.failures import NOT_CONFIGURED
+
+    return ProviderUnavailable(
+        f"vnstock {route}: no source configured (only fhsc/fmp/tcbs serve it; "
+        "fhsc and fmp were discontinued)",
+        reason=NOT_CONFIGURED,
+    )
 
 
 def ensure_api_key() -> str:
     """Gen-6: per-source Open API keys decide availability — no runtime
-    registration call exists. ``VNSTOCK_API_KEY`` (stored by ``vnstock login``)
-    only unlocks the full VAS statement set on Fundamental routes.
-    Never raises. Returns "keyed" / "anonymous".
+    registration call exists. "keyed" when at least one keyed source of a
+    chain (ssi, dnse) has every variable it needs. Never raises.
     """
-    for var in (*SOURCE_KEY_VARS, "VNSTOCK_API_KEY"):
-        if str(os.environ.get(var, "")).strip():
-            return "keyed"
-    return "anonymous"
+    return "keyed" if any(_source_ready(s) for s in ("ssi", "dnse")) else "anonymous"
 
 
 def quota_info() -> dict[str, Any]:
-    """Best-effort gen-6 source-key/tier report for source_status (never raises)."""
+    """Source-key report for source_status (never raises): per source whether
+    every variable is set, and per route chain which sources can answer — an
+    empty list means that route has no usable source (#87)."""
     try:
-        sources = {
-            var.removesuffix("_API_KEY").lower(): bool(str(os.environ.get(var, "")).strip())
-            for var in SOURCE_KEY_VARS
+        sources = {name: _source_ready(name) for name in SOURCE_CREDENTIALS}
+        chains = {
+            route: [s for s in chain if sources.get(s)] for route, chain in SOURCE_CHAINS.items()
         }
-        if any(sources.values()):
-            return {"tier": "source-keyed", "sources": sources}
-        if str(os.environ.get("VNSTOCK_API_KEY", "")).strip():
-            return {"tier": "account-keyed", "sources": sources}
-        return {"tier": "anonymous", "sources": sources}
+        keyed = any(sources[s] for s in ("ssi", "dnse"))
+        return {
+            "tier": "source-keyed" if keyed else "anonymous",
+            "sources": sources,
+            "chains": chains,
+            "discontinued": ["fhsc", "fmp"],
+        }
     except Exception as exc:
         return {"tier": "unknown", "note": str(exc)[:100]}
 
@@ -187,7 +294,9 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
         raise ProviderBadData(f"malformed vnstock frame for {symbol}") from exc
 
 
-@guarded("vnstock")
+# Own breaker: cycle refresh fetches ~150 symbols through here, and a batch run
+# hitting a rate limit must not open the breaker every interactive tool shares.
+@guarded("vnstock-batch")
 def candles_range(symbol: str, start: str, end: str, interval: str = "1D") -> list[dict[str, Any]]:
     """Daily candles for an explicit date range, ascending by day (cycle refresh)."""
     try:
@@ -236,6 +345,8 @@ def equity_quote_batch(symbols: list[str]) -> list[dict[str, Any]]:
     syms = [str(s).upper() for s in symbols or []]
     if not syms:
         return []
+    if not SRC_QUOTE:
+        raise _no_source("batch quote")
 
     def _one(chunk: list[str]) -> list[dict[str, Any]]:
         try:
@@ -319,6 +430,9 @@ def split_batch(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[
     return quotes, sorted(set(missing))
 
 
+_TRADES_PAGE_SIZE = 1000
+
+
 @guarded("vnstock")
 def equity_trades(
     symbol: str,
@@ -336,25 +450,41 @@ def equity_trades(
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
     try:
-        kwargs: dict[str, Any] = {"limit": max(int(limit), 1)}
+        # dnse pages through the WHOLE session whatever `limit` is, using it as the
+        # page size, capped at 500 pages: limit=3 made 500 requests and still cut
+        # the day short (measured 2026-11-08: FPT 16,181 trades; page 1000 → 0.9s,
+        # page 3 → 3.8s and truncated). Ask for big pages, then slice locally.
+        kwargs: dict[str, Any] = {"limit": max(int(limit), _TRADES_PAGE_SIZE)}
         if from_date is not None:
             kwargs["start"] = from_date
         if to_date is not None:
             kwargs["end"] = to_date
+        def _tagged(source: str) -> Any:
+            frame = Market(source).equity(symbol.upper()).trades(**kwargs)
+            if frame is not None and hasattr(frame, "attrs"):
+                frame.attrs["ot_source"] = source
+            return frame
+
         frame = _fetch_frame(
-            [
-                (
-                    source,
-                    (lambda source=source: Market(source).equity(symbol.upper()).trades(**kwargs)),
-                )
-                for source in SRC_EQUITY
-            ],
+            [(source, (lambda source=source: _tagged(source))) for source in SRC_TRADES],
             f"trades {symbol}",
         )
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock trades failed: {symbol}") from exc
+    except ProviderUnavailable as exc:
+        raise _rewrap(exc, f"vnstock trades failed: {symbol}") from exc
     rows = sorted(_records(frame), key=lambda r: str(r.get("time", ""))[:24], reverse=True)
+    lot = _TRADE_LOT.get(str(getattr(frame, "attrs", {}).get("ot_source", "")), 1)
+    if lot != 1:
+        for row in rows:
+            for key in ("volume", "accumulated_volume"):
+                if isinstance(row.get(key), (int, float)):
+                    row[key] = row[key] * lot
     return rows[: max(limit, 1)]
+
+
+# dnse trades count lots of 10 shares: the 2026-11-06 FPT session sums to 1,216,220
+# while the session traded 12,162,200 shares (v4 and the DNSE board agree on the
+# latter). Scale to shares so vn_trades means the same as before gen 6.
+_TRADE_LOT = {"dnse": 10}
 
 
 # The symbol list changes a few times a year; symbol_lookup used to fetch all ~1,600
@@ -411,11 +541,17 @@ def _fetch_listing() -> list[dict[str, str]]:
 
 
 def _records(frame: Any) -> list[dict[str, Any]]:
+    """Frame rows as dicts. Gen-6 frames carry tz-aware ``pd.Timestamp`` times,
+    which ``json.dumps`` (cache store, envelopes) cannot encode: datetimes become
+    ISO strings here, once, for every route."""
     try:
         rows = frame.to_dict(orient="records")
     except Exception:
         return []
-    return [{str(k): v for k, v in r.items()} for r in rows]
+    return [
+        {str(k): (v.isoformat() if isinstance(v, (datetime, date)) else v) for k, v in r.items()}
+        for r in rows
+    ]
 
 
 def _clean(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -469,8 +605,8 @@ def index_ohlcv(
             ],
             f"index bars {symbol}",
         )
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock index ohlcv failed: {symbol}") from exc
+    except ProviderUnavailable as exc:
+        raise _rewrap(exc, f"vnstock index ohlcv failed: {symbol}") from exc
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no index bars for {symbol}")
@@ -505,8 +641,8 @@ def equity_ohlcv(symbol: str, count: int = 100, interval: str = "1D") -> list[di
             ],
             f"equity bars {symbol}",
         )
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock equity ohlcv failed: {symbol}") from exc
+    except ProviderUnavailable as exc:
+        raise _rewrap(exc, f"vnstock equity ohlcv failed: {symbol}") from exc
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no equity bars for {symbol}")
@@ -538,8 +674,8 @@ def futures_ohlcv(
             ],
             f"futures bars {symbol}",
         )
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock futures ohlcv failed: {symbol}") from exc
+    except ProviderUnavailable as exc:
+        raise _rewrap(exc, f"vnstock futures ohlcv failed: {symbol}") from exc
     rows = _records(frame)
     if not rows:
         raise ProviderUnavailable(f"no futures bars for {symbol}")
@@ -565,12 +701,12 @@ def forex_ohlcv(pair: str = "USDVND", count: int = 30) -> list[dict[str, Any]]:
                         )
                     ),
                 )
-                for source in SRC_DERIV
+                for source in SRC_FX
             ],
             f"forex bars {pair}",
         )
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock forex failed: {pair}") from exc
+    except ProviderUnavailable as exc:
+        raise _rewrap(exc, f"vnstock forex failed: {pair}") from exc
     return _ascending_by_time(_records(frame))
 
 
@@ -597,8 +733,8 @@ def crypto_ohlv(symbol: str = "BTCUSDT", count: int = 30) -> list[dict[str, Any]
             ],
             f"crypto bars {symbol}",
         )
-    except Exception as exc:
-        raise ProviderUnavailable(f"vnstock crypto failed: {symbol}") from exc
+    except ProviderUnavailable as exc:
+        raise _rewrap(exc, f"vnstock crypto failed: {symbol}") from exc
     return _ascending_by_time(_records(frame))
 
 
@@ -685,11 +821,12 @@ def global_index(symbol: str = "USA30", count: int = 30) -> list[dict[str, Any]]
             ],
             f"global index bars {normalized}",
         )
-    except Exception as exc:
-        raise ProviderUnavailable(
+    except ProviderUnavailable as exc:
+        raise _rewrap(
+            exc,
             f"vnstock global index failed: {symbol} (→ {normalized}). "
             f"Valid symbols: {VALID_GLOBAL_SYMBOLS}. "
-            f"For indices not listed here (e.g. Nasdaq-100 NDX) use yf_global_indices."
+            f"For indices not listed here (e.g. Nasdaq-100 NDX) use yf_global_indices",
         ) from exc
     return _ascending_by_time(_records(frame))
 
@@ -751,6 +888,8 @@ def cashflow(symbol: str, period: str = "quarter") -> dict[str, Any]:
         from vnstock import Fundamental
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
+    if not SRC_FUNDAMENTAL:
+        raise _no_source("cash flow statement")
     try:
         frame = (
             Fundamental(SRC_FUNDAMENTAL[0])
@@ -812,6 +951,8 @@ def _load_fa_dataset(symbol: str) -> Any:
     """
     from vnstock_quant import fa
 
+    if not SRC_FUNDAMENTAL:
+        raise _no_source("financial statements (fa ratios)")
     return fa.Dataset.load([symbol], period="both", source=SRC_FUNDAMENTAL[0], estimate_shares=True)
 
 
@@ -954,6 +1095,8 @@ def equity_ratios(symbol: str, period: str = "year") -> dict[str, Any]:
     try:
         ds = _load_fa_dataset(symbol)
         long_frame = fa.ratios(ds, period=period, format="long")
+    except ProviderUnavailable as exc:
+        raise _rewrap(exc, f"vnstock ratios failed: {symbol}") from exc
     except Exception as exc:
         raise ProviderUnavailable(f"vnstock ratios failed: {symbol}: {exc}") from exc
     table = _fa_to_v4_table(symbol, period, long_frame)
@@ -1029,32 +1172,47 @@ _EXCHANGE_KEYS = ("exchange", "san", "floor", "exchangecode", "exchange_code")
 def reference_equity(
     exchange: str = "HOSE", by: str = "exchange", key: str | None = None
 ) -> list[dict[str, Any]]:
+    """Listing by exchange, index group or ICB industry, over the SRC_LISTING chain (#88).
+
+    Every mode walks the chain through ``_fetch_frame`` (reasons survive, a failed
+    source is not retried with another method). ``by="group"``: members of an index
+    basket (``key`` or ``exchange``, e.g. VN30). ``by="industry"``: gen 6's
+    ``list_by_industry`` has no industry argument — it returns the exchange with
+    ``icb_code``/``icb_name``, so ``key`` filters on those (code exact, name
+    substring). The exchange is passed upstream instead of pulling the whole market.
+    """
     try:
         from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
-    try:
-        if by == "group":
-            frame = Reference("ssi").equity.list_by_group(key or exchange)
-            return _records(frame)
-        if by == "industry":
-            frame = Reference("ssi").equity.list_by_industry(key or exchange)
-            return _records(frame)
-        frame = None
-        for source in SRC_LISTING:
-            try:
-                candidate = Reference(source).equity.list_by_exchange()
-                if candidate is not None and len(candidate) > 0:
-                    frame = candidate
-                    break
-            except Exception:
-                continue
-        if frame is None:
-            frame = Reference(SRC_LISTING[0]).equity.list()
-    except Exception as exc:
-        raise ProviderUnavailable("vnstock reference failed") from exc
-    rows = _records(frame)
-    query = exchange.upper()
+    query = exchange.strip().upper()
+    venue = query if query in ("HOSE", "HNX", "UPCOM") else None
+
+    def _chain(call: Any, label: str) -> list[dict[str, Any]]:
+        try:
+            frame = _fetch_frame(
+                [(source, (lambda source=source: call(Reference(source).equity)))
+                 for source in SRC_LISTING],
+                label,
+            )
+        except ProviderUnavailable as exc:
+            raise _rewrap(exc, "vnstock reference failed") from exc
+        return _records(frame)
+
+    if by == "group":
+        group = (key or exchange).strip()
+        return _chain(lambda eq: eq.list_by_group(group), f"group {group}")
+    if by == "industry":
+        rows = _chain(lambda eq: eq.list_by_industry(exchange=venue), f"industries {query}")
+        if key:
+            want = key.strip().lower()
+            rows = [
+                r for r in rows
+                if str(r.get("icb_code", "")).strip().lower() == want
+                or want in str(r.get("icb_name", "")).strip().lower()
+            ]
+        return rows
+    rows = _chain(lambda eq: eq.list_by_exchange(exchange=venue), f"exchange {query}")
     if query not in ("ALL", ""):
         lowered_keys = {k.lower(): k for r in rows for k in r}
         hit_key = next((lowered_keys[k] for k in _EXCHANGE_KEYS if k in lowered_keys), None)
@@ -1075,6 +1233,8 @@ def company_info(symbol: str, detail: bool = False) -> dict[str, Any]:
         from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
+    if not SRC_FUNDAMENTAL:
+        raise _no_source("company profile")
     try:
         client = Reference(SRC_FUNDAMENTAL[0]).company(symbol.upper())
         info = client.info()
@@ -1101,6 +1261,8 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
         from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
+    if not SRC_FUNDAMENTAL:
+        raise _no_source("insider trading")
     frame = None
     for source in SRC_FUNDAMENTAL:
         try:
@@ -1126,6 +1288,8 @@ def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
         from vnstock import Reference
     except ImportError as exc:
         raise ProviderUnavailable("vnstock not installed") from exc
+    if not SRC_FUNDAMENTAL:
+        raise _no_source("corporate events")
     frame = None
     for source in SRC_FUNDAMENTAL:
         try:
@@ -1157,8 +1321,8 @@ def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[s
     out: list[dict[str, Any]] = []
     legs: list[tuple[str, str, str, tuple[str, ...]]] = [
         # (returned symbol, v6 group, upstream symbol, source chain)
-        ("USDVND", "forex", "USDVND", SRC_DERIV),
-        ("XAUUSD", "commodity", "GC", SRC_DERIV),  # GC = gold futures contract
+        ("USDVND", "forex", "USDVND", SRC_FX),
+        ("XAUUSD", "commodity", "GC", SRC_FX),  # GC = gold futures contract
     ]
     for symbol, group, upstream, sources in legs:
         if symbols and symbol not in symbols:
@@ -1178,8 +1342,8 @@ def msn_fx_gold(symbols: list[str] | None = None, days: int = 35) -> list[dict[s
                 ],
                 f"{group} bars {upstream}",
             )
-        except Exception as exc:
-            raise ProviderUnavailable(f"vnstock {group} failed: {symbol}: {exc}") from exc
+        except ProviderUnavailable as exc:
+            raise _rewrap(exc, f"vnstock {group} failed: {symbol}") from exc
         rows = _ascending_by_time(_clean(_records(frame)))
         out.append(
             {

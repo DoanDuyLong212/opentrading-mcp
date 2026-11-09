@@ -153,6 +153,8 @@ async def test_vn_company_detail_controls_extras(monkeypatch):
     import vnstock as _vs
 
     monkeypatch.setattr(_vs, "Reference", lambda source=None: FakeReference())
+    # fhsc was discontinued 2026-11-08; re-enable its chain to keep the parser tested
+    monkeypatch.setattr(vn_p, "SRC_FUNDAMENTAL", ("fhsc",))
     vn_p.company_info("VCB", detail=False)
     assert calls == ["company", "info"]
     vn_p.company_info("VCB", detail=True)
@@ -205,7 +207,7 @@ async def test_vn_trades_accepts_board_range(monkeypatch):
 
     class FakeMarket:
         def __init__(self, source=None, **kwargs):
-            assert source == "fhsc"
+            assert source == "dnse"  # trades: dnse/tcbs only once fhsc was dropped
 
         def equity(self, symbol):
             assert symbol == "VCB"
@@ -214,9 +216,12 @@ async def test_vn_trades_accepts_board_range(monkeypatch):
     import vnstock as _vs
 
     monkeypatch.setattr(_vs, "Market", lambda source=None: FakeMarket(source))
-    # gen 6: board param no longer exists — dropped; dates map to start/end, limit forwarded
-    vn_p.equity_trades("VCB", 5, board="HOSE", from_date="2026-01-01", to_date="2026-02-01")
-    assert seen.get("limit") == 5
+    # gen 6: board param no longer exists — dropped; dates map to start/end. dnse uses
+    # `limit` as its page size over the whole session, so the adapter asks for big
+    # pages and slices to the caller's limit itself.
+    rows = vn_p.equity_trades("VCB", 5, board="HOSE", from_date="2026-01-01", to_date="2026-02-01")
+    assert seen.get("limit") == vn_p._TRADES_PAGE_SIZE
+    assert len(rows) <= 5
     assert seen.get("start") == "2026-01-01"
     assert seen.get("end") == "2026-02-01"
     assert "board" not in seen
