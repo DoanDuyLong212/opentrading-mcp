@@ -133,11 +133,24 @@ TETS = [
 ALL_SYMBOLS = INDICES + sorted({s for v in BASKETS.values() for s in v})
 
 
+_FETCH_ATTEMPTS = 3
+# Retrying cannot fix these: a malformed frame, a missing key, or a rate limit
+# that the caller (cycle-refresh) backs off from for 65 s on its own.
+_NO_RETRY_REASONS = frozenset({"not_configured", "auth_missing", "upstream_rate_limited"})
+
+
 def _fetch_range(sym: str, start: str, end: str) -> list[dict[str, Any]]:
+    """Daily candles with retries for transient failures only (#92).
+
+    No sleep after the last attempt, no retry of deterministic failures
+    (ProviderBadData, not_configured), and the last error's ``reason`` is kept
+    so cycle-refresh can still see a rate limit (#83).
+    """
     from opentrading_mcp.providers import vnstock as vn_p
+    from opentrading_mcp.providers.errors import ProviderBadData
 
     last: Exception | None = None
-    for attempt in range(3):
+    for attempt in range(_FETCH_ATTEMPTS):
         try:
             rows = vn_p.candles_range(sym, start, end, interval="1D")
             if not rows:
@@ -145,8 +158,15 @@ def _fetch_range(sym: str, start: str, end: str) -> list[dict[str, Any]]:
             return rows
         except Exception as exc:
             last = exc
-            time.sleep(2 * (attempt + 1))
-    raise ProviderUnavailable(f"candle fetch failed for {sym}: {last}")
+            if isinstance(exc, ProviderBadData) or getattr(exc, "reason", None) in _NO_RETRY_REASONS:
+                break
+            if attempt < _FETCH_ATTEMPTS - 1:
+                time.sleep(2 * (attempt + 1))
+    raise ProviderUnavailable(
+        f"candle fetch failed for {sym}: {last}",
+        reason=getattr(last, "reason", None),
+        retry_after_s=getattr(last, "retry_after_s", None),
+    )
 
 
 def _refresh_one(conn: Any, sym: str, today: str) -> dict[str, Any]:

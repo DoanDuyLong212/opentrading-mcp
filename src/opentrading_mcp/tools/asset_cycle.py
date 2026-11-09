@@ -41,7 +41,7 @@ TOOL = "asset_cycle"
 MAX_BATCH = 15
 
 VN_FETCH = {  # asset -> (provider, symbol)
-    "VNINDEX": ("vci", "VNINDEX"),
+    "VNINDEX": ("vnstock", "VNINDEX"),  # ssi -> dnse candles (VCI is gone in gen 6)
     "GOLD_W": ("yf", "GLD"),
     "USDVND": ("yf", "VND=X"),
     "RON95": ("petrol", None),
@@ -73,20 +73,11 @@ def _yf_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
     raise ProviderUnavailable(f"yfinance failed for {symbol}: {last}")
 
 
-def _vci_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
-    from opentrading_mcp.providers import vnstock as vn_p
+def _vnstock_close(symbol: str, start: str, end: str) -> list[dict[str, Any]]:
+    """Daily closes through the shared, reason-preserving retry of cycle_stats."""
+    from opentrading_mcp.tools.cycle_stats import _fetch_range
 
-    last: Exception | None = None
-    for attempt in range(3):
-        try:
-            rows = vn_p.candles_range(symbol, start, end, interval="1D")
-            if not rows:
-                raise ValueError("empty frame")
-            return [{"t": r["t"], "c": r["c"]} for r in rows]
-        except Exception as exc:
-            last = exc
-            time.sleep(2 * (attempt + 1))
-    raise ProviderUnavailable(f"candle fetch failed for {symbol}: {last}")
+    return [{"t": r["t"], "c": r["c"]} for r in _fetch_range(symbol, start, end)]
 
 
 def _petrol_ron95(start: str, end: str) -> list[dict[str, Any]]:
@@ -105,8 +96,8 @@ def _petrol_ron95(start: str, end: str) -> list[dict[str, Any]]:
 
 def _fetch_vn_asset(asset: str, start: str, end: str) -> list[dict[str, Any]]:
     prov, sym = VN_FETCH[asset]
-    if prov == "vci":
-        return _vci_close(sym, start, end)
+    if prov == "vnstock" and sym is not None:
+        return _vnstock_close(sym, start, end)
     if prov == "yf":
         return _yf_close(sym, start, end)
     if prov == "petrol":
