@@ -167,7 +167,8 @@ def warm(years: list[int] | None = None) -> None:
         with _lock:
             _years[year] = (time.time(), fresh)
         try:
-            cache_set(_STORE_KEY.format(year=year), json.dumps(fresh, ensure_ascii=False), _ttl(year))
+            payload = json.dumps(fresh, ensure_ascii=False)
+            cache_set(_STORE_KEY.format(year=year), payload, _ttl(year))
         except Exception as exc:
             log.warning("events calendar %s: store write failed: %s", year, exc)
         log.warning(
