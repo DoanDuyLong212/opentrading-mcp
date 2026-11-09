@@ -22,7 +22,12 @@ from datetime import date
 from importlib import metadata
 from typing import Any
 
-RELEASE_EXPIRY: dict[str, date] = {"6.0.0rc4": date(2026, 12, 7)}
+# rc5 (published 2026-11-09, `vnstock doctor`: "Dùng được đến hết ngày 09/12/2026") lives
+# ~30 days like rc4: each release candidate must be replaced about monthly.
+RELEASE_EXPIRY: dict[str, date] = {
+    "6.0.0rc4": date(2026, 12, 7),
+    "6.0.0rc5": date(2026, 12, 9),
+}
 WARN_DAYS = 30
 
 
