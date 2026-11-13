@@ -55,11 +55,13 @@ def test_trades_take_start_end_limit():
     _accepts(Market("dnse").equity("FPT").trades, "start", "end", "limit")
 
 
-@pytest.mark.parametrize("group", ["index", "futures"])
-def test_index_and_futures_ohlcv(group):
+@pytest.mark.parametrize(("group", "symbol"), [("index", "VNINDEX"), ("futures", "VN30F1M")])
+def test_index_and_futures_ohlcv(group, symbol):
+    """6.0.0 validates futures codes when the group is built (rc5 did not), so the
+    probe uses real codes (VNSTOCK_INPUT_SYMBOL for 'X')."""
     from vnstock import Market
 
-    _accepts(getattr(Market("ssi"), group)("X").ohlcv, "start", "end", "interval", "count_back")
+    _accepts(getattr(Market("ssi"), group)(symbol).ohlcv, "start", "end", "interval", "count_back")
 
 
 def test_crypto_ohlcv_on_binance():

@@ -8,12 +8,13 @@ vnstock-backed tool fails — candles, indices, futures and the listing included
 even on the ssi/dnse chains. ``vnstock.status()`` needs a registered device and
 ``doctor`` is an interactive CLI, so the date is pinned here instead.
 
-The official upgrade path is the newest pre-release from the vnstocks.com index
-(``pip install -U --pre --extra-index-url https://vnstocks.com/api/packages
-"vnstock>=6.0.0rc1,<7"``); here that is ``uv lock --upgrade-package vnstock``.
-When uv.lock moves to another vnstock version, add its expiry (``vnstock
-doctor`` shows it), or nothing for a final release, to ``RELEASE_EXPIRY``; an
-unknown release candidate is flagged as such rather than reported healthy.
+Release lifetimes (vendor docs, 2026-11-13): a release candidate runs 30 days from
+its build, a final release 365 days (6.0.0: until 2027-11-10). The vendor can also
+switch a release off early through its signed client policy: 6.0.0rc5 was refused
+from 11/11/2026 (code ``VNSTOCK_RELEASE_*``), four weeks before the date below,
+so this table is only a fallback. Upgrade with ``uv lock --upgrade-package vnstock
+--upgrade-package vnstock-oapi --upgrade-package vnstock-quant`` and keep the
+pyproject floors on final releases.
 """
 
 from __future__ import annotations
