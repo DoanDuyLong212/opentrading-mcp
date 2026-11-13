@@ -600,6 +600,13 @@ def _fetch_listing() -> list[dict[str, str]]:
         except Exception as exc:
             last = exc
             continue
+    if last is not None and _error_kind(last) == "disabled":
+        # A vendor-refused release: keep the reason so the breaker skips it (#120).
+        from opentrading_mcp.failures import VENDOR_DISABLED
+
+        raise ProviderUnavailable(
+            f"vnstock listing failed: {_source_error_text(last)}", reason=VENDOR_DISABLED
+        ) from last
     raise ProviderUnavailable("vnstock listing failed") from last
 
 
