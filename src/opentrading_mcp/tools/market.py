@@ -386,13 +386,17 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 data["requested_as_of"] = as_of
             if missing:
                 data["missing"] = missing
+            board_src, board_note = vn_p.board_source(quotes)
+            notes = [f"batch partial: {len(missing)} symbols missing"] if missing else []
+            if board_note:
+                notes.append(board_note)
             return await cache_store(
                 "market_snapshot",
                 fp,
                 price_ttl(),
                 data,
-                source="dnse-rest",
-                warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
+                source=board_src,
+                warnings=notes or None,
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _unavailable("market_snapshot", str(exc))
@@ -830,6 +834,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         keep = max(int(top_n), 1)
         rows, missing = vn_p.split_batch(rows)
+        board_src, board_note = vn_p.board_source(rows)
+        notes = [f"batch partial: {len(missing)} symbols missing"] if missing else []
+        if board_note:
+            notes.append(board_note)
         gainers = sorted(rows, key=_chg, reverse=True)[:keep]
         losers = sorted(rows, key=_chg)[:keep]
         volume = sorted(rows, key=_vol, reverse=True)[:keep]
@@ -852,8 +860,8 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
              "losers": [_clean(g) for g in losers],
              "volume_leaders": [_clean(g) for g in volume],
              "universe": len(rows), **({"missing": missing} if missing else {})},
-            source="dnse-rest",
-            warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
+            source=board_src,
+            warnings=notes or None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -986,6 +994,9 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
         rows, missing = vn_p.split_batch([q for q in (quotes or []) if isinstance(q, dict)])
         if missing:
             warnings.append(f"batch partial: {len(missing)} symbols missing")
+        board_note = vn_p.board_source(rows)[1]
+        if board_note:
+            warnings.append(board_note)
         ranked = sorted(rows, key=_chg, reverse=True)
         keep = max(int(top_n), 1)
         movers = ranked[:keep]

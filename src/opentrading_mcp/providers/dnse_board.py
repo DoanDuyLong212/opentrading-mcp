@@ -271,6 +271,24 @@ def _unreachable(exc: ProviderUnavailable) -> bool:
     )
 
 
+# At most this many fallback rows per minute, process-wide (about 2 ssi calls each):
+# market_movers asks for 60 symbols, the guest-mode burst test ran 60 in 6 s. Past the
+# cap a symbol is reported missing rather than queueing more ssi calls.
+FALLBACK_PER_MINUTE = 120
+_fallback_lock = threading.Lock()
+_fallback_times: list[float] = []
+
+
+def _take_fallback_slot() -> bool:
+    now = time.monotonic()
+    with _fallback_lock:
+        _fallback_times[:] = [t for t in _fallback_times if now - t < 60.0]
+        if len(_fallback_times) >= FALLBACK_PER_MINUTE:
+            return False
+        _fallback_times.append(now)
+        return True
+
+
 FALLBACK_NOTE = (
     "DNSE unreachable (#118): reduced row from ssi daily candles (today's bar from 1m "
     "bars). reference_price is the previous session's close, which differs from the "
@@ -294,6 +312,13 @@ def _ssi_candles(symbol: str) -> list[dict[str, Any]]:
 def ssi_row(symbol: str) -> dict[str, Any]:
     """Reduced v4 board row from ssi candles (#118), same units as ``build_row``:
     prices in dong, volume in shares."""
+    if not _take_fallback_slot():
+        raise ProviderUnavailable(
+            f"ssi fallback for {symbol} skipped: {FALLBACK_PER_MINUTE} rows a minute cap "
+            "(DNSE unreachable, #118)",
+            reason="upstream_rate_limited",
+            retry_after_s=60,
+        )
     candles = _ssi_candles(symbol)
     if not candles:
         raise ProviderUnavailable(f"ssi fallback: no candles for {symbol}")

@@ -20,6 +20,7 @@ CANDLES = [  # quote_history rows: thousand dong, shares
 @pytest.fixture(autouse=True)
 def _fresh(monkeypatch):
     monkeypatch.setattr(dnse_board, "_dnse_down_until", 0.0)
+    monkeypatch.setattr(dnse_board, "_fallback_times", [])
     for name in ("dnse", "ssi-board-fallback", "vnstock"):
         circuit.reset(name)
     yield
@@ -108,3 +109,42 @@ def test_batch_rows_come_back_through_the_fallback(monkeypatch):
     rows = vn_p.equity_quote_batch(["FPT", "HPG", "VCB"])
     assert [r["symbol"] for r in rows] == ["FPT", "HPG", "VCB"]
     assert {r["source"] for r in rows} == {"ssi-fallback"}
+
+
+def test_board_source_names_the_reduced_rows():
+    dnse_row = {"symbol": "FPT", "source": "dnse"}
+    ssi = {"symbol": "HPG", "source": "ssi-fallback"}
+    assert vn_p.board_source([dnse_row]) == ("dnse-rest", None)
+    src, note = vn_p.board_source([ssi, dict(ssi, symbol="VCB")])
+    assert src == "ssi-fallback" and note is not None and note.startswith("2/2 rows")
+    src, note = vn_p.board_source([dnse_row, ssi])
+    assert src == "dnse-rest" and note is not None and note.startswith("1/2 rows")
+
+
+def test_fallback_rows_are_capped_per_minute(monkeypatch):
+    monkeypatch.setattr(dnse, "_get", _dnse_timeout([]))
+    monkeypatch.setattr(vn_p.quote_history, "__wrapped__", _history([]))
+    monkeypatch.setattr(dnse_board, "FALLBACK_PER_MINUTE", 2)
+    monkeypatch.setattr(dnse_board, "_fallback_times", [])
+    assert dnse_board.quote_row("FPT")["source"] == "ssi-fallback"
+    assert dnse_board.quote_row("HPG")["source"] == "ssi-fallback"
+    with pytest.raises(ProviderUnavailable) as caught:
+        dnse_board.quote_row("VCB")
+    assert caught.value.reason == "upstream_rate_limited" and caught.value.retry_after_s == 60
+
+
+async def test_quote_batch_tool_says_the_rows_are_reduced(monkeypatch):
+    from opentrading_mcp.server import create_server, register_preset
+
+    monkeypatch.setattr(dnse, "_get", _dnse_timeout([]))
+    monkeypatch.setattr(vn_p.quote_history, "__wrapped__", _history([]))
+    monkeypatch.setattr(dnse_board, "_fallback_times", [])
+    server = create_server("all")
+    register_preset(server, "all")
+    tag = __import__("uuid").uuid4().hex[:4].upper()
+    env = await server._tool_manager.get_tool("vn_equity_quote_batch").run(
+        {"symbols": [f"Q{tag}A", f"Q{tag}B"]}
+    )
+    assert env["availability"] == "available"
+    assert env["provenance"]["source"] == "ssi-fallback"
+    assert any("reduced ssi rows" in w for w in env["warnings"])

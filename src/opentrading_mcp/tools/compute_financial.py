@@ -294,9 +294,13 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("valuation_run", str(exc))
         info = overview if isinstance(overview, dict) else {}
         price = None
+        price_source = "vnstock.equity_quote_batch"
         try:
             quote = quotes[0]
             price = _finite_metric(quote.get("close_price") or quote.get("close"))
+            if quote.get("source") == "ssi-fallback":
+                # #118: DNSE unreachable, last close from ssi daily candles
+                price_source = "ssi-fallback (daily close; DNSE unreachable)"
             if price is not None and price <= 0:
                 price = None
         except (IndexError, AttributeError, TypeError):
@@ -308,7 +312,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         bvps = _finite_metric(raw_bvps)
         out: dict[str, Any] = {
             "symbol": symbol.upper(), "price": price, "method": "per_pb",
-            "price_source": "vnstock.equity_quote_batch",
+            "price_source": price_source,
             "price_as_of": None,  # recorded batch-quote fixture has no observation timestamp
             "price_unit": "unverified",
             "price_adjustment_basis": "unverified",
