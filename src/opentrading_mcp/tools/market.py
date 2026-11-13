@@ -40,7 +40,7 @@ from opentrading_mcp.tools.shared import (
     run_blocking,
     summarize_rows,
 )
-from opentrading_mcp.vnstock_release import release_status
+from opentrading_mcp.vnstock_release import release_report
 
 
 def _norm_text(text: str) -> str:
@@ -423,8 +423,10 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
             vnstock_state = "unavailable"
         except Exception:
             vnstock_state = "unavailable"
-        # #80: the pinned vnstock release candidate stops working on a fixed date.
-        release = release_status()
+        # #80: a vnstock release stops on its date, or earlier when the vendor
+        # switches it off (6.0.0rc5, 11/11/2026): ask the library, table as fallback.
+        # The first call imports vnstock: never on the event loop.
+        release = await asyncio.to_thread(release_report)
         return await cache_store(
             "source_status",
             "-",

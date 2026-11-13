@@ -1,0 +1,58 @@
+name: vnstock canary
+
+# 6.0.0rc5 was switched off by the vendor on 11/11/2026 and prod served no prices for
+# two days before anyone noticed. Every 6 hours: the vendor's signed verdict on the
+# locked vnstock release (vnstock.status(), guest mode, no account key) plus one ssi
+# candle when SSI_* secrets are set: 1-2 upstream requests, about a minute of runner
+# time. On failure it opens an issue labelled vnstock-canary (or comments on the open
+# one), so someone is told. The heavier value check stays weekly (live-smoke.yml).
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: vnstock-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --no-dev
+      - name: Vendor verdict and one candle
+        id: canary
+        env:
+          VNSTOCK_TELEMETRY: "0"
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+        run: uv run python scripts/vnstock_canary.py --out canary.md
+      - name: Publish the report
+        if: always()
+        run: cat canary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Open or update the canary issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create vnstock-canary --color B60205 \
+            --description "vnstock release refused or about to expire" 2>/dev/null || true
+          body="$(cat canary.md 2>/dev/null || echo 'canary failed before writing a report')
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          open=$(gh issue list --label vnstock-canary --state open --json number -q '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$body"
+          else
+            gh issue create --label vnstock-canary \
+              --title "vnstock canary: release refused or expiring" --body "$body"
+          fi
