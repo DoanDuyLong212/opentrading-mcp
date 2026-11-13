@@ -146,3 +146,24 @@ async def test_candles_batch_reports_the_failures_in_warnings(monkeypatch):
     assert env["warnings"][0].startswith(", ".join(syms[:5]) + " +2: ")
     assert URL in env["warnings"][0]
     assert len(env["data"]["missing"]) == 7
+
+
+def test_listing_refusal_keeps_its_reason(monkeypatch):
+    import sys
+    import types
+
+    class Reference:
+        def __init__(self, source: str) -> None:
+            self.equity = self
+
+        def list(self) -> Any:
+            raise PolicyError(MESSAGE, "VNSTOCK_RELEASE_DISABLED")
+
+    monkeypatch.setitem(sys.modules, "vnstock", types.SimpleNamespace(Reference=Reference))
+    circuit.reset("vnstock")
+    for _ in range(6):
+        with pytest.raises(ProviderUnavailable) as caught:
+            vn_p._fetch_listing()
+        assert caught.value.reason == "vendor_disabled"
+    assert URL in str(caught.value)
+    circuit.reset("vnstock")

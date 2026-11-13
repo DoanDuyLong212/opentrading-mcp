@@ -154,8 +154,19 @@ def test_live_reader_never_raises(monkeypatch):
     assert rel._read_live_release() is None
 
 
+def _stub_other_probes(monkeypatch):
+    """The deep probes also call dnse, vietstock and yfinance: keep tests offline."""
+    from opentrading_mcp.providers import dnse, vietstock, yfinance
+
+    monkeypatch.setattr(dnse, "ohlc_history", lambda *a, **k: [{"t": 1}])
+    monkeypatch.setattr(vietstock, "auth_status", lambda: {"authenticated": True})
+    monkeypatch.setattr(yfinance, "batch_last", lambda *a, **k: [{"s": "^GSPC"}])
+
+
 async def test_deep_readyz_reports_a_switched_off_release(monkeypatch):
     from opentrading_mcp import health
+
+    _stub_other_probes(monkeypatch)
 
     refused = {**LIVE_OK, "allowed": False, "version": "6.0.0rc5"}
     monkeypatch.setattr(rel, "live_release", lambda: refused)
@@ -168,6 +179,8 @@ async def test_deep_readyz_reports_a_switched_off_release(monkeypatch):
 async def test_deep_readyz_vnstock_ok_needs_a_real_candle(monkeypatch):
     from opentrading_mcp import health
     from opentrading_mcp.providers import vnstock as vn_p
+
+    _stub_other_probes(monkeypatch)
 
     monkeypatch.setattr(rel, "live_release", lambda: LIVE_OK)
     monkeypatch.setattr(vn_p, "quote_history", lambda *a, **k: [{"c": 1.0}])
@@ -209,6 +222,20 @@ def test_canary_exit_code_follows_the_vendor_verdict(monkeypatch, release, code)
     got, lines = canary.run()
     assert got == code
     assert any("candle VCB: ok (5 rows)" in line for line in lines)
+
+
+def test_canary_fails_when_the_vendor_verdict_cannot_be_read(monkeypatch):
+    """The table says a final release is fine forever: without the live verdict the
+    canary cannot see a remote kill, so it must not report OK."""
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    canary = _canary()
+    monkeypatch.setattr(rel, "live_release", lambda: None)
+    monkeypatch.setattr(rel, "installed_version", lambda: "6.0.0")
+    monkeypatch.setattr(vn_p, "ensure_api_key", lambda: "anonymous")
+    code, lines = canary.run()
+    assert code == 1
+    assert any("could not be read" in line for line in lines)
 
 
 def test_canary_fails_on_a_refused_candle_but_not_on_a_network_error(monkeypatch):
