@@ -127,8 +127,35 @@ async def deep_probes() -> list[dict[str, Any]]:
             "required": False,
         }
 
+    def _probe_vnstock() -> dict[str, Any]:
+        """The vendor's verdict on the installed release plus one real ssi candle:
+        6.0.0rc5 was switched off remotely on 11/11/2026 and nothing reported it."""
+        from opentrading_mcp import vnstock_release
+        from opentrading_mcp.providers import vnstock as vn_p
+
+        release = vnstock_release.release_report()
+        detail = (
+            f"vnstock {release.get('version')} {release.get('status')} "
+            f"({release.get('source')})"
+        )
+        if release.get("expires"):
+            detail += f", until {release['expires']}"
+        if release.get("status") in ("disabled", "expired", "not_installed"):
+            return {"name": "vnstock", "ok": False, "detail": detail, "required": False}
+        try:
+            rows = vn_p.quote_history("VCB", 1)
+        except Exception as exc:
+            return {
+                "name": "vnstock",
+                "ok": False,
+                "detail": f"{detail}; candle VCB failed: {str(exc)[:160]}",
+                "required": False,
+            }
+        return {"name": "vnstock", "ok": bool(rows), "detail": detail, "required": False}
+
     out: list[dict[str, Any]] = []
     for name, fn in (
+        ("vnstock", _probe_vnstock),
         ("dnse", _probe_dnse),
         ("vietstock", _probe_vietstock),
         ("yfinance", _probe_yfinance),

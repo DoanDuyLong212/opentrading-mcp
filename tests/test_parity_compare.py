@@ -54,6 +54,15 @@ def test_listing_compares_symbols_and_names():
     assert status == "DIFF"
 
 
+def test_listing_symbol_that_left_the_exchange_is_an_expected_diff():
+    v4 = [{"symbol": "FPT", "name": "CTCP FPT"}, {"symbol": "SLD", "name": "CTCP Địa ốc Sacom"}]
+    v6 = [{"symbol": "FPT", "name": "Công ty Cổ phần FPT"}]
+    status, detail = parity.compare_listing(v4, v6)
+    assert status == "expected DIFF (left the exchange)" and "SLD (CatGroup OTC" in detail
+    other = [{"symbol": "FPT", "name": "x"}, {"symbol": "ZZZ", "name": "y"}]
+    assert parity.compare_listing(other, v6)[0] == "DIFF"  # unexplained absence still fails
+
+
 def test_ratios_compare_values_on_shared_periods():
     v4 = {"periods": ["2025", "2024"], "ratios": [
         {"item_id": "p_e", "values": {"2025": 15.91, "2024": 26.74}},
