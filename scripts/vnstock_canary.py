@@ -5,9 +5,9 @@ days before anyone noticed. This is the cheap, frequent check (1-2 requests): th
 vendor's signed verdict from ``vnstock.status()`` and ``quote_history("VCB", 5)``.
 
 Exit 1 (the workflow opens an issue) when the release is disabled, expired, within 30
-days of its end, or a candle call is refused by the vendor. Any other candle failure
-(network, a missing SSI key) is reported but exits 0: the weekly live-smoke covers the
-sources; this job watches the vendor.
+days of its end, its verdict cannot be read, or a candle call is refused by the
+vendor. Any other candle failure (network, a missing SSI key) is reported but exits
+0: the weekly live-smoke covers the sources; this job watches the vendor.
 
     uv run python scripts/vnstock_canary.py [--out canary.md]
 """
@@ -41,7 +41,10 @@ def run() -> tuple[int, list[str]]:
     if release.get("warning"):
         lines.append(f"- warning: {release['warning']}")
     if release.get("source") != "live":
-        lines.append("- note: the vendor verdict could not be read; table fallback shown")
+        # The date table calls a final release fine forever: without the live verdict
+        # a remote kill is invisible here, so this is a failure, not a note.
+        lines.append("- FAILED: the vendor verdict (vnstock.status) could not be read")
+        failed = True
     if release.get("status") in BAD_RELEASE:
         failed = True
     if vn_p.ensure_api_key() != "keyed":
