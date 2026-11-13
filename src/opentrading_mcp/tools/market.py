@@ -497,6 +497,21 @@ def register_market_tools(server: FastMCP) -> list[dict[str, Any]]:
                 missing.append({"symbol": symbol, "error": str(exc)})
         if ctx is not None:
             await ctx.report_progress(total, total, "done")
+        if missing:
+            # Surface the failures in warnings too: an all-failed batch was reported
+            # with warnings [] and reason "unknown" (13/11), the cause only inside
+            # data.missing. Same error text once, with the symbols that hit it.
+            # Messages name their symbol, so group on the text with the symbol blanked.
+            by_error: dict[str, tuple[str, list[str]]] = {}
+            for item in missing:
+                sym = str(item["symbol"])
+                key = re.sub(rf"\b{re.escape(sym)}\b", "*", item["error"]) if sym else item["error"]
+                by_error.setdefault(key, (item["error"], []))[1].append(sym)
+            for error, syms in list(by_error.values())[:3]:
+                shown = ", ".join(syms[:5]) + (f" +{len(syms) - 5}" if len(syms) > 5 else "")
+                warnings.append(f"{shown}: {error}")
+            if len(by_error) > 3:
+                warnings.append(f"{len(by_error) - 3} more distinct errors in data.missing")
         if missing and series:
             availability: str | None = "partial"
         elif not series and missing:
