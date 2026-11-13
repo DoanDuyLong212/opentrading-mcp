@@ -19,6 +19,7 @@ from typing import Any
 
 from pandas.api.types import is_bool
 
+from opentrading_mcp.failures import VENDOR_DISABLED_CODES
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.units import INDEX_SYMBOLS
@@ -76,15 +77,34 @@ def _source_ready(source: str) -> bool:
 
 
 def _error_kind(exc: BaseException) -> str:
-    """'rate' / 'auth' / 'error' for one source's failure (vnstock 6 class names
-    and ``code`` strings, matched by name so no vnstock import is needed)."""
+    """'disabled' / 'rate' / 'auth' / 'error' for one source's failure (vnstock 6 class
+    names and ``code`` strings, matched by name so no vnstock import is needed)."""
     names = {cls.__name__ for cls in type(exc).__mro__}
     code = str(getattr(exc, "code", "") or "")
+    if code in VENDOR_DISABLED_CODES:
+        return "disabled"
     if names & {"RateLimitedError", "RateLimitError"} or "RATE_LIMIT" in code:
         return "rate"
-    if names & {"CredentialError", "AccessDeniedError"} or "CREDENTIAL" in code:
+    # AccessDeniedError is an alias of AuthError in vnstock 6, so the class name seen
+    # here is AuthError; VNSTOCK_AUTH_DEVICE_* is the account's device limit.
+    if (
+        names & {"CredentialError", "AccessDeniedError", "AuthError"}
+        or "CREDENTIAL" in code
+        or code.startswith("VNSTOCK_AUTH_DEVICE")
+    ):
         return "auth"
     return "error"
+
+
+def _source_error_text(exc: BaseException) -> str:
+    """One source's failure for a chain message. A vendor refusal keeps its code and
+    its whole message (the migration URL): a 160-character cut once left only
+    "https://vnstocks.com/onb" and dropped the code."""
+    code = str(getattr(exc, "code", "") or "")
+    if code in VENDOR_DISABLED_CODES:
+        message = str(getattr(exc, "message", "") or exc)
+        return f"{code}: {message}"[:400]
+    return str(exc)[:160]
 
 
 def _chain_error(
@@ -93,7 +113,7 @@ def _chain_error(
     """One error for a whole source chain: every source's outcome, plus a
     machine-readable ``reason`` (#83) — a rate limit anywhere wins, then
     'every source lacks its keys'."""
-    from opentrading_mcp.failures import NOT_CONFIGURED, UPSTREAM_RATE_LIMITED
+    from opentrading_mcp.failures import NOT_CONFIGURED, UPSTREAM_RATE_LIMITED, VENDOR_DISABLED
     from opentrading_mcp.providers.errors import ProviderNoData
     from opentrading_mcp.tools.shared import RATE_LIMITED
 
@@ -101,17 +121,26 @@ def _chain_error(
         return ProviderUnavailable(
             f"no source configured for {label} (fhsc/fmp discontinued)", reason=NOT_CONFIGURED
         )
-    parts = [f"{src}: {str(exc)[:160]}" for src, exc in errors]
+    parts = [f"{src}: {_source_error_text(exc)}" for src, exc in errors]
     parts += [f"{src}: empty" for src in empty]
     detail = "; ".join(parts)
     kinds = {_error_kind(exc) for _, exc in errors}
+    if "disabled" in kinds:
+        # The installed vnstock release is refused: the server needs an upgrade, so
+        # this wins over everything else in the chain.
+        return ProviderUnavailable(
+            f"vnstock release refused by the vendor, server needs a vnstock upgrade: "
+            f"{label} ({detail})",
+            reason=VENDOR_DISABLED,
+        )
     if "rate" in kinds:
         return ProviderUnavailable(
             f"{RATE_LIMITED}: {label} ({detail})", reason=UPSTREAM_RATE_LIMITED
         )
     if kinds == {"auth"} and not empty:
         return ProviderUnavailable(
-            f"no data for {label}: source keys not set ({detail})", reason=NOT_CONFIGURED
+            f"no data for {label}: source keys not set or rejected ({detail})",
+            reason=NOT_CONFIGURED,
         )
     if empty and not errors:
         return ProviderNoData(f"no data for {label} ({detail})")

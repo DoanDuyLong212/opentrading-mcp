@@ -22,9 +22,11 @@ from opentrading_mcp.providers.errors import (
 
 T = TypeVar("T")
 
-# failures.NOT_CONFIGURED / failures.AUTH_MISSING (literal: failures imports nothing
-# from providers, but keeping circuit import-free of it avoids any future cycle).
-_CONFIG_REASONS = frozenset({"not_configured", "auth_missing"})
+# failures.NOT_CONFIGURED / failures.AUTH_MISSING / failures.VENDOR_DISABLED (literal:
+# failures imports nothing from providers, but keeping circuit import-free of it avoids
+# any future cycle). A vendor-refused release fails every call the same way until the
+# server is upgraded; counting it would only add "circuit is open" noise on top.
+_CONFIG_REASONS = frozenset({"not_configured", "auth_missing", "vendor_disabled"})
 
 _lock = threading.Lock()
 _breakers: dict[str, CircuitBreaker] = {}
