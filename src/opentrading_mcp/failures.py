@@ -25,10 +25,20 @@ NOT_CONFIGURED = "not_configured"
 AUTH_MISSING = "auth_missing"
 RECENT_FAILURE = "recent_failure"
 BUSY = "busy"
+# The data library's vendor refused this release (or source) through its signed client
+# policy, e.g. vnstock 6.0.0rc5 from 11/11/2026: only a server upgrade fixes it.
+VENDOR_DISABLED = "vendor_disabled"
 UNKNOWN = "unknown"
 
+# Codes of vnstock's signed client policy (``vnstock._policy.check``): the vendor
+# switched this release, or one source, off. Raised before any request; no retry or
+# other source of the same release can fix it, only upgrading the package.
+VENDOR_DISABLED_CODES = frozenset(
+    {"VNSTOCK_RELEASE_EXPIRED", "VNSTOCK_RELEASE_DISABLED", "VNSTOCK_SOURCE_DISABLED"}
+)
+
 # A retry cannot fix these until someone changes the server's configuration.
-_NOT_RETRYABLE = frozenset({NOT_CONFIGURED, AUTH_MISSING})
+_NOT_RETRYABLE = frozenset({NOT_CONFIGURED, AUTH_MISSING, VENDOR_DISABLED})
 
 _NOT_CONFIGURED_TEXT = re.compile(r"\bnot (?:set|configured)\b")
 
@@ -36,6 +46,13 @@ _NOT_CONFIGURED_TEXT = re.compile(r"\bnot (?:set|configured)\b")
 # timeout of this call, and "package limited" is a plan limit, not a rate limit. Matching
 # is case sensitive so an upper-case ticker inside a message cannot look like a keyword.
 _TEXT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(
+            r"\bVNSTOCK_(?:RELEASE_(?:EXPIRED|DISABLED)|SOURCE_DISABLED)\b"
+            r"|Bản vnstock \S+ đã bị tắt"
+        ),
+        VENDOR_DISABLED,
+    ),
     (re.compile(r"briefly unavailable"), RECENT_FAILURE),
     (re.compile(r"\bserver busy\b"), BUSY),
     (_NOT_CONFIGURED_TEXT, NOT_CONFIGURED),
@@ -106,6 +123,8 @@ def _reason_from_causes(exc: BaseException) -> str | None:
     for _ in range(5):
         if seen is None:
             return None
+        if str(getattr(seen, "code", "") or "") in VENDOR_DISABLED_CODES:
+            return VENDOR_DISABLED
         status = getattr(getattr(seen, "response", None), "status_code", None)
         if status == 429:
             return UPSTREAM_RATE_LIMITED
