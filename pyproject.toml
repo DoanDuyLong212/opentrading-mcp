@@ -17,9 +17,9 @@ dependencies = [
   "uvicorn>=0.30",
   "redis>=5.0",
   "psycopg[binary]>=3.1",
-  "vnstock>=6.0.0rc1,<7",
-  "vnstock-oapi>=0.1.0rc1,<1",
-  "vnstock-quant>=1.0.0rc1,<2",
+  "vnstock>=6.0.0,<7",
+  "vnstock-oapi>=0.1.1,<1",
+  "vnstock-quant>=1.0.0,<2",
   "yfinance>=0.2",
   "pandas>=2.0",
   "markdownify>=1.2.3",
@@ -80,8 +80,9 @@ module = ["vnstock.*", "vnstock_quant.*", "vnstock_oapi.*", "yfinance.*"]
 ignore_missing_imports = true
 
 # Vnstock ships gen 6 (vnstock, vnstock-oapi, vnstock-quant) from its own index,
-# not PyPI. `explicit` keeps every other package on PyPI; the rc pins above let
-# uv pick prereleases for exactly these three.
+# not PyPI. `explicit` keeps every other package on PyPI. The floors above are
+# final releases on purpose: the vendor switched 6.0.0rc5 off remotely on
+# 11/11/2026, so a release candidate must never be resolved again.
 [[tool.uv.index]]
 name = "vnstocks"
 url = "https://vnstocks.com/api/packages"
