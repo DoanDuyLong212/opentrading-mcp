@@ -33,8 +33,8 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
-      - key: VNSTOCK_API_KEY
-        sync: false
+      # VNSTOCK_API_KEY is not set: vnstock 6 runs in guest mode on purpose (a login
+      # registers each cold start as an account device; see opentrading_mcp/__init__).
       # fhsc/fmp keys are not used (owner decision 2026-11-08): vnstock reads
       # ssi first, then dnse (DNSE_SECRET doubles as vnstock's DNSE_API_SECRET).
       - key: SSI_API_KEY
