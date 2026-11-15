@@ -58,11 +58,14 @@ _TEXT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (_NOT_CONFIGURED_TEXT, NOT_CONFIGURED),
     (re.compile(r"\brejected\b|package limited|no permitted periods"), AUTH_MISSING),
     (re.compile(r"\brate limit|\bthrottled\b|\bHTTP 429\b"), UPSTREAM_RATE_LIMITED),
-    (re.compile(r"\btimed out\b|\btimeout\b"), UPSTREAM_TIMEOUT),
+    (
+        re.compile(r"\btimed out\b|\btimeout\b|\b(?:Connect|Read|Write|Pool)Timeout\b"),
+        UPSTREAM_TIMEOUT,
+    ),
     (
         re.compile(
             r"\bunreachable\b|retry exhausted|cannot resolve|\bHTTP 5\d\d\b"
-            r"|\bcircuit .* is open\b|has not published yet"
+            r"|\bcircuit .* is open\b|has not published yet|\bVNSTOCK_SOURCE_NETWORK\b"
         ),
         UPSTREAM_DOWN,
     ),

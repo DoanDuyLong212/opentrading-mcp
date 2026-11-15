@@ -77,8 +77,9 @@ def _source_ready(source: str) -> bool:
 
 
 def _error_kind(exc: BaseException) -> str:
-    """'disabled' / 'rate' / 'auth' / 'error' for one source's failure (vnstock 6 class
-    names and ``code`` strings, matched by name so no vnstock import is needed)."""
+    """'disabled' / 'rate' / 'auth' / 'network' / 'error' for one source's failure
+    (vnstock 6 class names and ``code`` strings, matched by name so no vnstock import
+    is needed)."""
     names = {cls.__name__ for cls in type(exc).__mro__}
     code = str(getattr(exc, "code", "") or "")
     if code in VENDOR_DISABLED_CODES:
@@ -93,7 +94,28 @@ def _error_kind(exc: BaseException) -> str:
         or code.startswith("VNSTOCK_AUTH_DEVICE")
     ):
         return "auth"
+    # vnstock-oapi's NetworkError (code VNSTOCK_SOURCE_NETWORK): the source never
+    # answered, e.g. DNSE blocking the server's IP ("Hết thời gian chờ: ConnectTimeout").
+    if "NetworkError" in names or code == "VNSTOCK_SOURCE_NETWORK":
+        return "network"
     return "error"
+
+
+def _network_reason(errors: list[tuple[str, BaseException]]) -> str:
+    """upstream_timeout when a source timed out, otherwise upstream_down."""
+    from opentrading_mcp.failures import UPSTREAM_DOWN, UPSTREAM_TIMEOUT
+
+    for _, exc in errors:
+        seen: BaseException | None = exc
+        for _ in range(5):
+            if seen is None:
+                break
+            names = {cls.__name__ for cls in type(seen).__mro__}
+            text = str(seen)
+            if any("Timeout" in n for n in names) or "Timeout" in text or "thời gian chờ" in text:
+                return UPSTREAM_TIMEOUT
+            seen = seen.__cause__
+    return UPSTREAM_DOWN
 
 
 def _source_error_text(exc: BaseException) -> str:
@@ -141,6 +163,11 @@ def _chain_error(
         return ProviderUnavailable(
             f"no data for {label}: source keys not set or rejected ({detail})",
             reason=NOT_CONFIGURED,
+        )
+    if kinds == {"network"}:
+        # Every failing source never answered: an outage, not an unknown failure.
+        return ProviderUnavailable(
+            f"no data for {label} ({detail})", reason=_network_reason(errors)
         )
     if empty and not errors:
         return ProviderNoData(f"no data for {label} ({detail})")
@@ -510,7 +537,9 @@ def split_batch(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[
 _TRADES_PAGE_SIZE = 1000
 
 
-@guarded("vnstock")
+# Own breaker: trades come only from dnse, which blocks the Render IP (#118). Its
+# timeouts must not open the shared "vnstock" breaker that candles/index/futures use.
+@guarded("vnstock-trades")
 def equity_trades(
     symbol: str,
     limit: int = 20,
