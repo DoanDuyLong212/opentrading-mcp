@@ -138,6 +138,10 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "vn_equity_quote_batch",
             )
             quotes, missing = vn_p.split_batch(quotes)
+            board_src, board_note = vn_p.board_source(quotes)
+            notes = [f"batch partial: {len(missing)} symbols missing"] if missing else []
+            if board_note:
+                notes.append(board_note)
             if summary:
                 # the `_missing` sentinel row is not a quote
                 return await cache_store(
@@ -149,18 +153,16 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "symbols": [q.get("symbol") for q in quotes],
                         **({"missing": missing} if missing else {}),
                     },
-                    source="dnse-rest",
-                    warnings=(
-                        [f"batch partial: {len(missing)} symbols missing"] if missing else None
-                    ),
+                    source=board_src,
+                    warnings=notes or None,
                 )
             return await cache_store(
                 "vn_equity_quote_batch",
                 fp,
                 price_ttl(),
                 {"quotes": _project(quotes, columns), **({"missing": missing} if missing else {})},
-                source="dnse-rest",
-                warnings=[f"batch partial: {len(missing)} symbols missing"] if missing else None,
+                source=board_src,
+                warnings=notes or None,
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_equity_quote_batch", str(exc))

@@ -483,6 +483,20 @@ def _shared_batch_pool(min_workers: int) -> ThreadPoolExecutor:
         return _VN_BATCH_POOL
 
 
+def board_source(rows: list[dict[str, Any]]) -> tuple[str, str | None]:
+    """Envelope ``source`` and warning for board rows: DNSE rows, or reduced ssi rows
+    while DNSE is unreachable from the server (#118)."""
+    reduced = [r for r in rows if isinstance(r, dict) and r.get("source") == "ssi-fallback"]
+    if not reduced:
+        return "dnse-rest", None
+    source = "ssi-fallback" if len(reduced) == len(rows) else "dnse-rest"
+    return source, (
+        f"{len(reduced)}/{len(rows)} rows are reduced ssi rows (DNSE unreachable, #118): "
+        "no ceiling/floor, depth or foreign flows; change is vs the previous close "
+        "(off on ex-rights days)"
+    )
+
+
 def split_batch(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
     """Split equity_quote_batch rows into (real quotes, missing symbols)."""
     quotes = [r for r in rows if isinstance(r, dict) and "_missing" not in r]

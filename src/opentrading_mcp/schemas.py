@@ -24,6 +24,7 @@ ALLOWED_SOURCES = frozenset(
         "vnstock",
         "dnse-rest",
         "dnse-ws",
+        "ssi-fallback",  # board rows from ssi candles while DNSE is unreachable (#118)
         "yfinance",
         "binance-spot",
         "binance-futures",

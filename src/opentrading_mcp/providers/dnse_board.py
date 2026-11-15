@@ -32,9 +32,12 @@ v4 read in the same second: FPT 44,800/252,500, HPG 255,700/843,962, SSI
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
+from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.units import INDEX_SYMBOLS
 
@@ -236,14 +239,146 @@ def _previous_close(symbol: str, traded_day: str) -> float | None:
     return round(float(earlier[-1]["c"]) * PRICE, 2) if earlier else None
 
 
-def quote_row(symbol: str) -> dict[str, Any]:
-    """Board row for one stock. Index codes are refused: they are not equities and
-    an index read through an equity route comes back mis-scaled (#77)."""
-    from opentrading_mcp.providers import dnse
+# #118: Render (Singapore) cannot reach openapi.dnse.com.vn at all (connect timeout,
+# 20 s each). After one such failure, skip DNSE for a while and serve reduced rows
+# from ssi candles instead of paying 20 s per symbol until the breaker opens.
+_DNSE_DOWN_FOR_S = 300.0
+_dnse_down_lock = threading.Lock()
+_dnse_down_until = 0.0
 
+
+def _dnse_down() -> bool:
+    with _dnse_down_lock:
+        return time.monotonic() < _dnse_down_until
+
+
+def _mark_dnse_down() -> None:
+    global _dnse_down_until
+    with _dnse_down_lock:
+        _dnse_down_until = time.monotonic() + _DNSE_DOWN_FOR_S
+
+
+def _unreachable(exc: ProviderUnavailable) -> bool:
+    """DNSE did not answer (timeout, transport error, open breaker), as opposed to an
+    answer we cannot use; only then is the ssi fallback the right move."""
+    from opentrading_mcp.providers.circuit import CircuitOpenError
+
+    text = str(exc)
+    return (
+        isinstance(exc, CircuitOpenError)
+        or text.startswith(("dnse timeout", "dnse unreachable"))
+        or getattr(exc, "reason", None) in ("upstream_timeout", "upstream_down")
+    )
+
+
+# At most this many fallback rows per minute, process-wide (about 2 ssi calls each):
+# market_movers asks for 60 symbols, the guest-mode burst test ran 60 in 6 s. Past the
+# cap a symbol is reported missing rather than queueing more ssi calls.
+FALLBACK_PER_MINUTE = 120
+_fallback_lock = threading.Lock()
+_fallback_times: list[float] = []
+
+
+def _take_fallback_slot() -> bool:
+    now = time.monotonic()
+    with _fallback_lock:
+        _fallback_times[:] = [t for t in _fallback_times if now - t < 60.0]
+        if len(_fallback_times) >= FALLBACK_PER_MINUTE:
+            return False
+        _fallback_times.append(now)
+        return True
+
+
+FALLBACK_NOTE = (
+    "DNSE unreachable (#118): reduced row from ssi daily candles (today's bar from 1m "
+    "bars). reference_price is the previous session's close, which differs from the "
+    "exchange reference on ex-rights days (then price_change/percent_change are off); "
+    "ceiling/floor, average, value, depth and foreign flows are unknown"
+)
+
+
+@guarded("ssi-board-fallback")
+def _ssi_candles(symbol: str) -> list[dict[str, Any]]:
+    """Candles for a fallback row, through the unguarded ``quote_history`` under this
+    module's own breaker: a burst of board fallbacks (market_movers asks for 60
+    symbols) hitting an ssi limit must not open the ``vnstock`` breaker that every
+    candle tool shares."""
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    history = getattr(vn_p.quote_history, "__wrapped__", vn_p.quote_history)
+    return list(history(symbol, days=3))
+
+
+def ssi_row(symbol: str) -> dict[str, Any]:
+    """Reduced v4 board row from ssi candles (#118), same units as ``build_row``:
+    prices in dong, volume in shares."""
+    if not _take_fallback_slot():
+        raise ProviderUnavailable(
+            f"ssi fallback for {symbol} skipped: {FALLBACK_PER_MINUTE} rows a minute cap "
+            "(DNSE unreachable, #118)",
+            reason="upstream_rate_limited",
+            retry_after_s=60,
+        )
+    candles = _ssi_candles(symbol)
+    if not candles:
+        raise ProviderUnavailable(f"ssi fallback: no candles for {symbol}")
+    last = candles[-1]
+    previous = candles[-2] if len(candles) >= 2 else None
+    close = _dong(last.get("c"))
+    reference = _dong(previous.get("c")) if previous else None
+    row: dict[str, Any] = {
+        "symbol": symbol,
+        "time": f"{last.get('t')}T00:00:00+07:00" if last.get("t") else None,
+        "exchange": None,
+        "open_price": _dong(last.get("o")),
+        "high_price": _dong(last.get("h")),
+        "low_price": _dong(last.get("l")),
+        "close_price": close,
+        "average_price": None,
+        "volume_accumulated": (round(v) if (v := _num(last.get("v"))) is not None else None),
+        "total_value": None,
+        "foreign_buy_volume": None,
+        "foreign_sell_volume": None,
+        "foreign_room": None,
+        "source": "ssi-fallback",
+        "quote_note": FALLBACK_NOTE,
+        "ceiling_price": None,
+        "floor_price": None,
+        "reference_price": reference,
+    }
+    if close is not None and reference:
+        row["price_change"] = round(close - reference, 2)
+        row["percent_change"] = round((close - reference) / reference * 100.0, 4)
+    else:
+        row["price_change"] = None
+        row["percent_change"] = None
+    for side in ("bid", "ask"):
+        for n in range(1, 4):
+            row[f"{side}_price_{n}"] = None
+            row[f"{side}_vol_{n}"] = None
+    return row
+
+
+def quote_row(symbol: str) -> dict[str, Any]:
+    """Board row for one stock: DNSE, or a reduced ssi row while DNSE does not answer
+    (#118). Index codes are refused: they are not equities and an index read through
+    an equity route comes back mis-scaled (#77)."""
     sym = symbol.strip().upper()
     if sym in INDEX_SYMBOLS:
         raise ProviderBadData(f"{sym} is an index code: use vn_index_ohlcv")
+    if not _dnse_down():
+        try:
+            return _dnse_row(sym)
+        except ProviderUnavailable as exc:
+            if not _unreachable(exc):
+                raise
+            _mark_dnse_down()
+    return ssi_row(sym)
+
+
+def _dnse_row(sym: str) -> dict[str, Any]:
+    from opentrading_mcp.providers import dnse
+
     trades = dnse._get(f"/price/{sym}/trades/latest")
     secdef = dnse._get(f"/price/{sym}/secdef")
     try:
