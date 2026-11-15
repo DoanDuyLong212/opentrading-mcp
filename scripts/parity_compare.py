@@ -111,11 +111,25 @@ def compare_crypto(v4: Any, v6: Any) -> tuple[str, str]:
     return compare_candles(v4, v6)
 
 
+# Baseline symbols that left the exchanges after the v4 capture (2026-11-08): absent from
+# the listing for a market reason, not an adapter one. Checked on Vietstock; add the date.
+LEFT_EXCHANGE: dict[str, str] = {
+    "SLD": "CatGroup OTC on Vietstock, seen 2026-11-13",
+}
+
+
 def compare_listing(v4: Any, v6: Any) -> tuple[str, str]:
     old = {r["symbol"]: r.get("name", "") for r in v4 if isinstance(r, dict)}
     new = {r["symbol"]: r.get("name", "") for r in v6 if isinstance(r, dict)}
     shared = set(old) & set(new)
     same_name = sum(1 for s in shared if old[s].strip().lower() == new[s].strip().lower())
+    gone = sorted(set(old) - set(new))
+    if old and gone and all(s in LEFT_EXCHANGE for s in gone):
+        return "expected DIFF (left the exchange)", (
+            f"{len(shared)}/{len(old)} baseline symbols present; absent: "
+            + ", ".join(f"{s} ({LEFT_EXCHANGE[s]})" for s in gone)
+            + f"; v6 lists {len(new)} symbols in total"
+        )
     status = "match" if old and len(shared) == len(old) else "DIFF"
     example = next((s for s in sorted(shared) if old[s] != new[s]), None)
     sample = f"; e.g. {example}: v4 {old[example]!r} vs v6 {new[example]!r}" if example else ""
