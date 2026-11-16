@@ -56,7 +56,7 @@ class _Inputs:
             valid = False
         if key != "equity_issued" and valid and not signed and value < 0:
             valid = False
-        if not valid:
+        if record is None or not valid:
             self.missing.add(name)
             return None
         self.sources[name] = {
