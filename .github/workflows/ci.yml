@@ -9,9 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  # Only superseded PR runs are cancelled: two quick pushes to main must each
-  # finish, or a commit lands on main without a completed CI run (#99).
+  # A PR shares one group per branch and cancels superseded runs. Each push to main
+  # gets its own group (its sha): within one group GitHub keeps only one pending run
+  # and cancels the older pending one even without cancel-in-progress, so three
+  # quick merges on 16/11 left 80f1e21 with no completed run (#99).
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
