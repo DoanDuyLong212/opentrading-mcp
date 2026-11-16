@@ -36,15 +36,16 @@ See `configs/` for opencode / Claude / Cursor / Codex / Antigravity snippets,
 
 ## Khoá nguồn vnstock 6
 
-Server dùng **vnstock thế hệ 6** (bản RC `6.0.0rc4` cho tới khi có bản chính thức): mỗi nguồn dữ
-liệu là một tài khoản Open API riêng, khoá đặt bằng biến môi trường, **không** commit.
+Server dùng **vnstock thế hệ 6**, bản chính thức `6.0.0` (ghim trong `uv.lock`, chạy ở chế độ khách):
+mỗi nguồn dữ liệu là một tài khoản Open API riêng, khoá đặt bằng biến môi trường, **không** commit.
 
-> **Bản RC `6.0.0rc4` hết hạn ngày 07/12/2026.** Sau ngày đó mọi tool lấy dữ liệu qua vnstock
-> (nến, chỉ số, phái sinh, listing…) ngừng chạy, kể cả khi đã có khoá ssi/dnse. Phải nâng bản ghim
-> trong `uv.lock` trước ngày này (`vnstock doctor` cho biết hạn của bản đang cài và có bản mới hơn
-> chưa; nâng bằng `uv lock --upgrade-package vnstock`). `source_status` → `upstreams.vnstock_release` báo số ngày còn lại
-> và gắn cảnh báo từ 30 ngày trước hạn; khi đổi phiên bản, ghi hạn của bản mới vào
-> `src/opentrading_mcp/vnstock_release.py` (test sẽ đỏ nếu quên).
+> **Bản `6.0.0` dùng được tới 10/11/2027** (bản chính thức sống 365 ngày; bản RC chỉ ~30 ngày và nhà
+> cung cấp có thể tắt sớm — 6.0.0rc5 bị tắt từ 11/11/2026). Hết hạn thì mọi tool lấy dữ liệu qua
+> vnstock (nến, chỉ số, phái sinh, listing…) ngừng chạy. `source_status` → `upstreams.vnstock_release`
+> đọc phán quyết trực tiếp từ `vnstock.status()` (dự phòng: bảng trong
+> `src/opentrading_mcp/vnstock_release.py`) và cảnh báo từ 30 ngày trước hạn; workflow
+> `vnstock-canary` kiểm mỗi 6 giờ. Nâng bằng `uv lock --upgrade-package vnstock` và chỉ ghim bản
+> chính thức (test sẽ đỏ nếu `uv.lock` ghim bản RC).
 
 | Nguồn | Cung cấp | Biến env |
 |---|---|---|
