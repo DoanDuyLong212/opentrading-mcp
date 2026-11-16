@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvbin/uv
+# Pinned (#98): a moving :latest can change resolution or break the build.
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvbin/uv
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 # gen 6 core has no matplotlib; telemetry opt-out per vnstock 6 (0 = off).

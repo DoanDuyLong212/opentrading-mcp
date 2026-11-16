@@ -1,6 +1,7 @@
-"""Expiry of the pinned vnstock release candidate (#80).
+"""Expiry of the pinned vnstock release (#80).
 
-vnstock 6 release candidates stop working on a fixed date. ``vnstock doctor``
+vnstock 6 releases stop working on a fixed date (the history below is from the
+release-candidate era). ``vnstock doctor``
 (which reads the date from vnstocks.com) printed on 2026-11-09: "Bản vnstock
 6.0.0rc4 — Dùng được đến hết ngày 07/12/2026" (usable through 07/12/2026), and
 vnstock_quant ships a ``ReleaseExpiredError``. After that date every
@@ -29,11 +30,12 @@ from datetime import date, datetime
 from importlib import metadata
 from typing import Any
 
-# rc5 (published 2026-11-09, `vnstock doctor`: "Dùng được đến hết ngày 09/12/2026") lives
-# ~30 days like rc4: each release candidate must be replaced about monthly.
+# Fallback dates for the pinned release when vnstock.status() cannot be read. The
+# server pins final releases since #119 (a final runs 365 days; 6.0.0 until
+# 2027-11-10). The rc4/rc5 rows went with the release candidates (#80); an
+# unrecorded pre-release is still reported as unknown_expiry.
 RELEASE_EXPIRY: dict[str, date] = {
-    "6.0.0rc4": date(2026, 12, 7),
-    "6.0.0rc5": date(2026, 12, 9),
+    "6.0.0": date(2027, 11, 10),
 }
 WARN_DAYS = 30
 

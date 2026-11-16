@@ -34,6 +34,8 @@ dev = [
   "ruff>=0.9",
   "mypy>=1.14",
   "pandas-stubs>=2.2",
+  # starlette.testclient prefers httpx2; plain httpx is deprecated there (#99)
+  "httpx2>=2.16",
 ]
 
 [project.scripts]
@@ -48,6 +50,12 @@ path = "src/opentrading_mcp/__init__.py"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# #99: TestClient over plain httpx is deprecated; keep it from coming back.
+filterwarnings = ["error::starlette.exceptions.StarletteDeprecationWarning"]
+
+[tool.coverage.report]
+# #98: CI fails when total coverage drops below this floor (71% on 16/11/2026).
+fail_under = 68
 
 [tool.ruff]
 target-version = "py312"

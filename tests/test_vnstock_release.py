@@ -12,37 +12,32 @@ from opentrading_mcp import vnstock_release as rel
 @pytest.mark.parametrize(
     ("today", "status", "days_left"),
     [
-        (date(2026, 11, 1), "ok", 36),
-        (date(2026, 11, 7), "expiring", 30),  # WARN_DAYS boundary warns
-        (date(2026, 12, 7), "expiring", 0),  # last usable day
-        (date(2026, 12, 8), "expired", -1),
+        (date(2027, 10, 1), "ok", 40),
+        (date(2027, 10, 11), "expiring", 30),  # WARN_DAYS boundary warns
+        (date(2027, 11, 10), "expiring", 0),  # last usable day
+        (date(2027, 11, 11), "expired", -1),
     ],
 )
-def test_rc4_expiry_windows(today, status, days_left):
-    out = rel.release_status(today=today, version="6.0.0rc4")
+def test_final_600_expiry_windows(today, status, days_left):
+    out = rel.release_status(today=today, version="6.0.0")
     assert out["status"] == status
     assert out["days_left"] == days_left
-    assert out["expires"] == "2026-12-07"
+    assert out["expires"] == "2027-11-10"
     assert ("warning" in out) is (status != "ok")
 
 
-def test_rc5_expiry_from_vnstock_doctor():
-    out = rel.release_status(today=date(2026, 11, 9), version="6.0.0rc5")
-    assert out["expires"] == "2026-12-09"
-    assert out["days_left"] == 30
-    assert out["status"] == "expiring"  # rc5 ships inside the 30-day warning window
-    assert rel.release_status(today=date(2026, 12, 10), version="6.0.0rc5")["status"] == "expired"
-
-
-def test_unknown_release_candidate_is_flagged_not_healthy():
-    out = rel.release_status(today=date(2026, 11, 9), version="6.0.0rc9")
+@pytest.mark.parametrize("version", ["6.0.0rc4", "6.0.0rc5", "6.0.0rc9"])
+def test_release_candidates_have_no_recorded_date(version):
+    """The rc rows were dropped with the move to finals (#80): any pre-release is
+    flagged, never reported healthy."""
+    out = rel.release_status(today=date(2026, 11, 9), version=version)
     assert out["status"] == "unknown_expiry"
     assert "pre-release" in out["warning"]
 
 
 def test_final_release_without_expiry_is_ok():
-    out = rel.release_status(today=date(2026, 11, 9), version="6.0.0")
-    assert out == {"version": "6.0.0", "status": "ok"}
+    out = rel.release_status(today=date(2026, 11, 9), version="6.0.1")
+    assert out == {"version": "6.0.1", "status": "ok"}
 
 
 def test_missing_package_is_reported(monkeypatch):
@@ -60,8 +55,9 @@ def test_the_locked_vnstock_version_has_a_recorded_expiry():
     match = re.search(r'name = "vnstock"\nversion = "([^"]+)"', lock)
     assert match, "vnstock not found in uv.lock"
     version = match.group(1)
-    if "rc" in version:
-        assert version in rel.RELEASE_EXPIRY, f"record the expiry of vnstock {version}"
+    assert "rc" not in version, f"pin a final vnstock release, not {version} (#80)"
+    if version in rel.RELEASE_EXPIRY:
+        assert rel.RELEASE_EXPIRY[version] > date(2026, 11, 16)
 
 
 async def test_source_status_carries_the_release_warning(monkeypatch):
@@ -71,8 +67,8 @@ async def test_source_status_carries_the_release_warning(monkeypatch):
 
     monkeypatch.setattr(
         market, "release_report",
-        lambda: rel.release_report(today=date(2026, 11, 20), live=None)
-        | rel.release_status(today=date(2026, 11, 20), version="6.0.0rc4"),
+        lambda: rel.release_report(today=date(2027, 10, 24), live=None)
+        | rel.release_status(today=date(2027, 10, 24), version="6.0.0"),
     )
     monkeypatch.setattr(vn_p, "quote_history", lambda *a, **k: [{"c": 1.0}])
     server = create_server("all")
@@ -80,7 +76,7 @@ async def test_source_status_carries_the_release_warning(monkeypatch):
     env = await server._tool_manager.get_tool("source_status").fn()
     release = env["data"]["upstreams"]["vnstock_release"]
     assert release["status"] == "expiring" and release["days_left"] == 17
-    assert any("expires on 2026-12-07" in w for w in env["warnings"])
+    assert any("expires on 2027-11-10" in w for w in env["warnings"])
 
 
 # --- live verdict (vnstock.status()["release"]) -------------------------------------
@@ -116,10 +112,10 @@ def test_switched_off_release_is_disabled_whatever_its_date():
 
 
 def test_unreadable_live_verdict_falls_back_to_the_table(monkeypatch):
-    monkeypatch.setattr(rel, "installed_version", lambda: "6.0.0rc5")
+    monkeypatch.setattr(rel, "installed_version", lambda: "6.0.0")
     out = rel.release_report(today=date(2026, 11, 13), live=None)
     assert out["source"] == "table"
-    assert out["expires"] == "2026-12-09"
+    assert out["expires"] == "2027-11-10"
 
 
 def test_live_lookup_is_cached_and_failures_retry_sooner(monkeypatch):
