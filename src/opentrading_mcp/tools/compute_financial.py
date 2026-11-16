@@ -301,8 +301,10 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             price = _finite_metric(quote.get("close_price") or quote.get("close"))
             price_as_of = quote.get("time") or None
             if quote.get("source") == "ssi-fallback":
-                # #118: DNSE unreachable, last close from ssi daily candles
+                # #118: DNSE unreachable, last close from ssi daily candles. Their time
+                # is the bar's midnight, not an observation time: keep the date only.
                 price_source = "ssi-fallback (daily close; DNSE unreachable)"
+                price_as_of = str(price_as_of)[:10] if price_as_of else None
             if price is not None and price <= 0:
                 price = None
         except (IndexError, AttributeError, TypeError):

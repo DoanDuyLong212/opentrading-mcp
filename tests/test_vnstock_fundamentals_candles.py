@@ -181,6 +181,45 @@ async def test_valuation_run_uses_trailing_eps_not_price_over_pe(monkeypatch):
     assert env["availability"] == "available"
 
 
+async def test_valuation_run_price_as_of_by_board_source(monkeypatch):
+    """A DNSE row keeps its trade time; an ssi-fallback row is a daily bar stamped at
+    midnight, so only its date is an honest observation time."""
+    from opentrading_mcp.server import create_server, register_preset
+    from opentrading_mcp.tools import compute_financial as comp_fin
+
+    rows = {
+        "dnse": {"symbol": "FPT", "close_price": 49800.0, "time": "2026-11-16T13:38:05+07:00"},
+        "ssi": {"symbol": "FPT", "close_price": 49800.0, "time": "2026-11-16T00:00:00+07:00",
+                "source": "ssi-fallback"},
+    }
+    picked: dict[str, str] = {}
+
+    async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        if fn is comp_fin.vs_p.overview_trading:
+            return {"data": [{"StockCode": "FPT"}]}
+        if fn is comp_fin.vn_p.equity_quote_batch:
+            return [rows[picked["board"]]]
+        if fn is comp_fin.vs_ratios.equity_fundamentals:
+            return {"eps": 6030.0, "bvps": 25689.0, "period_label": "Q3/2026",
+                    "frequency": "quarterly", "eps_basis": "trailing_four_quarters"}
+        raise AssertionError(fn)
+
+    monkeypatch.setattr(comp_fin, "_call", fake_call)
+    server = create_server("scan")
+    register_preset(server, "scan")
+    fn = server._tool_manager.get_tool("valuation_run").fn
+    picked["board"] = "dnse"
+    data = (await fn(symbol="FPT"))["data"]
+    assert (data["price_source"], data["price_as_of"]) == (
+        "dnse.board", "2026-11-16T13:38:05+07:00",
+    )
+    picked["board"] = "ssi"
+    data = (await fn(symbol="VCB"))["data"]  # another symbol: no cache hit
+    assert data["price_source"].startswith("ssi-fallback")
+    assert data["price_as_of"] == "2026-11-16"
+    assert data["price_unit"] == "VND/share"
+
+
 async def test_valuation_run_flags_missing_inputs(monkeypatch):
     from opentrading_mcp.server import create_server, register_preset
     from opentrading_mcp.tools import compute_financial as comp_fin
