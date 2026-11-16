@@ -148,6 +148,10 @@ def register_all(server: FastMCP) -> list[dict[str, Any]]:
     from opentrading_mcp.units import apply_units
 
     apply_units(server)
+    from opentrading_mcp.obs import apply_tool_telemetry
+
+    # outermost wrapper: measures the final envelope, cache hits included (#127)
+    apply_tool_telemetry(server)
     names = [t["name"] for t in collected]
     if len(names) != len(set(names)):
         raise ValueError("duplicate tool names in full surface")

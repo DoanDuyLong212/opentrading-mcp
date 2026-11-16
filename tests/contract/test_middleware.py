@@ -91,11 +91,15 @@ def test_observability_logs_tool_call_without_body(capsys):
 
     lines = [json.loads(line) for line in capsys.readouterr().err.strip().splitlines()]
     assert len(lines) == 1
-    assert lines[0]["tool"] == "market_snapshot"
-    assert lines[0]["ok"] is True
+    assert lines[0]["event"] == "mcp_request"
+    assert lines[0]["method"] == "market_snapshot"
+    assert lines[0]["status"] == 200
     assert lines[0]["duration_ms"] >= 0
     assert "VCB" not in json.dumps(lines)
-    assert 'tool_calls_total{tool="market_snapshot"} 1' in obs.render_metrics()
+    metrics = obs.render_metrics()
+    assert 'mcp_requests_total{status="2xx"} 1' in metrics
+    # tool outcomes come from the tool wrapper, not from the HTTP status (#127)
+    assert "tool_calls_total{" not in metrics
 
 
 def _shed_app(monkeypatch, pending: int, limit: int = 3) -> TestClient:

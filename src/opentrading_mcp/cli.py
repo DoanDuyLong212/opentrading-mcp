@@ -120,6 +120,7 @@ def build_http_app(server: FastMCP) -> Any:
     bypassed every check (all of them gated only POST /mcp). Tests build this same app
     to check that no route answers without a token.
     """
+    from opentrading_mcp import obs
     from opentrading_mcp.middleware import (
         AuthMiddleware,
         LoadShedMiddleware,
@@ -128,6 +129,7 @@ def build_http_app(server: FastMCP) -> Any:
         rate_limit_per_minute,
     )
 
+    obs.enable_tool_call_log()
     app = server.streamable_http_app()
     app.add_middleware(RateLimiter, limit_per_minute=rate_limit_per_minute())
     app.add_middleware(AuthMiddleware)
