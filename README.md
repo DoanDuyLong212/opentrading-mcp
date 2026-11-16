@@ -59,9 +59,10 @@ mỗi nguồn dữ liệu là một tài khoản Open API riêng, khoá đặt b
     `vn_msn_fx_gold` (USDVND + vàng **hợp đồng tương lai** COMEX `GC=F` — Yahoo không có vàng
     spot). Tỷ giá ngân hàng `vn_retail_fx` lấy từ bảng công khai của **Vietcombank** (mua tiền
     mặt / mua chuyển khoản / bán), cache 1 giờ vì Vietcombank chỉ cho 1 request mỗi 5 phút.
-  - Các route vnstock chỉ có ở fhsc/tcbs — batch quote, BCTC + chỉ số `vnstock_quant.fa`, hồ sơ
-    công ty, giao dịch nội bộ — trả `unavailable` với `reason: not_configured` cho tới khi chuyển
-    sang nguồn khác (Vietstock / DNSE riêng của dự án; xem issue #101).
+  - Route vnstock chỉ có ở fhsc/tcbs đã chuyển nguồn: bảng giá (batch quote) lấy từ client DNSE
+    riêng của dự án (dự phòng ssi khi DNSE không tới được, #118); BCTC và chỉ số tài chính lấy từ
+    Vietstock financeinfo. Còn hồ sơ công ty chi tiết và giao dịch nội bộ trả `unavailable` với
+    `reason: not_configured` (`vs_company_info` có tên/sàn/loại hình).
 - `source_status` → `quota_info.chains` cho biết mỗi nhóm route còn nguồn nào trả lời được.
 - Đăng ký khoá: developers.ssi.com.vn và DNSE; lưu qua env (Render env vars hoặc `.env` local,
   gitignore sẵn).

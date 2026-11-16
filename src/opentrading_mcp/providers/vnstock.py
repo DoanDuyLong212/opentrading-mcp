@@ -3,7 +3,8 @@
 Gen 6 removed the gen-4 classes (Quote/Listing/Company/Finance/Trading) and the
 implicit VCI/KBS/MSN sources: every call carries an explicit ``source`` and the
 first non-empty frame wins across the chain below. Mapping notes live in
-plans/vnstock-gen6-migration-2026-11-08.md; measured API in the SDD workspace.
+plans/vnstock-gen6-migration-2026-11-08.md; measured API notes in
+plans/vnstock-gen6-api-notes-2026-11-08.md.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
+from datetime import time as dt_time
 from typing import Any
 
 from opentrading_mcp.failures import VENDOR_DISABLED_CODES
@@ -253,11 +255,59 @@ def quota_info() -> dict[str, Any]:
         return {"tier": "unknown", "note": str(exc)[:100]}
 
 
+def _instant(value: Any) -> float | None:
+    """Seconds since the epoch for a row time: ISO text (offset or naive Vietnam time),
+    datetime/date, or an epoch number in seconds or milliseconds; a bare time of day
+    gives seconds since midnight (only comparable within one session). None when unknown.
+    Comparing the text instead (#92) misorders epochs and mixed offsets."""
+    from zoneinfo import ZoneInfo
+
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        if not math.isfinite(value):
+            return None
+        return float(value) / 1000.0 if abs(value) >= 1e11 else float(value)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        value = datetime(value.year, value.month, value.day)
+    if not isinstance(value, datetime):
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            value = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                return _instant(float(text))
+            except ValueError:
+                pass
+            try:  # a time of day alone (one session's trades): seconds since midnight
+                clock = dt_time.fromisoformat(text)
+            except ValueError:
+                return None
+            return float(clock.hour * 3600 + clock.minute * 60 + clock.second)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+    return float(value.timestamp())
+
+
+def _by_time(rows: list[dict[str, Any]], key: str = "time", *, newest_first: bool = False
+             ) -> list[dict[str, Any]]:
+    """Rows in time order; rows whose time cannot be read go last, in their original order."""
+    def sort_key(row: dict[str, Any]) -> tuple[int, float]:
+        at = _instant(row.get(key))
+        if at is None:
+            return (1, 0.0)
+        return (0, -at if newest_first else at)
+
+    return sorted(rows, key=sort_key)
+
+
 def _ascending_by_time(rows: list[dict[str, Any]], key: str = "time") -> list[dict[str, Any]]:
     """Chronological order for frame rows. Gen-6 profiles flip row order between
     functions; consumers (market_timing rows[-1], corp.py closes[-1]) assume
     ascending, so every raw ohlcv path normalizes here."""
-    return sorted(rows, key=lambda r: str(r.get(key, ""))[:24])
+    return _by_time(rows, key)
 
 
 def _candle_day(value: Any) -> str:
@@ -577,7 +627,7 @@ def equity_trades(
         )
     except ProviderUnavailable as exc:
         raise _rewrap(exc, f"vnstock trades failed: {symbol}") from exc
-    rows = sorted(_records(frame), key=lambda r: str(r.get("time", ""))[:24], reverse=True)
+    rows = _by_time(_records(frame), newest_first=True)
     lot = _TRADE_LOT.get(str(getattr(frame, "attrs", {}).get("ot_source", "")), 1)
     if lot != 1:
         for row in rows:
@@ -944,7 +994,8 @@ def insider_trading(symbol: str, limit: int = 10) -> list[dict[str, Any]]:
 
 @guarded("vnstock")
 def corp_events(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Corporate actions (cash dividends, share issues), newest first.
+    """Corporate actions (cash dividends, share issues), newest ex-right date first
+    (events_calendar.events_for sorts them).
 
     With no keyed per-symbol source (fhsc dropped), rows come from the ssi
     market-wide events calendar, cached per year (providers/events_calendar.py,

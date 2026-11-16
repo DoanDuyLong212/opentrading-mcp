@@ -913,3 +913,19 @@ def test_redact_hides_vnstock_secret_names():
 
     for name in ("DNSE_API_SECRET", "SSI_API_SECRET", "SSI_API_PRIVATE"):
         assert redact(f"env {name}=abc") == "[REDACTED]"
+
+
+def test_time_order_parses_instead_of_comparing_text():
+    """#92: str(time)[:24] misordered epochs, mixed offsets and rows with no time."""
+    rows = [
+        {"time": "2026-11-16T09:00:00+00:00", "n": "utc9"},  # 16:00 Vietnam time
+        {"time": "2026-11-16T10:00:00+07:00", "n": "vn10"},
+        {"time": 1794794400000, "n": "epoch_ms"},  # 2026-11-16 09:00 Vietnam time
+        {"n": "missing"},
+        {"time": "2026-11-16 11:30:00", "n": "naive"},  # naive = Vietnam time
+    ]
+    assert [r["n"] for r in vn_p._ascending_by_time(rows)] == [
+        "epoch_ms", "vn10", "naive", "utc9", "missing",
+    ]
+    newest = vn_p._by_time(rows, newest_first=True)
+    assert [r["n"] for r in newest] == ["utc9", "naive", "vn10", "epoch_ms", "missing"]

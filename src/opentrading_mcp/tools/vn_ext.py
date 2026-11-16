@@ -102,7 +102,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         Dùng khi: nến '15m'/'1m', đối chiếu chéo với vn_quote_history.
         Không dùng khi: nến ngày/tuần/tháng thông thường (ưu tiên vn_quote_history — có fallback
-            VCI→KBS); cần nhiều mã (dùng market_candles_batch).
+            ssi→dnse); cần nhiều mã (dùng market_candles_batch).
 
         interval: cỡ nến ('1D' ngày; intraday như '1m'/'15m' nếu nguồn hỗ trợ).
         summary/columns: summary chỉ trả {count,last,high,low}; columns giữ trường nêu tên.

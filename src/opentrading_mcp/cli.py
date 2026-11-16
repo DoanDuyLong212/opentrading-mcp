@@ -93,7 +93,7 @@ def add_health_routes(server: FastMCP) -> None:
 
 
 def warm_up() -> None:
-    """Import vnstock (gen 6 core, Rust-backed) before the first tool needs it.
+    """Import vnstock (gen 6 core) before the first tool needs it.
 
     The first import takes seconds of CPU on a small host; paid inside the first burst
     of tool calls, it stalled every request at once. Errors are ignored: tools report
