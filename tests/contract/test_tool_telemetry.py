@@ -87,3 +87,23 @@ def test_every_registered_tool_is_wrapped_once():
     for tool in server._tool_manager.list_tools():
         assert getattr(tool.fn, "__ot_telemetry__", False), tool.name
         assert not getattr(getattr(tool.fn, "__wrapped__", None), "__ot_telemetry__", False)
+
+
+async def test_a_cancelled_call_is_not_counted_as_an_exception():
+    obs.reset()
+
+    async def hang() -> dict[str, Any]:
+        await asyncio.sleep(10)
+        return {}
+
+    server = _server_with(hang)
+    task = asyncio.ensure_future(server._tool_manager.get_tool("probe_tool").fn())
+    await asyncio.sleep(0.01)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    metrics = obs.render_metrics()
+    assert 'error="cancelled"' in metrics
+    assert 'error="exception"' not in metrics

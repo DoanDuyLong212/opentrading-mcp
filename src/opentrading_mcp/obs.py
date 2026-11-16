@@ -11,6 +11,7 @@ ok in a few ms (#127). The middleware now records HTTP requests only.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 import sys
@@ -102,14 +103,19 @@ def _finish(tool: str, started: float, ok: bool, error_code: str) -> None:
         log_tool_call(tool, elapsed_ms, ok=ok, error_code=error_code)
 
 
+def _exception_code(exc: BaseException) -> str:
+    """A client that hangs up cancels the tool: that is not a tool failure."""
+    return "cancelled" if isinstance(exc, asyncio.CancelledError) else "exception"
+
+
 def _wrap_async(fn: Callable[..., Any], name: str) -> Callable[..., Any]:
     @functools.wraps(fn)
     async def wrapped(*args: Any, **kwargs: Any) -> Any:
         started = time.monotonic()
         try:
             result = await fn(*args, **kwargs)
-        except BaseException:
-            _finish(name, started, False, "exception")
+        except BaseException as exc:
+            _finish(name, started, False, _exception_code(exc))
             raise
         _finish(name, started, *outcome(result))
         return result
@@ -124,8 +130,8 @@ def _wrap_sync(fn: Callable[..., Any], name: str) -> Callable[..., Any]:
         started = time.monotonic()
         try:
             result = fn(*args, **kwargs)
-        except BaseException:
-            _finish(name, started, False, "exception")
+        except BaseException as exc:
+            _finish(name, started, False, _exception_code(exc))
             raise
         _finish(name, started, *outcome(result))
         return result
