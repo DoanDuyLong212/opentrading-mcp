@@ -352,6 +352,65 @@ async def test_analyst_consensus_days_filter(monkeypatch):
     assert any("date_uncertain" in w for w in env["warnings"])
 
 
+async def test_analyst_consensus_undated_warning_counts_returned_rows(monkeypatch):
+    """16/11 prod: FPT came back with reports=[] plus a date_uncertain warning about
+    another ticker's row that the symbol filter had already dropped."""
+
+    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        return [
+            {
+                "title": "VPB: Khuyến nghị KHẢ QUAN với giá mục tiêu 24,500 đồng/cổ phiếu",
+                "source": None,
+                "date": None,
+                "url": "https://x/1",
+                "symbol": "VPB",
+                "rating": "KHẢ QUAN",
+                "target": 24500.0,
+            },
+            {
+                "title": "GAS: Khuyến nghị MUA với giá mục tiêu 99,800 đồng/cổ phiếu",
+                "source": None,
+                "date": "13/11/2026",
+                "url": "https://x/2",
+                "symbol": "GAS",
+                "rating": "MUA",
+                "target": 99800.0,
+            },
+        ]
+
+    import opentrading_mcp.tools.corp as corp_mod
+
+    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
+    fn = _tool_fn("analyst_consensus")
+    env = await fn(symbol="FPT", days=120)
+    assert env["data"]["reports"] == []
+    assert env["data"]["scanned"] == 2
+    assert not any("date_uncertain" in w for w in env["warnings"])
+    assert any("not evidence" in w and "FPT" in w for w in env["warnings"])
+
+    env = await fn(symbol="VPB", days=120)
+    assert [r["symbol"] for r in env["data"]["reports"]] == ["VPB"]
+    assert any("1 row(s)" in w for w in env["warnings"])
+    assert not any("not evidence" in w for w in env["warnings"])
+
+
+async def test_analyst_consensus_symbol_filter_reads_whole_page(monkeypatch):
+    seen: list[int] = []
+
+    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
+        seen.append(fn.args[0])
+        return []
+
+    import opentrading_mcp.tools.corp as corp_mod
+
+    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
+    fn = _tool_fn("analyst_consensus")
+    await fn(symbol="HPG", limit=3)
+    await fn(limit=3)
+    assert seen[0] >= 100
+    assert seen[1] == 10
+
+
 def test_analyst_consensus_docstring_describes_report_page():
     from tests.contract.test_p6_corp2 import _tool_fn as _tf
 
