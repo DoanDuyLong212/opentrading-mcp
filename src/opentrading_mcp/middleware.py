@@ -245,10 +245,13 @@ def tool_name_of(body: bytes) -> str:
 
 
 class McpObservabilityMiddleware(BaseHTTPMiddleware):
-    """One JSON log line + metrics per POST /mcp call.
+    """One mcp_request log line + a status-class counter per POST /mcp call.
 
-    Only the tool name, duration and HTTP outcome are recorded — never
-    arguments, results or headers (upstream data may contain PII).
+    Only the JSON-RPC method or tool name, the time to response headers and the HTTP
+    status are recorded — never arguments, results or headers (upstream data may
+    contain PII). Tool outcomes and durations are recorded around the tool itself
+    (obs.apply_tool_telemetry, #127): a streamed response sends its headers before
+    the tool body runs, and a failed tool is still HTTP 200.
     """
 
     async def dispatch(
@@ -273,12 +276,10 @@ class McpObservabilityMiddleware(BaseHTTPMiddleware):
             response = await call_next(replayed)
         except Exception:
             elapsed_ms = (time.monotonic() - started) * 1000
-            obs.record_tool_call(tool, elapsed_ms, ok=False, error_code="exception")
-            obs.log_tool_call(tool, elapsed_ms, ok=False, error_code="exception")
+            obs.record_request(500)
+            obs.log_request(tool, elapsed_ms, 500)
             raise
         elapsed_ms = (time.monotonic() - started) * 1000
-        ok = response.status_code < 500
-        error_code = "" if ok else f"http_{response.status_code}"
-        obs.record_tool_call(tool, elapsed_ms, ok=ok, error_code=error_code)
-        obs.log_tool_call(tool, elapsed_ms, ok=ok, error_code=error_code)
+        obs.record_request(response.status_code)
+        obs.log_request(tool, elapsed_ms, response.status_code)
         return response
