@@ -355,7 +355,9 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         days: giữ báo cáo N ngày gần nhất theo ngày dd/mm/yyyy tách được
         (mặc định không lọc). Dòng không tách được ngày vẫn giữ và đánh
         date_uncertain:true — coi ngày của chúng là không chắc.
-        Chỉ có trang danh sách mới nhất (nguồn không phân trang).
+        Chỉ có trang danh sách mới nhất (nguồn không phân trang): thường dưới 10 báo cáo
+        toàn thị trường, nên lọc theo mã hay ra rỗng — rỗng KHÔNG có nghĩa là không CTCK nào
+        phủ mã đó. scanned: số báo cáo trên trang đã quét.
         Chỉ tiêu đề — không thân bài. url mỗi dòng là trang báo cáo: tóm tắt HTML sau
         'Tải về' (~500-700 ký tự) mang upside, doanh thu, lợi nhuận, EPS, P/E, P/B, cổ tức;
         'Nguồn:' cho biết tên CTCK. File 'edocs/...pdf' thường lỗi khi trích text (font
@@ -384,7 +386,12 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         warn: list[str] = []
         try:
             reports = await run_blocking(
-                functools.partial(pub_p.analyst_reports, max(int(limit) * 2, 10), kind),
+                # A ticker filter must see the whole page, not just its first rows.
+                functools.partial(
+                    pub_p.analyst_reports,
+                    200 if symbol and kind == "equity" else max(int(limit) * 2, 10),
+                    kind,
+                ),
                 "analyst_consensus",
                 timeout_secs=45.0,
             )
@@ -396,6 +403,15 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 availability="unavailable",
             )
         rows = [r for r in reports if isinstance(r, dict) and r.get("title")]
+        scanned = len(rows)
+        want = (symbol or "").strip().upper()
+        # Filter by symbol before dates and before the limit, so every warning below
+        # counts only rows that are actually returned.
+        if kind == "macro":
+            if symbol:
+                warn.append("symbol filter ignored for macro reports (no ticker)")
+        elif want:
+            rows = [r for r in rows if (r.get("symbol") or "").upper() == want]
         cutoff: str | None = None
         if days_n is not None:
             import datetime
@@ -408,33 +424,36 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             cut = today - datetime.timedelta(days=days_n)
             cutoff = cut.isoformat()
             kept: list[dict[str, Any]] = []
-            undated = 0
             for r in rows:
                 d = _parse_report_date(r.get("date"))
                 if d is None:
-                    undated += 1
                     row = dict(r)
                     row["date_uncertain"] = True
                     kept.append(row)
                 elif d >= cut:
                     kept.append(r)
             rows = kept
-            if undated:
-                warn.append(
-                    f"{undated} row(s) have no parsed date and are kept with "
-                    "date_uncertain:true — treat their dates as uncertain"
-                )
+        rows = rows[: max(int(limit), 1)]
+        undated = sum(1 for r in rows if r.get("date_uncertain"))
+        if undated:
+            warn.append(
+                f"{undated} row(s) have no parsed date and are kept with "
+                "date_uncertain:true — treat their dates as uncertain"
+            )
         if kind == "macro":
-            if symbol:
-                warn.append("symbol filter ignored for macro reports (no ticker)")
             if rows and not any(r.get("date") for r in rows):
                 warn.append(
                     "no dated CTCK macro reports on listing — section pointers only; "
                     "use vs_indicator_data for hard macro data"
                 )
-        elif symbol:
-            want = symbol.strip().upper()
-            rows = [r for r in rows if (r.get("symbol") or "").upper() == want]
+        elif want and not rows:
+            # The source serves one listing page of the newest reports market-wide
+            # (often under 10), so an empty answer for one ticker is the normal case.
+            warn.append(
+                f"no {want} report among the {scanned} newest market-wide reports on the "
+                "listing (the source serves only that one page): this is not evidence "
+                f"that no CTCK covers {want}"
+            )
         return await cache_store(
             "analyst_consensus",
             fp,
@@ -442,7 +461,8 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             {
                 "symbol": (symbol or "").upper(),
                 "report_type": kind,
-                "reports": rows[: max(int(limit), 1)],
+                "reports": rows,
+                "scanned": scanned,
                 "days": days_n,
                 "cutoff": cutoff,
             },
