@@ -1,7 +1,7 @@
 """Expiry of the pinned vnstock release (#80).
 
 vnstock 6 releases stop working on a fixed date (the history below is from the
-release-candidate era).
+release-candidate era). ``vnstock doctor``
 (which reads the date from vnstocks.com) printed on 2026-11-09: "Bản vnstock
 6.0.0rc4 — Dùng được đến hết ngày 07/12/2026" (usable through 07/12/2026), and
 vnstock_quant ships a ``ReleaseExpiredError``. After that date every
