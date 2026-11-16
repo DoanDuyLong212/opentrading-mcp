@@ -1,6 +1,6 @@
 """Units of the numbers in price results, published as ``units`` in the envelope.
 
-Upstreams disagree: vnstock candles (VCI/KBS history) give VN stock prices in
+Upstreams disagree: vnstock candles (ssi/dnse history) give VN stock prices in
 thousand dong (FPT 64.27 = 64,270 dong), while the vnstock price board gives
 dong (56700). A client that puts both in one table without a unit wrote
 "62,2 (đ)" for 62.2 thousand dong, a 1000x misreading (OpenTrading
@@ -26,7 +26,7 @@ DONG = "đồng/cổ phiếu (56700 = 56,7 nghìn đồng)"
 SHARES = "cổ phiếu"
 POINTS = "điểm"
 
-# vnstock quote_history (VCI → KBS; both legs return thousand dong, checked 22/10/2026):
+# vnstock quote_history (ssi → dnse; both legs return thousand dong, measured 2026-11-08):
 # candles t/o/h/l/c/v; summary last/high/low.
 _HISTORY = {"o, h, l, c, last, high, low": THOUSAND_DONG, "v": SHARES}
 # vnstock equity_ohlcv / index_ohlcv bars: time/open/high/low/close/volume; summary last/high/low.

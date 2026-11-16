@@ -2,7 +2,7 @@
 
 Replaces markdown-stored stats + ~/.opentrading JSON cache (deleted 2026-10-10):
 single writer (these tools), normalized tables, version in cycle_meta.
-Benchmark 2026-10: ~0.6s/symbol VCI delta -> batch 12/call (~10-15s).
+Benchmark 2026-10 (vnstock 4, VCI): ~0.6s/symbol delta -> batch 12/call (~10-15s).
 """
 
 from __future__ import annotations
@@ -375,7 +375,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                                   ctx: AnyContext | None = None) -> dict[str, Any]:
         """Incremental refresh a batch (max 15/call, recommend 12) of the tracked symbols.
 
-        Fetch [watermark+1, today] + 10-session overlap via VCI; overlap close
+        Fetch [watermark+1, today] + 10-session overlap via vnstock (ssi→dnse); overlap close
         deviation >0.5% triggers full re-fetch of that symbol. Each symbol is written in
         its own transaction. One refresh at a time.
         """

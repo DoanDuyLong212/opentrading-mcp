@@ -64,7 +64,7 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
         interval: str = "1D",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
-        """Nến 1 mã VN (1D/1W/1M), VCI trước KBS dự phòng. Dùng cho MỌI lịch sử giá của một mã.
+        """Nến 1 mã VN (1D/1W/1M), ssi trước dnse dự phòng. Dùng cho MỌI lịch sử giá của một mã.
 
         Dùng khi: "lịch sử giá FPT", "HPG có vượt đỉnh 20 phiên không", mọi tính toán cần chuỗi giá
             1 mã.
@@ -193,40 +193,54 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def vn_fundamentals(
         symbol: str, period: str = "year", report_type: str = "ttm"
     ) -> dict[str, Any]:
-        """Chỉ số tài chính tính bằng vnstock_quant.fa từ ba BCTC (gen 6). Định giá nhanh 1 mã.
+        """Bảng chỉ số tài chính của 1 mã từ Vietstock financeinfo (P/E, P/B, EPS, BVPS, ROE,
+            ROA, biên lợi nhuận). Định giá nhanh 1 mã.
 
         Dùng khi: "PE/PB/ROE của FPT", snapshot định giá nhanh.
         Không dùng khi: cần vùng giá trị hợp lý theo ensemble PER/PB (dùng valuation_run); cần đọc
             từng dòng BCTC (dùng financial_detail); cần BCTC không cần JWT (dùng
             financial_statements hoặc vs_financeinfo).
 
-        period: 'year' hoặc 'quarter'. report_type chỉ còn tác dụng phân biệt cache
-            ('ttm'/'latest') — gen 6 tính chỉ số từ BCTC đã chuẩn hoá, quý là TTM.
+        period: 'year' hoặc 'quarter'. P/E, P/B tính theo giá ngày kết thúc kỳ, không phải hôm nay.
+        report_type: giữ để tương thích, KHÔNG đổi số liệu (nguồn chỉ có một bảng; EPS là 4 quý
+            gần nhất ở cả hai period) — giá trị khác 'ttm' chỉ kèm cảnh báo.
         """
-        # v2: gen-6 fa table replaces the v4 raw records list (#86).
-        fp = f"v3|{symbol}|{period}|{report_type}"
+        # v4: report_type left the cache key; it never changed the numbers (#85).
+        fp = f"v4|{symbol}|{period}"
+        warnings = (
+            []
+            if (report_type or "ttm").strip().lower() == "ttm"
+            else [
+                f"report_type={report_type!r} is ignored: the source has one ratio table "
+                "(EPS is trailing four quarters in both periods)"
+            ]
+        )
         hit = await cache_lookup("vn_fundamentals", fp)
         if hit is not None:
+            if warnings:
+                hit = {**hit, "warnings": [*hit.get("warnings", []), *warnings]}
             return hit
         try:
             data = await run_blocking(
                 functools.partial(vs_ratios.equity_ratios, symbol.upper(), period),
                 "vn_fundamentals",
             )
-            return await cache_store(
+            stored = await cache_store(
                 "vn_fundamentals",
                 fp,
                 TTL_SECONDS["financeinfo"],  # quarterly ratios, not prices
                 {
                     "symbol": symbol.upper(),
                     "period": period,
-                    "report_type": report_type,
                     "periods": data.get("periods", []),
                     "ratios": data.get("ratios", []),
                     "source": data.get("source", vs_ratios.SOURCE),
                 },
                 source="vietstock",
             )
+            if warnings:
+                stored = {**stored, "warnings": [*stored.get("warnings", []), *warnings]}
+            return stored
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("vn_fundamentals", str(exc))
         except Exception as exc:

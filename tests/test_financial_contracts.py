@@ -120,7 +120,7 @@ def test_ratio_screener_and_valuation_do_not_fabricate_missing_metadata():
     assert "quality_status" not in gap
     assert screener_field_contract("market_cap", 1e12)["status"] == "unknown"
     assert screener_field_contract("roe", float("nan"))["status"] == "partial"
-    out = {"price": 20.0, "price_source": "vnstock.equity_quote_batch",
+    out = {"price": 20.0, "price_source": "dnse.board",
            "price_as_of": None, "price_unit": "unverified", "eps": 0.0}
     price = valuation_field_contract("price", out)
     assert price["status"] == "supported"

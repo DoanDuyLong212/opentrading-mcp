@@ -277,7 +277,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         # v6: EPS/BVPS from one fa period, eps_basis from that period (gen 6, #76).
         # v7: EPS/BVPS from Vietstock financeinfo (fhsc/fa discontinued).
         # v8: EPS/BVPS from the newest QUARTER (trailing four quarters) first (Q3).
-        fp = f"v8|{symbol}|{btype}|{method}"
+        # v9: price_source names the board (dnse.board), price_unit VND/share (#92).
+        fp = f"v9|{symbol}|{btype}|{method}"
         hit = await cache_lookup("valuation_run", fp)
         if hit is not None:
             return hit
@@ -291,10 +292,14 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("valuation_run", str(exc))
         info = overview if isinstance(overview, dict) else {}
         price = None
-        price_source = "vnstock.equity_quote_batch"
+        price_as_of = None
+        # equity_quote_batch is the project's DNSE board (providers/dnse_board.py, #111);
+        # its rows, the ssi fallback included, carry prices in dong.
+        price_source = "dnse.board"
         try:
             quote = quotes[0]
             price = _finite_metric(quote.get("close_price") or quote.get("close"))
+            price_as_of = quote.get("time") or None
             if quote.get("source") == "ssi-fallback":
                 # #118: DNSE unreachable, last close from ssi daily candles
                 price_source = "ssi-fallback (daily close; DNSE unreachable)"
@@ -310,8 +315,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         out: dict[str, Any] = {
             "symbol": symbol.upper(), "price": price, "method": "per_pb",
             "price_source": price_source,
-            "price_as_of": None,  # recorded batch-quote fixture has no observation timestamp
-            "price_unit": "unverified",
+            "price_as_of": price_as_of,
+            "price_unit": "VND/share" if price is not None else None,
             "price_adjustment_basis": "unverified",
             "eps_period": None,
             "eps_frequency": None,

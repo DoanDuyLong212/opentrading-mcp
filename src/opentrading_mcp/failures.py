@@ -80,7 +80,7 @@ UPSTREAMS: dict[str, str] = {
     "dnse_indices": "dnse-ws",
     "vn_company": "vnstock",
     "vs_company_info": "vietstock",
-    "vn_fundamentals": "vnstock",
+    "vn_fundamentals": "vietstock",  # vs_ratios (financeinfo) since #108
     "vn_retail_fx": "vietcombank",
     "vs_currency": "vietstock",
     "vs_market_index": "vietstock",
@@ -95,12 +95,12 @@ ALTERNATIVES: dict[str, tuple[str, ...]] = {
     # Q2 (owner decision 2026-11-09): no detailed profile source since fhsc was dropped;
     # vs_company_info has name/exchange/type. One way: vn_company is not configured.
     "vn_company": ("vs_company_info",),
-    "vn_fundamentals": ("vs_trading_info",),  # PE, PB, EPS
     # vs_currency rows carry no currency names (checked 2026-11-09), so it is not a
     # usable stand-in for vn_retail_fx; the reverse holds (same Vietcombank figures,
     # labelled, separate upstream).
     "vs_currency": ("vn_retail_fx",),
-    "vs_trading_info": ("vn_fundamentals",),
+    # vn_fundamentals and vs_trading_info both read Vietstock, so they fail together
+    # and no longer suggest each other (#85).
 }
 
 

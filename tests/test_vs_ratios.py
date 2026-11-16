@@ -241,6 +241,16 @@ async def test_vn_fundamentals_returns_the_vietstock_table(financeinfo):
     assert env["data"]["periods"][0] == "Q3/2026"
 
 
+async def test_vn_fundamentals_report_type_never_changes_the_numbers(financeinfo):
+    """#85: report_type was a no-op that only split the cache; now it is said so."""
+    ttm = await _tool("vn_fundamentals")(symbol="FPT", report_type="ttm")
+    latest = await _tool("vn_fundamentals")(symbol="FPT", report_type="latest")
+    assert ttm["data"] == latest["data"]
+    assert "report_type" not in latest["data"]
+    assert not any("report_type" in w for w in ttm["warnings"])
+    assert any("report_type='latest' is ignored" in w for w in latest["warnings"])
+
+
 async def test_vn_fundamentals_session_rejected_is_unavailable(financeinfo):
     from opentrading_mcp.providers.errors import ProviderAuthMissing
 

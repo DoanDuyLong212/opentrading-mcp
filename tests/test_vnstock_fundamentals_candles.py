@@ -173,8 +173,9 @@ async def test_valuation_run_uses_trailing_eps_not_price_over_pe(monkeypatch):
     assert data["eps_period"] == "2025"
     assert data["eps_frequency"] == "annual"
     assert data["eps_basis"] == "trailing_four_quarters"
-    assert data["price_as_of"] is None
-    assert data["price_unit"] == "unverified"
+    assert data["price_as_of"] is None  # the fake board row has no time
+    assert data["price_source"] == "dnse.board"
+    assert data["price_unit"] == "VND/share"
     assert data["price_adjustment_basis"] == "unverified"
     assert data["per_basis"] == "quote_price_over_reported_eps"
     assert env["availability"] == "available"

@@ -4,7 +4,7 @@ VN scope (6 price series): VNINDEX/GOLD_W/USDVND/RON95/BTC/BRENT
   monthly + anchors (TPCP/deposit/TPDN/SJC-spread/foreign, provenance-kept)
   + Granger-verified chains.
 Global scope (17 ETFs): monthly + NBER-phase + corr regimes + outlook snapshot.
-Refresh: yfinance/VCI/petrol-API (no auth); FRED optional (USREC w/ hardcoded
+Refresh: yfinance/vnstock (ssi→dnse)/petrol-API; FRED optional (USREC w/ hardcoded
 fallback 2020-03/04). Batch ~12 symbols/call like cycle_stats.
 """
 
