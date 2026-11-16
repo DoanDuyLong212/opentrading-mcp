@@ -21,6 +21,8 @@ import hashlib
 import hmac
 import json
 import os
+import threading
+import time
 from datetime import UTC, datetime
 from typing import Any
 from urllib import parse
@@ -76,16 +78,50 @@ def signed_headers(method: str, path: str) -> dict[str, str]:
     }
 
 
+# #118: Render (Singapore) cannot open a connection to openapi.dnse.com.vn; each try
+# waits the full 20 s timeout. After one failed CONNECT, every DNSE call fails at once
+# for this long instead of tying up the (single, free-plan) instance again. Only a real
+# connect failure arms it: a read timeout means DNSE answered the connection, and the
+# fast failure below never re-arms it, so DNSE is tried again when the window ends.
+CONNECT_DOWN_FOR_S = 300.0
+_connect_lock = threading.Lock()
+_connect_down_until = 0.0
+
+
+def _connect_down_left() -> float:
+    with _connect_lock:
+        return max(_connect_down_until - time.monotonic(), 0.0)
+
+
+def _mark_connect_down() -> None:
+    global _connect_down_until
+    with _connect_lock:
+        _connect_down_until = time.monotonic() + CONNECT_DOWN_FOR_S
+
+
 @guarded("dnse")
 def _get(path: str, params: dict[str, Any] | None = None, timeout: int = 20) -> Any:
     try:
         headers = signed_headers("get", path)
     except ProviderAuthMissing:
         raise
+    left = _connect_down_left()
+    if left > 0:
+        # "dnse unreachable" keeps dnse_board's ssi fallback working (_unreachable)
+        raise ProviderUnavailable(
+            f"dnse unreachable: {path} (could not connect recently; next try in {int(left)} s)",
+            reason="upstream_down",
+            retry_after_s=int(left) + 1,
+        )
     try:
         response = shared_client().get(
             f"{BASE}{path}", headers=headers, params=params, timeout=timeout
         )
+    except (httpx.ConnectTimeout, httpx.ConnectError) as exc:
+        _mark_connect_down()
+        if isinstance(exc, httpx.TimeoutException):
+            raise ProviderUnavailable(f"dnse timeout: {path}") from exc
+        raise ProviderUnavailable(f"dnse unreachable: {path}") from exc
     except httpx.TimeoutException as exc:
         raise ProviderUnavailable(f"dnse timeout: {path}") from exc
     except httpx.HTTPError as exc:

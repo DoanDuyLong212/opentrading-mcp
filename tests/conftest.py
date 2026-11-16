@@ -83,9 +83,18 @@ def _isolate_memory_cache():
     except Exception:
         pass
     _clear_ratio_caches()
+    _reset_dnse_connect_window()
     yield
     _memory.clear()
     _clear_ratio_caches()
+    _reset_dnse_connect_window()
+
+
+def _reset_dnse_connect_window() -> None:
+    """A test that fakes a DNSE connect timeout must not fail every later DNSE test."""
+    dnse = sys.modules.get("opentrading_mcp.providers.dnse")
+    if dnse is not None:
+        dnse._connect_down_until = 0.0
 
 
 def _clear_ratio_caches() -> None:
