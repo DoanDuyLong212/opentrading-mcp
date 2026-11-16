@@ -44,24 +44,64 @@ async def test_vn_fundamentals_accepts_report_type():
     assert "report_type" in inspect.signature(tool.fn).parameters
 
 
-async def test_vn_retail_gold_accepts_source(monkeypatch):
-    """Gen 6: Retail gold is gone — the tool always rides the direct BTMC fetch."""
+def _gold_sources(monkeypatch, *, pnj_ok: bool) -> list[str]:
     from opentrading_mcp.providers import vn_public as pub_p
+    from opentrading_mcp.providers.errors import ProviderUnavailable
 
-    seen: dict[str, Any] = {}
+    called: list[str] = []
+
+    def fake_pnj():
+        called.append("pnj")
+        if not pnj_ok:
+            raise ProviderUnavailable("PNJ fetch failed: timed out")
+        return [{"name": "Vàng miếng SJC 999.9", "code": "SJC",
+                 "buy_price": 13_450_000.0, "sell_price": 13_750_000.0, "time": None}]
 
     def fake_btmc_gold():
-        seen["called"] = True
-        return [{"SJC 1L": 1}, {"NHẪN trơn": 2}, {"other": 3}]
+        called.append("btmc")
+        return [  # BTMC feed: newest first, plus history and other products
+            {"name": "VÀNG MIẾNG SJC (Vàng SJC)", "buy_price": "13350000",
+             "sell_price": "13750000", "time": "16/11/2026 13:27"},
+            {"name": "VÀNG MIẾNG SJC (Vàng SJC)", "buy_price": "13300000",
+             "sell_price": "13700000", "time": "16/11/2026 13:15"},
+            {"name": "TRANG SỨC 99.9", "buy_price": "1", "sell_price": "2", "time": ""},
+        ]
 
+    monkeypatch.setattr(pub_p, "pnj_gold", fake_pnj)
     monkeypatch.setattr(pub_p, "btmc_gold", fake_btmc_gold)
-    fn = _tool_fn("vn_retail_gold")
-    env = await fn(source="sjc")
+    return called
+
+
+async def test_vn_retail_gold_auto_serves_pnj_first(monkeypatch):
+    called = _gold_sources(monkeypatch, pnj_ok=True)
+    env = await _tool_fn("vn_retail_gold")()
     _check_envelope(env, "vn_retail_gold")
-    assert seen["called"] is True
-    assert seen and env["provenance"]["source"] == "btmc-direct"
-    rows = env["data"]["rows"]
-    assert rows and all("SJC" in str(r) or "NHẪN" in str(r) for r in rows)
+    assert called == ["pnj"]
+    assert env["provenance"]["source"] == "pnj-direct"
+    assert env["data"]["unit"].startswith("đồng/chỉ")
+    assert env["data"]["rows"][0]["sell_price"] == 13_750_000.0
+
+
+async def test_vn_retail_gold_falls_back_to_btmc_newest_quote_only(monkeypatch):
+    """#126: PNJ down → BTMC, newest row per product, numbers in dong per chi."""
+    called = _gold_sources(monkeypatch, pnj_ok=False)
+    env = await _tool_fn("vn_retail_gold")(source="auto")
+    assert called == ["pnj", "btmc"]
+    assert env["provenance"]["source"] == "btmc-direct"
+    assert env["data"]["rows"] == [{"name": "VÀNG MIẾNG SJC (Vàng SJC)", "buy_price": 13_350_000.0,
+                                    "sell_price": 13_750_000.0, "time": "16/11/2026 13:27"}]
+    assert any("failed first" in w and "pnj" in w for w in env["warnings"])
+
+
+async def test_vn_retail_gold_unknown_source_is_said_not_silently_ignored(monkeypatch):
+    """#85: source='sjc' used to be ignored without a word."""
+    called = _gold_sources(monkeypatch, pnj_ok=True)
+    env = await _tool_fn("vn_retail_gold")(source="sjc")
+    assert called == ["pnj"]
+    assert any("source='sjc' is not served" in w for w in env["warnings"])
+    only_btmc = await _tool_fn("vn_retail_gold")(source="btmc")
+    assert only_btmc["provenance"]["source"] == "btmc-direct"
+    assert called == ["pnj", "btmc"]
 
 
 async def test_vn_index_ohlcv_accepts_interval(monkeypatch):

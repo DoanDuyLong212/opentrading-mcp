@@ -150,7 +150,9 @@ def _parse_btmc(payload: Any) -> list[dict[str, Any]]:
     return out
 
 
-@guarded("vn_public")
+# Each gold source has its own breaker (#126): BTMC timing out from Render used to
+# count toward "vn_public", which Vietcombank rates and the analyst listing share.
+@guarded("btmc")
 def btmc_gold() -> list[dict[str, Any]]:
     """BTMC retail gold over HTTPS with timeout (P11).
 
@@ -164,6 +166,83 @@ def btmc_gold() -> list[dict[str, Any]]:
     except Exception as exc:
         raise ProviderUnavailable(f"BTMC fetch failed: {exc}") from exc
     return _parse_btmc(payload)
+
+
+def _gold_number(value: Any) -> float | None:
+    try:
+        number = float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def btmc_retail() -> list[dict[str, Any]]:
+    """SJC bar and plain-ring rows from BTMC, newest quote per product, in dong per chi.
+
+    BTMC's feed carries the day's history (about 1,300 rows on 16/11/2026, newest
+    first); only the newest row of each product is kept.
+    """
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in btmc_gold():
+        name = str(row.get("name") or "").strip()
+        upper = name.upper()
+        if not name or name in seen or not ("SJC" in upper or "NHẪN" in upper):
+            continue
+        seen.add(name)
+        out.append(
+            {
+                "name": name,
+                "buy_price": _gold_number(row.get("buy_price")),
+                "sell_price": _gold_number(row.get("sell_price")),
+                "time": row.get("time") or None,
+            }
+        )
+    if not out:
+        raise ProviderBadData("BTMC returned no SJC or ring gold rows")
+    return out
+
+
+PNJ_URL = "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price?zone=00"
+
+
+def _parse_pnj(payload: Any) -> list[dict[str, Any]]:
+    """PNJ rows {masp, tensp, giamua, giaban} are thousand dong per chi (SJC sell 13750
+    = 13,750,000 dong, matching BTMC on 16/11/2026); returned in dong per chi."""
+    try:
+        items = payload["data"]
+    except (KeyError, TypeError) as exc:
+        raise ProviderBadData("PNJ payload malformed") from exc
+    out: list[dict[str, Any]] = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict) or not item.get("tensp"):
+            continue
+        buy = _gold_number(item.get("giamua"))
+        sell = _gold_number(item.get("giaban"))
+        out.append(
+            {
+                "name": str(item["tensp"]),
+                "code": item.get("masp"),
+                "buy_price": buy * 1000 if buy is not None else None,
+                "sell_price": sell * 1000 if sell is not None else None,
+                "time": None,  # the feed carries no quote time
+            }
+        )
+    if not out:
+        raise ProviderBadData("PNJ returned no gold rows")
+    return out
+
+
+@guarded("pnj")
+def pnj_gold() -> list[dict[str, Any]]:
+    """PNJ retail gold (SJC bar, PNJ ring, jewellery grades), dong per chi."""
+    try:
+        resp = shared_client().get(PNJ_URL, timeout=8.0)
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        raise ProviderUnavailable(f"PNJ fetch failed: {exc}") from exc
+    return _parse_pnj(payload)
 
 
 @guarded("vn_public")

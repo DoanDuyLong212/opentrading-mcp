@@ -48,6 +48,7 @@ ALLOWED_SOURCES = frozenset(
         "alternative.me",
         "msn",
         "btmc-direct",
+        "pnj-direct",
         "vnstock-retail",
         "vietcombank",
     }

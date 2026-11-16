@@ -64,6 +64,20 @@ def test_btmc_gold_parses_direct_payload():
     assert rows[0]["sell_price"] == "182000000"
 
 
+def test_pnj_gold_parses_thousand_dong_per_chi():
+    """Live shape 16/11/2026: SJC giaban 13750 = 13,750,000 dong per chi (BTMC: 13750000)."""
+    from opentrading_mcp.providers import vn_public as pub_p
+
+    payload = {"data": [
+        {"masp": "SJC", "tensp": "Vàng miếng SJC 999.9", "giaban": 13750, "giamua": 13450},
+        {"masp": "N24K", "tensp": "Nhẫn Trơn PNJ 999.9", "giaban": 13690, "giamua": 13270},
+        {"masp": "X", "tensp": "", "giaban": 1, "giamua": 1},
+    ]}
+    rows = pub_p._parse_pnj(payload)
+    assert [r["code"] for r in rows] == ["SJC", "N24K"]
+    assert (rows[0]["buy_price"], rows[0]["sell_price"]) == (13_450_000, 13_750_000)
+
+
 async def test_retail_gold_prefers_direct_fetch(monkeypatch):
     async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
         return [{"name": "VÀNG MIẾNG SJC 1L", "buy_price": "1", "sell_price": "2"}]
