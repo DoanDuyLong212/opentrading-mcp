@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from opentrading_mcp.providers import vnstock as vn_p
+from opentrading_mcp.providers import vs_ratios
 from opentrading_mcp.server import create_server, register_preset
 
 
@@ -26,7 +27,7 @@ async def test_screener_technical_stage_filters(monkeypatch):
                 {"symbol": "VCB", "exchange": "HOSE"},
                 {"symbol": "HPG", "exchange": "HOSE"},
             ]
-        if target is vn_p.equity_fundamentals:
+        if target is vs_ratios.equity_fundamentals:
             return {"pe": 10.0, "roe": 0.2}
         if target is vn_p.quote_history:
             return [

@@ -17,9 +17,10 @@ import pandas as pd
 import pytest
 
 from opentrading_mcp.providers import vnstock as vn
+from opentrading_mcp.providers import vs_ratios
 
 
-def _fa_table(
+def _ratio_table(
     pe: float | None,
     roe_pct: float | None,
     eps: float | None,
@@ -41,11 +42,13 @@ def _fa_table(
     }
 
 
-def test_equity_fundamentals_reads_the_fa_table(monkeypatch):
+def test_equity_fundamentals_reads_the_ratio_table(monkeypatch):
     monkeypatch.setattr(
-        vn, "equity_ratios", lambda symbol, period="year": _fa_table(15.91, 28.3, 6021.21, 25679.55)
+        vs_ratios,
+        "equity_ratios",
+        lambda symbol, period="year": _ratio_table(15.91, 28.3, 6021.21, 25679.55),
     )
-    out = vn.equity_fundamentals("fpt")
+    out = vs_ratios.equity_fundamentals("fpt")
     assert {
         key: out[key]
         for key in ("symbol", "pe", "roe", "market_cap", "eps", "bvps", "period_label")
@@ -59,26 +62,30 @@ def test_equity_fundamentals_reads_the_fa_table(monkeypatch):
         "period_label": "2025",
     }
     assert out["frequency"] == "annual"
-    # annual fa rows are the audited year, not TTM (#76)
-    assert out["eps_basis"] == "reported_period_ratio"
+    # Vietstock EPS is trailing four quarters in both tables
+    assert out["eps_basis"] == "trailing_four_quarters"
     assert out["market_cap_status"] == "missing_from_ratio_table"
 
 
 def test_equity_fundamentals_small_roe_is_still_percent(monkeypatch):
     # 0.9% ROE → 0.009 fraction; the old >1 heuristic would read this as 90%.
     monkeypatch.setattr(
-        vn, "equity_ratios", lambda symbol, period="year": _fa_table(15.91, 0.9, 6021.21, 25679.55)
+        vs_ratios,
+        "equity_ratios",
+        lambda symbol, period="year": _ratio_table(15.91, 0.9, 6021.21, 25679.55),
     )
-    assert vn.equity_fundamentals("X")["roe"] == pytest.approx(0.009)
+    assert vs_ratios.equity_fundamentals("X")["roe"] == pytest.approx(0.009)
 
 
 def test_equity_fundamentals_keeps_valid_zeros(monkeypatch):
-    # A finite 0 computed by fa is a value, not missing data (a break-even
+    # A finite 0 in the ratio table is a value, not missing data (a break-even
     # company reports EPS/ROE 0). Only a missing row/cell is None.
     monkeypatch.setattr(
-        vn, "equity_ratios", lambda symbol, period="year": _fa_table(0.0, 0.0, 6021.21, 0.0)
+        vs_ratios,
+        "equity_ratios",
+        lambda symbol, period="year": _ratio_table(0.0, 0.0, 6021.21, 0.0),
     )
-    out = vn.equity_fundamentals("FPT")
+    out = vs_ratios.equity_fundamentals("FPT")
     assert out["pe"] == 0
     assert out["roe"] == 0
     assert out["bvps"] == 0

@@ -144,6 +144,11 @@ def forensic_coverage(record: dict[str, Any] | None) -> dict[str, dict[str, Any]
     return {field: forensic_field_contract(record, field) for field in sorted(_FORENSIC_INPUTS)}
 
 
+# Ratio rows come from Vietstock financeinfo (providers/vs_ratios.py); the old
+# vnstock_quant.fa table was removed (#81, #82).
+RATIO_SOURCE = "vietstock.financeinfo"
+
+
 def ratio_field_contract(
     item_id: str,
     value: Any = None,
@@ -164,17 +169,12 @@ def ratio_field_contract(
         if field in _PERIOD_END_MULTIPLES
         else None
     )
-    suspect = bool((quality or {}).get("suspected_placeholder"))
     present = _finite(value)
     # A finite reported value is a "supported" observation; the unverified
-    # upstream formula and observation date stay disclosed below. A suspected
-    # placeholder row downgrades to "partial"; an absent expected value is
-    # "partial" as well (known field, missing number).
-    status = (
-        ("partial" if suspect else "supported")
-        if (known and present)
-        else ("partial" if known else "unknown")
-    )
+    # upstream formula and observation date stay disclosed below. An absent
+    # expected value is "partial" (known field, missing number). quality_note
+    # comes from rows the source cannot fill (vs_ratios gap rows, all None).
+    status = ("supported" if present else "partial") if known else "unknown"
     return {
         "field": item_id,
         "status": status,
@@ -183,9 +183,8 @@ def ratio_field_contract(
             "provider_formula_and_observation_as_of_unverified" if known else "unknown_item_id"
         ),
         "decision_eligible": False,
-        "quality_status": "suspected" if suspect else None,
         "quality_note": (quality or {}).get("quality_note"),
-        "source": "vnstock_quant.fa.ratios" if known else None,
+        "source": RATIO_SOURCE if known else None,
         "norm_id": None,
         "formula": None,  # upstream formula is not verified
         "unit": unit,
@@ -279,7 +278,7 @@ def screener_field_contract(
         # disclosed partial gap (expected field, no number)
         present = _finite(value)
         status = "supported" if present else "partial"
-        source = "vnstock_quant.fa.ratios"
+        source = RATIO_SOURCE
         unit = "multiple" if field == "pe" else "ratio"
         basis = "period_end_price" if field == "pe" else "reported_period_ratio"
     else:
@@ -475,7 +474,7 @@ def financial_contract_reference() -> dict[str, Any]:
         "measurement_limits": [
             "financeinfo publication date and revision order unavailable",
             "BCTC publication applies only to matched enriched fields; revision order unavailable",
-            "ratio formula is vnstock_quant.fa (fa.describe documents it);"
+            "ratios are Vietstock financeinfo as reported (formula not published);"
             " publication and revision order unavailable",
             "valuation quote price unit, timestamp and adjustment basis unverified",
             "current-TTM PE and current market-cap source not in this registry",

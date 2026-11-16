@@ -13,7 +13,9 @@ HISTORICAL, one-time: the baseline was captured on 2026-11-08 into
 tests/fixtures/parity_v4_2026-11-08/. It only runs against vnstock 4.x (which
 stops authenticating on 2026-11-10) and against the v4 adapter functions; on
 the gen-6 adapter several of them no longer exist (forex/global/msn moved to
-providers/yfinance.py). Do not re-run it to refresh the baseline.
+providers/yfinance.py; equity_ratios/equity_fundamentals/cashflow were
+removed with the fa code, #81/#82; ratios come from providers/vs_ratios.py).
+Do not re-run it to refresh the baseline.
 """
 
 from __future__ import annotations

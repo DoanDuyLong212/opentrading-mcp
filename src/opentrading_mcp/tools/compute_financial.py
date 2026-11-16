@@ -198,14 +198,11 @@ _PEER_METRIC_ALIASES = {
 
 
 def _ratio_quality(ratios: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Keep source quality flags when a ratio series is projected to one value."""
+    """Keep the source quality note when a ratio series is projected to one value."""
     return {
-        ratio["item_id"]: {
-            key: ratio[key]
-            for key in ("suspected_placeholder", "quality_note") if key in ratio
-        }
+        ratio["item_id"]: {"quality_note": ratio["quality_note"]}
         for ratio in ratios
-        if "suspected_placeholder" in ratio or "quality_note" in ratio
+        if "quality_note" in ratio
     }
 
 
@@ -500,7 +497,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng % (roe 28.3 =
         28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ (dòng có as_of
         "period_end", kèm note). peers: thêm chỉ số kỳ mới nhất của từng mã.
-        metric_quality trên peer giữ cờ nghi vấn và ghi chú nguồn theo từng item_id.
+        metric_quality trên peer giữ ghi chú nguồn (quality_note) theo từng item_id.
         """
         # gen 6: period labels come from fa (computed locally), no upstream frame
         # parsing to refuse; rejected labels surface via discarded_period_labels.
@@ -586,7 +583,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         bvps là tên tắt của p_e, p_b, roe, roa, trailing_eps, book_value_per_share_bvps).
         Mỗi dòng là chỉ số năm báo cáo mới nhất của mã (period_label): % cho tỷ suất, đồng cho
         EPS/BVPS, bội số cuối kỳ cho P/E, P/B (dòng có valuation_as_of, kèm note).
-        metric_quality giữ cờ nghi vấn và ghi chú nguồn theo từng item_id được chọn.
+        metric_quality giữ ghi chú nguồn (quality_note) theo từng item_id được chọn.
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
         # v7: retain reported frequency, metric basis and rejected period labels.

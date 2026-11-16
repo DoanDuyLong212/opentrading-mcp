@@ -12,10 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pytest
 
-from opentrading_mcp.providers import vnstock as vn_p
 from opentrading_mcp.providers import vs_ratios as vsr_mod
 from opentrading_mcp.server import create_server, register_preset
 from opentrading_mcp.tools import compute_financial as comp_fin
@@ -71,51 +69,6 @@ def _install(monkeypatch, calls: list[tuple[str, str]]) -> None:
     monkeypatch.setattr(comp_fin, "_call", fake_call)
 
 
-def _fa_long(rows: list[dict[str, Any]]) -> pd.DataFrame:
-    return pd.DataFrame(rows, columns=["symbol", "period", "id", "value", "unit", "reason"])
-
-
-def test_fa_table_orders_periods_newest_first_and_scales_ratios():
-    # fa emits decimals; the v4 table is percent-scaled and newest-first.
-    long = _fa_long(
-        [
-            {
-                "symbol": "FPT",
-                "period": "2024",
-                "id": "RT_PRT_ROE",
-                "value": 0.25,
-                "unit": "ratio",
-                "reason": "",
-            },
-            {
-                "symbol": "FPT",
-                "period": "2025",
-                "id": "RT_PRT_ROE",
-                "value": 0.283,
-                "unit": "ratio",
-                "reason": "",
-            },
-            {
-                "symbol": "FPT",
-                "period": "2025",
-                "id": "RT_VALUE_PE",
-                "value": 15.91,
-                "unit": "times",
-                "reason": "",
-            },
-        ]
-    )
-    out = vn_p._fa_to_v4_table("FPT", "year", long)
-    assert out["periods"] == ["2025", "2024"]
-    by_id = {r["item_id"]: r for r in out["ratios"]}
-    assert by_id["p_e"]["values"]["2025"] == 15.91  # multiple stays a multiple
-    assert by_id["roe"]["values"]["2025"] == pytest.approx(28.3)  # decimal → percent
-    assert by_id["roe"]["rt_id"] == "RT_PRT_ROE"
-    assert by_id["roe_trailling"]["values"] == by_id["roe"]["values"]
-    if "trailing_eps" in by_id:
-        assert by_id["trailing_eps"]["basis"] == "trailing_four_quarters"
-
-
 async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
     calls: list[tuple[str, str]] = []
     _install(monkeypatch, calls)
@@ -128,71 +81,6 @@ async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
     # A computed 0 is a value (fa computes it from statements) — never nulled.
     assert data["ratios"][1]["values"] == dict.fromkeys(data["periods"], 0.0)
     assert "suspected_placeholder" not in data["ratios"][1]
-
-
-def test_fa_table_keeps_genuine_all_zero_metrics():
-    long = _fa_long(
-        [
-            {
-                "symbol": "FPT",
-                "period": "2025",
-                "id": "RT_PRT_ROE",
-                "value": 0.0,
-                "unit": "ratio",
-                "reason": "",
-            },
-            {
-                "symbol": "FPT",
-                "period": "2024",
-                "id": "RT_PRT_ROE",
-                "value": 0.0,
-                "unit": "ratio",
-                "reason": "",
-            },
-        ]
-    )
-    out = vn_p._fa_to_v4_table("FPT", "year", long)
-    roe = next(r for r in out["ratios"] if r["item_id"] == "roe")
-    assert roe["values"] == {"2025": 0.0, "2024": 0.0}
-    assert "suspected_placeholder" not in roe
-
-
-def test_fa_table_zero_variants_and_real_gaps():
-    long = _fa_long(
-        [
-            {
-                "symbol": "FPT",
-                "period": "2025",
-                "id": "RT_PRT_ROE",
-                "value": 0.0,
-                "unit": "ratio",
-                "reason": "",
-            },  # zero stays zero
-            {
-                "symbol": "FPT",
-                "period": "2024",
-                "id": "RT_PRT_ROE",
-                "value": float("inf"),
-                "unit": "ratio",
-                "reason": "",
-            },
-            {
-                "symbol": "FPT",
-                "period": "2025",
-                "id": "RT_VALUE_PE",
-                "value": float("nan"),
-                "unit": "times",
-                "reason": "MISSING_MARKET",
-            },
-        ]
-    )
-    out = vn_p._fa_to_v4_table("FPT", "year", long)
-    by_id = {r["item_id"]: r["values"] for r in out["ratios"]}
-    assert by_id["roe"]["2025"] == 0.0
-    assert by_id["roe"]["2024"] is None  # non-finite is not a value
-    assert by_id["p_e"]["2025"] is None
-    pe = next(r for r in out["ratios"] if r["item_id"] == "p_e")
-    assert "MISSING_MARKET" in (pe.get("quality_note") or "")
 
 
 async def test_financial_ratios_cache_hit_keeps_zeros(monkeypatch):

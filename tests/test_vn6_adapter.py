@@ -315,10 +315,8 @@ def test_alt_ohlcv_groups_use_count_back_and_named_interval(monkeypatch):
         lambda: vn_p.company_info("FPT"),
         lambda: vn_p.insider_trading("FPT"),
         lambda: vn_p.corp_events("FPT"),
-        lambda: vn_p.cashflow("FPT"),
-        lambda: vn_p.equity_ratios("FPT", "year"),
     ],
-    ids=["quote", "company", "insider", "events", "cashflow", "ratios"],
+    ids=["quote", "company", "insider", "events"],
 )
 def test_fhsc_only_routes_fail_as_not_configured(monkeypatch, call):
     """Routes only fhsc/fmp/tcbs serve must say 'not configured' (not retryable)

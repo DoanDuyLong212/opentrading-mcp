@@ -251,77 +251,50 @@ def test_valuation_run_eps_fallback(monkeypatch):
     assert "2025" in env["data"]["eps_source"]
 
 
-def test_financial_detail_lctt_vnstock_fallback(monkeypatch):
-    """Vietstock LCTT norms empty upstream → vnstock cashflow fallback (not unavailable)."""
+def _lctt_env(monkeypatch, lctt):
+    """financial_detail(LCTT) when Vietstock's LCTT norms are empty upstream."""
     from opentrading_mcp.providers import vietstock as vs_p
-    from opentrading_mcp.providers import vnstock as vn_p
     from opentrading_mcp.providers.errors import ProviderBadData
     from opentrading_mcp.tools import corp as corp_mod
 
     def boom_detail(symbol: str, statement: str = "KQKD", periods_n: int = 8) -> dict:
         raise ProviderBadData(f"vietstock no norms for {symbol} {statement}")
 
-    def fake_cf(symbol: str, period: str = "quarter") -> dict:
-        return {
-            "symbol": symbol,
-            "period": period,
-            "unit": "VNDbn",
-            "periods": ["Q1/2026", "Q2/2026"],
-            "rows": [{"name": "Test flow", "values": [1.0, 2.0]}],
-        }
-
     monkeypatch.setattr(vs_p, "financial_detail", boom_detail)
-    monkeypatch.setattr(vn_p, "cashflow", fake_cf)
+    monkeypatch.setattr(vs_p, "financial_lctt", lctt)
     monkeypatch.setattr(corp_mod, "vs_p", vs_p)
     import asyncio
 
     server = create_server()
     register_all(server)
     fn = server._tool_manager.get_tool("financial_detail").fn
-    env = asyncio.new_event_loop().run_until_complete(fn(symbol="FPT", statement="LCTT"))
+    return asyncio.new_event_loop().run_until_complete(fn(symbol="FPT", statement="LCTT"))
+
+
+def test_financial_detail_lctt_reads_vietstock_bctc(monkeypatch):
+    """Vietstock LCTT norms empty upstream → LCTT values from Vietstock BCTC."""
+
+    def fake_lctt(symbol: str, years: int = 2) -> dict:
+        return {"symbol": symbol, "rows": [{"name": "Test flow", "values": [1.0, 2.0]}]}
+
+    env = _lctt_env(monkeypatch, fake_lctt)
     assert env["availability"] == "available", env
-    assert env["provenance"]["source"] == "vnstock"
-    assert any("LCTT empty upstream" in w for w in env["warnings"])
+    assert env["provenance"]["source"] == "vietstock"
     assert env["data"]["rows"][0]["name"] == "Test flow"
 
 
-def test_cashflow_parser_skips_metadata_columns(monkeypatch):
-    """Gen-6 wide cashflow frames carry item_en/item_id columns — only period cols become values."""
-    import sys
-    import types
+def test_financial_detail_lctt_unavailable_names_both_failures(monkeypatch):
+    """No vnstock cash-flow fallback any more (it needed fhsc, #81/#82): both
+    Vietstock failures are reported."""
+    from opentrading_mcp.providers.errors import ProviderUnavailable
 
-    import pandas as pd
+    def dead_lctt(symbol: str, years: int = 2) -> dict:
+        raise ProviderUnavailable("vietstock bctc down")
 
-    import opentrading_mcp.providers.vnstock as vn_p
-
-    class FakeEquity:
-        def cash_flow(self, period: str = "quarter", format: str = "wide", **kwargs: Any) -> Any:
-            return pd.DataFrame(
-                [
-                    {
-                        "item": "Test flow",
-                        "item_en": "x",
-                        "item_id": 1,
-                        "2026-Q1": 1_000_000_000.0,
-                        "2026-Q2": 2_000_000_000.0,
-                    },
-                ]
-            )
-
-    class FakeFundamental:
-        def __init__(self, source=None, **kwargs):
-            assert source == "fhsc"
-
-        def equity(self, symbol: str) -> FakeEquity:
-            return FakeEquity()
-
-    fake_vnstock = types.ModuleType("vnstock")
-    fake_vnstock.Fundamental = FakeFundamental
-    monkeypatch.setitem(sys.modules, "vnstock", fake_vnstock)
-    out = vn_p.cashflow("FPT")
-    assert out["periods"] == ["2026-Q1", "2026-Q2"], out["periods"]
-    assert out["rows"] == [{"name": "Test flow", "values": [1.0, 2.0]}]
-    assert out["rows"][0]["values"] == [1.0, 2.0]  # raw VND → VNDbn
+    env = _lctt_env(monkeypatch, dead_lctt)
+    assert env["availability"] == "unavailable", env
+    assert any("no norms" in w for w in env["warnings"])
+    assert any("bctc down" in w for w in env["warnings"])
 
 
 def test_vnstock_api_key_helpers(monkeypatch):
