@@ -40,35 +40,6 @@ async def test_empty_range_is_not_a_required_metric(monkeypatch):
 # --- #44 mục 4: nhánh dữ liệu kiểu cũ không trả NaN/inf ------------------------------
 
 
-def test_fa_table_treats_non_finite_and_boolean_cells_as_missing():
-    """fa cells that are NaN/±Infinity/boolean are never financial numbers."""
-    import pandas as pd
-
-    from opentrading_mcp.providers import vnstock as vn_p
-    from opentrading_mcp.providers.screener import apply_filters
-
-    for value in (float("inf"), float("nan"), True, False):
-        assert apply_filters([{"roe": pd.Series([value]).iloc[0]}], {"roe": [0, 2]}) == []
-        long = pd.DataFrame(
-            [
-                {
-                    "symbol": "AAA",
-                    "period": "2025-Q4",
-                    "id": "RT_PRT_ROE",
-                    "value": value,
-                    "unit": "ratio",
-                    "reason": "",
-                },
-            ]
-        )
-        table = vn_p._fa_to_v4_table("AAA", "quarter", long)
-        roe = next(r for r in table["ratios"] if r["item_id"] == "roe")
-        assert roe["values"]["2025-Q4"] is None
-
-
-# --- #44 mục 5: valuation_run hiển thị EPS/BVPS bằng 0 -------------------------------
-
-
 async def test_valuation_run_echoes_a_reported_zero(monkeypatch):
     from typing import Any
 

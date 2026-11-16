@@ -92,7 +92,6 @@ def _clear_ratio_caches() -> None:
     """In-process ratio caches (6 h TTL) must not carry a stubbed table from one
     test module into another (#91: only test_vn6_ratios cleared its own)."""
     for module, attr in (
-        ("opentrading_mcp.providers.vnstock", "_fa_cache"),
         ("opentrading_mcp.providers.vs_ratios", "_cache"),
     ):
         cache = getattr(sys.modules.get(module), attr, None)

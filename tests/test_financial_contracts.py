@@ -112,14 +112,12 @@ def test_ratio_screener_and_valuation_do_not_fabricate_missing_metadata():
     assert ratio["period_basis"] == "period_end_price"
     assert ratio["publication_as_of"] is None
     assert ratio_field_contract("provider_new_item", 12.0)["status"] == "unknown"
-    suspect = ratio_field_contract(
-        "roe_trailling", 0.0,
-        quality={"suspected_placeholder": True, "quality_note": "all-zero source row"},
-    )
-    assert suspect["status"] == "partial"
-    assert suspect["value_present"] is True
-    assert suspect["quality_status"] == "suspected"
-    assert suspect["quality_note"] == "all-zero source row"
+    gap = ratio_field_contract("p_s", None, quality={"quality_note": "not in financeinfo"})
+    assert gap["status"] == "partial"
+    assert gap["value_present"] is False
+    assert gap["quality_note"] == "not in financeinfo"
+    assert gap["source"] == "vietstock.financeinfo"
+    assert "quality_status" not in gap
     assert screener_field_contract("market_cap", 1e12)["status"] == "unknown"
     assert screener_field_contract("roe", float("nan"))["status"] == "partial"
     out = {"price": 20.0, "price_source": "vnstock.equity_quote_batch",
@@ -169,27 +167,26 @@ def test_central_coverage_for_all_five_financial_tool_families():
         "periods": ["2025", "2024"], "frequency": "annual",
         "ratios": [{"item_id": "p_e", "values": {"2025": 0, "2024": None}},
                    {"item_id": "new_provider_id", "values": {"2025": 10, "2024": 9}},
-                   {"item_id": "roe_trailling", "values": {"2025": 0, "2024": 0},
-                    "suspected_placeholder": True, "quality_note": "all-zero source row"}],
+                   {"item_id": "p_s", "values": {"2025": None, "2024": None},
+                    "quality_note": "not in financeinfo"}],
         "peers": [{"symbol": "VCB", "period_label": "2025", "frequency": "annual",
-                   "values": {"roe_trailling": 0.0},
-                   "metric_quality": {"roe_trailling": {
-                       "suspected_placeholder": True,
-                       "quality_note": "all-zero source row"}}}],
+                   "values": {"p_s": None},
+                   "metric_quality": {"p_s": {"quality_note": "not in financeinfo"}}}],
     })
     assert ratios["coverage_scope"] == "all_reported_periods"
     assert ratios["periods"]["2025"]["p_e"]["status"] == "supported"
     assert ratios["periods"]["2024"]["p_e"]["status"] == "partial"
     assert ratios["periods"]["2025"]["new_provider_id"]["status"] == "unknown"
-    assert ratios["periods"]["2025"]["roe_trailling"]["status"] == "partial"
-    assert ratios["peers"]["VCB"]["fields"]["roe_trailling"]["status"] == "partial"
+    assert ratios["periods"]["2025"]["p_s"]["status"] == "partial"
+    assert ratios["periods"]["2025"]["p_s"]["quality_note"] == "not in financeinfo"
+    assert ratios["peers"]["VCB"]["fields"]["p_s"]["status"] == "partial"
     peers = coverage_for_tool("peer_compare", {
         "rows": [{"symbol": "FPT", "period_label": "2025", "p_e": 15.0,
-                  "roe_trailling": 0.0, "metric_quality": {"roe_trailling": {
-                      "suspected_placeholder": True, "quality_note": "all-zero source row"}}}],
+                  "p_s": None, "metric_quality": {"p_s": {
+                      "quality_note": "not in financeinfo"}}}],
     })
     assert peers["FPT"]["p_e"]["period"] == "2025"
-    assert peers["FPT"]["roe_trailling"]["status"] == "partial"
+    assert peers["FPT"]["p_s"]["status"] == "partial"
     screener = coverage_for_tool("stock_screener", {
         "candidates": [{"symbol": "FPT", "pe": 10.0, "fundamentals_period": "2025"}],
     })

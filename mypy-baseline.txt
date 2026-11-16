@@ -16,7 +16,6 @@
 1 src/opentrading_mcp/providers/technicals.py|var-annotated|Need type annotation for "v"
 1 src/opentrading_mcp/providers/vietstock.py|assignment|Incompatible types in assignment (expression has type "tuple[str, Any | None, Any | None]", variable has type "tuple[Any | None, Any | None]")
 2 src/opentrading_mcp/providers/vietstock.py|type-arg|Missing type arguments for generic type "tuple"
-1 src/opentrading_mcp/providers/vnstock.py|arg-type|Argument 1 to "float" has incompatible type "Any | None"; expected "str | Buffer | SupportsFloat | SupportsIndex"
 1 src/opentrading_mcp/tools/asset_cycle.py|arg-type|Argument 1 to "_yf_close" has incompatible type "str | None"; expected "str"
 1 src/opentrading_mcp/tools/asset_cycle.py|assignment|Incompatible types in assignment (expression has type "str", variable has type "int")
 2 src/opentrading_mcp/tools/asset_cycle.py|index|Invalid index type "int" for "dict[str, bool]"; expected type "str"

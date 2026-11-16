@@ -381,7 +381,6 @@ def _probes() -> list[tuple[str, tuple[str, ...], Callable[[], Any], Compare]]:
         # #111: the board comes from the project DNSE client (v4 KBS shape).
         ("equity_quote_batch", ("dnse",),
          lambda: vn.equity_quote_batch(["FPT", "VCB", "HPG", "VNM", "MWG"]), compare_board),
-        ("cashflow_FPT_quarter", (), lambda: vn.cashflow("FPT", period="quarter"), compare_none),
         ("company_info_FPT", (), lambda: vn.company_info("FPT"), compare_none),
         ("insider_trading_FPT", (), lambda: vn.insider_trading("FPT", limit=10), compare_none),
         # Q1: the ssi calendar (whole market, ~4 min per year) is loaded first.

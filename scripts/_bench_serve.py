@@ -42,7 +42,7 @@ def build_app(port: int):
     from starlette.routing import Route
 
     from opentrading_mcp.providers import dnse as dnse_p
-    from opentrading_mcp.providers import store
+    from opentrading_mcp.providers import store, vs_ratios
     from opentrading_mcp.providers import vnstock as vn_p
     from opentrading_mcp.server import create_server, register_all
     from opentrading_mcp.tools import shared
@@ -71,7 +71,7 @@ def build_app(port: int):
         lambda symbol, days, iv=None: _synthetic_candles(symbol)[:max(int(days), 30)])
     vn_p.equity_quote_batch = instrument(
         lambda symbols: [{"symbol": s, "close": 50., "change": 0.} for s in symbols])
-    vn_p.equity_ratios = instrument(lambda symbol, kind, limit=5: {
+    vs_ratios.equity_ratios = instrument(lambda symbol, period="year": {
         "periods": ["2025"], "frequency": "annual",
         "ratios": [{"item_id": "roe", "values": {"2025": 0.15}, "basis": "annual"}]})
     dnse_p.ws_snapshot = instrument(lambda symbols=None: {"mock": True, "symbols": symbols})

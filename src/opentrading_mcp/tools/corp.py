@@ -672,8 +672,9 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                 timeout_secs=90.0,
             )
         except ProviderBadData as exc:
-            # Vietstock LCTT norms are empty upstream for all symbols —
-            # route: Vietstock BCTC values first (same source), vnstock fallback
+            # Vietstock LCTT norms are empty upstream for all symbols: read the
+            # LCTT values from Vietstock BCTC instead. The old vnstock cash-flow
+            # fallback needed fhsc, which was discontinued (#81, #82).
             if statement.strip().upper() == "LCTT" and "no norms" in str(exc):
                 try:
                     data = await run_blocking(
@@ -685,25 +686,11 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "financial_detail", fp, TTL_SECONDS["financeinfo"],
                         data, source="vietstock",
                     )
-                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
-                    pass
-                try:
-                    from opentrading_mcp.providers import vnstock as vn_p
-
-                    fb = await run_blocking(
-                        functools.partial(vn_p.cashflow, symbol, "quarter"),
-                        "financial_detail_lctt_fb",
-                        timeout_secs=60.0,
-                    )
-                    return make_envelope(
-                        fb, source="vnstock",
-                        warnings=["Vietstock LCTT empty upstream — vnstock fallback"],
-                    )
-                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as fbe:
+                except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as lctt:
                     return make_envelope(
                         {"tool": "financial_detail"},
                         source="unavailable",
-                        warnings=[str(exc), str(fbe)],
+                        warnings=[str(exc), str(lctt)],
                         availability="unavailable",
                     )
             return make_envelope(

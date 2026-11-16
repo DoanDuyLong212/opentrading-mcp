@@ -94,8 +94,3 @@ def test_error_classes_the_adapter_matches_by_name_exist():
         assert hasattr(errors, name), name
 
 
-def test_fa_signatures():
-    fa = pytest.importorskip("vnstock_quant").fa
-    _accepts(fa.ratios, "data", "ids", "period", "format")
-    _accepts(fa.Dataset.load, "symbols", "period", "source", "estimate_shares")
-    _accepts(fa.Dataset.from_frames, "statements", "prices", "estimate_shares")
