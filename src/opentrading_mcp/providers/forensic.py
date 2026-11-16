@@ -11,7 +11,7 @@ import copy
 import math
 import re
 from datetime import date, datetime
-from typing import Any
+from typing import Any, TypeGuard
 from zoneinfo import ZoneInfo
 
 from opentrading_mcp.providers import vietstock
@@ -79,7 +79,7 @@ BCTC_FIELDS = {
 }
 
 
-def finite_number(value: Any) -> bool:
+def finite_number(value: Any) -> TypeGuard[float]:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return False
     try:
@@ -203,7 +203,10 @@ def normalize_annual(raw: dict[str, Any], *, as_of: date | None = None) -> dict[
                 for row in rows:
                     if not isinstance(row, dict):
                         continue
-                    field = GENERAL_LINES[statement].get(row.get("ReportNormID"))
+                    norm_id = row.get("ReportNormID")
+                    field = (
+                        GENERAL_LINES[statement].get(norm_id) if isinstance(norm_id, int) else None
+                    )
                     value = row.get(f"Value{header['ID']}")
                     unit = str(row.get("Unit") or "VND").upper()
                     if field is None or not finite_number(value) or unit not in {"VND", "VNĐ"}:
@@ -386,7 +389,7 @@ def enrich_annual(bundle: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]
         ):
             reject("annual BCTC report scope, term or publication invalid")
             continue
-        lines: dict[int, Any] = {}
+        lines: dict[Any, Any] = {}
         for row in observed:
             norm = row.get("ReportNormId")
             if norm in lines:

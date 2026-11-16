@@ -285,8 +285,9 @@ def _run_strategy(
         px_ok = all(p is not None and math.isfinite(p) and p > 0 for p in candidate)
     else:
         candidate, px_ok = None, False
-    if px_ok:
-        px = candidate
+    px: list[float]
+    if px_ok and candidate is not None:
+        px = [p for p in candidate if p is not None]  # px_ok: none of them is None
         fill_mode = "next-bar-open"
     else:
         px = list(closes)
@@ -335,8 +336,8 @@ def _run_strategy(
                 pnls.append(equity - entry_eq)
     if in_pos:
         # mark the final open position to the last close
-        last_close = closes[-1] if closes else prev_px
         if prev_px:
+            last_close = closes[-1] if closes else prev_px
             equity *= last_close / prev_px
             record_equity()
         pnls.append(equity - entry_eq)
