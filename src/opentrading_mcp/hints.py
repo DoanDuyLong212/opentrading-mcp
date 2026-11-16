@@ -32,7 +32,7 @@ HINTS: dict[str, str] = {
     "vn_equity_quote_batch": "bang gia nhieu ma gia khop | quotes many tickers board",
     "vn_listing": "danh sach ma niem yet toan thi truong | all listed tickers universe",
     "vn_fundamentals": "chi so tai chinh bctc nhanh | ratios statements quick valuation",
-    "vn_retail_gold": "gia vang SJC nhan mua ban | gold price retail",
+    "vn_retail_gold": "gia vang SJC nhan mua ban PNJ BTMC | gold price retail",
     "vn_retail_fx": "ty gia USD Vietcombank mua ban | exchange rate dollar",
     # vs
     "vs_auth_status": "dang nhap Vietstock token het han | login token expiry",

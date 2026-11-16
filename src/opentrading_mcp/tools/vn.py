@@ -247,33 +247,54 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             return _na("vn_fundamentals", f"upstream failed: {exc}")
 
     @server.tool(annotations=READ_ONLY)
-    async def vn_retail_gold(source: str = "btmc") -> dict[str, Any]:
-        """SJC and ring gold buy/sell from BTMC retail. Use for local gold premium.
+    async def vn_retail_gold(source: str = "auto") -> dict[str, Any]:
+        """Giá vàng bán lẻ trong nước: vàng miếng SJC và nhẫn trơn, mua vào / bán ra. Dùng để tính
+            chênh lệch vàng trong nước so với thế giới.
 
-        Gen 6 removed vnstock Retail gold entirely; this tool now always uses
-        the direct BTMC https fetch (the `source` argument is kept for cache-key
-        compatibility and ignored).
+        source: 'auto' (mặc định: PNJ, lỗi thì BTMC), 'pnj' hoặc 'btmc'. Giá trị khác được coi
+            là 'auto' và kèm cảnh báo.
+        rows: {name, buy_price, sell_price, time} — ĐỒNG MỖI CHỈ (1 lượng = 10 chỉ; SJC bán
+            13.750.000 đ/chỉ = 137,5 triệu đ/lượng). time: giờ niêm yết (PNJ không có).
+        Không dùng khi: cần giá vàng thế giới (dùng vn_msn_fx_gold).
         """
-        fp = f"{source}"
+        from opentrading_mcp.providers import vn_public as pub_p
+
+        want = (source or "auto").strip().lower()
+        warnings: list[str] = []
+        if want not in ("auto", "pnj", "btmc"):
+            warnings.append(f"source={source!r} is not served (auto|pnj|btmc): used auto")
+            want = "auto"
+        # v2: rows in dong per chi from PNJ or BTMC, newest quote per product (#126, #85)
+        fp = f"v2|{want}"
         hit = await cache_lookup("vn_retail_gold", fp)
         if hit is not None:
+            if warnings:
+                hit = {**hit, "warnings": [*hit.get("warnings", []), *warnings]}
             return hit
-        try:
-            from opentrading_mcp.providers import vn_public as pub_p
-
-            rows = await run_blocking(pub_p.btmc_gold, "vn_retail_gold", timeout_secs=20.0)
-            keep = [r for r in rows if "SJC" in str(r) or "NHẪN" in str(r)]
+        fetchers = {"pnj": (pub_p.pnj_gold, 12.0), "btmc": (pub_p.btmc_retail, 20.0)}
+        order = ("pnj", "btmc") if want == "auto" else (want,)
+        failed: list[str] = []
+        for name in order:
+            fetch, secs = fetchers[name]
+            try:
+                rows = await run_blocking(fetch, f"vn_retail_gold_{name}", timeout_secs=secs)
+            except (ProviderUnavailable, ProviderBadData) as exc:
+                failed.append(f"{name}: {exc}")
+                continue
+            except Exception as exc:
+                failed.append(f"{name}: upstream failed: {exc}")
+                continue
+            if failed:
+                warnings.append(f"served by {name}; failed first: " + "; ".join(failed))
             return await cache_store(
                 "vn_retail_gold",
                 fp,
                 TTL_SECONDS["hour"],
-                {"rows": keep or rows},
-                source="btmc-direct",
+                {"unit": "đồng/chỉ (1 lượng = 10 chỉ)", "source": name, "rows": rows},
+                source=f"{name}-direct",
+                warnings=warnings or None,
             )
-        except (ProviderUnavailable, ProviderBadData) as exc:
-            return _na("vn_retail_gold", str(exc))
-        except Exception as exc:
-            return _na("vn_retail_gold", f"upstream failed: {exc}")
+        return _na("vn_retail_gold", "; ".join(failed))
 
     @server.tool(annotations=READ_ONLY)
     async def vn_retail_fx() -> dict[str, Any]:
