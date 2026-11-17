@@ -87,14 +87,38 @@ def _seed_token_from_trading_agents() -> str:
     return ""
 
 
+def _credentials_configured() -> bool:
+    return bool(_env("VIETSTOCK_EMAIL")) and bool(_env("VIETSTOCK_PASSWORD"))
+
+
 def auth_status() -> dict[str, Any]:
+    """JWT state. An expired JWT with credentials configured is a re-login (#142),
+    not an outage: the client logs in again on the next paid call."""
     token = _env("VIETSTOCK_COOKIE_LOGIN") or _seed_token_from_trading_agents()
     if not token:
-        return {"authenticated": False, "reason": "no jwt configured"}
+        return {
+            "authenticated": False,
+            "reason": "no jwt configured",
+            "relogin_available": _credentials_configured(),
+        }
     exp = _decode_jwt_exp(token)
     if exp and exp < time.time():
-        return {"authenticated": False, "reason": "jwt expired"}
-    return {"authenticated": True, "jwt_expires_at": int(exp) if exp else None}
+        if _credentials_configured():
+            return {
+                "authenticated": True,
+                "reason": "jwt expired, will re-login on next call",
+                "relogin_available": True,
+                "jwt_expires_at": int(exp),
+            }
+        return {"authenticated": False, "reason": "jwt expired", "relogin_available": False}
+    out: dict[str, Any] = {"authenticated": True, "jwt_expires_at": int(exp) if exp else None}
+    if exp:
+        days = int((exp - time.time()) // 86400)
+        if days < 7:
+            # #142: warn before the cookie dies so the secret can be rotated.
+            out["expiring_soon"] = True
+            out["expires_in_days"] = max(days, 0)
+    return out
 
 
 def _login(client: httpx.Client) -> None:

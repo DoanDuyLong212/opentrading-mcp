@@ -68,6 +68,10 @@ def add_health_routes(server: FastMCP) -> None:
 
     async def readyz(request: Request) -> JSONResponse:
         code, body = await health_report(deep=request.query_params.get("deep") == "1")
+        # #146: /readyz is public, so the component report (driver messages can
+        # carry hostnames) stays behind the token, as with /healthz?full=1.
+        if request.query_params.get("full") != "1":
+            return JSONResponse({"ok": body.get("ok"), "status": code}, status_code=code)
         return JSONResponse(body, status_code=code)
 
     async def metrics(_request: Request) -> PlainTextResponse:

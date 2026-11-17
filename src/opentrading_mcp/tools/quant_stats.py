@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -45,7 +47,11 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         năm hóa cho Sharpe (252 ngày, 52 tuần, 12 tháng).
         Ví dụ: {"returns": [0.01, -0.005, 0.02], "periods_per_year": 252}.
         """
-        fp = f"{returns}|{periods_per_year}"
+        # v2: the fingerprint is a sha256 of the canonical input — the returns list
+        # itself must never become a Redis key (#145).
+        fp = "v2|" + hashlib.sha256(
+            json.dumps([list(returns), int(periods_per_year)]).encode()
+        ).hexdigest()
         hit = await cache_lookup("quant_risk", fp)
         if hit is not None:
             return hit
