@@ -69,7 +69,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("i", vn_p.index_ohlcv, symbol, count, interval)
+            rows = await _call("vn_index_ohlcv", vn_p.index_ohlcv, symbol, count, interval)
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
@@ -113,7 +113,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("e", vn_p.equity_ohlcv, symbol, count, interval)
+            rows = await _call("vn_equity_ohlcv", vn_p.equity_ohlcv, symbol, count, interval)
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
@@ -147,7 +147,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("f", vn_p.futures_ohlcv, symbol, count, interval)
+            rows = await _call("vn_futures_ohlcv", vn_p.futures_ohlcv, symbol, count, interval)
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
@@ -182,7 +182,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("f", yf_p.fx_history, pair, count)
+            rows = await _call("vn_forex_ohlcv", yf_p.fx_history, pair, count)
             if summary:
                 s = _summarize(pair, rows)
                 return await cache_store(
@@ -214,7 +214,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("c", vn_p.crypto_ohlv, symbol, count)
+            rows = await _call("vn_crypto_ohlcv", vn_p.crypto_ohlv, symbol, count)
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
@@ -252,7 +252,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("g", yf_p.global_index, symbol, count)
+            rows = await _call("vn_global_index", yf_p.global_index, symbol, count)
             if summary:
                 s = _summarize(symbol, rows)
                 return await cache_store(
@@ -286,7 +286,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("r", vn_p.reference_equity, exchange, by, key)
+            rows = await _call("vn_reference", vn_p.reference_equity, exchange, by, key)
             return await cache_store(
                 "vn_reference", fp, TTL_SECONDS["categories"],
                 {"exchange": exchange.upper(), "rows": rows}, source="vnstock",
@@ -312,7 +312,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("c", vn_p.company_info, symbol, detail)
+            data = await _call("vn_company", vn_p.company_info, symbol, detail)
             return await cache_store(
                 "vn_company", fp, TTL_SECONDS["financeinfo"],  # static profile
                 data, source="vnstock",
@@ -337,7 +337,7 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("m", yf_p.fx_gold, symbols, days)
+            data = await _call("vn_msn_fx_gold", yf_p.fx_gold, symbols, days)
             return await cache_store(
                 "vn_msn_fx_gold", fp, TTL_SECONDS["market"],  # FX legs trade 24/7
                 {"series": data}, source="yfinance",
@@ -363,7 +363,9 @@ def register_vn_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("t", vn_p.equity_trades, symbol, limit, board, from_date, to_date)
+            rows = await _call(
+                "vn_trades", vn_p.equity_trades, symbol, limit, board, from_date, to_date
+            )
             return await cache_store(
                 "vn_trades", fp, price_ttl(),
                 {"symbol": symbol.upper(), "trades": rows}, source="vnstock",

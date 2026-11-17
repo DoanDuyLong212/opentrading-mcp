@@ -123,7 +123,7 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("f", intel_p.fred_series, series_id, limit)
+            data = await _call("fred_series", intel_p.fred_series, series_id, limit)
             if spark and isinstance(data, dict):
                 points = data.get("points", [])
                 data["spark"] = [p.get("v") for p in points if isinstance(p, dict)]
@@ -146,7 +146,7 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("w", intel_p.worldbank_country, iso3, indicator)
+            data = await _call("world_macro_country", intel_p.worldbank_country, iso3, indicator)
             if isinstance(data, dict) and isinstance(data.get("points"), list):
                 data["points"] = data["points"][: max(int(limit), 1)]
             return await cache_store(
@@ -167,7 +167,7 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("f", intel_p.fear_greed)
+            data = await _call("world_fear_greed", intel_p.fear_greed)
             if isinstance(data, dict) and isinstance(data.get("series"), list):
                 data["series"] = data["series"][: max(int(limit), 1)]
             return await cache_store(
@@ -192,7 +192,9 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            posts = await _call("s", intel_p.fireant_posts, symbol, max(int(limit), 1), secs=45.0)
+            posts = await _call(
+                "sentiment_score", intel_p.fireant_posts, symbol, max(int(limit), 1), secs=45.0
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("sentiment_score", str(exc))
         if not posts:
@@ -235,7 +237,7 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("e", intel_p.gdelt_events, query, max(int(limit), 1))
+            data = await _call("event_stats", intel_p.gdelt_events, query, max(int(limit), 1))
             from opentrading_mcp.providers import geo as geo_p
 
             articles = data.get("articles", []) if isinstance(data, dict) else []
@@ -247,7 +249,7 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         except ProviderUnavailable:
             try:
-                data = await _call("e", intel_p.gdelt_events, query)
+                data = await _call("event_stats", intel_p.gdelt_events, query)
                 from opentrading_mcp.providers import geo as geo_p
 
                 articles = data.get("articles", []) if isinstance(data, dict) else []
@@ -276,7 +278,9 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         windows = {"1d": ("2d", "1d"), "1wk": ("3mo", "1wk"), "1mo": ("1y", "1d")}
         period, interval = windows.get(timeframe, ("2d", "1d"))
         try:
-            data = await _call("c", yf_p.batch_last, assets[:10], period, interval, secs=60.0)
+            data = await _call(
+                "compare_assets", yf_p.batch_last, assets[:10], period, interval, secs=60.0
+            )
             return await cache_store(
                 "compare_assets", fp, TTL_SECONDS["world"],
                 data, source="yfinance",
@@ -298,7 +302,7 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            rows = await _call("i", vn_p.insider_trading, symbol, limit)
+            rows = await _call("insider_trading", vn_p.insider_trading, symbol, limit)
             return await cache_store(
                 "insider_trading", fp, TTL_SECONDS["overview"],
                 {"symbol": symbol.upper(), "deals": rows}, source="vnstock",

@@ -285,8 +285,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             # P06: the two legs are independent — fetch concurrently (was sequential)
             overview, quotes = await asyncio.gather(
-                _call("v", vs_p.overview_trading, symbol, secs=45.0),
-                _call("q", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0),
+                _call("valuation_run", vs_p.overview_trading, symbol, secs=45.0),
+                _call("valuation_run", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0),
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("valuation_run", str(exc))
@@ -470,7 +470,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            raw = await _call("f", vs_p.financeinfo, symbol, period, secs=60.0)
+            raw = await _call("financial_statements", vs_p.financeinfo, symbol, period, secs=60.0)
             data, warnings = vs_p.align_financeinfo(raw, statement, periods_n)
             return await cache_store(
                 "financial_statements", fp, TTL_SECONDS["financeinfo"],
@@ -522,7 +522,9 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             return want in row["item_id"].lower() or want in row["item"].lower()
 
         try:
-            table = await _call("r", vs_ratios.equity_ratios, symbol, period, secs=45.0)
+            table = await _call(
+                "financial_ratios", vs_ratios.equity_ratios, symbol, period, secs=45.0
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("financial_ratios", str(exc))
         kept = [r for r in table["ratios"] if _keep(r)]
@@ -539,7 +541,9 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             out["peers"] = []
             for peer in peers:
                 try:
-                    peer_table = await _call("r", vs_ratios.equity_ratios, peer, period, secs=45.0)
+                    peer_table = await _call(
+                        "financial_ratios", vs_ratios.equity_ratios, peer, period, secs=45.0
+                    )
                 except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
                     out["peers"].append({"symbol": peer.upper(), "error": str(exc)})
                     warnings.append(f"{peer.upper()}: {exc}")
@@ -613,7 +617,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         async def _fetch_table(name: str):
             async with sem:
-                return await _call("p", vs_ratios.equity_ratios, name, "year", secs=45.0)
+                return await _call("peer_compare", vs_ratios.equity_ratios, name, "year", secs=45.0)
 
         gathered = await asyncio.gather(
             *(_fetch_table(name) for name in names), return_exceptions=True
@@ -676,7 +680,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
             trading = await _call(
                 "t", vs_p._post, "/company/tradinginfo", {"code": symbol.upper(), "s": 0}
             )
-            company = await _call("c", vs_p.company_info, symbol)
+            company = await _call("stock_overview", vs_p.company_info, symbol)
             return await cache_store(
                 "stock_overview", fp, price_ttl(),  # embeds a live trading snapshot
                 {"trading": trading, "company": company}, source="vietstock",
@@ -697,7 +701,7 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            docs = await _call("e", vs_p.documents, symbol)
+            docs = await _call("company_events", vs_p.documents, symbol)
             if types is not None and isinstance(docs, list):
                 wanted = {t.strip().lower() for t in types.split(",") if t.strip()}
                 docs = [
