@@ -59,7 +59,8 @@ def _row(table: dict, item_id: str) -> dict:
 
 def test_fpt_year_table_matches_the_vietstock_page(financeinfo):
     t = vs_ratios.equity_ratios("FPT", "year")
-    assert t["periods"] == ["2025", "2024", "2023", "2022", "2021"]  # newest first
+    assert t["periods"] == ["2021", "2022", "2023", "2024", "2025"]  # oldest first (#140)
+    assert t["latest_period"] == "2025"
     assert t["frequency"] == "annual" and t["source"] == "vietstock.financeinfo"
     assert _row(t, "p_e")["values"]["2025"] == 15.91
     assert _row(t, "trailing_eps")["values"]["2025"] == 6021.0
@@ -84,7 +85,7 @@ def test_quarter_returns_are_single_quarter_not_ttm(financeinfo):
     """Vietstock quarter ROE is the quarter's own (FPT ~7 %), not trailing:
     labelling it TTM would be the #76 mistake again."""
     t = vs_ratios.equity_ratios("FPT", "quarter")
-    assert t["periods"][0] == "Q3/2026" and t["frequency"] == "quarterly"
+    assert t["periods"][-1] == "Q3/2026" and t["frequency"] == "quarterly"
     roe = _row(t, "roe")
     assert roe["basis"] == "single_quarter" and roe["values"]["Q3/2026"] == 6.58
     assert _row(t, "trailing_eps")["basis"] == "trailing_four_quarters"
@@ -106,7 +107,7 @@ def test_ids_the_source_lacks_are_explained(financeinfo):
 
 
 def test_no_usable_period_raises_bad_data():
-    """#75: callers index periods[0]; an empty table must fail in the provider."""
+    """#75: an empty table must fail in the provider, not in a caller."""
     aligned = {"periods": ["weird"], "statements": {"Chỉ số tài chính": [
         {"norm_id": 55, "values": {"weird": 1.0}}]}}
     with pytest.raises(ProviderBadData, match="weird"):
@@ -221,7 +222,7 @@ async def test_financial_ratios_peer_error_and_basis(financeinfo):
     financeinfo.failing["VCB"] = ProviderBadData("Vietstock returned no usable year period for VCB")
     env = await _tool("financial_ratios")(symbol="FPT", peers=["VCB"])
     data = env["data"]
-    assert data["periods"][0] == "2025"
+    assert data["periods"][-1] == data["latest_period"] == "2025"
     roe = next(r for r in data["ratios"] if r["item_id"] == "roe")
     assert roe["basis"] == "reported_period_ratio"
     peer = next(p for p in data["peers"] if p["symbol"] == "VCB")
@@ -238,7 +239,7 @@ async def test_financial_ratios_main_symbol_failure_is_unavailable(financeinfo):
 async def test_vn_fundamentals_returns_the_vietstock_table(financeinfo):
     env = await _tool("vn_fundamentals")(symbol="FPT", period="quarter")
     assert env["data"]["source"] == "vietstock.financeinfo"
-    assert env["data"]["periods"][0] == "Q3/2026"
+    assert env["data"]["periods"][-1] == env["data"]["latest_period"] == "Q3/2026"
 
 
 async def test_vn_fundamentals_report_type_never_changes_the_numbers(financeinfo):
