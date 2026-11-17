@@ -209,7 +209,9 @@ async def test_news_market_sources_gdelt(monkeypatch):
     from opentrading_mcp.providers import intel as intel_p
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        if tool == "g":
+        # Dispatch on the callee (#154): labels are tool names now, not codes.
+        # The test also patches gdelt_events with a sentinel, so match either.
+        if "gdelt" in getattr(fn, "__name__", ""):
             return {"articles": [{"title": "g"}]}
         raise AssertionError("vietstock must not be called")
 

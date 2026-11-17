@@ -57,7 +57,8 @@ async def test_valuation_run_method_passthrough():
 async def test_valuation_run_explicit_method(monkeypatch):
 
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any):
-        if tool == "v":
+        # Dispatch on the callee (#154): labels are tool names now, not codes.
+        if getattr(fn, "__name__", "") == "overview_trading":
             return {"EPS": 5.0, "BVPS": 20.0}
         return [{"close_price": 100.0}]
 
