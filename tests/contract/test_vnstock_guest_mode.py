@@ -33,7 +33,7 @@ def test_pins_are_final_releases():
     import re
 
     text = (pathlib.Path(__file__).resolve().parents[2] / "pyproject.toml").read_text("utf-8")
-    pins = re.findall(r'"(vnstock(?:-oapi|-quant)?)>=([^,"]+)', text)
-    assert {name for name, _ in pins} == {"vnstock", "vnstock-oapi", "vnstock-quant"}
+    pins = re.findall(r'"(vnstock(?:-oapi)?)>=([^,"]+)', text)
+    assert {name for name, _ in pins} == {"vnstock", "vnstock-oapi"}
     for name, floor in pins:
         assert "rc" not in floor and "a" not in floor and "b" not in floor, (name, floor)
