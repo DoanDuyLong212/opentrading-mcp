@@ -3,17 +3,18 @@
 Shareable MCP-server for Vietnamese market research. Team internal first, public later.
 
 - Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp`. Legacy HTTP+SSE (`/sse`) đã gỡ 28/10/2026.
-- Presets (each <50 tools): `market`, `scan`, `quant`, `brief`, `intel`, `all`.
+- Single full surface: **174 tools** (175 khi có websearch key). `--preset market|scan|quant|brief|intel` là alias deprecated — vẫn chạy nhưng đăng ký cùng một mặt bằng tool, client tự lọc.
 - Backend: Postgres 16 + Redis 7 only. No MongoDB (`reports` PG JSONB replaces `vietstock_news`).
-- Timezone `Asia/Ho_Chi_Minh` tz-aware everywhere.
+- Thời gian: ngày thị trường theo giờ VN (`Asia/Ho_Chi_Minh`, offset cố định +07:00 —
+  candle/macro/snapshot/cycle dùng `vn_today()`); timestamp hệ thống (`fetched_at`, HTTP Date) là UTC.
 
 ## Quickstart (local, no deploy)
 
 ```bash
-pip install -e ".[dev]"
-PYTHONPATH=src python -m pytest tests/ -v
-opentrading-mcp serve                          # stdio for opencode/claude/cursor (full 139 tools)
-opentrading-mcp serve --http --port 8102            # LAN share
+uv sync --frozen --extra dev                   # vnstock chỉ có trên index uv riêng (pyproject [tool.uv.sources])
+uv run pytest tests/ -q
+uv run opentrading-mcp serve                   # stdio for opencode/claude/cursor (full 174 tools)
+uv run opentrading-mcp serve --http --port 8102     # LAN share
 ```
 
 ## Team LAN / Render
@@ -151,16 +152,16 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
 | Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` (liveness) · `/readyz` (Redis/Postgres/worker; `?deep=1` thêm upstream, `?full=1`/`?deep=1` cần token) |
-| Tools | 139 (140 khi có websearch key), single full surface, client tự lọc |
+| Tools | 174 (175 khi có websearch key), single full surface, client tự lọc |
 | Deploy | Render chạy `serve --http` full surface (xem `Dockerfile` CMD) |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
 | Quy tắc dùng | Rate-limit 120 req/phút/IP; quota 1000 calls/ngày/user (team token bypass quota) |
-| Timezone | `Asia/Ho_Chi_Minh` tz-aware — parse theo giờ VN |
+| Thời gian | Ngày thị trường theo giờ VN (+07:00); timestamp hệ thống UTC |
 
 ### Cách 2 — stdio local (dev, không cần token)
 
 ```bash
-uvx opentrading-mcp serve                     # 139 tools full
+uvx opentrading-mcp serve                     # 174 tools full
 uvx opentrading-mcp serve --preset all        # deprecated alias, vẫn chạy
 ```
 
@@ -177,7 +178,7 @@ File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
 | `availability: "unavailable"` + warnings | Upstream chết/thiếu worker (vd WS trio cần worker local) | Đọc `reason`, `retryable`, `retry_after_s`, `alternatives` (nếu có) và `warnings`; `isError` vẫn là `false` |
 | `availability: "empty"` | Query hợp lệ nhưng không có rows (vd IPO rỗng) | Đúng bản chất, không phải lỗi |
 | Cold start 20–40s | Render free-tier sleep | `/healthz` chỉ đánh thức instance (liveness, không I/O); vnstock được import nền ngay khi process khởi động. Kiểm tra Redis/Postgres: `/readyz` |
-| Timezone | Mọi timestamp `Asia/Ho_Chi_Minh` tz-aware | Parse theo VN, không UTC |
+| Thời gian | Ngày thị trường (nến, snapshot, cycle) theo giờ VN; timestamp hệ thống UTC |
 | Chi tiết đầy đủ | Kiến trúc, bảo mật, DB, clients | `docs/architecture-review-2026-09-30.md` |
 | Bảng 138 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
 | **Thiết kế 19 skills cho harness** | Spec build skills (workflow + budget + acceptance) | `docs/skills-design-for-harness.md` |
