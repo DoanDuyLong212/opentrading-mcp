@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
@@ -1164,7 +1164,6 @@ dependencies = [
     { name = "uvicorn" },
     { name = "vnstock" },
     { name = "vnstock-oapi" },
-    { name = "vnstock-quant" },
     { name = "yfinance" },
 ]
 
@@ -1201,7 +1200,6 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.30" },
     { name = "vnstock", specifier = ">=6.0.0,<7", index = "https://vnstocks.com/api/packages" },
     { name = "vnstock-oapi", specifier = ">=0.1.1,<1", index = "https://vnstocks.com/api/packages" },
-    { name = "vnstock-quant", specifier = ">=1.0.0,<2", index = "https://vnstocks.com/api/packages" },
     { name = "yfinance", specifier = ">=0.2" },
 ]
 provides-extras = ["dev"]
@@ -1819,8 +1817,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "sys_platform != 'win32'" },
+    { name = "jeepney", marker = "sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -1963,24 +1961,6 @@ dependencies = [
 ]
 wheels = [
     { url = "https://vnstocks.com/api/packages/files/vnstock-oapi/0.1.1/vnstock_oapi-0.1.1-py3-none-any.whl", hash = "sha256:3a5c99b91cf63f90af8343cdad3c84ab17f1d22978be10b8b0598f1ba135310c", size = 159491, upload-time = "2026-11-10T14:42:20.075Z" },
-]
-
-[[package]]
-name = "vnstock-quant"
-version = "1.0.0"
-source = { registry = "https://vnstocks.com/api/packages" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "vnstock" },
-    { name = "vnstock-oapi" },
-]
-wheels = [
-    { url = "https://vnstocks.com/api/packages/files/vnstock-quant/1.0.0/vnstock_quant-1.0.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:1ac4b75425dffb17e0a115ee356ab2f766a7de208ac5237590a6eb92e2daff4d", size = 3628674, upload-time = "2026-11-12T08:09:59.413Z" },
-    { url = "https://vnstocks.com/api/packages/files/vnstock-quant/1.0.0/vnstock_quant-1.0.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:ce96a9fbf88655aa7f0a1638296f8d30b613083e104af1efddbca38261a9ca9f", size = 3406937, upload-time = "2026-11-12T08:09:59.536Z" },
-    { url = "https://vnstocks.com/api/packages/files/vnstock-quant/1.0.0/vnstock_quant-1.0.0-cp310-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:a3bb49b11d7a5f7faf22e03fb93ef9c64d0614f613eb75fd570ae9d98409e230", size = 3510905, upload-time = "2026-11-12T08:09:59.658Z" },
-    { url = "https://vnstocks.com/api/packages/files/vnstock-quant/1.0.0/vnstock_quant-1.0.0-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:f29c0d1b915f50de1e0a973c6fe33f692ce53f56fd858b4cef0cf8277b875387", size = 3792350, upload-time = "2026-11-12T08:09:59.82Z" },
-    { url = "https://vnstocks.com/api/packages/files/vnstock-quant/1.0.0/vnstock_quant-1.0.0-cp310-abi3-win_amd64.whl", hash = "sha256:fb2d48f56436c45c7fc4d1a6ddaf325e01b2335c87f7ef99129a0742edf1e66e", size = 3842962, upload-time = "2026-11-12T08:09:59.968Z" },
 ]
 
 [[package]]
