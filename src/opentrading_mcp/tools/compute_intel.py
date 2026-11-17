@@ -292,10 +292,12 @@ def register_compute_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
     async def insider_trading(symbol: str, limit: int = 10) -> dict[str, Any]:
         """Giao dịch nội bộ qua vnstock Company. Dùng khi đọc dòng tiền người trong cuộc.
 
-        Dùng khi: "ban lãnh đạo có mua/bán cổ phiếu không", kiểm tra informed flow.
-        Không dùng khi: khối ngoại (dùng money_flow); thỏa thuận (dùng block_trades).
+        Dùng khi: (hiện KHÔNG khả dụng) — KHÔNG có nguồn: fhsc/fmp (nguồn duy nhất của
+            route này) đã ngừng hoạt động → trả unavailable not_configured.
+        Không dùng khi: khối ngoại (dùng money_flow); thỏa thuận (dùng block_trades); và
+            thực tế là mọi lúc cho tới khi có nguồn giao dịch nội bộ mới.
 
-        limit: số giao dịch tối đa.
+        limit: số giao dịch tối đa (khi tool có nguồn trở lại).
         """
         fp = f"{symbol}|{limit}"
         hit = await cache_lookup("insider_trading", fp)
