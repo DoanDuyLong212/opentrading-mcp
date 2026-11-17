@@ -48,7 +48,7 @@ def file_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_init_sql_has_three_tables():
-    init = (ROOT / "docker" / "postgres" / "init.sql").read_text()
+    init = (ROOT / "docker" / "postgres" / "init.sql").read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS watchlists (" in init
     assert "CREATE TABLE IF NOT EXISTS watchlist_items (" in init
     assert "CREATE TABLE IF NOT EXISTS alert_rules (" in init
@@ -58,7 +58,7 @@ def test_init_sql_has_three_tables():
 
 
 def test_no_mongo_still_passes():
-    text = (ROOT / "docker-compose.mcp.yml").read_text()
+    text = (ROOT / "docker-compose.mcp.yml").read_text(encoding="utf-8")
     assert "mongo" not in text.lower()
 
 

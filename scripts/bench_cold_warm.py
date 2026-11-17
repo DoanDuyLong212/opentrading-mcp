@@ -178,14 +178,14 @@ async def main() -> None:
 
     done: set[str] = set()
     if os.path.exists(ns.out):
-        with open(ns.out) as fh:
+        with open(ns.out, encoding="utf-8") as fh:
             for line in fh:
                 try:
                     done.add(json.loads(line)["tool"])
                 except Exception:
                     pass
 
-    with open(ns.out, "a") as fh:
+    with open(ns.out, "a", encoding="utf-8") as fh:
         for i, name in enumerate(names):
             if name in done or name not in schemas:
                 continue

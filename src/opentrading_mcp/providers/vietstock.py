@@ -1007,6 +1007,10 @@ FINANCEINFO_MIN_GAP_S = 0.5
 _financeinfo_slots = threading.BoundedSemaphore(FINANCEINFO_CONCURRENCY)
 _financeinfo_gap_lock = threading.Lock()
 _financeinfo_last_start = 0.0
+# Indirections so tests can assert on requested sleeps (#153) instead of
+# wall-clock gaps, which flake on Windows' ~15.6 ms timer granularity.
+_financeinfo_clock = time.monotonic
+_financeinfo_sleep = time.sleep
 
 
 def _financeinfo_post(body: dict[str, Any]) -> Any:
@@ -1014,10 +1018,10 @@ def _financeinfo_post(body: dict[str, Any]) -> Any:
     global _financeinfo_last_start
     with _financeinfo_slots:
         with _financeinfo_gap_lock:
-            wait = _financeinfo_last_start + FINANCEINFO_MIN_GAP_S - time.monotonic()
+            wait = _financeinfo_last_start + FINANCEINFO_MIN_GAP_S - _financeinfo_clock()
             if wait > 0:
-                time.sleep(wait)
-            _financeinfo_last_start = time.monotonic()
+                _financeinfo_sleep(wait)
+            _financeinfo_last_start = _financeinfo_clock()
         return _post("/data/financeinfo", body)
 
 
