@@ -95,6 +95,23 @@ async def component_worker() -> dict[str, Any]:
     return {"name": "worker", "ok": True, "detail": f"heartbeat {age}s ago", "required": False}
 
 
+def probe_vietstock() -> dict[str, Any]:
+    """#142: an expired JWT with credentials configured is a re-login, not an outage;
+    an expiry within 7 days is a rotation warning, still healthy."""
+    from opentrading_mcp.providers import vietstock as vs_p
+
+    status = vs_p.auth_status()
+    ok = bool(status.get("authenticated"))
+    reason = str(status.get("reason") or "")
+    if ok and status.get("expiring_soon"):
+        detail = f"jwt expires in {status.get('expires_in_days')}d — rotate the cookie"
+    elif ok and reason:
+        detail = reason
+    else:
+        detail = "jwt ok" if ok else (reason or "not authenticated")
+    return {"name": "vietstock", "ok": ok, "detail": detail, "required": False}
+
+
 async def deep_probes() -> list[dict[str, Any]]:
     """One cheap live call per upstream family; failures are non-fatal details."""
 
@@ -103,18 +120,6 @@ async def deep_probes() -> list[dict[str, Any]]:
 
         rows = dnse_p.ohlc_history("VN30F1M", bar_type="derivative", resolution=15, page_size=2)
         return {"name": "dnse", "ok": bool(rows), "detail": f"{len(rows)} bars", "required": False}
-
-    def _probe_vietstock() -> dict[str, Any]:
-        from opentrading_mcp.providers import vietstock as vs_p
-
-        status = vs_p.auth_status()
-        ok = bool(status.get("authenticated"))
-        return {
-            "name": "vietstock",
-            "ok": ok,
-            "detail": "jwt ok" if ok else "not authenticated",
-            "required": False,
-        }
 
     def _probe_yfinance() -> dict[str, Any]:
         from opentrading_mcp.providers import yfinance as yf_p
@@ -157,7 +162,7 @@ async def deep_probes() -> list[dict[str, Any]]:
     for name, fn in (
         ("vnstock", _probe_vnstock),
         ("dnse", _probe_dnse),
-        ("vietstock", _probe_vietstock),
+        ("vietstock", probe_vietstock),
         ("yfinance", _probe_yfinance),
     ):
         try:
