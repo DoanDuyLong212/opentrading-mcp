@@ -62,7 +62,8 @@ async def test_money_flow_uses_nn_chart_fallback(monkeypatch):
 
 async def test_sentiment_score_end_to_end(monkeypatch):
     async def fake_call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
-        if tool == "s":
+        # Dispatch on the callee (#154): labels are tool names now, not codes.
+        if getattr(fn, "__name__", "") == "fireant_posts":
             return [{"text": "VCB quá ngon, múc mạnh", "likes": 10}]
         return '{"score": 0.8}'
 

@@ -54,7 +54,9 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("o", intel_p.prediction_odds, query, tag, limit, secs=60.0)
+            data = await _call(
+                "world_prediction_odds", intel_p.prediction_odds, query, tag, limit, secs=60.0
+            )
             events = data.get("events", []) if isinstance(data, dict) else []
             return await cache_store(
                 "world_prediction_odds",
@@ -80,7 +82,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("e", intel_p.polymarket_event, slug, secs=60.0)
+            data = await _call("polymarket_event", intel_p.polymarket_event, slug, secs=60.0)
             return await cache_store(
                 "polymarket_event", fp, TTL_SECONDS["mins10"],
                 data, source="polymarket",
@@ -110,7 +112,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
             from opentrading_mcp.providers import geo as geo_p
 
             try:
-                flights = await _call("m", geo_p.military_flights, secs=30.0)
+                flights = await _call("geo_intel", geo_p.military_flights, secs=30.0)
                 track = geo_p.track_signal_loss(flights)
                 by_country: dict[str, int] = {}
                 by_type: dict[str, int] = {}
@@ -191,7 +193,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            drivers = await _call("r", yf_p.regime_assets, secs=120.0)
+            drivers = await _call("assets_rotation", yf_p.regime_assets, secs=120.0)
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("assets_rotation", str(exc))
         spx = (drivers.get("^GSPC") or {}).get("chg_1y_pct")
@@ -237,8 +239,12 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         )
         for symbol in symbols[:4]:
             try:
-                overview = await _call("o", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0)
-                candles = await _call("c", vn_p.quote_history, symbol.upper(), 30, secs=60.0)
+                overview = await _call(
+                    "compare_equities", vn_p.equity_quote_batch, [symbol.upper()], secs=45.0
+                )
+                candles = await _call(
+                    "compare_equities", vn_p.quote_history, symbol.upper(), 30, secs=60.0
+                )
                 closes = [c["c"] for c in candles if c["c"]]
                 mom = (  # 20 sessions back is closes[-21]
                     round((closes[-1] - closes[-21]) / closes[-21] * 100, 2)
@@ -286,7 +292,7 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            pins = await _call("p", yf_p.market_pins, secs=60.0)
+            pins = await _call("oracle_meta", yf_p.market_pins, secs=60.0)
         except (ProviderUnavailable, ProviderBadData):
             pins = {}
         return await cache_store(

@@ -69,17 +69,14 @@ async def test_dividends_world_filters_empty_rows(monkeypatch):
     assert rows[0]["dividends"] == 0.5
 
 
-async def test_holders_vn_returns_shareholders(monkeypatch):
-    async def fake_block(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
-        return {"symbol": "VCB", "shareholders": [{"owner": "SBV", "pct": 74.0}]}
-
-    import opentrading_mcp.tools.corp as corp_mod
-
-    monkeypatch.setattr(corp_mod, "run_blocking", fake_block)
+async def test_holders_vn_says_no_source():
+    """#148: fhsc was the only VN shareholder source; say so without a doomed call."""
     fn = _tool_fn("holders")
     env = await fn(symbol="VCB", region="vn")
     _check_envelope(env, "holders")
-    assert env["data"]["holders"][0]["owner"] == "SBV"
+    assert env["availability"] == "unavailable"
+    assert env["reason"] == "not_configured"
+    assert "no source" in " ".join(env["warnings"]).lower()
 
 
 async def test_holders_world_institutional(monkeypatch):

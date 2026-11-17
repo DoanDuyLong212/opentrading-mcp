@@ -43,7 +43,7 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("o", dnse_p.orderbook, symbol, depth)
+            data = await _call("dnse_orderbook", dnse_p.orderbook, symbol, depth)
             return await cache_store(
                 "dnse_orderbook", fp, price_ttl(), data, source="dnse-rest"
             )
@@ -84,7 +84,9 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
             return hit
         try:
             week_ago = (date.today() - timedelta(days=7)).isoformat()
-            raw = await _call("l", dnse_p.ohlc_history, "VN30F1M", "derivative", 1, week_ago, 2000)
+            raw = await _call(
+                "dnse_vn30f1m_live", dnse_p.ohlc_history, "VN30F1M", "derivative", 1, week_ago, 2000
+            )
             raw_bars = raw if isinstance(raw, list) else []
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("dnse_vn30f1m_live", str(exc))
@@ -146,7 +148,7 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            dates = await _call("w", dnse_p.working_dates)
+            dates = await _call("dnse_working_dates", dnse_p.working_dates)
             if year is not None and isinstance(dates, list):
                 prefix = str(year)
                 dates = [

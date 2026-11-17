@@ -249,12 +249,12 @@ async def test_recorded_annual_payload_parser_to_tool(symbol, monkeypatch):
             Path(__file__).parent
             / "fixtures"
             / f"financeinfo_{symbol.lower()}_annual_20261024.json"
-        ).read_text()
+        ).read_text(encoding="utf-8")
     )
     detail = (
         json.loads(
             (Path(__file__).parent / "fixtures" / "vietstock_fpt_bctc_annual_20261024.json")
-            .read_text()
+            .read_text(encoding="utf-8")
         )
         if symbol == "FPT"
         else {"symbol": symbol, "unit_request": 1, "rows": []}

@@ -63,7 +63,11 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF"]
+# preview + explicit: PLW1514 (unspecified-encoding, #150) is a preview rule; this
+# keeps every other preview rule off.
+preview = true
+explicit-preview-rules = true
+select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF", "PLW1514"]
 
 [tool.ruff.lint.per-file-ignores]
 # Long SQL strings and data tables from the cycle research port (PR #7).

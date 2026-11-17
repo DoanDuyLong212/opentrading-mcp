@@ -42,7 +42,7 @@ def _load_env_dotenv(path: Path) -> dict[str, str]:
     env: dict[str, str] = {}
     if not path.exists():
         return env
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -140,10 +140,13 @@ def main() -> int:
         "probe_count": len(probes),
         "ok_count": sum(1 for p in probes.values() if p.get("ok")),
     }
-    (OUT_DIR / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
+    (OUT_DIR / "meta.json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     for name, payload in probes.items():
         (OUT_DIR / f"{name}.json").write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n"
+            json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
+            encoding="utf-8",
         )
     print(json.dumps(meta, indent=2))
     failed = [n for n, p in probes.items() if not p.get("ok")]

@@ -35,7 +35,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("w", yf_p.world_indices, tickers)
+            data = await _call("yf_world_indices", yf_p.world_indices, tickers)
             return await cache_store(
                 "yf_world_indices", fp, TTL_SECONDS["world"],
                 {"indices": data}, source="yfinance",
@@ -54,7 +54,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("o", yf_p.oracle_markets, groups, secs=120.0)
+            data = await _call("yf_oracle_markets", yf_p.oracle_markets, groups, secs=120.0)
             return await cache_store(
                 "yf_oracle_markets", fp, TTL_SECONDS["world"],
                 data, source="yfinance",
@@ -69,7 +69,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("r", yf_p.regime_assets, secs=120.0)
+            data = await _call("yf_regime_assets", yf_p.regime_assets, secs=120.0)
             return await cache_store(
                 "yf_regime_assets", "-", TTL_SECONDS["documents"],
                 data, source="yfinance",
@@ -88,7 +88,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("m", yf_p.mega_flows, max(int(top_n), 1))
+            data = await _call("yf_mega_flows", yf_p.mega_flows, max(int(top_n), 1))
             return await cache_store(
                 "yf_mega_flows", fp, TTL_SECONDS["world"],
                 data, source="yfinance",
@@ -108,7 +108,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("a", yf_p.alloc_history, asset, timeframe, secs=120.0)
+            data = await _call("yf_alloc_history", yf_p.alloc_history, asset, timeframe, secs=120.0)
             return await cache_store(
                 "yf_alloc_history", fp, TTL_SECONDS["documents"],
                 data, source="yfinance",
@@ -123,7 +123,7 @@ def register_yf_world_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("p", yf_p.market_pins)
+            data = await _call("yf_market_pins", yf_p.market_pins)
             return await cache_store(
                 "yf_market_pins", "-", TTL_SECONDS["world"],
                 data, source="yfinance",

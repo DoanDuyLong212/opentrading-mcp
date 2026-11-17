@@ -143,8 +143,9 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
     ) -> dict[str, Any]:
         """Shareholder and institutional holder tables. Use for ownership reads.
 
-        region: 'vn' (vnstock shareholders — NO source since fhsc was dropped: answers
-        unavailable not_configured) or 'world' (yfinance).
+        region: 'world' (yfinance) or 'vn' — VN shareholder tables have NO source
+        (fhsc was the only one and was discontinued): answers unavailable no_source
+        without a provider round-trip (#148).
         kind: 'major'|'institutional'|'mutualfund'|'all' (world only;
         vn returns shareholders for any kind).
         """
@@ -156,16 +157,20 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             return hit
         if ctx is not None:
             await ctx.log("info", f"holders {symbol} {area} {want}")
+        if area == "vn":
+            # #148: say no immediately — vnstock's company route has no source either,
+            # so the old path paid a doomed provider call before the same answer.
+            return make_envelope(
+                {"tool": "holders", "symbol": symbol.upper(), "region": "vn"},
+                source="unavailable",
+                warnings=[
+                    "no source: VN shareholder tables were only served by fhsc, which "
+                    "was discontinued; region='world' (yfinance) still works"
+                ],
+                availability="unavailable",
+            )
         try:
-            if area == "vn":
-                info = await run_blocking(
-                    functools.partial(vn_p.company_info, symbol, True),
-                    "holders",
-                    timeout_secs=60.0,
-                )
-                holders_rows = info.get("shareholders") or []
-                src = "vnstock"
-            elif area == "world":
+            if area == "world":
                 if want not in ("major", "institutional", "mutualfund", "all"):
                     raise ProviderBadData(f"unknown kind {kind!r}")
                 holders_rows = await run_blocking(
