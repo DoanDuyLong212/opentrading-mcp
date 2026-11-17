@@ -76,6 +76,9 @@ _GAP_IDS = {
 }
 _GAP_NOTE = "not in Vietstock financeinfo — compute from prices or the annual report"
 
+# #140: one public order for every finance tool, matching financial_statements.
+PERIOD_ORDER = "oldest_to_newest"
+
 _TTL = 6 * 3600.0
 _cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
 _cache_lock = threading.Lock()
@@ -90,6 +93,32 @@ def period_sort_key(label: str) -> tuple[int, int]:
     if match:
         return (int(match.group(2)), int(match.group(1)))
     return (0, 0)
+
+
+def latest_populated_period(
+    rows: list[dict[str, Any]], periods: list[str], item_ids: Any = None
+) -> str | None:
+    """Newest period holding a value for any of ``item_ids`` (default: any row).
+
+    Chosen by period order, never by list position: an empty newest period must
+    not become the anchor just because it sits at one end of the list.
+    """
+    if not periods:
+        return None
+    wanted = {str(i).lower() for i in item_ids} if item_ids else None
+    usable = [r for r in rows if wanted is None or str(r.get("item_id", "")).lower() in wanted]
+    for period in reversed(periods):
+        if any((r.get("values") or {}).get(period) is not None for r in usable):
+            return period
+    return periods[-1]
+
+
+def table_latest_period(table: dict[str, Any]) -> str | None:
+    """Newest label of a ratio table, tolerating tables built before #140."""
+    if table.get("latest_period"):
+        return str(table["latest_period"])
+    periods = table.get("periods") or []
+    return str(periods[-1]) if periods else None
 
 
 def _finite(value: Any) -> float | None:
@@ -120,8 +149,10 @@ def _percent_of(part: float | None, whole: float | None) -> float | None:
 def table_from_financeinfo(symbol: str, period: str, aligned: dict[str, Any]) -> dict[str, Any]:
     """Aligned financeinfo (``vietstock.align_financeinfo``) → v4 ratio table.
 
-    Raises ProviderBadData when no usable period remains (#75: callers index
-    ``periods[0]``) or when the page has no ratio block.
+    ``periods`` runs oldest→newest like ``financial_statements`` (#140);
+    ``latest_period`` names the newest one, so no caller needs ``periods[0]``.
+    Raises ProviderBadData when no usable period remains or when the page has
+    no ratio block.
     """
     kind = "quarter" if period == "quarter" else "year"
     statements = aligned.get("statements") or {}
@@ -131,7 +162,7 @@ def table_from_financeinfo(symbol: str, period: str, aligned: dict[str, Any]) ->
     labels = [str(p) for p in aligned.get("periods") or []]
     discarded = sorted(p for p in labels if period_sort_key(p) == (0, 0))
     ordered = sorted(
-        (p for p in labels if period_sort_key(p) != (0, 0)), key=period_sort_key, reverse=True
+        (p for p in labels if period_sort_key(p) != (0, 0)), key=period_sort_key
     )
     if not ordered:
         detail = f" (discarded labels: {', '.join(discarded)})" if discarded else ""
@@ -201,6 +232,8 @@ def table_from_financeinfo(symbol: str, period: str, aligned: dict[str, Any]) ->
         "frequency": "annual" if kind == "year" else "quarterly",
         "period_basis": "reported_period_label",
         "periods": ordered,
+        "latest_period": ordered[-1],
+        "period_order": PERIOD_ORDER,
         "ratios": ratios,
         "discarded_period_labels": discarded,
         "source": SOURCE,
@@ -239,9 +272,11 @@ _FUNDAMENTAL_CORE = {
 def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
     """Per-symbol PE/ROE/EPS/BVPS, every value from ONE report period (#76).
 
-    The anchor is the newest period holding at least one core metric; a core
-    metric missing there is None and listed in ``missing_in_period`` — never
-    borrowed from an older period. ``roe`` is a fraction (0.283 = 28.3 %), as
+    The anchor is the newest period holding at least one core metric, chosen by
+    period order rather than list position (#140); a core metric missing there
+    is None and listed in ``missing_in_period`` — never borrowed from an older
+    period (#76). ``latest_period`` is the table's newest period, which is not
+    the anchor when that period is still empty. ``roe`` is a fraction (0.283 = 28.3 %), as
     in v4. ``eps_basis`` follows the source row (Vietstock EPS is trailing four
     quarters in both tables); ``roe_basis`` says whether ROE is a full year or
     a single quarter.
@@ -253,10 +288,8 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
         row = by_id.get(item_id)
         return row["values"].get(label) if row else None
 
-    anchor = next(
-        (p for p in table["periods"]
-         if any(_value(item_id, p) is not None for item_id in _FUNDAMENTAL_CORE.values())),
-        None,
+    anchor = latest_populated_period(
+        table["ratios"], table["periods"], _FUNDAMENTAL_CORE.values()
     )
     picked = {
         name: (_value(item_id, anchor) if anchor is not None else None)
@@ -272,6 +305,7 @@ def equity_fundamentals(symbol: str, period: str = "year") -> dict[str, Any]:
         "eps": picked["eps"],
         "bvps": picked["bvps"],
         "period_label": anchor,
+        "latest_period": table_latest_period(table),
         "missing_in_period": sorted(k for k, v in picked.items() if v is None),
         "frequency": table["frequency"],
         "eps_basis": (by_id.get("trailing_eps") or {}).get("basis", "trailing_four_quarters"),

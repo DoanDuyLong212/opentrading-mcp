@@ -28,6 +28,7 @@ from datetime import date
 from typing import Any
 
 from opentrading_mcp.providers.errors import ProviderNoData, ProviderUnavailable
+from opentrading_mcp.vn_time import vn_today
 
 log = logging.getLogger(__name__)
 
@@ -52,12 +53,12 @@ _loading = threading.Event()
 
 
 def _years_wanted(today: date | None = None) -> list[int]:
-    year = (today or date.today()).year
+    year = (today or vn_today()).year
     return [year, year - 1]
 
 
 def _ttl(year: int, today: date | None = None) -> int:
-    return CURRENT_TTL_S if year >= (today or date.today()).year else PAST_TTL_S
+    return CURRENT_TTL_S if year >= (today or vn_today()).year else PAST_TTL_S
 
 
 def _day(value: Any) -> str | None:

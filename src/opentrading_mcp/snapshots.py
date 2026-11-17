@@ -7,10 +7,11 @@ history via snapshot_history. Payload is a JSONB blob keyed (date, kind).
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from opentrading_mcp import dbinit
+from opentrading_mcp.vn_time import vn_today
 
 SNAPSHOT_KINDS = (
     "market_board",
@@ -54,7 +55,7 @@ def save(kind: str, payload: Any, day: str | None = None) -> bool:
                 "INSERT INTO daily_snapshots (date, kind, payload) VALUES (%s, %s, %s)"
                 " ON CONFLICT (date, kind) DO UPDATE SET payload = EXCLUDED.payload",
                 (
-                    day or date.today().isoformat(),
+                    day or vn_today().isoformat(),
                     kind,
                     json.dumps(_json_safe(payload), default=str, allow_nan=False),
                 ),
@@ -117,7 +118,7 @@ def kinds() -> list[str]:
 def snapshot_once(day: str | None = None) -> dict[str, Any]:
     """Run every snapshot kind best-effort; returns {kind: ok|fail reason}."""
     out: dict[str, Any] = {}
-    day = day or date.today().isoformat()
+    day = day or vn_today().isoformat()
 
     def _run(kind: str, fn: Any, *args: Any) -> None:
         try:
@@ -143,7 +144,7 @@ def snapshot_once(day: str | None = None) -> dict[str, Any]:
             "gdp73_t3": vs_p.macro_report_data(3, 73),
             "cpi15_t7s2": vs_p.macro_report_data(7, 15, "2"),
             "fx55_t1": vs_p.macro_report_data(
-                1, 55, "", (date.today() - timedelta(days=92)).isoformat()
+                1, 55, "", (vn_today() - timedelta(days=92)).isoformat()
             ),
             "xk38_t2": vs_p.macro_report_data(2, 38),
             "nk39_t2": vs_p.macro_report_data(2, 39),

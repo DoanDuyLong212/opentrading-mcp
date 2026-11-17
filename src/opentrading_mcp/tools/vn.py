@@ -202,11 +202,13 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
             financial_statements hoặc vs_financeinfo).
 
         period: 'year' hoặc 'quarter'. P/E, P/B tính theo giá ngày kết thúc kỳ, không phải hôm nay.
+        periods trả theo thứ tự cũ→mới; cần kỳ mới nhất thì đọc latest_period, đừng lấy periods[0].
         report_type: giữ để tương thích, KHÔNG đổi số liệu (nguồn chỉ có một bảng; EPS là 4 quý
             gần nhất ở cả hai period) — giá trị khác 'ttm' chỉ kèm cảnh báo.
         """
         # v4: report_type left the cache key; it never changed the numbers (#85).
-        fp = f"v4|{symbol}|{period}"
+        # v5: periods run oldest→newest and latest_period is published (#140).
+        fp = f"v5|{symbol}|{period}"
         warnings = (
             []
             if (report_type or "ttm").strip().lower() == "ttm"
@@ -233,6 +235,8 @@ def register_vn_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "symbol": symbol.upper(),
                     "period": period,
                     "periods": data.get("periods", []),
+                    "latest_period": data.get("latest_period"),
+                    "period_order": data.get("period_order", vs_ratios.PERIOD_ORDER),
                     "ratios": data.get("ratios", []),
                     "source": data.get("source", vs_ratios.SOURCE),
                 },

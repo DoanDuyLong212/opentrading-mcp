@@ -30,6 +30,8 @@ from datetime import date, datetime
 from importlib import metadata
 from typing import Any
 
+from opentrading_mcp.vn_time import vn_today
+
 # Fallback dates for the pinned release when vnstock.status() cannot be read. The
 # server pins final releases since #119 (a final runs 365 days; 6.0.0 until
 # 2027-11-10). The rc4/rc5 rows went with the release candidates (#80); an
@@ -51,7 +53,7 @@ def installed_version() -> str | None:
 def release_status(today: date | None = None, version: str | None = None) -> dict[str, Any]:
     """{version, status, expires, days_left, warning?} — status is one of
     ok / expiring / expired / unknown_expiry / not_installed. Never raises."""
-    today = today or date.today()
+    today = today or vn_today()
     version = version if version is not None else installed_version()
     if version is None:
         return {"version": None, "status": "not_installed"}
@@ -142,7 +144,7 @@ def release_report(
     the table still gave it until 09/12. Pass ``live`` (a release dict, or None for
     "could not read") to skip the lookup in tests. Never raises.
     """
-    today = today or date.today()
+    today = today or vn_today()
     release = live_release() if live is True else (live or None)
     if not release:
         return {**release_status(today=today), "source": "table"}
