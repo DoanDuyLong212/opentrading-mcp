@@ -250,6 +250,11 @@ def _remaining() -> tuple[int, list[str]]:
         conn.close()
 
 
+SURVIVORSHIP_WARNING = (
+    "basket = current constituents; names delisted or suspended since 2018 are excluded"
+)
+
+
 def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
     src = "cycle_stats"
 
@@ -278,7 +283,8 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         sql, args = _filters("SELECT basket, month, mean_ret, hit_rate, rel_ret, n FROM cycle_month_stats",
                              [("basket", _canon_basket(basket)), ("month", month)], "basket, month")
         return await db.read_rows("cycle_seasonality", src, sql, args,
-                                  ["basket", "month", "mean_ret", "hit_rate", "rel_ret", "n"], bool(args))
+                                  ["basket", "month", "mean_ret", "hit_rate", "rel_ret", "n"], bool(args),
+                                  warnings=[SURVIVORSHIP_WARNING])
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_chains(pair: str | None = None,
@@ -286,7 +292,8 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Relative rotation chains (A strong -> B vs VNINDEX next month). Omit pair for full table."""
         sql, args = _filters("SELECT pair, n_up, rel_mean, rel_hit FROM cycle_chains",
                              [("pair", pair)], "rel_mean DESC")
-        return await db.read_rows("cycle_chains", src, sql, args, ["pair", "n_up", "rel_mean", "rel_hit"], bool(args))
+        return await db.read_rows("cycle_chains", src, sql, args, ["pair", "n_up", "rel_mean", "rel_hit"], bool(args),
+                                  warnings=[SURVIVORSHIP_WARNING])
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_turning(year: int | None = None,
@@ -306,7 +313,8 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         sql, args = _filters("SELECT basket, pre5_mean, pre5_hit, post5_mean, post5_hit, n FROM cycle_tet",
                              [("basket", _canon_basket(basket))], "pre5_mean DESC")
         return await db.read_rows("cycle_tet", src, sql, args,
-                                  ["basket", "pre5_mean", "pre5_hit", "post5_mean", "post5_hit", "n"], bool(args))
+                                  ["basket", "pre5_mean", "pre5_hit", "post5_mean", "post5_hit", "n"], bool(args),
+                                  warnings=[SURVIVORSHIP_WARNING])
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_yearly(basket: str | None = None,
@@ -322,7 +330,8 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         cols = ["basket", "year", "ret", "is_partial_year", "data_through", "period_basis"]
         sql, args = _filters(f"SELECT {', '.join(cols)} FROM cycle_yearly",
                              [("basket", _canon_basket(basket)), ("year", year)], "basket, year")
-        return await db.read_rows("cycle_yearly", src, sql, args, cols, bool(args))
+        return await db.read_rows("cycle_yearly", src, sql, args, cols, bool(args),
+                                  warnings=[SURVIVORSHIP_WARNING])
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_trough_events(ctx: AnyContext | None = None) -> dict[str, Any]:
@@ -339,7 +348,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "vnindex_3m", *TROUGH_BASKETS]
         out = await db.read_rows("cycle_trough_events", src,
                                  f"SELECT {', '.join(cols)} FROM cycle_trough_events ORDER BY trough",
-                                 [], cols)
+                                 [], cols, warnings=[SURVIVORSHIP_WARNING])
         rule: dict[str, Any] = {}
         try:
             meta = await db.in_thread(

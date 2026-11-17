@@ -84,6 +84,7 @@ async def read_rows(
     args: Sequence[Any],
     cols: Sequence[str],
     filtered: bool = False,
+    warnings: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """SELECT in a thread; rows as dicts. Empty: 'not seeded' (or 'no match' when filtered)."""
     try:
@@ -92,15 +93,20 @@ async def read_rows(
         return na(tool, str(exc))
     if not rows:
         if filtered:
+            all_w = ["Không có dòng khớp bộ lọc."]
+            if warnings:
+                all_w.extend(warnings)
             return make_envelope(
-                {"rows": []}, source=source, warnings=["Không có dòng khớp bộ lọc."]
+                {"rows": []}, source=source, warnings=all_w
             )
         return na(tool, NOT_SEEDED)
     out = [
         {c: (str(v) if isinstance(v, date) else v) for c, v in zip(cols, r, strict=False)}
         for r in rows
     ]
-    return make_envelope({"rows": out}, source=source)
+    return make_envelope(
+        {"rows": out}, source=source, warnings=list(warnings) if warnings else None
+    )
 
 
 def _meta(meta_table: str, count_sql: str | None) -> tuple[dict[str, str], int | None]:
