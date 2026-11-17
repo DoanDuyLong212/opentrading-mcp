@@ -15,7 +15,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from opentrading_mcp.cache import TTL_SECONDS, cache_key
@@ -23,6 +23,7 @@ from opentrading_mcp.providers import dnse as dnse_p
 from opentrading_mcp.providers import yfinance as yf_p
 from opentrading_mcp.providers.store import cache_set
 from opentrading_mcp.schemas import utc_now_iso
+from opentrading_mcp.vn_time import VN_TZ
 
 SYMBOLS_OHLC = ["VN30F1M"]
 INDICES = ["VNINDEX", "VN30"]
@@ -30,9 +31,8 @@ INDICES = ["VNINDEX", "VN30"]
 # Cửa sổ phiên DNSE: 09:00-15:00 giờ Việt Nam, thứ Hai-thứ Sáu. Ngoài cửa sổ
 # server không gửi data → recv timeout 30s → reconnect vĩnh viễn (churn log, CPU
 # uổng): ngủ tới 09:00 ngày giao dịch kế tiếp thay vì giữ vòng connect. Ngày lễ
-# chưa được tính (như in_vn_session). VN không có DST → offset cố định +07:00,
-# không cần tzdata (an toàn trên Render slim image).
-VN_TZ = timezone(timedelta(hours=7))
+# chưa được tính (như in_vn_session). VN không có DST → offset cố định +07:00
+# (vn_time.VN_TZ), không cần tzdata.
 DNSE_START_HOUR = 9
 DNSE_END_HOUR = 15
 

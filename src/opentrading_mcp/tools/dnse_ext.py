@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -23,6 +23,7 @@ from opentrading_mcp.tools.shared import (
     price_ttl,
     run_blocking,
 )
+from opentrading_mcp.vn_time import vn_today
 
 
 async def _call(tool: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -83,7 +84,7 @@ def register_dnse_ext_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            week_ago = (date.today() - timedelta(days=7)).isoformat()
+            week_ago = (vn_today() - timedelta(days=7)).isoformat()
             raw = await _call("l", dnse_p.ohlc_history, "VN30F1M", "derivative", 1, week_ago, 2000)
             raw_bars = raw if isinstance(raw, list) else []
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:

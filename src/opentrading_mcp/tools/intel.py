@@ -24,6 +24,7 @@ from opentrading_mcp.tools.shared import (
     price_ttl,
     run_blocking,
 )
+from opentrading_mcp.vn_time import vn_today
 
 
 def _na(tool: str, reason: str) -> dict[str, Any]:
@@ -143,9 +144,9 @@ def register_intel_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
             articles = data.get("articles", []) if isinstance(data, dict) else []
             if days is not None:
-                from datetime import date, timedelta
+                from datetime import timedelta
 
-                cutoff = (date.today() - timedelta(days=max(int(days), 0))).isoformat()
+                cutoff = (vn_today() - timedelta(days=max(int(days), 0))).isoformat()
                 dated = []
                 for article in articles:
                     stamp = str(article.get("date", ""))[:10] if isinstance(article, dict) else ""

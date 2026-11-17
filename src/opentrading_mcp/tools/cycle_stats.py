@@ -29,6 +29,7 @@ from opentrading_mcp.tools.shared import (
 from opentrading_mcp.tools.shared import (
     run_blocking as _run_blocking,
 )
+from opentrading_mcp.vn_time import vn_today
 
 
 async def run_blocking(fn, tool, timeout_secs=60.0):
@@ -386,7 +387,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             return db.na("cycle_stats_refresh", f"no tracked symbols (unknown: {', '.join(unknown) or 'none'})")
 
         async def work() -> dict[str, Any]:
-            today = date.today().isoformat()
+            today = vn_today().isoformat()
             updated: list[dict[str, Any]] = []
             full: list[dict[str, Any]] = []
             failed: list[dict[str, Any]] = []
@@ -616,7 +617,7 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
     # yearly
     yr = (1 + bdf).resample("YE").prod(min_count=1) - 1
     yr.index = yr.index.year
-    current_year = date.today().year
+    current_year = vn_today().year
     with conn.cursor() as cur:
         cur.execute("DELETE FROM cycle_yearly")
         for c in yr.columns:
@@ -679,7 +680,7 @@ def _finalize_rest(conn: Any, bdf: Any, mb: Any, mean_t: Any, hit_t: Any,
                 f" VALUES({', '.join(['%s'] * len(cols))}) ON CONFLICT DO NOTHING",
                 [vals[c] for c in cols])
     # meta
-    today = date.today().isoformat()
+    today = vn_today().isoformat()
     with conn.cursor() as cur:
         for k, v in [("as_of", today), ("members_version", MEMBERS_VERSION),
                      ("trough_rule_version", TROUGH_RULE_VERSION),
