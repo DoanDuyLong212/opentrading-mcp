@@ -53,7 +53,8 @@ def test_market_history_window_uses_the_vn_date(monkeypatch):
 
 
 def test_macro_window_end_date_is_a_vn_date(monkeypatch):
-    from opentrading_mcp.providers import store, vietstock as vs_p
+    from opentrading_mcp.providers import store
+    from opentrading_mcp.providers import vietstock as vs_p
 
     captured: dict[str, dict] = {}
 
