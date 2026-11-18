@@ -7,6 +7,8 @@ name = "opentrading-mcp"
 dynamic = ["version"]
 description = "Shareable MCP-server for Vietnamese market research (team -> public)"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
   "mcp>=1.9,<2",
