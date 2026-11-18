@@ -184,7 +184,10 @@ UNITS: dict[str, dict[str, str]] = {
         "_note": "rsi/macd/adx không đơn vị; ichimoku/swings/fib là mức giá cùng đơn vị `last`",
     },
     "stock_screener": {
-        "pe": "lần (P/E cuối kỳ báo cáo, không phải hôm nay)",
+        "pe": (
+            "lần — pe_basis='current_ttm' (mặc định, #39): giá hôm nay (đồng) / EPS 4 quý "
+            "(VND/cp), kèm pe_as_of; 'period_end': P/E cuối kỳ báo cáo"
+        ),
         "roe": "%",
         "_note": "market_cap: nguồn chưa xác minh đơn vị/thời điểm → không trả",
     },

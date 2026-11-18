@@ -33,9 +33,9 @@ def test_ichimoku_lines_are_high_low_midpoints():
 
 
 def test_ichimoku_cloud_under_price_is_the_spans_from_25_bars_ago():
-    # Verify this implementation's index convention against its own source series.
-    full = tech.compute(CANDLES)["ichimoku"]
-    earlier = tech.compute(CANDLES[:-25])["ichimoku"]
+    # Verify the offset25 convention's indexing against its own source series.
+    full = tech.compute(CANDLES, ichimoku_convention="offset25")["ichimoku"]
+    earlier = tech.compute(CANDLES[:-25], ichimoku_convention="offset25")["ichimoku"]
     assert full["offset_bars"] == 25
     assert full["convention"] == "current_cloud_from_spans_25_bars_prior"
     assert full["chikou_reference"] == "close_25_bars_ago_for_current_close_comparison"
@@ -49,9 +49,9 @@ def test_ichimoku_offset_25_differs_from_26_on_nonflat_series():
         {"o": 100 + i, "h": 102 + i, "l": 99 + i, "c": 101 + i, "v": 1000 + i}
         for i in range(90)
     ]
-    full = tech.compute(candles)["ichimoku"]
-    at_25 = tech.compute(candles[:-25])["ichimoku"]
-    at_26 = tech.compute(candles[:-26])["ichimoku"]
+    full = tech.compute(candles, ichimoku_convention="offset25")["ichimoku"]
+    at_25 = tech.compute(candles[:-25], ichimoku_convention="offset25")["ichimoku"]
+    at_26 = tech.compute(candles[:-26], ichimoku_convention="offset25")["ichimoku"]
     assert full["senkou_a"] == at_25["senkou_a_ahead"]
     assert full["senkou_b"] == at_25["senkou_b_ahead"]
     assert full["senkou_a"] != at_26["senkou_a_ahead"]
@@ -96,6 +96,21 @@ def _naive_donchian(rows: list[dict[str, Any]], n: int, end_idx: int) -> float:
     hi = max(r["h"] for r in window)
     lo = min(r["l"] for r in window)
     return (hi + lo) / 2
+
+
+def test_classic26_is_the_default_convention():
+    # #39 (owner decision 2026-11-18): the classic 26-bar displacement is the
+    # default; offset25 remains opt-in for the previously published contract.
+    candles = [
+        {"o": 100 + i, "h": 102 + i, "l": 99 + i, "c": 101 + i, "v": 1000 + i}
+        for i in range(90)
+    ]
+    ich = tech.compute(candles)["ichimoku"]
+    assert ich["offset_bars"] == 26
+    assert ich["convention"] == "classic26_cloud_from_spans_26_bars_prior"
+    assert tech.compute(candles, ichimoku_convention="offset25")["ichimoku"][
+        "offset_bars"
+    ] == 25
 
 
 def test_classic26_convention_shifts_the_cloud_one_more_bar():

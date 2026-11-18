@@ -86,15 +86,31 @@ async def test_stock_screener_does_not_break(monkeypatch):
     monkeypatch.setattr(vn_p, "listing_symbols", lambda: list(fake_universe))
 
     def fake_ratio(symbol: str, period: str = "year"):
-        return {"symbol": symbol, "pe": 10.0 if symbol == "VCB" else 30.0, "roe": 0.20}
+        return {
+            "symbol": symbol,
+            "pe": 10.0 if symbol == "VCB" else 30.0,
+            "roe": 0.20,
+            "eps": 5000.0,
+        }
 
     monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_ratio)
+    prices = {"VCB": 50000.0, "HPG": 250000.0}
+
+    def fake_quotes(symbols):
+        return [
+            {"symbol": s, "close_price": prices.get(s), "time": "2026-11-18 14:45:00"}
+            for s in symbols
+        ]
+
+    monkeypatch.setattr(vn_p, "equity_quote_batch", fake_quotes)
 
     fn = _scan_tool_fn("stock_screener")
-    # new-style filters
+    # new-style filters; default pe_basis=current_ttm: VCB 50000/5000 = 10 passes,
+    # HPG 250000/5000 = 50 fails its period-end PE of 30 would also fail.
     env = await fn(filters={"pe": [None, 20]}, limit=20)
     _check_envelope(env, "stock_screener")
     assert env["data"]["universe"] == 2
+    assert env["data"]["pe_basis"] == "current_ttm"
     assert len(env["data"]["candidates"]) == 1
     assert env["data"]["candidates"][0]["symbol"] == "VCB"
     # backward-compat max_pe/min_roe
@@ -110,6 +126,87 @@ async def test_stock_screener_does_not_break(monkeypatch):
     _check_envelope(env3, "stock_screener")
     assert env3["data"]["universe"] == 2
     assert len(env3["data"]["candidates"]) >= 1
+
+
+async def test_stock_screener_current_ttm_pe_is_price_over_trailing_eps(monkeypatch):
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    monkeypatch.setattr(vn_p, "listing_symbols", lambda: [{"symbol": "FPT"}])
+    monkeypatch.setattr(
+        vsr_mod,
+        "equity_fundamentals",
+        lambda symbol, period="year": {
+            "symbol": symbol,
+            "pe": 5.0,  # period-end table PE — must be ignored under current_ttm
+            "roe": 0.2,
+            "eps": 6000.0,
+            "period_label": "2025",
+        },
+    )
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [
+            {"symbol": s, "close_price": 48000.0, "time": "2026-11-18 14:45:00"}
+            for s in symbols
+        ],
+    )
+    fn = _scan_tool_fn("stock_screener")
+    env = await fn(limit=5)
+    _check_envelope(env, "stock_screener")
+    assert env["data"]["pe_basis"] == "current_ttm"
+    cand = env["data"]["candidates"][0]
+    assert cand["pe"] == 8.0  # 48000 / 6000, not the table's 5.0
+    assert cand["pe_basis"] == "current_ttm"
+    assert cand["pe_as_of"] == "2026-11-18 14:45:00"
+    assert cand["fundamentals_period"] == "2025"
+
+
+async def test_stock_screener_current_ttm_without_price_never_fakes_a_pe(monkeypatch):
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    monkeypatch.setattr(vn_p, "listing_symbols", lambda: [{"symbol": "FPT"}])
+    monkeypatch.setattr(
+        vsr_mod,
+        "equity_fundamentals",
+        lambda symbol, period="year": {"symbol": symbol, "pe": 5.0, "roe": 0.2, "eps": 6000.0},
+    )
+    monkeypatch.setattr(vn_p, "equity_quote_batch", lambda symbols: [])
+    fn = _scan_tool_fn("stock_screener")
+    env = await fn(filters={"pe": [None, 20]}, limit=5)
+    _check_envelope(env, "stock_screener")
+    # No price → no pe → the pe filter has no evaluated conclusion for this symbol.
+    assert env["data"]["candidates"] == []
+    assert any("current_ttm" in str(w) for w in env["warnings"])
+
+
+async def test_stock_screener_period_end_basis_keeps_table_pe(monkeypatch):
+    from opentrading_mcp.providers import vnstock as vn_p
+
+    monkeypatch.setattr(vn_p, "listing_symbols", lambda: [{"symbol": "FPT"}])
+    monkeypatch.setattr(
+        vsr_mod,
+        "equity_fundamentals",
+        lambda symbol, period="year": {"symbol": symbol, "pe": 15.91, "roe": 0.2, "eps": 6000.0},
+    )
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [{"symbol": s, "close_price": 48000.0} for s in symbols],
+    )
+    fn = _scan_tool_fn("stock_screener")
+    env = await fn(pe_basis="period_end", limit=5)
+    _check_envelope(env, "stock_screener")
+    assert env["data"]["pe_basis"] == "period_end"
+    assert env["data"]["candidates"][0]["pe"] == 15.91
+    assert "pe_as_of" not in env["data"]["candidates"][0]
+
+
+async def test_stock_screener_rejects_unknown_pe_basis():
+    fn = _scan_tool_fn("stock_screener")
+    env = await fn(pe_basis="tomorrow")
+    assert env["availability"] == "unavailable"
+    assert any("pe_basis" in str(w) for w in env["warnings"])
 
 
 def test_reference_equity_filters_by_exchange_field(monkeypatch):
@@ -209,9 +306,14 @@ async def test_stock_screener_bounded_enrich_no_valuation_filter(monkeypatch):
 
     def fake_ratio(symbol: str, period: str = "year"):
         calls.append(symbol)
-        return {"symbol": symbol, "pe": 10.0, "roe": 0.2, "market_cap": 1000.0}
+        return {"symbol": symbol, "pe": 10.0, "roe": 0.2, "market_cap": 1000.0, "eps": 5000.0}
 
     monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_ratio)
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [{"symbol": s, "close_price": 50000.0} for s in symbols],
+    )
     fn = _scan_tool_fn("stock_screener")
     # no valuation filter → enrich capped at 10
     env = await fn(limit=5)

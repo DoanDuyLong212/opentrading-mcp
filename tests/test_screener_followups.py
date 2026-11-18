@@ -353,7 +353,13 @@ async def test_enrichment_cap_marks_partial_even_when_first_15_valid(monkeypatch
         lambda symbol: {
             "symbol": symbol,
             "pe": 10,
+            "eps": 5000.0,
         },
+    )
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [{"symbol": s, "close_price": 50000.0} for s in symbols],
     )
     server = create_server("scan")
     register_preset(server, "scan")

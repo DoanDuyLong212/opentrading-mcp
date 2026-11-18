@@ -125,7 +125,9 @@ async def test_screener_reports_scope_and_fundamentals_period(monkeypatch):
         return {"symbol": symbol, "pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
     monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
-    env = await _tool("stock_screener")(max_pe=10, limit=5)
+    # period_end basis: this test pins the enrichment-cap coverage contract,
+    # not the pe basis (current_ttm has its own tests in test_p2_screener.py).
+    env = await _tool("stock_screener")(max_pe=10, limit=5, pe_basis="period_end")
     data = env["data"]
     assert data["universe"] == 40
     assert data["screened"] == 15
@@ -162,7 +164,7 @@ async def test_screener_evaluated_excludes_missing_required_metric(monkeypatch):
         return {"symbol": symbol, "pe": 8.0, "roe": 0.2, "period_label": "2025"}
 
     monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
-    env = await _tool("stock_screener")(max_pe=10, limit=5)
+    env = await _tool("stock_screener")(max_pe=10, limit=5, pe_basis="period_end")
     data = env["data"]
     assert _coverage_core(data) == {
         "stage": "fundamentals",
@@ -287,7 +289,15 @@ async def test_screener_technical_eligible_follows_prefilter(monkeypatch):
     monkeypatch.setattr(
         vsr_mod,
         "equity_fundamentals",
-        lambda symbol: {"pe": 8.0 if int(symbol[1:]) < 10 else 30.0, "roe": 0.2},
+        lambda symbol: {"pe": 8.0 if int(symbol[1:]) < 10 else 30.0, "roe": 0.2, "eps": 5000.0},
+    )
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [
+            {"symbol": s, "close_price": 40000.0 if int(s[1:]) < 10 else 200000.0}
+            for s in symbols
+        ],
     )
     calls: list[str] = []
 
@@ -387,9 +397,14 @@ async def test_screener_valuation_coverage_survives_cache_hit(monkeypatch):
 
     def fake_fund(symbol: str, period: str = "year") -> dict[str, Any]:
         fund_calls.append(symbol)
-        return {"pe": 8.0, "roe": 0.2, "period_label": "2025"}
+        return {"pe": 8.0, "roe": 0.2, "eps": 4000.0, "period_label": "2025"}
 
     monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [{"symbol": s, "close_price": 32000.0} for s in symbols],
+    )
     fn = _tool("stock_screener")
     env = await fn(max_pe=10, limit=5)
     assert env["data"]["screened"] == 15
@@ -426,7 +441,13 @@ async def test_screener_fundamentals_failure_warns_per_symbol(monkeypatch):
     def fake_fund(symbol: str, period: str = "year") -> dict[str, Any]:
         if symbol == "S01":
             raise RuntimeError("upstream down")
-        return {"pe": 8.0, "roe": 0.2}
+        return {"pe": 8.0, "roe": 0.2, "eps": 4000.0}
+
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [{"symbol": s, "close_price": 32000.0} for s in symbols],
+    )
 
     monkeypatch.setattr(vsr_mod, "equity_fundamentals", fake_fund)
     env = await _tool("stock_screener")(max_pe=10, limit=5)
