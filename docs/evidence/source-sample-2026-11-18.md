@@ -6,64 +6,64 @@ Rows: 40
 
 | # | group | tool | args | value | unit/period | as_of | status | primary source (URL + date) | match | notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | statement | financial_statements | {'symbol': 'FPT', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:48.387831+07:00 | unresolved |  |  | LookupError: row 'Doanh thu' not found in KQKD |
-| 2 | statement | financial_statements | {'symbol': 'FPT', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:48.389005+07:00 | unresolved |  |  | LookupError: row 'Lợi nhuận sau thuế' not found in KQKD |
-| 3 | statement | financial_statements | {'symbol': 'FPT', 'period': 'quarter', 'statement': 'CDKT', 'periods_n': 4} | — |  | 2026-11-18T11:10:50.219286+07:00 | unresolved |  |  | LookupError: row 'Vốn chủ sở hữu' not found in CDKT |
-| 4 | statement | financial_statements | {'symbol': 'HPG', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:51.444748+07:00 | unresolved |  |  | LookupError: row 'Doanh thu' not found in KQKD |
-| 5 | statement | financial_statements | {'symbol': 'HPG', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:51.445625+07:00 | unresolved |  |  | LookupError: row 'Lợi nhuận sau thuế' not found in KQKD |
-| 6 | statement | financial_statements | {'symbol': 'HPG', 'period': 'quarter', 'statement': 'CDKT', 'periods_n': 4} | — |  | 2026-11-18T11:10:52.943783+07:00 | unresolved |  |  | LookupError: row 'Vốn chủ sở hữu' not found in CDKT |
-| 7 | statement | financial_detail | {'symbol': 'VCB', 'statement': 'LCTT', 'periods_n': 4} | — |  | 2026-11-18T11:10:53.295251+07:00 | unavailable |  |  | vietstock no norms for VCB LCTT; vietstock no LCTT values for VCB |
-| 8 | statement | financial_detail | {'symbol': 'FPT', 'statement': 'LCTT', 'periods_n': 4} | {'name': 'Lưu chuyển tiền thuần từ hoạt động kinh doanh', 'value': 952.0} | tỷ đồng (financial_detail) | 2026-11-18T11:10:53.537769+07:00 | collected |  |  |  |
-| 9 | statement | financial_detail | {'symbol': 'HPG', 'statement': 'LCTT', 'periods_n': 4} | {'name': 'Lưu chuyển tiền thuần từ hoạt động kinh doanh', 'value': 20936.3} | tỷ đồng (financial_detail) | 2026-11-18T11:10:53.799527+07:00 | collected |  |  |  |
-| 10 | statement | financial_statements | {'symbol': 'VNM', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:55.349533+07:00 | unresolved |  |  | LookupError: row 'Doanh thu' not found in KQKD |
-| 11 | statement | financial_statements | {'symbol': 'VNM', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:55.350236+07:00 | unresolved |  |  | LookupError: row 'Lợi nhuận sau thuế' not found in KQKD |
-| 12 | statement | financial_statements | {'symbol': 'MWG', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:55.685132+07:00 | unresolved |  |  | LookupError: row 'Doanh thu' not found in KQKD |
-| 13 | statement | financial_statements | {'symbol': 'MWG', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:55.685836+07:00 | unresolved |  |  | LookupError: row 'Lợi nhuận sau thuế' not found in KQKD |
-| 14 | statement | financial_statements | {'symbol': 'VCB', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | — |  | 2026-11-18T11:10:55.891924+07:00 | unresolved |  |  | LookupError: row 'Lợi nhuận sau thuế' not found in KQKD |
-| 15 | statement | financial_statements | {'symbol': 'VCB', 'period': 'year', 'statement': 'CDKT', 'periods_n': 4} | — |  | 2026-11-18T11:10:56.415958+07:00 | unresolved |  |  | LookupError: row 'Vốn chủ sở hữu' not found in CDKT |
-| 16 | price | vn_quote_history | {'symbol': 'FPT', 'days': 300} | {'date': '2026-11-18', 'close': 47.1, 'volume': 9337200.0} |  | 2026-11-18T11:10:57.906250+07:00 | collected |  |  |  |
-| 17 | price | vn_quote_history | {'symbol': 'HPG', 'days': 300} | {'date': '2026-11-18', 'close': 20.9, 'volume': 4244200.0} |  | 2026-11-18T11:10:58.321181+07:00 | collected |  |  |  |
-| 18 | price | vn_quote_history | {'symbol': 'VCB', 'days': 300} | {'date': '2026-11-18', 'close': 51.2, 'volume': 3021800.0} |  | 2026-11-18T11:10:58.662094+07:00 | collected |  |  |  |
-| 19 | price | vn_quote_history | {'symbol': 'MWG', 'days': 300} | {'date': '2026-11-18', 'close': 72.9, 'volume': 444100.0} |  | 2026-11-18T11:10:58.991540+07:00 | collected |  |  |  |
-| 20 | price | vn_quote_history | {'symbol': 'SSI', 'days': 300} | {'date': '2026-11-18', 'close': 19.75, 'volume': 5263700.0} |  | 2026-11-18T11:10:59.387924+07:00 | collected |  |  |  |
-| 21 | price | vn_quote_history | {'symbol': 'FPT', 'days': 400} | {'date': '2026-07-23', 'close': 58.82, 'volume': 6287300.0} |  | 2026-11-18T11:10:59.588932+07:00 | collected |  |  |  |
-| 22 | price | vn_quote_history | {'symbol': 'HPG', 'days': 400} | {'date': '2026-07-23', 'close': 20.8, 'volume': 36967600.0} |  | 2026-11-18T11:10:59.781574+07:00 | collected |  |  |  |
-| 23 | price | vn_quote_history | {'symbol': 'VCB', 'days': 400} | {'date': '2026-07-23', 'close': 54.0, 'volume': 7435600.0} |  | 2026-11-18T11:10:59.978815+07:00 | collected |  |  |  |
-| 24 | price | vn_quote_history | {'symbol': 'MWG', 'days': 400} | {'date': '2026-07-23', 'close': 69.48, 'volume': 9066200.0} |  | 2026-11-18T11:11:00.185417+07:00 | collected |  |  |  |
-| 25 | price | vn_quote_history | {'symbol': 'SSI', 'days': 400} | {'date': '2026-07-23', 'close': 18.82, 'volume': 29879100.0} |  | 2026-11-18T11:11:00.377419+07:00 | collected |  |  |  |
-| 26 | index | vn_quote_history | {'symbol': 'VNINDEX', 'days': 30} | {'date': '2026-11-18', 'close': 1716.02, 'volume': 177365570.0} |  | 2026-11-18T11:11:00.665668+07:00 | collected |  |  |  |
-| 27 | index | vn_quote_history | {'symbol': 'VN30', 'days': 30} | {'date': '2026-11-18', 'close': 1822.75, 'volume': 65198100.0} |  | 2026-11-18T11:11:00.945856+07:00 | collected |  |  |  |
-| 28 | index | vn_quote_history | {'symbol': 'HNXINDEX', 'days': 30} | {'date': '2026-11-18', 'close': 248.33, 'volume': 19790272.0} |  | 2026-11-18T11:11:01.398534+07:00 | collected |  |  |  |
-| 29 | index | vn_quote_history | {'symbol': 'UPCOMINDEX', 'days': 30} | {'date': '2026-11-18', 'close': 121.61, 'volume': 5477511.0} |  | 2026-11-18T11:11:01.670250+07:00 | collected |  |  |  |
-| 30 | index | vn_quote_history | {'symbol': 'VN100', 'days': 30} | {'date': '2026-11-18', 'close': 1746.45, 'volume': 156085308.0} |  | 2026-11-18T11:11:01.946431+07:00 | collected |  |  |  |
-| 31 | macro | sbv_rates | {} | {'name': 'Lãi suất tái cấp vốn', 'value': '4,500%', 'as_of': '09/11/2026'} |  | 2026-11-18T11:11:02.722691+07:00 | collected |  |  |  |
-| 32 | macro | sbv_rates | {} | {'name': 'Lãi suất tái chiết khấu', 'value': '3,000%', 'as_of': '09/11/2026'} |  | 2026-11-18T11:11:02.723419+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T11:11:02.722691+07:00, dùng lại bản đã lưu |
-| 33 | macro | vn_retail_fx | {} | {'name': 'US DOLLAR', 'value': 25880.0} | VND/USD | 2026-11-18T11:11:02.871925+07:00 | collected |  |  |  |
-| 34 | macro | vn_retail_fx | {} | {'name': 'US DOLLAR', 'value': 25500.0} | VND/USD | 2026-11-18T11:11:02.872847+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T11:11:02.871925+07:00, dùng lại bản đã lưu |
-| 35 | macro | vn_retail_fx | {} | {'name': 'EURO', 'value': 28964.31} | VND/EUR | 2026-11-18T11:11:02.873268+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T11:11:02.871925+07:00, dùng lại bản đã lưu |
-| 36 | macro | vn_msn_fx_gold | {'symbols': ['USDVND'], 'days': 10} | {'symbol': 'USDVND', 'last': {'time': '2026-11-18', 'open': 25705.0, 'high': 25705.0, 'low': 25699.0, 'close': 25705.0, 'volume': 0.0}} | VND per USD | 2026-11-18T11:11:05.225683+07:00 | collected |  |  |  |
-| 37 | macro | vn_msn_fx_gold | {'symbols': ['GOLD'], 'days': 10} | {'symbol': 'GC=F', 'last': {'time': '2026-11-18', 'open': 3855.2, 'high': 3859.3, 'low': 3786.7, 'close': 3788.4, 'volume': 49102.0}} | USD per troy ounce | 2026-11-18T11:11:05.344241+07:00 | collected |  |  |  |
-| 38 | macro | vn_retail_gold | {} | {'name': 'Vàng miếng SJC 999.9', 'value': 13720000.0} | đồng/chỉ (1 lượng = 10 chỉ) | 2026-11-18T11:11:05.554272+07:00 | collected |  |  |  |
-| 39 | macro | world_macro_country | {'iso3': 'VNM', 'indicator': 'NY.GDP.MKTP.KD.ZG', 'limit': 5} | {'t': '2025', 'v': 8.01882998978245} |  | 2026-11-18T11:11:05.797714+07:00 | collected |  |  |  |
-| 40 | macro | world_macro_country | {'iso3': 'VNM', 'indicator': 'FP.CPI.TOTL.ZG', 'limit': 5} | {'t': '2025', 'v': 3.30999314219739} |  | 2026-11-18T11:11:05.865469+07:00 | collected |  |  |  |
+| 1 | statement | financial_statements | {'symbol': 'FPT', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'Doanh thu thuần', 'value': 13754159003395.0} | VND | 2026-11-18T13:11:31.643548+07:00 | collected |  |  |  |
+| 2 | statement | financial_statements | {'symbol': 'FPT', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'LNST thu nhập DN', 'value': 2729313537249.0} | VND | 2026-11-18T13:11:31.644323+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T13:11:31.643548+07:00, dùng lại bản đã lưu |
+| 3 | statement | financial_statements | {'symbol': 'FPT', 'period': 'quarter', 'statement': 'CDKT', 'periods_n': 4} | {'name': 'Vốn chủ sở hữu', 'value': 44039381339841.0} | VND | 2026-11-18T13:11:33.783106+07:00 | collected |  |  |  |
+| 4 | statement | financial_statements | {'symbol': 'HPG', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'Doanh thu thuần', 'value': 62214187236976.0} | VND | 2026-11-18T13:11:35.130314+07:00 | collected |  |  |  |
+| 5 | statement | financial_statements | {'symbol': 'HPG', 'period': 'quarter', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'LNST thu nhập DN', 'value': 8265460462966.0} | VND | 2026-11-18T13:11:35.130959+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T13:11:35.130314+07:00, dùng lại bản đã lưu |
+| 6 | statement | financial_statements | {'symbol': 'HPG', 'period': 'quarter', 'statement': 'CDKT', 'periods_n': 4} | {'name': 'Vốn chủ sở hữu', 'value': 149568352619326.0} | VND | 2026-11-18T13:11:36.322967+07:00 | collected |  |  |  |
+| 7 | statement | financial_detail | {'symbol': 'VCB', 'statement': 'LCTT', 'periods_n': 4} | — |  | 2026-11-18T13:11:36.643555+07:00 | unavailable |  |  | vietstock no norms for VCB LCTT; vietstock no LCTT values for VCB |
+| 8 | statement | financial_detail | {'symbol': 'FPT', 'statement': 'LCTT', 'periods_n': 4} | {'name': 'Lưu chuyển tiền thuần từ hoạt động kinh doanh', 'value': 952.0} | tỷ đồng (financial_detail) | 2026-11-18T13:11:36.895419+07:00 | collected |  |  |  |
+| 9 | statement | financial_detail | {'symbol': 'HPG', 'statement': 'LCTT', 'periods_n': 4} | {'name': 'Lưu chuyển tiền thuần từ hoạt động kinh doanh', 'value': 20936.3} | tỷ đồng (financial_detail) | 2026-11-18T13:11:37.132238+07:00 | collected |  |  |  |
+| 10 | statement | financial_statements | {'symbol': 'VNM', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'Doanh thu thuần', 'value': 63645886756227.0} | VND | 2026-11-18T13:11:37.172666+07:00 | collected |  |  |  |
+| 11 | statement | financial_statements | {'symbol': 'VNM', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'LNST thu nhập DN', 'value': 9413589732469.0} | VND | 2026-11-18T13:11:37.173317+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T13:11:37.172666+07:00, dùng lại bản đã lưu |
+| 12 | statement | financial_statements | {'symbol': 'MWG', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'Doanh thu thuần', 'value': 155928145619367.0} | VND | 2026-11-18T13:11:37.962900+07:00 | collected |  |  |  |
+| 13 | statement | financial_statements | {'symbol': 'MWG', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'LNST thu nhập DN', 'value': 7072622885875.0} | VND | 2026-11-18T13:11:37.963366+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T13:11:37.962900+07:00, dùng lại bản đã lưu |
+| 14 | statement | financial_statements | {'symbol': 'VCB', 'period': 'year', 'statement': 'KQKD', 'periods_n': 4} | {'name': 'Tổng LNST', 'value': 35197940000000.0} | VND | 2026-11-18T13:11:38.167714+07:00 | collected |  |  |  |
+| 15 | statement | financial_statements | {'symbol': 'VCB', 'period': 'year', 'statement': 'CDKT', 'periods_n': 4} | {'name': 'Vốn và các quỹ', 'value': 224558726000000.0} | VND | 2026-11-18T13:11:38.728818+07:00 | collected |  |  |  |
+| 16 | price | vn_quote_history | {'symbol': 'FPT', 'days': 300} | {'date': '2026-11-18', 'close': 47.0, 'volume': 10621500.0} |  | 2026-11-18T13:11:39.498482+07:00 | collected |  |  |  |
+| 17 | price | vn_quote_history | {'symbol': 'HPG', 'days': 300} | {'date': '2026-11-18', 'close': 20.8, 'volume': 5283400.0} |  | 2026-11-18T13:11:39.906680+07:00 | collected |  |  |  |
+| 18 | price | vn_quote_history | {'symbol': 'VCB', 'days': 300} | {'date': '2026-11-18', 'close': 51.2, 'volume': 3799600.0} |  | 2026-11-18T13:11:40.683986+07:00 | collected |  |  |  |
+| 19 | price | vn_quote_history | {'symbol': 'MWG', 'days': 300} | {'date': '2026-11-18', 'close': 72.9, 'volume': 571100.0} |  | 2026-11-18T13:11:41.084829+07:00 | collected |  |  |  |
+| 20 | price | vn_quote_history | {'symbol': 'SSI', 'days': 300} | {'date': '2026-11-18', 'close': 19.75, 'volume': 5788500.0} |  | 2026-11-18T13:11:41.532571+07:00 | collected |  |  |  |
+| 21 | price | vn_quote_history | {'symbol': 'FPT', 'days': 400} | {'date': '2026-07-23', 'close': 58.82, 'volume': 6287300.0} |  | 2026-11-18T13:11:41.769659+07:00 | collected |  |  |  |
+| 22 | price | vn_quote_history | {'symbol': 'HPG', 'days': 400} | {'date': '2026-07-23', 'close': 20.8, 'volume': 36967600.0} |  | 2026-11-18T13:11:42.009713+07:00 | collected |  |  |  |
+| 23 | price | vn_quote_history | {'symbol': 'VCB', 'days': 400} | {'date': '2026-07-23', 'close': 54.0, 'volume': 7435600.0} |  | 2026-11-18T13:11:42.229762+07:00 | collected |  |  |  |
+| 24 | price | vn_quote_history | {'symbol': 'MWG', 'days': 400} | {'date': '2026-07-23', 'close': 69.48, 'volume': 9066200.0} |  | 2026-11-18T13:11:42.473727+07:00 | collected |  |  |  |
+| 25 | price | vn_quote_history | {'symbol': 'SSI', 'days': 400} | {'date': '2026-07-23', 'close': 18.82, 'volume': 29879100.0} |  | 2026-11-18T13:11:42.722251+07:00 | collected |  |  |  |
+| 26 | index | vn_quote_history | {'symbol': 'VNINDEX', 'days': 30} | {'date': '2026-11-18', 'close': 1714.16, 'volume': 220468511.0} |  | 2026-11-18T13:11:42.952898+07:00 | collected |  |  |  |
+| 27 | index | vn_quote_history | {'symbol': 'VN30', 'days': 30} | {'date': '2026-11-18', 'close': 1819.57, 'volume': 81359863.0} |  | 2026-11-18T13:11:43.246820+07:00 | collected |  |  |  |
+| 28 | index | vn_quote_history | {'symbol': 'HNXINDEX', 'days': 30} | {'date': '2026-11-18', 'close': 248.06, 'volume': 23165506.0} |  | 2026-11-18T13:11:43.476161+07:00 | collected |  |  |  |
+| 29 | index | vn_quote_history | {'symbol': 'UPCOMINDEX', 'days': 30} | {'date': '2026-11-18', 'close': 121.18, 'volume': 6758552.0} |  | 2026-11-18T13:11:43.744976+07:00 | collected |  |  |  |
+| 30 | index | vn_quote_history | {'symbol': 'VN100', 'days': 30} | {'date': '2026-11-18', 'close': 1743.69, 'volume': 194844378.0} |  | 2026-11-18T13:11:44.026492+07:00 | collected |  |  |  |
+| 31 | macro | sbv_rates | {} | {'name': 'Lãi suất tái cấp vốn', 'value': '4,500%', 'as_of': '09/11/2026'} |  | 2026-11-18T13:11:44.579956+07:00 | collected |  |  |  |
+| 32 | macro | sbv_rates | {} | {'name': 'Lãi suất tái chiết khấu', 'value': '3,000%', 'as_of': '09/11/2026'} |  | 2026-11-18T13:11:44.580564+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T13:11:44.579956+07:00, dùng lại bản đã lưu |
+| 33 | macro | vn_retail_fx | {} | {'name': 'US DOLLAR', 'value': 25880.0} | VND/USD | 2026-11-18T13:11:44.723683+07:00 | collected |  |  |  |
+| 34 | macro | vn_retail_fx | {} | {'name': 'US DOLLAR', 'value': 25500.0} | VND/USD | 2026-11-18T13:11:44.724323+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T13:11:44.723683+07:00, dùng lại bản đã lưu |
+| 35 | macro | vn_retail_fx | {} | {'name': 'EURO', 'value': 28964.31} | VND/EUR | 2026-11-18T13:11:44.724584+07:00 | collected |  |  | dữ liệu lấy lúc 2026-11-18T13:11:44.723683+07:00, dùng lại bản đã lưu |
+| 36 | macro | vn_msn_fx_gold | {'symbols': ['USDVND'], 'days': 10} | {'symbol': 'USDVND', 'last': {'time': '2026-11-18', 'open': 25705.0, 'high': 25705.0, 'low': 25699.0, 'close': 25705.0, 'volume': 0.0}} | VND per USD | 2026-11-18T13:11:45.325275+07:00 | collected |  |  |  |
+| 37 | macro | vn_msn_fx_gold | {'symbols': ['GOLD'], 'days': 10} | {'symbol': 'GC=F', 'last': {'time': '2026-11-18', 'open': 3855.2, 'high': 3859.3, 'low': 3781.7, 'close': 3787.5, 'volume': 59920.0}} | USD per troy ounce | 2026-11-18T13:11:45.425219+07:00 | collected |  |  |  |
+| 38 | macro | vn_retail_gold | {} | {'name': 'Vàng miếng SJC 999.9', 'value': 13720000.0} | đồng/chỉ (1 lượng = 10 chỉ) | 2026-11-18T13:11:45.631839+07:00 | collected |  |  |  |
+| 39 | macro | world_macro_country | {'iso3': 'VNM', 'indicator': 'NY.GDP.MKTP.KD.ZG', 'limit': 5} | {'t': '2025', 'v': 8.01882998978245} |  | 2026-11-18T13:11:45.866442+07:00 | collected |  |  |  |
+| 40 | macro | world_macro_country | {'iso3': 'VNM', 'indicator': 'FP.CPI.TOTL.ZG', 'limit': 5} | {'t': '2025', 'v': 3.30999314219739} |  | 2026-11-18T13:11:45.925296+07:00 | collected |  |  |  |
 
 Expectation per row (what the primary source must show):
 
 1. stmt-FPT-quarter-doanh-thu: FPT doanh thu quý gần nhất
-2. stmt-FPT-quarter-lợi-nhuận-sa: FPT LNST quý gần nhất
+2. stmt-FPT-quarter-lnst: FPT LNST quý gần nhất
 3. stmt-FPT-quarter-vốn-chủ-sở-h: FPT vốn chủ quý gần nhất
 4. stmt-HPG-quarter-doanh-thu: HPG doanh thu quý gần nhất
-5. stmt-HPG-quarter-lợi-nhuận-sa: HPG LNST quý gần nhất
+5. stmt-HPG-quarter-lnst: HPG LNST quý gần nhất
 6. stmt-HPG-quarter-vốn-chủ-sở-h: HPG vốn chủ quý gần nhất
 7. cfo-VCB-annual: VCB: lưu chuyển tiền thuần HĐKD năm gần nhất
 8. cfo-FPT-annual: FPT: lưu chuyển tiền thuần HĐKD năm gần nhất
 9. cfo-HPG-annual: HPG: lưu chuyển tiền thuần HĐKD năm gần nhất
 10. stmt-VNM-year-doanh-thu: VNM doanh thu năm gần nhất
-11. stmt-VNM-year-lợi-nhuận-sa: VNM LNST năm gần nhất
+11. stmt-VNM-year-lnst: VNM LNST năm gần nhất
 12. stmt-MWG-year-doanh-thu: MWG doanh thu năm gần nhất
-13. stmt-MWG-year-lợi-nhuận-sa: MWG LNST năm gần nhất
-14. stmt-VCB-year-lợi-nhuận-sa: VCB LNST năm gần nhất
-15. stmt-VCB-year-vốn-chủ-sở-h: VCB vốn chủ năm gần nhất
+13. stmt-MWG-year-lnst: MWG LNST năm gần nhất
+14. stmt-VCB-year-lnst: VCB LNST năm gần nhất
+15. stmt-VCB-year-vốn-và-các-q: VCB vốn chủ năm gần nhất
 16. price-FPT-last: FPT: giá đóng cửa phiên gần nhất (nguồn: HOSE/HNX, IR)
 17. price-HPG-last: HPG: giá đóng cửa phiên gần nhất (nguồn: HOSE/HNX, IR)
 18. price-VCB-last: VCB: giá đóng cửa phiên gần nhất (nguồn: HOSE/HNX, IR)

@@ -42,11 +42,31 @@ def _last(values: Any) -> Any:
     return None
 
 
+_STATEMENT_SECTIONS = {
+    # financeinfo keys the sections by their Vietnamese report names; the codes
+    # the tool accepts as `statement` (KQKD/CDKT/CSTC) are aliases.
+    "kqkd": "kết quả kinh doanh",
+    "cdkt": "báo cáo tình hình tài chính",
+    "cstc": "chỉ số tài chính",
+}
+
+
+def _resolve_section(data: dict[str, Any], section: str) -> str:
+    sections = data.get("statements") or {}
+    if section in sections:
+        return section
+    want = _STATEMENT_SECTIONS.get(section.strip().lower(), section.strip().lower())
+    for name in sections:
+        if want in str(name).lower():
+            return str(name)
+    raise LookupError(f"section {section!r} not in {sorted(sections)}")
+
+
 def _statement(section: str, needle: str) -> Callable[[dict[str, Any]], Any]:
     """Newest value of the statement row whose name contains `needle`."""
 
     def read(data: dict[str, Any]) -> Any:
-        rows = (data.get("statements") or {}).get(section) or []
+        rows = (data.get("statements") or {}).get(_resolve_section(data, section)) or []
         row = next(
             (r for r in rows if needle.lower() in str(r.get("name", "")).lower()), None
         )
@@ -197,7 +217,7 @@ def _samples() -> tuple[Sample, ...]:
     for symbol, expect in (("FPT", "quý gần nhất"), ("HPG", "quý gần nhất")):
         out.append(_stmt(symbol, "quarter", "KQKD", "Doanh thu", f"{symbol} doanh thu {expect}"))
         out.append(
-            _stmt(symbol, "quarter", "KQKD", "Lợi nhuận sau thuế", f"{symbol} LNST {expect}")
+            _stmt(symbol, "quarter", "KQKD", "lnst", f"{symbol} LNST {expect}")
         )
         out.append(
             _stmt(symbol, "quarter", "CDKT", "Vốn chủ sở hữu", f"{symbol} vốn chủ {expect}")
@@ -208,10 +228,10 @@ def _samples() -> tuple[Sample, ...]:
             _stmt(symbol, "year", "KQKD", "Doanh thu", f"{symbol} doanh thu năm gần nhất")
         )
         out.append(
-            _stmt(symbol, "year", "KQKD", "Lợi nhuận sau thuế", f"{symbol} LNST năm gần nhất")
+            _stmt(symbol, "year", "KQKD", "lnst", f"{symbol} LNST năm gần nhất")
         )
-    out.append(_stmt("VCB", "year", "KQKD", "Lợi nhuận sau thuế", "VCB LNST năm gần nhất"))
-    out.append(_stmt("VCB", "year", "CDKT", "Vốn chủ sở hữu", "VCB vốn chủ năm gần nhất"))
+    out.append(_stmt("VCB", "year", "KQKD", "lnst", "VCB LNST năm gần nhất"))
+    out.append(_stmt("VCB", "year", "CDKT", "Vốn và các quỹ", "VCB vốn chủ năm gần nhất"))
 
     # 10 prices: 5 latest closes + 5 bars on a dividend/bonus date (adjusted vs raw).
     for symbol in ("FPT", "HPG", "VCB", "MWG", "SSI"):
