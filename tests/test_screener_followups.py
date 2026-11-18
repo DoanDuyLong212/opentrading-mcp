@@ -228,6 +228,9 @@ async def test_market_cap_missing_has_no_evaluated_conclusion_and_cap_is_visible
             "market_cap": None,
         },
     )
+    from opentrading_mcp.providers import vietstock as vs_p
+
+    monkeypatch.setattr(vs_p, "market_capital", lambda symbol: {})
     server = create_server("scan")
     register_preset(server, "scan")
     env = await server._tool_manager.get_tool("stock_screener").fn(
@@ -239,7 +242,7 @@ async def test_market_cap_missing_has_no_evaluated_conclusion_and_cap_is_visible
         "limit": 15,
         "attempted": 15,
         "metric_available": {"market_cap": 0},
-        "unsupported_metrics": ["market_cap"],
+        "unsupported_metrics": [],
     }
     assert coverage["eligible"] == 35
     assert coverage["attempted"] == 15
@@ -278,6 +281,9 @@ async def test_market_cap_legacy_value_is_not_evaluated_without_basis(monkeypatc
             "market_cap": 1000,
         },
     )
+    from opentrading_mcp.providers import vietstock as vs_p
+
+    monkeypatch.setattr(vs_p, "market_capital", lambda symbol: {})
     server = create_server("scan")
     register_preset(server, "scan")
     env = await server._tool_manager.get_tool("stock_screener").fn(
@@ -288,10 +294,76 @@ async def test_market_cap_legacy_value_is_not_evaluated_without_basis(monkeypatc
     assert env["data"]["coverage"]["fundamentals"]["metric_available"] == {
         "market_cap": 0,
     }
-    assert env["data"]["coverage"]["fundamentals"]["unsupported_metrics"] == ["market_cap"]
+    assert env["data"]["coverage"]["fundamentals"]["unsupported_metrics"] == []
     assert env["availability"] == "partial"
     assert not env["data"]["candidates"]
-    assert any("unit/as-of/shares basis unverified" in w for w in env["warnings"])
+    # The ratio table's basis-less legacy value (1000) is never used either.
+    assert any("market_cap unavailable" in w for w in env["warnings"])
+
+
+async def test_market_cap_filter_uses_verified_tradinginfo_source(monkeypatch):
+    """#39.9 option A: market_cap comes from Vietstock tradinginfo, VND, as_of."""
+    from opentrading_mcp.providers import vietstock as vs_p
+    from opentrading_mcp.providers import vnstock as vn_p
+    from opentrading_mcp.server import create_server, register_preset
+    from opentrading_mcp.tools import scan
+
+    async def fake_run(fn, tool, **kwargs):
+        return fn()
+
+    async def fake_lookup(*args):
+        return None
+
+    async def fake_store(tool, fingerprint, ttl, data, **kwargs):
+        from opentrading_mcp.schemas import make_envelope
+
+        return make_envelope(data, **kwargs)
+
+    monkeypatch.setattr(scan, "run_blocking", fake_run)
+    monkeypatch.setattr(scan, "cache_lookup", fake_lookup)
+    monkeypatch.setattr(scan, "cache_store", fake_store)
+    monkeypatch.setattr(
+        vn_p, "listing_symbols", lambda: [{"symbol": "AAA"}, {"symbol": "BBB"}]
+    )
+    monkeypatch.setattr(
+        vsr_mod,
+        "equity_fundamentals",
+        lambda symbol: {"symbol": symbol, "pe": 10, "roe": 0.2, "eps": 5000.0},
+    )
+    monkeypatch.setattr(
+        vn_p,
+        "equity_quote_batch",
+        lambda symbols: [{"symbol": s, "close_price": 50000.0} for s in symbols],
+    )
+    caps = {"AAA": 1_000_000_000_000_000, "BBB": 200_000_000_000}
+    monkeypatch.setattr(
+        vs_p,
+        "market_capital",
+        lambda symbol: {
+            "symbol": symbol,
+            "market_cap": caps[symbol],
+            "unit": "VND",
+            "shares": 1_000_000_000.0,
+            "price": 50000.0,
+            "shares_basis": "listed_shares (KLCPLH)",
+            "formula": "listed_shares x last price",
+            "as_of": "2026-11-18",
+            "source": "vietstock",
+        },
+    )
+    server = create_server("scan")
+    register_preset(server, "scan")
+    env = await server._tool_manager.get_tool("stock_screener").fn(
+        filters={"market_cap": [500_000_000_000, None]},
+        limit=5,
+    )
+    assert env["data"]["coverage"]["evaluated"] == 2
+    cand = next(c for c in env["data"]["candidates"] if c["symbol"] == "AAA")
+    assert cand["market_cap"] == 1_000_000_000_000_000
+    assert cand["market_cap_unit"] == "VND"
+    assert cand["market_cap_as_of"] == "2026-11-18"
+    assert "KLCPLH" in cand["market_cap_basis"]
+    assert [c["symbol"] for c in env["data"]["candidates"]] == ["AAA"]
 
 
 async def test_nonfilterable_invalid_price_condition_does_not_block_tool(monkeypatch):

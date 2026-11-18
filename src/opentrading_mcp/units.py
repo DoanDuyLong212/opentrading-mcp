@@ -189,7 +189,10 @@ UNITS: dict[str, dict[str, str]] = {
             "(VND/cp), kèm pe_as_of; 'period_end': P/E cuối kỳ báo cáo"
         ),
         "roe": "%",
-        "_note": "market_cap: nguồn chưa xác minh đơn vị/thời điểm → không trả",
+        "_note": (
+            "market_cap: VND — Vietstock tradinginfo MarketCapital = số cp niêm yết "
+            "(KLCPLH) x giá cuối, as_of TradingDate (đo 2026-11-18, #39.9 phương án A)"
+        ),
     },
     # Vietstock foreign chart: BuyVol/SellVol shares; BuyVal/SellVal billion dong
     # (46,533,428 shares / 1813.559809 = 38,970 dong per share, sample 2026-10-06).

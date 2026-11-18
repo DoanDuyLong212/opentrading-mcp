@@ -380,6 +380,39 @@ def _ms_date(raw: Any) -> str | None:
 EVENT_TYPE_IDS = {"dividends": 1, "listings": 2, "meetings": 5}
 
 
+def market_capital(symbol: str) -> dict[str, Any]:
+    """Verified market cap (#39.9 option A, measured 2026-11-18).
+
+    /company/tradinginfo `MarketCapital` is VND and equals KLCPLH (listed
+    shares) x LastPrice exactly (FPT 88,534,913,073,600 = 1,885,727,648 x
+    47,100); TradingDate is the as-of of that last price.
+    """
+    raw = _post("/company/tradinginfo", {"code": symbol.upper(), "s": 0})
+    data = raw if isinstance(raw, dict) else {}
+    cap = data.get("MarketCapital")
+    if not isinstance(cap, (int, float)) or isinstance(cap, bool) or cap <= 0:
+        raise ProviderBadData(f"vietstock tradinginfo: no MarketCapital for {symbol.upper()}")
+    shares = data.get("KLCPLH")
+    price = data.get("LastPrice")
+
+    def _num(value: Any) -> float | None:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        return None
+
+    return {
+        "symbol": symbol.upper(),
+        "market_cap": float(cap),
+        "unit": "VND",
+        "shares": _num(shares),
+        "price": _num(price),
+        "shares_basis": "listed_shares (KLCPLH)",
+        "formula": "listed_shares x last price",
+        "as_of": _ms_date(data.get("TradingDate")),
+        "source": "vietstock",
+    }
+
+
 def event_calendar(event: str = "dividends", symbol: str = "", limit: int = 20) -> Any:
     """Corporate-action calendar rows (no earnings-date type exists upstream)."""
     if event not in EVENT_TYPE_IDS:
