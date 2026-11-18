@@ -28,13 +28,17 @@ from opentrading_mcp.vn_time import VN_TZ
 SYMBOLS_OHLC = ["VN30F1M"]
 INDICES = ["VNINDEX", "VN30"]
 
-# Cửa sổ phiên DNSE: 09:00-15:00 giờ Việt Nam, thứ Hai-thứ Sáu. Ngoài cửa sổ
-# server không gửi data → recv timeout 30s → reconnect vĩnh viễn (churn log, CPU
-# uổng): ngủ tới 09:00 ngày giao dịch kế tiếp thay vì giữ vòng connect. Ngày lễ
-# chưa được tính (như in_vn_session). VN không có DST → offset cố định +07:00
-# (vn_time.VN_TZ), không cần tzdata.
-DNSE_START_HOUR = 9
-DNSE_END_HOUR = 15
+# Phiên DNSE (giờ Việt Nam, thứ Hai-thứ Sáu): 09:00-11:30 và 13:00-15:00.
+# Nghỉ trưa 11:30-13:00 server không gửi data → recv timeout 30s → reconnect,
+# churn log/CPU (#144). Ngoài phiên: ngủ tới phiên kế tiếp thay vì giữ vòng
+# connect. Ngày lễ: DNSE working-dates (best-effort, cache 6h); không có lịch
+# thì chỉ bỏ cuối tuần + log, không bao giờ bỏ nhầm một phiên thật.
+# VN không có DST → offset cố định +07:00 (vn_time.VN_TZ), không cần tzdata.
+DNSE_SESSIONS = ((9, 0, 11, 30), (13, 0, 15, 0))
+DNSE_START_HOUR = DNSE_SESSIONS[0][0]
+DNSE_END_HOUR = DNSE_SESSIONS[-1][2]
+_TRADING_DAYS_TTL = 6 * 3600.0
+_TRADING_DAYS: tuple[float, frozenset[str]] = (0.0, frozenset())
 
 
 def _vn(now: datetime | None = None) -> datetime:
@@ -45,8 +49,37 @@ def _vn(now: datetime | None = None) -> datetime:
     return moment.astimezone(VN_TZ)
 
 
+def _day(now: datetime | None = None) -> datetime:
+    return _vn(now).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def dnse_sessions(now: datetime | None = None) -> list[tuple[datetime, datetime]]:
+    """Hai phiên [start, end) của ngày chứa `now` (09:00-11:30, 13:00-15:00)."""
+    day = _day(now)
+    out: list[tuple[datetime, datetime]] = []
+    for start_h, start_m, end_h, end_m in DNSE_SESSIONS:
+        out.append(
+            (
+                day.replace(hour=start_h, minute=start_m),
+                day.replace(hour=end_h, minute=end_m),
+            )
+        )
+    return out
+
+
+def dnse_session(now: datetime | None = None) -> tuple[datetime, datetime] | None:
+    """Phiên chứa `now`, hoặc None khi nghỉ trưa / ngoài giờ / cuối tuần."""
+    moment = _vn(now)
+    if moment.weekday() >= 5:
+        return None
+    for start, end in dnse_sessions(moment):
+        if start <= moment < end:
+            return start, end
+    return None
+
+
 def dnse_window(now: datetime | None = None) -> tuple[datetime, datetime]:
-    """Cửa sổ [09:00, 15:00) giờ VN của ngày chứa `now`."""
+    """Cả ngày [09:00, 15:00) giờ VN (giữ cho caller cũ; phiên tách ở nghỉ trưa)."""
     moment = _vn(now)
     start = moment.replace(hour=DNSE_START_HOUR, minute=0, second=0, microsecond=0)
     end = moment.replace(hour=DNSE_END_HOUR, minute=0, second=0, microsecond=0)
@@ -54,23 +87,85 @@ def dnse_window(now: datetime | None = None) -> tuple[datetime, datetime]:
 
 
 def dnse_off_hours(now: datetime | None = None) -> bool:
-    """True nếu ngoài [09:00, 15:00) giờ VN hoặc cuối tuần — lúc đó WS không có dữ liệu."""
-    moment = _vn(now)
-    if moment.weekday() >= 5:
+    """True nếu không nằm trong phiên giao dịch nào (gồm nghỉ trưa, cuối tuần)."""
+    return dnse_session(now) is None
+
+
+def _is_trading_day(day: datetime, trading_days: frozenset[str] | None) -> bool:
+    """Weekday, and not a holiday proven by a calendar that actually covers `day`."""
+    if day.weekday() >= 5:
+        return False
+    if not trading_days:
         return True
-    start, end = dnse_window(moment)
-    return not (start <= moment < end)
+    iso = day.date().isoformat()
+    if iso in trading_days:
+        return True
+    # Absence proves a holiday only while the calendar still reaches this day.
+    return iso > max(trading_days)
 
 
-def _seconds_until_open(now: datetime | None = None) -> float:
-    """Số giây tới 09:00 của ngày giao dịch kế tiếp (hôm nay nếu chưa tới 15:00)."""
+def _next_session_start(
+    now: datetime | None = None, trading_days: frozenset[str] | None = None
+) -> datetime:
     moment = _vn(now)
-    start, end = dnse_window(moment)
-    if moment >= end:
-        start += timedelta(days=1)
-    while start.weekday() >= 5:
-        start += timedelta(days=1)
-    return max(0.0, (start - moment).total_seconds())
+    day = _day(moment)
+    if _is_trading_day(day, trading_days):
+        for start, _end in dnse_sessions(day):
+            if moment < start:
+                return start
+    for offset in range(1, 15):
+        candidate = day + timedelta(days=offset)
+        if _is_trading_day(candidate, trading_days):
+            return candidate.replace(hour=DNSE_SESSIONS[0][0], minute=DNSE_SESSIONS[0][1])
+    return day + timedelta(days=1)
+
+
+def _seconds_until_open(
+    now: datetime | None = None, trading_days: frozenset[str] | None = None
+) -> float:
+    """Số giây tới đầu phiên kế tiếp (0 khi đang trong phiên), bỏ trưa/cuối tuần/lễ."""
+    moment = _vn(now)
+    if dnse_session(moment) is not None:
+        return 0.0
+    return max(0.0, (_next_session_start(moment, trading_days) - moment).total_seconds())
+
+
+def _parse_trading_days(payload: Any) -> frozenset[str]:
+    """Ngày giao dịch (ISO) từ payload DNSE ``/market/working-dates``."""
+    rows: Any = payload
+    if isinstance(payload, dict):
+        rows = next(
+            (payload[key] for key in ("dates", "tradingDays", "workingDates", "data")
+             if isinstance(payload.get(key), list)),
+            [],
+        )
+    out: set[str] = set()
+    if isinstance(rows, list):
+        for row in rows:
+            value = row.get("date") if isinstance(row, dict) else row
+            if isinstance(value, str) and len(value) >= 10:
+                out.add(value[:10])
+    return frozenset(out)
+
+
+async def _exchange_trading_days() -> frozenset[str] | None:
+    """Lịch giao dịch DNSE (cache 6h); None khi không lấy được (thuần thứ 2-6)."""
+    global _TRADING_DAYS
+    fetched, days = _TRADING_DAYS
+    if days and time.time() - fetched < _TRADING_DAYS_TTL:
+        return days
+    try:
+        payload = await asyncio.wait_for(asyncio.to_thread(dnse_p.working_dates), timeout=10)
+    except Exception as exc:
+        _log(
+            f"dnse trading calendar unavailable ({type(exc).__name__}: {exc}); "
+            "weekday-only sleep"
+        )
+        _TRADING_DAYS = (time.time(), frozenset())
+        return None
+    days = _parse_trading_days(payload)
+    _TRADING_DAYS = (time.time(), days)
+    return days or None
 
 
 def _log(message: str) -> None:
@@ -127,8 +222,8 @@ async def dnse_ws_loop(publish_seconds: int = 5) -> None:
     backoff = 5
     while True:
         if dnse_off_hours():
-            wait = _seconds_until_open()
-            _log(f"dnse ws ngoài cửa sổ 9-15h: tạm dừng {int(wait)}s tới 09:00")
+            wait = _seconds_until_open(trading_days=await _exchange_trading_days())
+            _log(f"dnse ws ngoài phiên: tạm dừng {int(wait)}s tới phiên kế tiếp")
             await asyncio.sleep(wait)
             continue
         try:
@@ -159,7 +254,8 @@ async def _dnse_ws_once(api_key: str, api_secret: str, publish_seconds: int) -> 
         for index in INDICES:
             await ws.send(json.dumps(dnse_p.build_ws_subscribe(f"market_index.{index}.json", [])))
         await ws.send(json.dumps(dnse_p.build_ws_subscribe("foreign.*.json", SYMBOLS_OHLC)))
-        window_end = dnse_window()[1]
+        session = dnse_session()
+        window_end = session[1] if session else dnse_window()[1]
         while True:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=30)
@@ -167,7 +263,7 @@ async def _dnse_ws_once(api_key: str, api_secret: str, publish_seconds: int) -> 
                 _log("dnse recv timeout, reconnecting")
                 return
             if _vn() >= window_end:
-                _log("dnse ws hết cửa sổ 15:00: ngắt kết nối tới phiên sau")
+                _log(f"dnse ws hết phiên {window_end:%H:%M}: ngắt kết nối tới phiên sau")
                 return
             data = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
             if data.get("action") == "ping":
