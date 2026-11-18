@@ -87,6 +87,22 @@ CHAIN_PAIRS: list[tuple[str, str]] = [
 # Baskets tracked after major market troughs (cycle_trough_events columns).
 TROUGH_BASKETS = ["bank", "securities", "realestate", "oilgas", "steel", "utility", "tech", "vin"]
 
+# #143: baskets are TODAY's constituents (v2 drops ITA/POM/SFN); the tables run from
+# 2018, so delisted/suspended names are missing from the whole history and long-run
+# basket returns are biased upward. Every basket-stat output carries this note.
+SURVIVORSHIP_WARNING = (
+    "basket = current constituents (members v2): names delisted or suspended since "
+    "2018 are excluded from the whole history, so long-run basket returns are biased "
+    "upward (no point-in-time membership)."
+)
+
+
+def _basket_note(env: dict[str, Any]) -> dict[str, Any]:
+    """Append the survivorship note to a basket-stat envelope (success or not-seeded)."""
+    if isinstance(env, dict) and isinstance(env.get("warnings"), list):
+        env["warnings"] = [*env["warnings"], SURVIVORSHIP_WARNING]
+    return env
+
 
 def _fold(s: str) -> str:
     """Lowercase, strip diacritics, collapse to words (for basket names)."""
@@ -278,8 +294,9 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         sql, args = _filters("SELECT basket, month, mean_ret, hit_rate, rel_ret, n FROM cycle_month_stats",
                              [("basket", _canon_basket(basket)), ("month", month)], "basket, month")
-        return await db.read_rows("cycle_seasonality", src, sql, args,
-                                  ["basket", "month", "mean_ret", "hit_rate", "rel_ret", "n"], bool(args))
+        return _basket_note(await db.read_rows(
+            "cycle_seasonality", src, sql, args,
+            ["basket", "month", "mean_ret", "hit_rate", "rel_ret", "n"], bool(args)))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_chains(pair: str | None = None,
@@ -287,7 +304,8 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Relative rotation chains (A strong -> B vs VNINDEX next month). Omit pair for full table."""
         sql, args = _filters("SELECT pair, n_up, rel_mean, rel_hit FROM cycle_chains",
                              [("pair", pair)], "rel_mean DESC")
-        return await db.read_rows("cycle_chains", src, sql, args, ["pair", "n_up", "rel_mean", "rel_hit"], bool(args))
+        return _basket_note(await db.read_rows(
+            "cycle_chains", src, sql, args, ["pair", "n_up", "rel_mean", "rel_hit"], bool(args)))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_turning(year: int | None = None,
@@ -306,8 +324,9 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         sql, args = _filters("SELECT basket, pre5_mean, pre5_hit, post5_mean, post5_hit, n FROM cycle_tet",
                              [("basket", _canon_basket(basket))], "pre5_mean DESC")
-        return await db.read_rows("cycle_tet", src, sql, args,
-                                  ["basket", "pre5_mean", "pre5_hit", "post5_mean", "post5_hit", "n"], bool(args))
+        return _basket_note(await db.read_rows(
+            "cycle_tet", src, sql, args,
+            ["basket", "pre5_mean", "pre5_hit", "post5_mean", "post5_hit", "n"], bool(args)))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_yearly(basket: str | None = None,
@@ -323,7 +342,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         cols = ["basket", "year", "ret", "is_partial_year", "data_through", "period_basis"]
         sql, args = _filters(f"SELECT {', '.join(cols)} FROM cycle_yearly",
                              [("basket", _canon_basket(basket)), ("year", year)], "basket, year")
-        return await db.read_rows("cycle_yearly", src, sql, args, cols, bool(args))
+        return _basket_note(await db.read_rows("cycle_yearly", src, sql, args, cols, bool(args)))
 
     @server.tool(annotations=READ_ONLY)
     async def cycle_trough_events(ctx: AnyContext | None = None) -> dict[str, Any]:
@@ -357,7 +376,7 @@ def register_cycle_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                     pass
         if rule and out.get("data") is not None:
             out["data"]["rule"] = rule
-        return out
+        return _basket_note(out)
 
     tools = [
         {"name": "cycle_stats_check"},
