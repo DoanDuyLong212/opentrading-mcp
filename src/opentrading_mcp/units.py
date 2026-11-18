@@ -82,6 +82,125 @@ UNITS: dict[str, dict[str, str]] = {
         "vol_ann_pct": "%/năm (đã năm hóa 252 phiên)",
         "rank": "hạng trong rổ (1 = tổng lợi nhuận cao nhất)",
     },
+    # ---- #138: raw DNSE / Vietstock / board tools -------------------------------
+    # DNSE futures/index bars are points and contracts, never dong. DNSE's raw REST
+    # prices are thousand dong + lots of 10 for stocks (dnse_board.PRICE/LOT,
+    # measured 2026-11-09); the board rows this project serves are already dong.
+    "dnse_ohlc_history": {
+        "o, h, l, c, last, high, low": "điểm chỉ số (futures/index) — không phải đồng",
+        "v": "hợp đồng (bar_type=derivative); cổ phiếu (bar_type=index)",
+    },
+    # Raw /trades/latest body, one instrument class per symbol: mixed by design.
+    "dnse_latest_trade": {
+        "matchPrice, openPrice, highestPrice, lowestPrice, avgPrice": (
+            f"{THOUSAND_DONG}; futures: điểm (mixed — theo symbols)"
+        ),
+        "totalVolumeTraded": "lô 10 cổ phiếu (cổ phiếu); hợp đồng (futures) — mixed",
+        "grossTradeAmount": "tỷ đồng (đo 2026-11-09)",
+    },
+    # order_book() returns dong/shares for stocks and points/contracts for futures,
+    # and states which one in `unit`.
+    "dnse_orderbook": {
+        "bids.price, asks.price, bids.volume, asks.volume": (
+            "đồng + cổ phiếu (cổ phiếu); điểm + hợp đồng (futures) — đọc `unit` trong data"
+        ),
+    },
+    "dnse_foreign_flow": {
+        "flow.buy, flow.sell, flow.net": (
+            "chưa xác minh: giá trị khối ngoại VN30F1M từ WS (chưa có mẫu đo)"
+        ),
+    },
+    "dnse_ws_snapshot": {
+        "ohlc.*.open, ohlc.*.high, ohlc.*.low, ohlc.*.close": "điểm (VN30F1M/index)",
+        "ohlc.*.volume": "hợp đồng",
+        "index.*.value, index.*.change, index.*.pct": "điểm chỉ số (pct: %)",
+        "foreign.*.buy, foreign.*.sell, foreign.*.net": "chưa xác minh (WS foreign amount)",
+    },
+    # getmarketprice rows include indices (points) and stocks (dong) in one list.
+    "vs_market_price": {
+        "Price, Change": (
+            "điểm với chỉ số (VNIndex 1740.46); đồng với cổ phiếu — mixed, đọc Code/Name"
+        ),
+        "PerChange": "%",
+    },
+    "vs_trading_info": {
+        "PriorClosePrice, CeilingPrice, FloorPrice": DONG,
+        "EPS, BVPS": "đồng/cổ phiếu",
+        "PE, PB": "lần (bội số)",
+        "KLCPLH, KLCPNY": SHARES,
+    },
+    "vs_overview_trading": {
+        "ClosePrice, Change": DONG,
+        "PerChange": "%",
+        "_note": (
+            "volume/giá trị (TotalVol, FBuyVal...): tên trường và đơn vị chưa xác minh"
+        ),
+    },
+    "breadth_scan": {
+        "advancers, decliners, unchanged, ceiling, floor": "số mã",
+        "advancers_pct": "%",
+    },
+    # ---- #139: derived tools ----------------------------------------------------
+    "valuation_run": {
+        "price": DONG,
+        "eps, bvps": "đồng/cổ phiếu (eps_unit do tool khai báo unverified)",
+        "per, pb": "lần (bội số)",
+    },
+    "stock_overview": {
+        "trading.PriorClosePrice, trading.CeilingPrice, trading.FloorPrice": DONG,
+        "trading.EPS, trading.BVPS": "đồng/cổ phiếu",
+        "trading.PE, trading.PB": "lần (bội số)",
+        "company.target_price": "đồng/cổ phiếu",
+    },
+    # Item ids come from vs_ratios.UNIT_FIELDS, which carries the unit per item.
+    "peer_compare": {
+        "trailing_eps, book_value_per_share_bvps": "đồng/cổ phiếu",
+        "p_e, p_b": "lần (bội số cuối kỳ báo cáo)",
+        "roe, roa, net_profit_margin, gross_profit_margin": "%",
+    },
+    "signals_technical": {
+        "last, support, resistance, sma*, ema*, boll_upper, boll_lower": (
+            "nghìn đồng/cp với cổ phiếu; điểm với chỉ số — cùng đơn vị nến vào"
+        ),
+        "rs_vs_bench, pos_52w": "%",
+        "_note": "rsi/macd/adx không đơn vị; ichimoku/swings/fib là mức giá cùng đơn vị `last`",
+    },
+    "stock_screener": {
+        "pe": "lần (P/E cuối kỳ báo cáo, không phải hôm nay)",
+        "roe": "%",
+        "_note": "market_cap: nguồn chưa xác minh đơn vị/thời điểm → không trả",
+    },
+    # Vietstock foreign chart: BuyVol/SellVol shares; BuyVal/SellVal billion dong
+    # (46,533,428 shares / 1813.559809 = 38,970 dong per share, sample 2026-10-06).
+    "money_flow": {
+        "flow.*.BuyVol, flow.*.SellVol": SHARES,
+        "flow.*.BuyVal, flow.*.SellVal": "tỷ đồng (1813.56 = 1.813,56 tỷ)",
+        "_note": "nhánh dnse-ws chỉ phủ VN30F1M futures; amount ở nhánh đó chưa xác minh",
+    },
+    "quant_backtest": {
+        "gross_return, net_return, benchmark_return, max_drawdown": "phân số (0.05 = 5%)",
+        "equity_curve.*.value": "chỉ số chuẩn hóa (100 = đầu kỳ), không phải đồng",
+    },
+    "quant_risk": {
+        "sharpe_proxy": "tỷ lệ (không đơn vị)",
+        "max_drawdown, win_rate": "phân số (0.05 = 5%)",
+    },
+    "quant_factors": {
+        "momentum_20d_pct, vol_20d_ann_pct, max_dd_20d_pct, max_dd_full_pct": "%",
+    },
+    "block_trades": {
+        "close": DONG,
+        "mt_val, pt_val": "đồng (50.930.200.000 = 50,93 tỷ)",
+        "mt_vol, pt_vol": SHARES,
+        "pt_pct": "%",
+    },
+    "analyst_consensus": {
+        "target": "đồng/cổ phiếu (đọc từ tiêu đề 'giá mục tiêu'; chưa xác minh bằng mẫu)",
+    },
+    "dividends_splits": {
+        "value_per_share": "đồng/cổ phiếu (region=vn); USD/cổ phiếu (region=world)",
+        "exercise_ratio": "tỷ lệ (0.1 = 10 cp mới/100 cp)",
+    },
 }
 
 
