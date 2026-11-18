@@ -1,8 +1,22 @@
 # vnstock build dependency audit (#134)
 
-Date: 2026-11-18. Read-only: no dependency was changed, because `uv lock` needs
-`vnstocks.com` and this environment cannot reach it (see “What could not be
-done”).
+Date: 2026-11-18. Read-only: no dependency was changed in the repo.
+
+Reachability update (same day, 11:26 +07): `https://vnstocks.com` answered
+HTTP 200, a wheel URL from `uv.lock` answered HEAD 200 anonymously, and
+`uv lock --check` resolved cleanly — so the mirror step (option 1) is now
+executable; it stayed out of this change because the mirror location is the
+owner's decision. The structural finding is unchanged: the three packages
+exist only on the vendor index, not on PyPI (`pypi.org/pypi/vnstock` → 404).
+
+vnstock generation note (per the owner's request to re-check): installed
+`vnstock 6.0.0` is the **official-Open-API generation** — its own summary reads
+“kết nối Open API chính thức bằng khoá của bạn, chuẩn hoá kết quả thành bảng dữ
+liệu thống nhất” (your key, normalized tables). The index also serves
+`vnstock 6.0.1` and `vnstock-oapi 0.1.2` (lock pins 6.0.0 / 0.1.1, uploaded
+2026-11-10). Bumping the lock to 6.0.1 is a separate decision: generation 6
+changed tables and scales (prices in thousand-đ, units per table), so a parity
+check (`#100`-style matrix) must run before any lock upgrade.
 
 ## What the build still depends on
 
@@ -94,9 +108,11 @@ largest native artifact.
 3. Keep option 2 in reserve; it is a product decision about what the server is
    without vnstock, not a packaging one.
 
-## What could not be done here
+## What was deliberately not done here
 
-- `https://vnstocks.com` is not reachable from this environment, so no wheel
-  could be downloaded, no mirror was created, and `uv lock` was not run.
-- Mirror location and hosting are an owner decision (#134); this document is
-  evidence plus a procedure, not a migration.
+- No wheel was mirrored and no lock file changed: the mirror location and
+  hosting are the owner's decision (#134), and lock upgrades (6.0.0 → 6.0.1,
+  `vnstock-quant` removal) each need their own parity check and PR.
+- The index version listing is anonymous-readable (`/api/packages/vnstock`,
+  PEP 503), so the mirror download in option 1 step 1 can run from this
+  network today.
