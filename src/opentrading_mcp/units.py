@@ -75,6 +75,13 @@ UNITS: dict[str, dict[str, str]] = {
     },
     # Yahoo index bars, checked 2026-11-09 (^GSPC 7376.86).
     "vn_global_index": {"open, high, low, close, last": POINTS},
+    # #149: returns are dimensionless; percentages are per session or per window.
+    "series_stats": {
+        "mean_return_pct, stdev_return_pct": "%/phiên",
+        "total_return_pct, relative_strength_pct": "% cả cửa sổ",
+        "vol_ann_pct": "%/năm (đã năm hóa 252 phiên)",
+        "rank": "hạng trong rổ (1 = tổng lợi nhuận cao nhất)",
+    },
 }
 
 
