@@ -68,6 +68,14 @@ def test_measured_scales_are_never_downgraded_to_guesses() -> None:
     assert UNITS["block_trades"]["close"] == DONG
     assert UNITS["block_trades"]["mt_val, pt_val"].startswith("đồng")
     assert UNITS["vs_trading_info"]["EPS, BVPS"].startswith("đồng")
+
+
+def test_live_measured_scales_2026_11_18_stay_published() -> None:
+    """The scales verified with a valid Vietstock JWT on 2026-11-18 (#138/#139)."""
+    assert "USD" in UNITS["vs_market_price"]["Price, Change"]
+    assert "nghìn đồng" in UNITS["dnse_ohlc_history"]["o, h, l, c, last, high, low"]
+    assert UNITS["vs_overview_trading"]["_note"].startswith("TotalVol = cổ phiếu")
+    assert "tỷ đồng" in UNITS["dnse_latest_trade"]["grossTradeAmount"]
     assert UNITS["peer_compare"]["p_e, p_b"].startswith("lần")
     backtest = UNITS["quant_backtest"]["gross_return, net_return, benchmark_return, max_drawdown"]
     assert "phân số" in backtest

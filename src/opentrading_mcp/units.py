@@ -83,20 +83,28 @@ UNITS: dict[str, dict[str, str]] = {
         "rank": "hạng trong rổ (1 = tổng lợi nhuận cao nhất)",
     },
     # ---- #138: raw DNSE / Vietstock / board tools -------------------------------
-    # DNSE futures/index bars are points and contracts, never dong. DNSE's raw REST
+    # DNSE futures/index bars are points and contracts, never dong; stock bars are
+    # thousand dong (FPT 2026-11-02 c=50.2 = 50.200 đ, đo 2026-11-18). DNSE raw REST
     # prices are thousand dong + lots of 10 for stocks (dnse_board.PRICE/LOT,
-    # measured 2026-11-09); the board rows this project serves are already dong.
+    # measured 2026-11-09, khẳng định lại 2026-11-18); board rows are already dong.
     "dnse_ohlc_history": {
-        "o, h, l, c, last, high, low": "điểm chỉ số (futures/index) — không phải đồng",
-        "v": "hợp đồng (bar_type=derivative); cổ phiếu (bar_type=index)",
+        "o, h, l, c, last, high, low": (
+            "điểm chỉ số (futures/index) — không phải đồng; cổ phiếu (bar_type=stock): nghìn đồng"
+        ),
+        "v": (
+            "hợp đồng (bar_type=derivative); cổ phiếu (bar_type=stock, "
+            "FPT v=12.293.400 ≈ KLGD ngày)"
+        ),
     },
     # Raw /trades/latest body, one instrument class per symbol: mixed by design.
+    # Identity re-checked 2026-11-18: FPT lots 939.890 x matchPrice 47.05kđ x 10
+    # = 444,945 tỷ đ = grossTradeAmount 444.94512.
     "dnse_latest_trade": {
         "matchPrice, openPrice, highestPrice, lowestPrice, avgPrice": (
             f"{THOUSAND_DONG}; futures: điểm (mixed — theo symbols)"
         ),
         "totalVolumeTraded": "lô 10 cổ phiếu (cổ phiếu); hợp đồng (futures) — mixed",
-        "grossTradeAmount": "tỷ đồng (đo 2026-11-09)",
+        "grossTradeAmount": "tỷ đồng (đo 2026-11-09, khẳng định lại 2026-11-18)",
     },
     # order_book() returns dong/shares for stocks and points/contracts for futures,
     # and states which one in `unit`.
@@ -107,19 +115,23 @@ UNITS: dict[str, dict[str, str]] = {
     },
     "dnse_foreign_flow": {
         "flow.buy, flow.sell, flow.net": (
-            "chưa xác minh: giá trị khối ngoại VN30F1M từ WS (chưa có mẫu đo)"
+            "chưa xác minh: giá trị khối ngoại từ WS; REST /foreign trả rỗng 2026-11-18"
         ),
     },
     "dnse_ws_snapshot": {
         "ohlc.*.open, ohlc.*.high, ohlc.*.low, ohlc.*.close": "điểm (VN30F1M/index)",
         "ohlc.*.volume": "hợp đồng",
         "index.*.value, index.*.change, index.*.pct": "điểm chỉ số (pct: %)",
-        "foreign.*.buy, foreign.*.sell, foreign.*.net": "chưa xác minh (WS foreign amount)",
+        "foreign.*.buy, foreign.*.sell, foreign.*.net": (
+            "chưa xác minh (WS foreign amount; REST thay thế trả rỗng 2026-11-18)"
+        ),
     },
-    # getmarketprice rows include indices (points) and stocks (dong) in one list.
+    # getmarketprice serves indices/futures (points) and global commodities (USD);
+    # no stock rows in any board type (checked 1/2/3, 2026-11-18: VNIndex 1716.44,
+    # VN30F1M 1828.0, XAUUSDO 3789.62, CL 85.06).
     "vs_market_price": {
         "Price, Change": (
-            "điểm với chỉ số (VNIndex 1740.46); đồng với cổ phiếu — mixed, đọc Code/Name"
+            "điểm với chỉ số/futures VN (VNIndex 1716.44); USD với XAUUSD/CL — mixed, đọc Code"
         ),
         "PerChange": "%",
     },
@@ -128,12 +140,18 @@ UNITS: dict[str, dict[str, str]] = {
         "EPS, BVPS": "đồng/cổ phiếu",
         "PE, PB": "lần (bội số)",
         "KLCPLH, KLCPNY": SHARES,
+        "_note": (
+            "giá/MarketCapital/TotalVal đều đồng (FPT 2026-11-18: Ceiling 51.800, "
+            "Floor 45.150, Last 47.100, MarketCap 88,82 nghìn tỷ đ)"
+        ),
     },
     "vs_overview_trading": {
         "ClosePrice, Change": DONG,
         "PerChange": "%",
         "_note": (
-            "volume/giá trị (TotalVol, FBuyVal...): tên trường và đơn vị chưa xác minh"
+            "TotalVol = cổ phiếu, TotalVal/ForeignBuyVal/ForeignSellVal = đồng "
+            "(FPT 2026-11-18: Close 47.100, TotalVal 452,01 tỷ, ForeignBuy 19,74 tỷ); "
+            "TotalBuyTrade/SellTrade, BuyAvgTrade = chưa xác minh (trả 0)"
         ),
     },
     "breadth_scan": {
