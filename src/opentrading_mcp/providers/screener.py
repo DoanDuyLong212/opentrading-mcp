@@ -22,9 +22,9 @@ COLUMNS: dict[str, dict[str, str]] = {
     "roe": {"group": "quality", "desc": "Return on equity, ratio 0..1 (e.g. 0.18 = 18%)."},
     "market_cap": {
         "group": "valuation",
-        "desc": "Market capitalization filter expects VND. Current vnstock ratios do not "
-        "provide verified unit, as-of date and share basis; stock_screener reports "
-        "no coverage until a source with that basis is verified.",
+        "desc": "Market capitalization in VND — Vietstock tradinginfo MarketCapital "
+        "(listed shares KLCPLH x last price, TradingDate as-of; verified 2026-11-18, "
+        "#39.9 option A). stock_screener fetches it only when this filter is active.",
     },
     "sector": {
         "group": "universe",

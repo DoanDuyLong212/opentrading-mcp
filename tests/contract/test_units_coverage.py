@@ -37,6 +37,8 @@ REQUIRED = {
 }
 
 # Entries that must admit a mixture or an unmeasured scale, never a bare guess.
+# stock_screener left the list on 2026-11-18: its pe (current_ttm/period_end) and
+# market_cap (Vietstock tradinginfo, VND) scales are now measured and published.
 MUST_ADMIT = {
     "dnse_latest_trade",
     "dnse_orderbook",
@@ -46,7 +48,6 @@ MUST_ADMIT = {
     "vs_overview_trading",
     "money_flow",
     "analyst_consensus",
-    "stock_screener",
 }
 
 
