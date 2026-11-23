@@ -3,7 +3,7 @@
 Shareable MCP-server for Vietnamese market research. Team internal first, public later.
 
 - Transports: `stdio` (default, all 5 clients) + Streamable HTTP stateless `POST /mcp`. Legacy HTTP+SSE (`/sse`) đã gỡ 28/10/2026.
-- Presets (each <50 tools): `market`, `scan`, `quant`, `brief`, `intel`, `all`.
+- Single full tool surface, không chia preset (client tự lọc: opencode glob, Cursor toggle, Claude tool search). `--preset all` chỉ là alias deprecated.
 - Backend: Postgres 16 + Redis 7 only. No MongoDB (`reports` PG JSONB replaces `vietstock_news`).
 - Timezone `Asia/Ho_Chi_Minh` tz-aware everywhere.
 
@@ -12,7 +12,7 @@ Shareable MCP-server for Vietnamese market research. Team internal first, public
 ```bash
 pip install -e ".[dev]"
 PYTHONPATH=src python -m pytest tests/ -v
-opentrading-mcp serve                          # stdio for opencode/claude/cursor (full 139 tools)
+opentrading-mcp serve                          # stdio for opencode/claude/cursor (full 174 tools)
 opentrading-mcp serve --http --port 8102            # LAN share
 ```
 
@@ -115,7 +115,7 @@ Xoay token mỗi tháng: đổi env là xong, không đụng code.
 - `url` đúng `/mcp`. Server chỉ phục vụ Streamable HTTP (`/mcp`);
   mọi route ngoài `/healthz`, `/readyz`, `/.well-known/mcp.json` đều cần token.
 
-Xong bước này thì restart opencode/harness → server `opentrading` hiện 138 tools là thành công.
+Xong bước này thì restart opencode/harness → server `opentrading` hiện 174 tools là thành công.
 Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
 
 ### Bước 2 — Verify kết nối (3 lệnh, kỳ vọng rõ ràng)
@@ -124,10 +124,10 @@ Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
 BASE=https://opentrading-mcp-web.onrender.com
 HDR=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "Authorization: Bearer $TEAM_TOKEN")
 
-# 1. Liệt kê tools → kỳ vọng: 138 tools (đếm "name": 138 lần).
+# 1. Liệt kê tools → kỳ vọng: 174 tools (đếm "name": 174 lần; 175 nếu có websearch key).
 #    Lưu ý: response là SSE (dòng "data: {json}"), opencode parse tự động;
 #    curl thì grep trên text thô như dưới. Nếu chỉ đếm được 66 → prod đang
-#    chạy preset market cũ (thiếu scan/quant/brief/intel) → redeploy bản mới nhất.
+#    chạy bản rất cũ (preset market trước 2026-10-05) → redeploy bản mới nhất.
 curl -s -X POST "$BASE/mcp" "${HDR[@]}" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | grep -o '"name":' | wc -l
 
@@ -151,7 +151,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 | Transport | Streamable HTTP (stateless), JSON-RPC 2.0 |
 | Server card (public) | `https://opentrading-mcp-web.onrender.com/.well-known/mcp.json` |
 | Health (public) | `https://opentrading-mcp-web.onrender.com/healthz` (liveness) · `/readyz` (Redis/Postgres/worker; `?deep=1` thêm upstream, `?full=1`/`?deep=1` cần token) |
-| Tools | 139 (140 khi có websearch key), single full surface, client tự lọc |
+| Tools | 174 (175 khi có websearch key), single full surface, client tự lọc |
 | Deploy | Render chạy `serve --http` full surface (xem `Dockerfile` CMD) |
 | Prompts | 6 workflows: `morning_briefing`, `ticker_analysis`, `pre_earnings`, `sector_rotation`, `ai_detect`, `risk_check` |
 | Quy tắc dùng | Rate-limit 120 req/phút/IP; quota 1000 calls/ngày/user (team token bypass quota) |
@@ -160,7 +160,7 @@ Headers bắt buộc mỗi request: `Content-Type: application/json`,
 ### Cách 2 — stdio local (dev, không cần token)
 
 ```bash
-uvx opentrading-mcp serve                     # 139 tools full
+uvx opentrading-mcp serve                     # 174 tools full
 uvx opentrading-mcp serve --preset all        # deprecated alias, vẫn chạy
 ```
 
@@ -179,5 +179,5 @@ File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
 | Cold start 20–40s | Render free-tier sleep | `/healthz` chỉ đánh thức instance (liveness, không I/O); vnstock được import nền ngay khi process khởi động. Kiểm tra Redis/Postgres: `/readyz` |
 | Timezone | Mọi timestamp `Asia/Ho_Chi_Minh` tz-aware | Parse theo VN, không UTC |
 | Chi tiết đầy đủ | Kiến trúc, bảo mật, DB, clients | `docs/architecture-review-2026-09-30.md` |
-| Bảng 138 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
-| **Thiết kế 19 skills cho harness** | Spec build skills (workflow + budget + acceptance) | `docs/skills-design-for-harness.md` |
+| Bảng 174 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
+| **Thiết kế 22 skills cho harness** | Spec build skills (workflow + budget + acceptance) | `docs/skills-design-for-harness.md` |
