@@ -500,17 +500,19 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         TTM. Dòng derived (p_b, gross_profit_margin) tính từ số cùng kỳ, kèm formula. Các chỉ
         số nguồn không có (p_s, ev_ebit, beta…) trả None kèm quality_note.
         set: chỉ giữ chỉ số có item_id hoặc tên chứa
-        chuỗi này ('all' giữ hết; ví dụ 'roe', 'p_e', 'margin'). Trả periods (mới→cũ) và
-        ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng % (roe 28.3 =
-        28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ (dòng có as_of
-        "period_end", kèm note). peers: thêm chỉ số kỳ mới nhất của từng mã.
+        chuỗi này ('all' giữ hết; ví dụ 'roe', 'p_e', 'margin'). Trả periods (cũ→mới, cùng thứ
+        tự với financial_statements) và latest_period (kỳ mới nhất — dùng field này, đừng lấy
+        periods[0]); ratios [{item_id, item, values: {kỳ: số}}]: tỷ suất/tăng trưởng tính bằng %
+        (roe 28.3 = 28,3%), EPS/BVPS bằng đồng, P/E, P/B là bội số tại cuối kỳ (dòng có as_of
+        "period_end", kèm note). peers: thêm chỉ số kỳ mới nhất CÓ số của từng mã.
         metric_quality trên peer giữ ghi chú nguồn (quality_note) theo từng item_id.
         """
         # gen 6: period labels come from fa (computed locally), no upstream frame
         # parsing to refuse; rejected labels surface via discarded_period_labels.
         # v8: fa-computed values replace cached v4 (KBS) payloads (#86).
         # v9: Vietstock financeinfo replaces fa (fhsc discontinued).
-        fp = f"v9|{symbol}|{set}|{period}|{peers}"
+        # v10: periods run oldest→newest and latest_period is published (#140).
+        fp = f"v10|{symbol}|{set}|{period}|{peers}"
         hit = await cache_lookup("financial_ratios", fp)
         if hit is not None:
             return hit
@@ -530,6 +532,8 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
         if any(r["item_id"].lower() in _PERIOD_END_PRICE_ITEMS for r in kept):
             out["note"] = _PERIOD_END_NOTE  # first in the payload, before the numbers
         out["periods"] = table["periods"]
+        out["latest_period"] = vs_ratios.table_latest_period(table)
+        out["period_order"] = table.get("period_order", vs_ratios.PERIOD_ORDER)
         out["frequency"] = table.get("frequency", "annual" if period == "year" else "quarterly")
         out["period_basis"] = table.get("period_basis", "reported_period_label")
         out["discarded_period_labels"] = table.get("discarded_period_labels", [])
@@ -544,7 +548,11 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                     out["peers"].append({"symbol": peer.upper(), "error": str(exc)})
                     warnings.append(f"{peer.upper()}: {exc}")
                     continue
-                newest = peer_table["periods"][0]
+                newest = vs_ratios.latest_populated_period(
+                    peer_table["ratios"],
+                    peer_table["periods"],
+                    [r["item_id"] for r in peer_table["ratios"] if _keep(r)],
+                )
                 peer_row: dict[str, Any] = {
                     "symbol": peer.upper(),
                     "period_label": newest,
@@ -588,15 +596,16 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         peers: tối đa 5 mã khác. metrics: chỉ giữ các item_id nêu tên (pe, pb, roe, roa, eps,
         bvps là tên tắt của p_e, p_b, roe, roa, trailing_eps, book_value_per_share_bvps).
-        Mỗi dòng là chỉ số năm báo cáo mới nhất của mã (period_label): % cho tỷ suất, đồng cho
-        EPS/BVPS, bội số cuối kỳ cho P/E, P/B (dòng có valuation_as_of, kèm note).
+        Mỗi dòng là chỉ số năm báo cáo mới nhất CÓ số của mã (period_label): % cho tỷ suất, đồng
+        cho EPS/BVPS, bội số cuối kỳ cho P/E, P/B (dòng có valuation_as_of, kèm note).
         metric_quality giữ ghi chú nguồn (quality_note) theo từng item_id được chọn.
         Ví dụ: {"symbol": "VCB", "peers": ["TCB", "MBB"], "metrics": ["pe", "roe"]}.
         """
         # v7: retain reported frequency, metric basis and rejected period labels.
         # v8: fa-computed values replace cached v4 (KBS) payloads (#86).
         # v9: Vietstock financeinfo replaces fa (fhsc discontinued).
-        fp = f"v9|{symbol}|{peers}|{metrics}"
+        # v10: periods run oldest→newest and the row anchor is the newest populated (#140).
+        fp = f"v10|{symbol}|{peers}|{metrics}"
         hit = await cache_lookup("peer_compare", fp)
         if hit is not None:
             return hit
@@ -623,7 +632,13 @@ def register_compute_financial_tools(server: FastMCP) -> list[dict[str, Any]]:
                 rows.append({"symbol": name.upper(), "error": str(table)})
                 warnings.append(f"{name.upper()}: {table}")
                 continue
-            newest = table["periods"][0]
+            wanted_ids = [
+                r["item_id"] for r in table["ratios"]
+                if wanted is None or r["item_id"].lower() in wanted
+            ]
+            newest = vs_ratios.latest_populated_period(
+                table["ratios"], table["periods"], wanted_ids
+            )
             row: dict[str, Any] = {"symbol": name.upper(), "period_label": newest}
             seen_ids.update(r["item_id"].lower() for r in table["ratios"])
             for ratio in table["ratios"]:

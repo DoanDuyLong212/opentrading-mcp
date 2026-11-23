@@ -21,6 +21,7 @@ from opentrading_mcp.tools.shared import (
     run_blocking,
 )
 from opentrading_mcp.tools.vs import _na
+from opentrading_mcp.vn_time import vn_today
 
 
 async def _call(tool: str, fn: Any, *args: Any) -> Any:
@@ -238,9 +239,8 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         list_id = 64 if direction == "xk" else 65
-        import datetime
 
-        frm = from_date or f"{datetime.date.today().year}-01-01"
+        frm = from_date or f"{vn_today().year}-01-01"
         try:
             out = await _call("x", vs_p.macro_report_data, 2, list_id, "", frm)
             rows = out.get("rows", []) if isinstance(out, dict) else []

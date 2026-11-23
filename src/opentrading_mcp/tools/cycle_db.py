@@ -22,6 +22,7 @@ from typing import Any
 from opentrading_mcp import dbinit
 from opentrading_mcp.schemas import make_envelope
 from opentrading_mcp.tools.shared import TEAM_PRINCIPAL, AnyContext, caller_id
+from opentrading_mcp.vn_time import vn_today
 
 STALE_DAYS = 90
 NOT_SEEDED = (
@@ -137,7 +138,7 @@ async def check_freshness(
         return na(tool, str(exc))
     as_of = meta.get("as_of", "")
     try:
-        stale = (date.today() - date.fromisoformat(as_of)).days if as_of else None
+        stale = (vn_today() - date.fromisoformat(as_of)).days if as_of else None
     except ValueError:
         stale = None
     mismatch = {k: (meta.get(k), v) for k, v in (expect_meta or {}).items() if meta.get(k) != v}

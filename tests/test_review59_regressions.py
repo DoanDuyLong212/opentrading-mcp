@@ -62,7 +62,9 @@ async def test_tool_reports_inferred_dates(monkeypatch, sweep):
     args = {"fast_range": [2], "slow_range": [3]} if sweep else {"fast": 2, "slow": 3}
     env = await fn(symbol="REVIEW", strategy="sma_cross", **args)
     rows = env["data"]["ranked"] if sweep else [env["data"]]
-    assert rows and all(r["stale"] and r["date_basis"] == "inferred" for r in rows)
+    # #137: undated candles are reported missing, never given a walkback calendar.
+    assert rows and all(r["stale"] and r["date_basis"] == "missing" for r in rows)
+    assert any("date" in w.lower() for w in env["warnings"])
 
 
 @pytest.mark.asyncio

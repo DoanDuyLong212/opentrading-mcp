@@ -139,10 +139,11 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Pairwise Pearson correlation of daily returns. Use for diversification reads.
 
         symbols: up to 8 tickers (same market). days: daily bars each.
-        Dates inner-join; vnstock day-only labels fall back to business-day
-        walkback (see date_note).
+        Dates inner-join on observed ISO dates only; undated bars are dropped
+        from the join, never given a guessed calendar day (#137, see date_note).
         """
-        fp = f"{symbols}|{days}"
+        # v2: undated bars are dropped from the join, never guessed (#137).
+        fp = f"v2|{symbols}|{days}"
         hit = await cache_lookup("correlation_matrix", fp)
         if hit is not None:
             return hit
@@ -173,13 +174,25 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        common, aligned, walked = _align_returns(fetched)
+        common, aligned, dates_missing = _align_returns(fetched)
         if len(common) < 21:
+            reason = (
+                "no common observation dates: bars carry no dates and dates are never "
+                "invented (#137)"
+                if dates_missing and not common
+                else "fewer than 20 common dates"
+            )
             return make_envelope(
                 {"symbols": universe},
                 source="vnstock",
-                warnings=["fewer than 20 common dates"],
-                availability="empty",
+                warnings=[reason],
+                availability="unavailable" if dates_missing and not common else "empty",
+            )
+        warn: list[str] = []
+        if dates_missing:
+            warn.append(
+                "some bars carry no observation date; they are dropped from the join, "
+                "never given a guessed calendar day"
             )
         matrix = np.corrcoef([aligned[s] for s in universe])
         table = {
@@ -192,9 +205,15 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "symbols": universe,
                 "common_dates": len(common),
                 "matrix": table,
-                "date_note": "business-day walkback (approx)" if walked else "upstream ISO dates",
+                "date_note": (
+                    "observed ISO dates; undated bars dropped from the join"
+                    if dates_missing
+                    else "upstream ISO dates"
+                ),
             },
             source="computed-local",
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -204,9 +223,11 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Rolling-window return stats per calendar month. Use for seasonal bias.
 
         window: trading days per window, 5-63 (21 ~= month). Buckets by window
-        end month; vnstock day-only labels use business-day walkback.
+        end month; bars without an observation date are skipped, never given a
+        guessed calendar day (#137).
         """
-        fp = f"{symbol}|{window}"
+        # v2: undated bars are skipped, never given a guessed month (#137).
+        fp = f"v2|{symbol}|{window}"
         hit = await cache_lookup("seasonality", fp)
         if hit is not None:
             return hit
@@ -228,12 +249,17 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        dates, closes, walked = _dated_closes(candles)
+        dates, closes, dates_missing = _dated_closes(candles)
         months: dict[int, list[float]] = {m: [] for m in range(1, 13)}
+        undated = 0
         for i in range(win, len(closes)):
             if not closes[i - win]:
                 continue
-            months[dates[i].month].append(closes[i] / closes[i - win] - 1)
+            d = dates[i] if i < len(dates) else None
+            if d is None:
+                undated += 1
+                continue
+            months[d.month].append(closes[i] / closes[i - win] - 1)
         stats = {}
         for m in range(1, 13):
             rs = months[m]
@@ -247,15 +273,37 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "best_pct": round(max(rs) * 100, 2),
                 "worst_pct": round(min(rs) * 100, 2),
             }
+        if not stats:
+            return make_envelope(
+                {"symbol": symbol.upper(), "window": win, "months": {}},
+                source="computed-local",
+                warnings=[
+                    "no observation dates in the candle series; seasonality buckets by "
+                    "calendar month and dates are never invented (#137)"
+                ],
+                availability="unavailable",
+            )
+        warn: list[str] = []
+        if dates_missing:
+            warn.append(
+                f"{undated} window ends carry no observation date; they are skipped, "
+                "never assigned a guessed calendar month"
+            )
         return await cache_store(
             "seasonality", fp, TTL_SECONDS["hour"],
             {
                 "symbol": symbol.upper(),
                 "window": win,
                 "months": stats,
-                "date_note": "business-day walkback (approx)" if walked else "upstream ISO dates",
+                "date_note": (
+                    "observed ISO dates; undated window ends skipped"
+                    if dates_missing
+                    else "upstream ISO dates"
+                ),
             },
             source="computed-local",
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -270,7 +318,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         objective: 'equal', 'inv_vol' (1/sigma), 'max_sharpe' (closed-form
         long-only heuristic, no scipy). days: daily bars each (max 8 symbols).
         """
-        fp = f"{symbols}|{objective}|{days}"
+        # v2: undated bars are dropped from the join, never guessed (#137).
+        fp = f"v2|{symbols}|{objective}|{days}"
         hit = await cache_lookup("portfolio_optimize", fp)
         if hit is not None:
             return hit
@@ -308,13 +357,25 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        common, aligned, _ = _align_returns(fetched)
+        common, aligned, dates_missing = _align_returns(fetched)
         if len(common) < 31:
+            reason = (
+                "no common observation dates: bars carry no dates and dates are never "
+                "invented (#137)"
+                if dates_missing and not common
+                else "fewer than 30 common dates"
+            )
             return make_envelope(
                 {"symbols": universe},
                 source="vnstock",
-                warnings=["fewer than 30 common dates"],
-                availability="empty",
+                warnings=[reason],
+                availability="unavailable" if dates_missing and not common else "empty",
+            )
+        warn: list[str] = []
+        if dates_missing:
+            warn.append(
+                "some bars carry no observation date; they are dropped from the join, "
+                "never given a guessed calendar day"
             )
         rets = np.array([aligned[s] for s in universe])
         vols = rets.std(axis=1)
@@ -356,6 +417,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 **stats,
             },
             source="computed-local",
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -376,7 +439,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         import datetime
 
-        fp = f"{symbol}|{dates}|{window_before}|{window_after}|{benchmark}"
+        # v2: undated bars are dropped from the maps, never guessed (#137).
+        fp = f"v2|{symbol}|{dates}|{window_before}|{window_after}|{benchmark}"
         hit = await cache_lookup("event_study", fp)
         if hit is not None:
             return hit
@@ -414,12 +478,27 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             warnings.append(f"benchmark unavailable — raw returns: {exc}")
         s_dates, s_closes, _ = _dated_closes(candles)
         b_dates, b_closes, _ = _dated_closes(bench_candles)
-        s_map = dict(zip(s_dates, s_closes, strict=False))
-        b_map = dict(zip(b_dates, b_closes, strict=False))
+        # #137: undated bars carry no calendar position — drop them, never guess a day.
+        s_map = {d: c for d, c in zip(s_dates, s_closes, strict=False) if d is not None}
+        b_map = {d: c for d, c in zip(b_dates, b_closes, strict=False) if d is not None}
+        if not s_map:
+            return make_envelope(
+                {"tool": "event_study"},
+                source="unavailable",
+                warnings=[
+                    "no observation dates in the candle series; event windows need real "
+                    "dates and dates are never invented (#137)"
+                ],
+                availability="unavailable",
+            )
+        if bench_candles and not b_map:
+            warnings.append(
+                f"benchmark {benchmark} carries no observation dates; raw returns only"
+            )
         common = sorted(set(s_map) & set(b_map)) if b_map else sorted(s_map)
         bwd = max(int(window_before), 1)
         fwd = max(int(window_after), 1)
-        rows = []
+        rows: list[dict[str, Any]] = []
         skipped = 0
         for raw in dates:
             try:

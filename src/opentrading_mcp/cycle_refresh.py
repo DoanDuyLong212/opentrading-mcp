@@ -14,8 +14,9 @@ import asyncio
 import functools
 import json
 import sys
-from datetime import date
 from typing import Any
+
+from opentrading_mcp.vn_time import vn_today
 
 
 async def run(batch: int = 12, only: str | None = None) -> dict[str, Any]:
@@ -27,7 +28,7 @@ async def run(batch: int = 12, only: str | None = None) -> dict[str, Any]:
 
     report: dict[str, Any] = {"failed": []}
     if only in (None, "cycle"):
-        today = date.today().isoformat()
+        today = vn_today().isoformat()
         done = 0
         for i in range(0, len(ALL_SYMBOLS), batch):
             for sym in ALL_SYMBOLS[i : i + batch]:

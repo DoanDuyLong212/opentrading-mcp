@@ -27,6 +27,7 @@ from opentrading_mcp.providers.errors import (
     ProviderBadData,
     ProviderUnavailable,
 )
+from opentrading_mcp.vn_time import vn_today
 
 BASE = "https://finance.vietstock.vn"
 BROWSER_UA = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
@@ -1323,12 +1324,11 @@ def macro_report_data(
     Returns {rows, source} with pipe-row parse; raises ProviderAuthMissing
     when the session is rejected (upgrade/permission body).
     """
-    import datetime
 
     from opentrading_mcp.cache import cache_key
     from opentrading_mcp.providers.store import cache_get, cache_set
 
-    to_date = to_date or datetime.date.today().isoformat()
+    to_date = to_date or vn_today().isoformat()
     cache_key_str = cache_key(
         "vs_macro", f"{term_type_id}|{category_id}|{sub_term_type_id}|{from_date}|{to_date}"
     )
