@@ -49,6 +49,36 @@ def test_healthz_is_liveness_only(monkeypatch):
     assert calls == [False, False, True]
 
 
+def test_public_readyz_has_no_component_report(monkeypatch):
+    """#146: unauthenticated /readyz is a status code plus ok — component details
+    (driver messages, hostnames) need the token, as with /healthz?full=1."""
+    from opentrading_mcp import health
+
+    async def report(deep: bool = False) -> tuple[int, dict[str, Any]]:
+        return 503, {
+            "ok": False,
+            "server": "opentrading",
+            "components": [
+                {
+                    "name": "redis",
+                    "ok": False,
+                    "detail": "redis://secret-host:6379 connection refused",
+                    "required": True,
+                }
+            ],
+            "failed": ["redis"],
+        }
+
+    monkeypatch.setattr(health, "health_report", report)
+    client = TestClient(_server().streamable_http_app())
+    resp = client.get("/readyz")
+    assert resp.status_code == 503  # the host readiness check only needs the code
+    body = resp.json()
+    assert body["ok"] is False
+    assert "components" not in body and "failed" not in body
+    assert "secret-host" not in resp.text
+
+
 @pytest.fixture
 def one_slot(monkeypatch):
     from opentrading_mcp.tools import shared

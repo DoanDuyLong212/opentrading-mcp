@@ -154,7 +154,10 @@ def register_dnse_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            snap = dnse_p.ws_foreign_snapshot()
+            # #145: the snapshot read is network Redis — off the event loop.
+            snap = await run_blocking(
+                dnse_p.ws_foreign_snapshot, "dnse_foreign_flow", timeout_secs=15.0
+            )
             return await cache_store(
                 "dnse_foreign_flow", "v2", price_ttl(),
                 {
