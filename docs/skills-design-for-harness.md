@@ -1,6 +1,7 @@
-# Skills Design cho Harness — opentrading-mcp (2026-10-02, rev.3)
+# Skills Design cho Harness — opentrading-mcp (2026-10-02, rev.3; surface update 2026-11-23, rev.4)
 
-**Mục đích**: spec hoàn chỉnh để team harness TỰ BUILD **22 skills** trên nền 135 MCP tools.
+**Mục đích**: spec hoàn chỉnh để team harness TỰ BUILD **22 skills** trên nền **174 MCP tools**
+hiện tại (baseline thiết kế: 135 tools ngày 2026-10-02; xem rev.4 bên dưới).
 Không cần code thêm phía server — mọi workflow đã verify live 2026-10-02 (số liệu thật
 trong từng skill là evidence thật, không minh họa).
 
@@ -9,7 +10,13 @@ trong từng skill là evidence thật, không minh họa).
 thêm S28 kiểm tra nguồn dữ liệu 1 lượt. (rev.2 trước đó: tách S1 thành điều phối + 6 skill
 chuyên S22–S27, thêm S20/S21.)
 
-- Nguồn tool catalog chi tiết: `docs/tools-review-2026-09-24.md` (bảng 135 tools + 6 workflows).
+**rev.4 (2026-11-23)**: surface hiện tại **174 tools / 28 modules** (175 entries khi có
+`web_search` key) — tăng so với baseline 135/138 của rev.3. Ma trận home và evidence trong
+PHẦN 2 vẫn giữ nguyên baseline 2026-10-02; 7 module mới (`cycle_stats`, `asset_cycle`,
+`market_timing`, `vn_predictions`, `vn_screener`, `vnindex_scenarios`, `vn_reversal`)
+chưa được gán home trong tài liệu này.
+
+- Nguồn tool catalog chi tiết: `docs/tools-review-2026-09-24.md` (bảng 174 tools + 6 workflows).
 - Nguồn kiến trúc/bảo mật/kết nối: `docs/architecture-review-2026-09-30.md`.
 - Skill format theo chuẩn opencode skills: `SKILL.md` frontmatter + body markdown.
 
@@ -37,7 +44,7 @@ chuyên S22–S27, thêm S20/S21.)
 
 - `type: "remote"` (KHÔNG phải `streamable-http`); `oauth: false` (BẮT BUỘC — server là
   resource-server thuần, không OAuth endpoints).
-- Prod serve preset `all` = 138 tools (137 + web_search khi có key).
+- Prod serve full surface = 174 tools (175 khi có `web_search` key). `--preset all` là alias deprecated, mọi preset đều trả full surface.
 - Timeout call ≥120s (nhiều tool upstream chậm; opencode mặc định 30s là NGUYÊN NHÂN
   timeout oan — đã kết luận từ live run).
 
@@ -65,7 +72,7 @@ skill không được đấm ngược lại (vd fill PE null bằng số suy đo
   hoặc đề nghị chuyển skill).
 - Mỗi wave xong mới xét wave sau — bước sau dùng dữ kiện bước trước, không gọi dự phòng.
 - `empty` = không có thì dừng nhánh đó, không đổi params retry liên tục.
-- LLM KHÔNG cần đọc hết 138 descriptors: trigger `description` của skill chọn đúng 1 skill,
+- LLM KHÔNG cần đọc hết 174 descriptors: trigger `description` của skill chọn đúng 1 skill,
   làm theo bảng workflow trong skill.
 
 ## 0.4 Song song hóa
@@ -896,7 +903,7 @@ thuộc skill nào — mọi skill được phép gọi trực tiếp khi cần 
 1 chủ đề; (3) không xóa khi user chưa xin. Vòng đời đầy đủ xem git history rev.2
 (commit trước) của file này.
 
-# PHẦN 2 — MA TRẬN BAO PHỦ 135 TOOLS (rev.3)
+# PHẦN 2 — MA TRẬN BAO PHỦ 135 TOOLS (rev.3 — baseline 2026-10-02; surface hiện tại 174 tools, các tool mới chưa gán home)
 
 Mỗi tool có đúng **1 HOME**. S5/S9 là skill tổ chức (0 home, chỉ cross-ref).
 Tools của skills đã xóa (S2/S10/S11/S12/S14/S18) hoặc đã chuyển home, hoặc park ở
@@ -981,7 +988,7 @@ Ghi chú 3 WS tools (home S2 cũ → park chờ duyệt): remote không worker �
 
 # PHẦN 3 — QUY TRÌNH HARNESS BUILD & ACCEPTANCE
 
-1. **Kết nối trước**: config 0.1, chạy `mcp probe` + `tools/list` = 138 tools.
+1. **Kết nối trước**: config 0.1, chạy `mcp probe` + `tools/list` = 174 tools (175 nếu có `web_search` key).
 2. **Scaffold**: 22 thư mục `skills/<slug>/SKILL.md` theo template Phần 1 (frontmatter +
    bảng workflow + verdict + budget + failure + evidence + acceptance).
 3. **Test nghiệm thu per skill**: bảng `Acceptance` tương ứng — chạy input mẫu, đối chiếu:
