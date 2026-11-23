@@ -21,6 +21,8 @@ SERVER_INSTRUCTIONS = (
     "Envelope {data, provenance{source,as_of,timezone}, warnings[], availability}. "
     "Price results carry units{fields: unit}: VN stock candles are in thousand dong, "
     "the price board in dong; convert before putting both in one table. "
+    "Long-series arithmetic (mean/stdev, relative strength, rank over a window) is "
+    "series_stats — call it instead of computing in a shell; it returns the inputs used. "
     "Detail maps: termTypeID/tids/btype in opentrading://reference/term-types. "
     "Long lists support limit/offset+columns/summary; results may include "
     "page{total,offset,limit,next}."

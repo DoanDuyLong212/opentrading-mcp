@@ -146,6 +146,7 @@ HINTS: dict[str, str] = {
     "quant_backtest": "kiem dinh chien luoc mua giu | backtest buy hold",
     "quant_risk": "rui ro sharpe sut giam toi da | risk metrics drawdown",
     "quant_factors": "nhan to dong luong bien dong | momentum volatility factors",
+    "series_stats": "thong ke chuoi nhieu ma xep hang | series statistics rank relative strength",
     "scenario_simulate": "kich ban gia giam lai lo | shock scenario pnl",
     "correlation_matrix": "tuong quan giua cac ma | correlation diversification",
     "seasonality": "tinh mua vu theo thang | seasonal monthly returns",
