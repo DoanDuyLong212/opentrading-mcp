@@ -24,4 +24,5 @@ def test_no_single_letter_call_labels():
 def test_labels_name_the_calling_tool():
     brief = (TOOLS / "brief.py").read_text(encoding="utf-8")
     assert '_call("brief_build"' in brief
-    assert '_call("market_brief_world"' in brief or '_call("brief_build"' in brief
+    news = (TOOLS / "intel.py").read_text(encoding="utf-8")
+    assert '_call("news_market"' in brief + news

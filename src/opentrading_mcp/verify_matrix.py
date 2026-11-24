@@ -66,6 +66,7 @@ MATRIX: list[tuple[str, dict[str, Any], float]] = [
     ("quant_backtest", {"symbol": "VCB"}, 120.0),
     ("quant_risk", {"returns": [0.01, -0.02, 0.03]}, 20.0),
     ("quant_factors", {"symbol": "VCB"}, 60.0),
+    ("series_stats", {"symbols": ["VCB", "HPG"], "benchmark": "VNINDEX"}, 90.0),
     ("scenario_simulate", {"scenario": "VNINDEX -5% week", "shock_pct": -5.0}, 60.0),
     ("brief_build", {"scope": "vn"}, 90.0),
     ("news_market", {"limit": 5}, 60.0),

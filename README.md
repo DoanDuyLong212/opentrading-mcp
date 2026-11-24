@@ -116,7 +116,7 @@ Xoay token mỗi tháng: đổi env là xong, không đụng code.
 - `url` đúng `/mcp`. Server chỉ phục vụ Streamable HTTP (`/mcp`);
   mọi route ngoài `/healthz`, `/readyz`, `/.well-known/mcp.json` đều cần token.
 
-Xong bước này thì restart opencode/harness → server `opentrading` hiện 138 tools là thành công.
+Xong bước này thì restart opencode/harness → server `opentrading` hiện 174 tools là thành công.
 Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
 
 ### Bước 2 — Verify kết nối (3 lệnh, kỳ vọng rõ ràng)
@@ -125,10 +125,10 @@ Clients khác (Claude/Cursor/generic) dùng cùng URL + 3 headers dưới đây.
 BASE=https://opentrading-mcp-web.onrender.com
 HDR=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "Authorization: Bearer $TEAM_TOKEN")
 
-# 1. Liệt kê tools → kỳ vọng: 138 tools (đếm "name": 138 lần).
+# 1. Liệt kê tools → kỳ vọng: 174 tools (đếm "name": 174 lần; 175 nếu có websearch key).
 #    Lưu ý: response là SSE (dòng "data: {json}"), opencode parse tự động;
 #    curl thì grep trên text thô như dưới. Nếu chỉ đếm được 66 → prod đang
-#    chạy preset market cũ (thiếu scan/quant/brief/intel) → redeploy bản mới nhất.
+#    chạy bản rất cũ (preset market trước 2026-10-05) → redeploy bản mới nhất.
 curl -s -X POST "$BASE/mcp" "${HDR[@]}" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | grep -o '"name":' | wc -l
 
@@ -180,5 +180,5 @@ File config mẫu local trong `configs/`: `opencode.jsonc`, `claude.mcp.json`,
 | Cold start 20–40s | Render free-tier sleep | `/healthz` chỉ đánh thức instance (liveness, không I/O); vnstock được import nền ngay khi process khởi động. Kiểm tra Redis/Postgres: `/readyz` |
 | Thời gian | Ngày thị trường (nến, snapshot, cycle) theo giờ VN; timestamp hệ thống UTC |
 | Chi tiết đầy đủ | Kiến trúc, bảo mật, DB, clients | `docs/architecture-review-2026-09-30.md` |
-| Bảng 138 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
-| **Thiết kế 19 skills cho harness** | Spec build skills (workflow + budget + acceptance) | `docs/skills-design-for-harness.md` |
+| Bảng 174 tools + 6 workflows | Params, mô tả TV, sample live, verdicts | `docs/tools-review-2026-09-24.md` |
+| **Thiết kế 22 skills cho harness** | Spec build skills (workflow + budget + acceptance) | `docs/skills-design-for-harness.md` |
