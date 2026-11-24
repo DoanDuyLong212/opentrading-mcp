@@ -59,6 +59,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         min_roe: float | None = None,
         limit: int = 20,
         technical: dict[str, Any] | None = None,
+        pe_basis: str = "current_ttm",
     ) -> dict[str, Any]:
         """Sàng danh sách mã theo định giá và chất lượng; metric cơ bản chỉ tra tối đa 30 mã.
 
@@ -68,10 +69,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         filters: {trường: [min, max]} (None là không chặn) hoặc chuỗi cho khớp mã/sàn;
         dùng signals_screener_columns để biết trường hợp lệ. max_pe/min_roe là phím tắt.
-        PE/ROE chỉ được tra cho tối đa 30 mã đầu danh sách (screened trong kết quả); pe là
-        P/E cuối kỳ báo cáo ghi ở fundamentals_period, không phải P/E theo giá hôm nay.
-        market_cap chưa có nguồn xác minh đơn vị VND/thời điểm/cơ sở số cổ phiếu;
-        lọc vốn hóa trả coverage bằng 0 thay vì kết luận không có mã phù hợp.
+        PE/ROE chỉ được tra cho tối đa 30 mã đầu danh sách (screened trong kết quả).
+        pe_basis: 'current_ttm' (mặc định — quyết định chủ repo 2026-11-18 #39) là P/E
+        theo GIÁ HIỆN TẠI (board DNSE, đồng) chia EPS 4 quý (Vietstock, VND/cp), mỗi ứng
+        viên có pe_as_of (thời điểm giá) và pe_basis; thiếu giá hoặc EPS thì pe=null và mã
+        không được kết luận cho lọc pe. 'period_end' là P/E cuối kỳ báo cáo ở
+        fundamentals_period (cách cũ, để so sánh lịch sử).
+        market_cap: VND từ Vietstock tradinginfo — MarketCapital = số cp niêm yết
+        (KLCPLH) x giá cuối, có as_of (xác minh 2026-11-18, phương án A của #39.9);
+        chỉ tra khi lọc market_cap đang bật; mã thiếu nguồn thì không được kết luận
+        cho lọc đó (không đoán thay).
         Bộ lọc pe chỉ có cận trên giữ pe > 0 (P/E âm là doanh nghiệp lỗ, không phải rẻ);
         muốn giữ mã lỗ thì đặt cận dưới rõ ràng, ví dụ {"pe": [-5, 10]}.
         technical: lọc thời điểm vòng 3 trên ứng viên đã lọc
@@ -91,6 +98,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         technical = technical or None  # {} means "no technical stage", not a rule set
         from opentrading_mcp.providers import screener as sc_p
         from opentrading_mcp.providers import technicals as tech_p
+        from opentrading_mcp.providers import vietstock as vs_p
 
         try:
             # Validate shortcuts even when an explicit field filter overrides them.
@@ -112,7 +120,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         # v6: reject malformed bounds before cache/upstream; expose metric coverage.
         # v7: pe/roe and fundamentals_period from one fa period (#76).
-        fp = f"v8|{eff}|{limit}|{technical}"
+        # v9: pe_basis='current_ttm' (price now / trailing EPS) is the default (#39).
+        # v10: market_cap from Vietstock tradinginfo when the filter is active (#39.9 A).
+        if pe_basis not in ("current_ttm", "period_end"):
+            return make_envelope(
+                {"tool": "stock_screener"},
+                source="unavailable",
+                warnings=[f"unknown pe_basis {pe_basis!r} (current_ttm|period_end)"],
+                availability="unavailable",
+            )
+        fp = f"v10|{pe_basis}|{eff}|{limit}|{technical}"
         hit = await cache_lookup("stock_screener", fp)
         if hit is not None:
             return hit
@@ -170,14 +187,84 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                     k for k in ("pe", "roe")
                     if sc_p._as_number(info.get(k)) is not None
                 }
-                if present:
-                    entry.update({k: info[k] for k in present})
-                    if info.get("period_label"):
-                        # the report period of pe/roe (e.g. '2025' = year-end 2025 PE)
-                        entry["fundamentals_period"] = info["period_label"]
-                    return present
-                enrich_failed.append((sym, "no verified pe/roe in source"))
-                return set()
+                if not present:
+                    enrich_failed.append((sym, "no verified pe/roe in source"))
+                    return set()
+                entry.update({k: info[k] for k in present})
+                if info.get("period_label"):
+                    # the report period of pe/roe (e.g. '2025' = year-end 2025 PE)
+                    entry["fundamentals_period"] = info["period_label"]
+                if "market_cap" in required_metrics:
+                    # #39.9 option A (owner decision 2026-11-18): Vietstock
+                    # tradinginfo MarketCapital — VND, listed shares x last price,
+                    # as_of TradingDate. The ratio table's basis-less legacy
+                    # market_cap field is never used for the filter.
+                    async with sem:
+                        try:
+                            mc = await run_blocking(
+                                functools.partial(vs_p.market_capital, sym),
+                                "stock_screener",
+                                timeout_secs=10.0,
+                            )
+                        except Exception as exc:
+                            enrich_failed.append(
+                                (sym, f"market_cap source error: {str(exc)[:60]}")
+                            )
+                            return present
+                    cap = mc.get("market_cap") if isinstance(mc, dict) else None
+                    if not isinstance(cap, (int, float)) or isinstance(cap, bool) or cap <= 0:
+                        enrich_failed.append((sym, "market_cap unavailable in source"))
+                        return present
+                    entry["market_cap"] = float(cap)
+                    entry["market_cap_unit"] = "VND"
+                    entry["market_cap_as_of"] = mc.get("as_of")
+                    entry["market_cap_basis"] = (
+                        "Vietstock tradinginfo: listed shares (KLCPLH) x last price"
+                    )
+                    present.add("market_cap")
+                if pe_basis == "current_ttm":
+                    # The screened pe is today's price over trailing EPS (#39.7);
+                    # the table's period-end PE is never reused under this basis.
+                    # Missing inputs only fail the run when a pe filter is active;
+                    # otherwise the field is simply absent for that symbol.
+                    pe_needed = "pe" in required_metrics
+                    present.discard("pe")
+                    entry.pop("pe", None)
+                    eps = sc_p._as_number(info.get("eps"))
+                    if eps is None or eps == 0:
+                        if pe_needed:
+                            enrich_failed.append(
+                                (sym, "trailing EPS unavailable for current_ttm pe")
+                            )
+                        return present
+                    async with sem:
+                        try:
+                            quotes = await run_blocking(
+                                functools.partial(vn_p.equity_quote_batch, [sym]),
+                                "stock_screener",
+                                timeout_secs=10.0,
+                            )
+                        except Exception as exc:
+                            if pe_needed:
+                                enrich_failed.append((sym, f"price error: {str(exc)[:60]}"))
+                            return present
+                    quote = quotes[0] if isinstance(quotes, list) and quotes else {}
+                    price = sc_p._as_number(
+                        quote.get("close_price") or quote.get("close")
+                    )
+                    if price is None or price <= 0:
+                        if pe_needed:
+                            enrich_failed.append(
+                                (sym, "price unavailable for current_ttm pe")
+                            )
+                        return present
+                    entry["pe"] = round(price / eps, 4)
+                    entry["pe_basis"] = "current_ttm"
+                    entry["pe_as_of"] = (
+                        str(quote.get("time") or quote.get("date") or "")[:19] or None
+                    )
+                    present.add("pe")
+                return present
             enrich_failed.append((sym, "no fundamentals payload"))
             return set()
 
@@ -198,12 +285,8 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         }
         for metric, available in metric_counts.items():
             if enrich_n and available == 0:
-                reason = (
-                    " (source unit/as-of/shares basis unverified)"
-                    if metric == "market_cap" else ""
-                )
                 warnings.append(
-                    f"{metric} unavailable{reason} for all {enrich_n} enriched symbols; "
+                    f"{metric} unavailable for all {enrich_n} enriched symbols; "
                     "the filter has no evaluated conclusion"
                 )
         if rows and enrich_n and enriched < enrich_n:
@@ -335,6 +418,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
             {
                 "universe": len(rows),
                 "screened": attempted_n,
+                "pe_basis": pe_basis,
                 "coverage": {
                     "stage": stage,
                     "eligible": eligible_n,
@@ -344,7 +428,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
                         "limit": SCREENER_ENRICH_CAP,
                         "attempted": enrich_n,
                         "metric_available": metric_counts,
-                        "unsupported_metrics": ["market_cap"] if "market_cap" in eff else [],
+                        "unsupported_metrics": [],
                     } if needs_valuation else None,
                 },
                 "filters": eff,
@@ -393,7 +477,7 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         symbol: str,
         interval: str = "1D",
         indicators: list[str] | None = None,
-        ichimoku_convention: str = "offset25",
+        ichimoku_convention: str = "classic26",
         ctx: AnyContext | None = None,
     ) -> dict[str, Any]:
         """Chấm kỹ thuật đầy đủ từ nến local trên 1D/1W/1M. Dùng khi chọn thời điểm vào lệnh cho 1
@@ -410,16 +494,16 @@ def register_scan_tools(server: FastMCP) -> list[dict[str, Any]]:
         nến thì null (không điền 50/0). ichimoku trả offset_bars và convention:
         senkou_a/senkou_b là mây tại nến hiện tại từ phép tính offset nến trước;
         senkou_*_ahead là span tính hôm nay; chikou là giá đóng cửa offset nến trước
-        để so với close hiện tại. ichimoku_convention: 'offset25' (mặc định — mây
-        hiện tại từ 25 completed bars trước, quy ước đã phát hành) hoặc 'classic26'
-        (displacement 26 theo tài liệu TradingView). Chưa parity TradingView
-        built-in với cả hai; chọn convention đổi kết quả 1 bar neo và nằm trong
+        để so với close hiện tại. ichimoku_convention: 'classic26' (mặc định —
+        displacement 26 chuẩn cổ điển, quyết định chủ repo 2026-11-18 #39) hoặc
+        'offset25' (quy ước cũ, mây từ 25 completed bars trước — vẫn còn để đọc
+        kết quả đã phát hành). Chọn convention đổi kết quả 1 bar neo và nằm trong
         fingerprint cache.
         """
         from opentrading_mcp.providers import technicals as tech_p
 
-        # v4: optional classic26 Ichimoku convention.
-        fp = f"v4|{symbol}|{interval}|{indicators}|{ichimoku_convention}"
+        # v5: classic26 is the default Ichimoku convention (owner decision #39).
+        fp = f"v5|{symbol}|{interval}|{indicators}|{ichimoku_convention}"
         hit = await cache_lookup("signals_technical", fp)
         if hit is not None:
             return hit

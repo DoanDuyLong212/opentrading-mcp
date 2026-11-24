@@ -97,7 +97,7 @@ def _wma(series: pd.Series, n: int) -> pd.Series:
 def compute(
     candles: list[dict[str, Any]] | pd.DataFrame,
     benchmark: list[float] | None = None,
-    ichimoku_convention: str = "offset25",
+    ichimoku_convention: str = "classic26",
 ) -> dict[str, Any]:
     """Compute full technicals from candles with columns t,o,h,l,c,v.
 
@@ -263,10 +263,9 @@ def compute(
     boll_upper = _last_float(mid + 2 * std)
     boll_lower = _last_float(mid - 2 * std)
 
-    # Ichimoku (9/26/52). This implementation aligns the current cloud with spans
-    # computed 25 completed bars earlier; a 26-bar convention is also published.
-    # We retain the established 25-bar contract until a reference series proves
-    # which chart convention consumers need. *_ahead are the spans computed now.
+    # Ichimoku (9/26/52). Default convention is classic26 (displacement 26) —
+    # repo-owner decision 2026-11-18 (#39); offset25 stays available as an option
+    # for the previously published contract. *_ahead are the spans computed now.
     if ichimoku_convention not in ("offset25", "classic26"):
         raise ValueError(
             f"unknown ichimoku_convention {ichimoku_convention!r} (offset25|classic26)"
