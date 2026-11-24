@@ -5,7 +5,6 @@ FINANCEINFO_MIN_GAP_S apart."""
 
 from __future__ import annotations
 
-import itertools
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -44,12 +43,25 @@ def test_a_screener_burst_never_exceeds_two_pages_in_flight(fake_post):
     assert fake_post["peak"] <= vs_p.FINANCEINFO_CONCURRENCY == 2
 
 
-def test_page_starts_are_spaced(fake_post):
+def test_page_starts_are_spaced(monkeypatch, fake_post):
+    """#153: assert on the sleeps the limiter requests, not on wall-clock gaps —
+    Windows timer granularity (~15.6 ms) made the 18 ms floor flaky."""
+    clock = {"now": 100.0}
+    sleeps: list[float] = []
+    monkeypatch.setattr(vs_p, "_financeinfo_clock", lambda: clock["now"])
+
+    def fake_sleep(wait: float) -> None:
+        sleeps.append(wait)
+        clock["now"] += wait
+
+    monkeypatch.setattr(vs_p, "_financeinfo_sleep", fake_sleep)
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda s: vs_p.financeinfo(s, "year"), ["A", "B", "C", "D", "E"]))
-    starts = sorted(fake_post["starts"])
-    gaps = [b - a for a, b in itertools.pairwise(starts)]
-    assert min(gaps) >= 0.02 * 0.9
+    assert len(fake_post["starts"]) == 5
+    gap = vs_p.FINANCEINFO_MIN_GAP_S
+    assert sleeps, "the limiter must request a sleep between page starts"
+    assert min(sleeps) >= gap - 1e-9, "every requested sleep must honour the min gap"
+    assert max(sleeps) <= gap + 1e-9, "requested sleeps must not pad beyond the gap"
 
 
 def test_pages_keep_their_order_and_body(fake_post):

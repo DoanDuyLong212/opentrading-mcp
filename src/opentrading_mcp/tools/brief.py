@@ -64,20 +64,24 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         sections: dict[str, Any] = {}
         try:
-            sections["world_pins"] = await _call("p", intel_p.fear_greed, secs=30.0)
+            sections["world_pins"] = await _call("brief_build", intel_p.fear_greed, secs=30.0)
         except (ProviderUnavailable, ProviderBadData):
             sections["world_pins"] = None
         try:
-            sections["news"] = await _call("n", intel_p.fireant_posts, None, 10, secs=45.0)
+            sections["news"] = await _call(
+                "brief_build", intel_p.fireant_posts, None, 10, secs=45.0
+            )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             try:
                 sections["news"] = (
-                    await _call("g", intel_p.gdelt_events, "vietnam stock market", secs=45.0)
+                    await _call(
+                        "brief_build", intel_p.gdelt_events, "vietnam stock market", secs=45.0
+                    )
                 ).get("articles", [])
             except (ProviderUnavailable, ProviderBadData) as exc:
                 sections["news"] = str(exc)
         try:
-            cats = await _call("c", vs_p.indicator_categories)
+            cats = await _call("brief_build", vs_p.indicator_categories)
             sections["macro_series_available"] = len(cats) if isinstance(cats, list) else 0
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             sections["macro_series_available"] = 0
@@ -134,7 +138,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             return hit
         if sources == "gdelt":
             try:
-                data = await _call("g", intel_p.gdelt_events, "vietnam market", limit)
+                data = await _call("news_market", intel_p.gdelt_events, "vietnam market", limit)
                 return await cache_store(
                     "news_market", f"{limit}|{sources}", TTL_SECONDS["mins10"],
                     data, source="gdelt",
@@ -142,7 +146,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             except (ProviderUnavailable, ProviderBadData) as exc:
                 return _na("news_market", str(exc))
         try:
-            posts = await _call("f", intel_p.fireant_posts, None, limit, secs=45.0)
+            posts = await _call("news_market", intel_p.fireant_posts, None, limit, secs=45.0)
             if posts:
                 return await cache_store(
                     "news_market", f"{limit}|{sources}", TTL_SECONDS["mins10"],
@@ -151,7 +155,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             pass
         try:
-            data = await _call("g", intel_p.gdelt_events, "vietnam market", 20)
+            data = await _call("news_market", intel_p.gdelt_events, "vietnam market", 20)
             return await cache_store(
                 "news_market", f"{limit}|{sources}", TTL_SECONDS["mins10"],
                 data, source="gdelt",
@@ -181,7 +185,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         sym = symbol.strip().upper()
         if sources == "gdelt":
             try:
-                data = await _call("g", intel_p.gdelt_events, sym, limit)
+                data = await _call("news_symbol", intel_p.gdelt_events, sym, limit)
                 return await cache_store(
                     "news_symbol", fp, TTL_SECONDS["mins10"],
                     data, source="gdelt",
@@ -189,7 +193,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
             except (ProviderUnavailable, ProviderBadData) as exc:
                 return _na("news_symbol", str(exc))
         try:
-            posts = await _call("f", intel_p.fireant_posts, sym, limit, secs=45.0)
+            posts = await _call("news_symbol", intel_p.fireant_posts, sym, limit, secs=45.0)
             if posts:
                 return await cache_store(
                     "news_symbol", fp, TTL_SECONDS["mins10"],
@@ -198,7 +202,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData):
             pass
         try:
-            data = await _call("g", intel_p.gdelt_events, f"{sym} stock", 20, secs=45.0)
+            data = await _call("news_symbol", intel_p.gdelt_events, f"{sym} stock", 20, secs=45.0)
             return await cache_store(
                 "news_symbol", fp, TTL_SECONDS["mins10"],
                 data, source="gdelt",
@@ -254,7 +258,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=["world calendar: wire FRED releases next"],
             )
         try:
-            cats = await _call("c", vs_p.indicator_categories)
+            cats = await _call("economic_calendar", vs_p.indicator_categories)
             rows = [
                 {
                     "category_id": c.get("CategoryID"),
@@ -286,7 +290,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "sbv_rates", "-", TTL_SECONDS["financeinfo"],
-                await _call("s", pub_p.sbv_rates), source="sbv-scrape",
+                await _call("sbv_rates", pub_p.sbv_rates), source="sbv-scrape",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("sbv_rates", str(exc))
@@ -308,7 +312,10 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "macro_events_vn", "-", TTL_SECONDS["documents"],
-                {"releases": await _call("m", pub_p.nso_releases)}, source="nso-scrape"
+                {
+                    "releases": await _call("macro_events_vn", pub_p.nso_releases)
+                },
+                source="nso-scrape",
             )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("macro_events_vn", str(exc))
@@ -331,7 +338,7 @@ def register_brief_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            docs = await _call("d", vs_p.documents, symbol or "VCB", 60)
+            docs = await _call("corporate_calendar", vs_p.documents, symbol or "VCB", 60)
             if isinstance(docs, list):
                 docs = docs[: max(int(limit), 1)]
             return await cache_store(

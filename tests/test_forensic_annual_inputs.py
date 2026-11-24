@@ -75,8 +75,12 @@ def parsed(raw=None):
 
 def recorded_annual_sources():
     base = Path(__file__).parent / "fixtures"
-    annual = json.loads((base / "financeinfo_fpt_annual_20261024.json").read_text())
-    detail = json.loads((base / "vietstock_fpt_bctc_annual_20261024.json").read_text())
+    annual = json.loads(
+        (base / "financeinfo_fpt_annual_20261024.json").read_text(encoding="utf-8")
+    )
+    detail = json.loads(
+        (base / "vietstock_fpt_bctc_annual_20261024.json").read_text(encoding="utf-8")
+    )
     return annual, detail
 
 
@@ -562,7 +566,9 @@ def test_recorded_quarterly_payload_is_never_accepted_as_annual():
     from pathlib import Path
 
     raw = json.loads(
-        (Path(__file__).parent / "fixtures" / "financeinfo_fpt_quarter.json").read_text()
+        (Path(__file__).parent / "fixtures" / "financeinfo_fpt_quarter.json").read_text(
+            encoding="utf-8"
+        )
     )
     out = parsed(raw)
     assert out["records"] == []

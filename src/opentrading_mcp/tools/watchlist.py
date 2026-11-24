@@ -77,7 +77,7 @@ def _file_path(kind: str) -> Path:
 def _file_load(kind: str) -> list[dict[str, Any]]:
     path = _file_path(kind)
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(data, list):
             return [r for r in data if isinstance(r, dict)]
         return []
@@ -93,7 +93,7 @@ def _file_dump(kind: str, rows: list[dict[str, Any]]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(json.dumps(rows, ensure_ascii=False, indent=1))
+        tmp.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, path)
     except Exception as exc:
         logger.warning("file write failed (%s): %s", kind, exc)

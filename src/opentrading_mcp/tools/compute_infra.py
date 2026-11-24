@@ -131,7 +131,7 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
         if universe:
             pool = [u.strip().upper() for u in universe if u.strip()]
         elif exchange:
-            rows = await _call("r", vn_p.reference_equity, exchange)
+            rows = await _call("signals_scan", vn_p.reference_equity, exchange)
             pool = [str(r.get("symbol")) for r in rows if isinstance(r, dict) and r.get("symbol")]
         else:
             pool = ["VCB", "HPG", "SSI", "VIC", "VHM", "MSN", "MWG", "FPT", "CTG", "BID"]
@@ -141,7 +141,7 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
         total = len(names)
         for name in names:
             try:
-                candles = await _call("s", vn_p.quote_history, name, 30, secs=60.0)
+                candles = await _call("signals_scan", vn_p.quote_history, name, 30, secs=60.0)
                 closes = [c["c"] for c in candles if c["c"]]
                 scanned += 1
                 if len(closes) >= 20 and closes[-1] >= max(closes[-20:]):
@@ -172,7 +172,9 @@ def register_compute_infra_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            candles = await _call("p", vn_p.quote_history, symbol, lookback + 20, secs=60.0)
+            candles = await _call(
+                "pattern_match", vn_p.quote_history, symbol, lookback + 20, secs=60.0
+            )
         except (ProviderUnavailable, ProviderBadData) as exc:
             return _na("pattern_match", str(exc))
         closes = [c["c"] for c in candles if c["c"]]

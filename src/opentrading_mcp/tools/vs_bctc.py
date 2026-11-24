@@ -38,7 +38,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            terms = await _call("t", vs_p.financial_terms)
+            terms = await _call("vs_financial_terms", vs_p.financial_terms)
             return await cache_store(
                 "vs_financial_terms", "-", TTL_SECONDS["categories"],
                 {"terms": terms}, source="vietstock",
@@ -57,7 +57,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         if hit is not None:
             return hit
         try:
-            data = await _call("n", vs_p.financial_norms, btype)
+            data = await _call("vs_financial_norms", vs_p.financial_norms, btype)
             rows = data if isinstance(data, list) else data.get("data", [])
             return await cache_store(
                 "vs_financial_norms", fp, TTL_SECONDS["categories"],
@@ -83,7 +83,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_company_info", fp, TTL_SECONDS["financeinfo"],  # static profile
-                {"info": await _call("c", vs_p.company_info, symbol)}, source="vietstock",
+                {
+                    "info": await _call("vs_company_info", vs_p.company_info, symbol)
+                },
+                source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_company_info", str(exc))
@@ -104,7 +107,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_overview_trading", fp, price_ttl(),  # per-symbol trading snapshot
-                {"overview": await _call("o", vs_p.overview_trading, symbol)},
+                {"overview": await _call("vs_overview_trading", vs_p.overview_trading, symbol)},
                 source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -123,7 +126,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_documents", fp, TTL_SECONDS["documents"],
-                {"docs": await _call("d", vs_p.documents, symbol, page_size)},
+                {"docs": await _call("vs_documents", vs_p.documents, symbol, page_size)},
                 source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -138,7 +141,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_industry_tree", "-", TTL_SECONDS["categories"],
-                {"tree": await _call("t", vs_p.industry_tree)}, source="vietstock",
+                {"tree": await _call("vs_industry_tree", vs_p.industry_tree)}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_industry_tree", str(exc))
@@ -152,7 +155,10 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_industry_heatmap", "-", TTL_SECONDS["world"],
-                {"heatmap": await _call("h", vs_p.industry_heatmap)}, source="vietstock",
+                {
+                    "heatmap": await _call("vs_industry_heatmap", vs_p.industry_heatmap)
+                },
+                source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_industry_heatmap", str(exc))
@@ -166,7 +172,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_selftrading", "-", TTL_SECONDS["hour"],
-                {"flow": await _call("s", vs_p.selftrading)}, source="vietstock",
+                {"flow": await _call("vs_selftrading", vs_p.selftrading)}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_selftrading", str(exc))
@@ -184,7 +190,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_gics_index", fp, price_ttl(),
-                {"group": group, "rows": await _call("g", vs_p.gics_index, group)},
+                {"group": group, "rows": await _call("vs_gics_index", vs_p.gics_index, group)},
                 source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
@@ -199,7 +205,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
         try:
             return await cache_store(
                 "vs_currency", "-", TTL_SECONDS["hour"],
-                {"rows": await _call("c", vs_p.currency)}, source="vietstock",
+                {"rows": await _call("vs_currency", vs_p.currency)}, source="vietstock",
             )
         except (ProviderAuthMissing, ProviderUnavailable, ProviderBadData) as exc:
             return _na("vs_currency", str(exc))
@@ -219,7 +225,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "vs_market_info", fp, price_ttl(),
                 {
                     "exchange": exchange.strip().upper(),
-                    "rows": await _call("m", vs_p.market_info_board, exchange),
+                    "rows": await _call("vs_market_info", vs_p.market_info_board, exchange),
                 },
                 source="vietstock",
             )
@@ -242,7 +248,7 @@ def register_vs_bctc_tools(server: FastMCP) -> list[dict[str, Any]]:
 
         frm = from_date or f"{vn_today().year}-01-01"
         try:
-            out = await _call("x", vs_p.macro_report_data, 2, list_id, "", frm)
+            out = await _call("vs_xnk_detail", vs_p.macro_report_data, 2, list_id, "", frm)
             rows = out.get("rows", []) if isinstance(out, dict) else []
             availability = "available" if rows else "empty"
             return await cache_store(

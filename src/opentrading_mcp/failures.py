@@ -56,6 +56,8 @@ _TEXT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"briefly unavailable"), RECENT_FAILURE),
     (re.compile(r"\bserver busy\b"), BUSY),
     (_NOT_CONFIGURED_TEXT, NOT_CONFIGURED),
+    # #148: tools that know a route has no upstream say so in plain words.
+    (re.compile(r"\bno source\b"), NOT_CONFIGURED),
     (re.compile(r"\brejected\b|package limited|no permitted periods"), AUTH_MISSING),
     (re.compile(r"\brate limit|\bthrottled\b|\bHTTP 429\b"), UPSTREAM_RATE_LIMITED),
     (
