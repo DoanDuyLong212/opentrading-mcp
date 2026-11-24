@@ -23,7 +23,7 @@ from opentrading_mcp.tools.shared import (
 )
 
 
-async def run_blocking(fn, tool, timeout_secs=60.0):
+async def run_blocking(fn: Any, tool: str, timeout_secs: float = 60.0) -> Any:
     """Compute-module alias: all blocking work here rides the heavy pool."""
     return await _run_blocking(fn, tool, timeout_secs, heavy=True)
 
@@ -139,10 +139,11 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Pairwise Pearson correlation of daily returns. Use for diversification reads.
 
         symbols: up to 8 tickers (same market). days: daily bars each.
-        Dates inner-join; vnstock day-only labels fall back to business-day
-        walkback (see date_note).
+        Dates inner-join on observed ISO dates only; undated bars are dropped
+        from the join, never given a guessed calendar day (#137, see date_note).
         """
-        fp = f"{symbols}|{days}"
+        # v2: undated bars are dropped from the join, never guessed (#137).
+        fp = f"v2|{symbols}|{days}"
         hit = await cache_lookup("correlation_matrix", fp)
         if hit is not None:
             return hit
@@ -173,13 +174,25 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        common, aligned, walked = _align_returns(fetched)
+        common, aligned, dates_missing = _align_returns(fetched)
         if len(common) < 21:
+            reason = (
+                "no common observation dates: bars carry no dates and dates are never "
+                "invented (#137)"
+                if dates_missing and not common
+                else "fewer than 20 common dates"
+            )
             return make_envelope(
                 {"symbols": universe},
                 source="vnstock",
-                warnings=["fewer than 20 common dates"],
-                availability="empty",
+                warnings=[reason],
+                availability="unavailable" if dates_missing and not common else "empty",
+            )
+        warn: list[str] = []
+        if dates_missing:
+            warn.append(
+                "some bars carry no observation date; they are dropped from the join, "
+                "never given a guessed calendar day"
             )
         matrix = np.corrcoef([aligned[s] for s in universe])
         table = {
@@ -192,9 +205,15 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "symbols": universe,
                 "common_dates": len(common),
                 "matrix": table,
-                "date_note": "business-day walkback (approx)" if walked else "upstream ISO dates",
+                "date_note": (
+                    "observed ISO dates; undated bars dropped from the join"
+                    if dates_missing
+                    else "upstream ISO dates"
+                ),
             },
             source="computed-local",
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -204,9 +223,11 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Rolling-window return stats per calendar month. Use for seasonal bias.
 
         window: trading days per window, 5-63 (21 ~= month). Buckets by window
-        end month; vnstock day-only labels use business-day walkback.
+        end month; bars without an observation date are skipped, never given a
+        guessed calendar day (#137).
         """
-        fp = f"{symbol}|{window}"
+        # v2: undated bars are skipped, never given a guessed month (#137).
+        fp = f"v2|{symbol}|{window}"
         hit = await cache_lookup("seasonality", fp)
         if hit is not None:
             return hit
@@ -228,12 +249,17 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        dates, closes, walked = _dated_closes(candles)
+        dates, closes, dates_missing = _dated_closes(candles)
         months: dict[int, list[float]] = {m: [] for m in range(1, 13)}
+        undated = 0
         for i in range(win, len(closes)):
             if not closes[i - win]:
                 continue
-            months[dates[i].month].append(closes[i] / closes[i - win] - 1)
+            d = dates[i] if i < len(dates) else None
+            if d is None:
+                undated += 1
+                continue
+            months[d.month].append(closes[i] / closes[i - win] - 1)
         stats = {}
         for m in range(1, 13):
             rs = months[m]
@@ -247,15 +273,37 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "best_pct": round(max(rs) * 100, 2),
                 "worst_pct": round(min(rs) * 100, 2),
             }
+        if not stats:
+            return make_envelope(
+                {"symbol": symbol.upper(), "window": win, "months": {}},
+                source="computed-local",
+                warnings=[
+                    "no observation dates in the candle series; seasonality buckets by "
+                    "calendar month and dates are never invented (#137)"
+                ],
+                availability="unavailable",
+            )
+        warn: list[str] = []
+        if dates_missing:
+            warn.append(
+                f"{undated} window ends carry no observation date; they are skipped, "
+                "never assigned a guessed calendar month"
+            )
         return await cache_store(
             "seasonality", fp, TTL_SECONDS["hour"],
             {
                 "symbol": symbol.upper(),
                 "window": win,
                 "months": stats,
-                "date_note": "business-day walkback (approx)" if walked else "upstream ISO dates",
+                "date_note": (
+                    "observed ISO dates; undated window ends skipped"
+                    if dates_missing
+                    else "upstream ISO dates"
+                ),
             },
             source="computed-local",
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -270,7 +318,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         objective: 'equal', 'inv_vol' (1/sigma), 'max_sharpe' (closed-form
         long-only heuristic, no scipy). days: daily bars each (max 8 symbols).
         """
-        fp = f"{symbols}|{objective}|{days}"
+        # v2: undated bars are dropped from the join, never guessed (#137).
+        fp = f"v2|{symbols}|{objective}|{days}"
         hit = await cache_lookup("portfolio_optimize", fp)
         if hit is not None:
             return hit
@@ -308,13 +357,25 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        common, aligned, _ = _align_returns(fetched)
+        common, aligned, dates_missing = _align_returns(fetched)
         if len(common) < 31:
+            reason = (
+                "no common observation dates: bars carry no dates and dates are never "
+                "invented (#137)"
+                if dates_missing and not common
+                else "fewer than 30 common dates"
+            )
             return make_envelope(
                 {"symbols": universe},
                 source="vnstock",
-                warnings=["fewer than 30 common dates"],
-                availability="empty",
+                warnings=[reason],
+                availability="unavailable" if dates_missing and not common else "empty",
+            )
+        warn: list[str] = []
+        if dates_missing:
+            warn.append(
+                "some bars carry no observation date; they are dropped from the join, "
+                "never given a guessed calendar day"
             )
         rets = np.array([aligned[s] for s in universe])
         vols = rets.std(axis=1)
@@ -356,6 +417,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
                 **stats,
             },
             source="computed-local",
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -376,7 +439,8 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         """
         import datetime
 
-        fp = f"{symbol}|{dates}|{window_before}|{window_after}|{benchmark}"
+        # v2: undated bars are dropped from the maps, never guessed (#137).
+        fp = f"v2|{symbol}|{dates}|{window_before}|{window_after}|{benchmark}"
         hit = await cache_lookup("event_study", fp)
         if hit is not None:
             return hit
@@ -414,12 +478,27 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             warnings.append(f"benchmark unavailable — raw returns: {exc}")
         s_dates, s_closes, _ = _dated_closes(candles)
         b_dates, b_closes, _ = _dated_closes(bench_candles)
-        s_map = dict(zip(s_dates, s_closes, strict=False))
-        b_map = dict(zip(b_dates, b_closes, strict=False))
+        # #137: undated bars carry no calendar position — drop them, never guess a day.
+        s_map = {d: c for d, c in zip(s_dates, s_closes, strict=False) if d is not None}
+        b_map = {d: c for d, c in zip(b_dates, b_closes, strict=False) if d is not None}
+        if not s_map:
+            return make_envelope(
+                {"tool": "event_study"},
+                source="unavailable",
+                warnings=[
+                    "no observation dates in the candle series; event windows need real "
+                    "dates and dates are never invented (#137)"
+                ],
+                availability="unavailable",
+            )
+        if bench_candles and not b_map:
+            warnings.append(
+                f"benchmark {benchmark} carries no observation dates; raw returns only"
+            )
         common = sorted(set(s_map) & set(b_map)) if b_map else sorted(s_map)
         bwd = max(int(window_before), 1)
         fwd = max(int(window_after), 1)
-        rows = []
+        rows: list[dict[str, Any]] = []
         skipped = 0
         for raw in dates:
             try:
@@ -494,6 +573,192 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
             warnings=warnings,
         )
 
+    @server.tool(annotations=READ_ONLY)
+    async def series_stats(
+        symbols: list[str],
+        window: int = 60,
+        metrics: list[str] | None = None,
+        benchmark: str | None = None,
+        ctx: AnyContext | None = None,
+    ) -> dict[str, Any]:
+        """Mean, stdev, total return, annualised vol and rank over N sessions.
+
+        Dùng khi: "so sánh 3 mã 60 phiên qua", "mã nào mạnh nhất", "độ biến động
+            60 phiên", "relative strength so với VNINDEX".
+        Không dùng khi: chỉ cần giá một mã (vn_quote_history); đã có chuỗi return
+            và chỉ cần Sharpe/drawdown (quant_risk).
+
+        symbols: tối đa 30 mã. window: số phiên (2-250, mặc định 60).
+        metrics: tập con của mean_return_pct, stdev_return_pct, total_return_pct,
+        vol_ann_pct, relative_strength_pct (viết tắt mean/stdev/total_return/vol/
+        relative_strength cũng được; mặc định tất cả); rank luôn có.
+        benchmark: mã chỉ số/cổ phiếu để tính relative strength (ví dụ VNINDEX).
+
+        Dates inner-join; nến không có ngày bị loại và được ghi cảnh báo, không
+        đoán ngày (#137). Trả kèm inputs đã dùng (first/last date, sessions,
+        adjusted) và `units`.
+        """
+        allowed = (
+            "mean_return_pct",
+            "stdev_return_pct",
+            "total_return_pct",
+            "vol_ann_pct",
+            "relative_strength_pct",
+        )
+        aliases = {
+            "mean": "mean_return_pct",
+            "stdev": "stdev_return_pct",
+            "total_return": "total_return_pct",
+            "vol": "vol_ann_pct",
+            "relative_strength": "relative_strength_pct",
+        }
+        selected = [
+            aliases.get(str(m).strip().lower(), str(m).strip().lower())
+            for m in (metrics or allowed)
+        ]
+        selected = list(dict.fromkeys(m for m in selected if m in allowed))
+        if not selected:
+            return make_envelope(
+                {"tool": "series_stats"},
+                source="local",
+                warnings=[f"metrics must be a subset of {', '.join(allowed)}"],
+                availability="empty",
+            )
+        sessions = max(2, min(int(window), 250))
+        universe = list(dict.fromkeys(s.strip().upper() for s in symbols if s.strip()))[:30]
+        if not universe:
+            return make_envelope(
+                {"tool": "series_stats"},
+                source="local",
+                warnings=["need at least 1 symbol"],
+                availability="empty",
+            )
+        bench = benchmark.strip().upper() if benchmark and benchmark.strip() else None
+        fp = f"v1|{'/'.join(universe)}|{sessions}|{','.join(selected)}|{bench or ''}"
+        hit = await cache_lookup("series_stats", fp)
+        if hit is not None:
+            return hit
+        if ctx is not None:
+            await ctx.log("info", f"series_stats {universe} window={sessions}")
+        warn: list[str] = []
+        try:
+            fetched: dict[str, list[dict[str, Any]]] = {}
+            for sym in universe:
+                fetched[sym] = await run_blocking(
+                    functools.partial(vn_p.quote_history, sym, sessions + 1),
+                    "series_stats",
+                    timeout_secs=90.0,
+                )
+            if bench is not None:
+                try:
+                    fetched[bench] = await run_blocking(
+                        functools.partial(vn_p.quote_history, bench, sessions + 1),
+                        "series_stats",
+                        timeout_secs=90.0,
+                    )
+                except (ProviderUnavailable, ProviderBadData) as exc:
+                    warn.append(f"benchmark {bench} unavailable: {exc}")
+                    bench = None
+        except (ProviderUnavailable, ProviderBadData) as exc:
+            return make_envelope(
+                {"tool": "series_stats"},
+                source="unavailable",
+                warnings=[str(exc)],
+                availability="unavailable",
+            )
+        common, aligned, dates_missing = _align_returns(fetched)
+        if len(common) < 2:
+            return make_envelope(
+                {"symbols": universe},
+                source="vnstock",
+                warnings=[
+                    "no two common observation dates: bars carry no dates and "
+                    "dates are never invented (#137)"
+                ],
+                availability="empty",
+            )
+        import statistics
+
+        def _compound_pct(rets: list[float]) -> float:
+            equity = 1.0
+            for ret in rets:
+                equity *= 1.0 + ret
+            return (equity - 1.0) * 100.0
+
+        bench_returns = aligned.get(bench or "", [])
+        bench_total = _compound_pct(bench_returns[-sessions:]) if bench else None
+        rows: list[dict[str, Any]] = []
+        for sym in universe:
+            rets = aligned[sym][-sessions:]
+            if not rets:
+                continue
+            mean = statistics.fmean(rets)
+            stdev = statistics.pstdev(rets)
+            total = _compound_pct(rets)
+            row: dict[str, Any] = {"symbol": sym, "sessions": len(rets)}
+            if "mean_return_pct" in selected:
+                row["mean_return_pct"] = round(mean * 100, 4)
+            if "stdev_return_pct" in selected:
+                row["stdev_return_pct"] = round(stdev * 100, 4)
+            if "total_return_pct" in selected:
+                row["total_return_pct"] = round(total, 4)
+            if "vol_ann_pct" in selected:
+                row["vol_ann_pct"] = round(stdev * (252**0.5) * 100, 4)
+            if "relative_strength_pct" in selected and bench_total is not None:
+                row["relative_strength_pct"] = round(total - bench_total, 4)
+            row["_total"] = total
+            rows.append(row)
+        if not rows:
+            return make_envelope(
+                {"symbols": universe},
+                source="vnstock",
+                warnings=[*warn, "no symbol had at least one return in the window"],
+                availability="empty",
+            )
+        totals = sorted((row["_total"] for row in rows), reverse=True)
+        for row in rows:
+            row["rank"] = 1 + sum(1 for value in totals if value > row["_total"] + 1e-12)
+            row.pop("_total")
+        rows.sort(key=lambda row: row["rank"])
+        used = min(len(aligned[sym]) for sym in universe)
+        used = min(used, sessions)
+        if used < sessions:
+            warn.append(
+                f"chỉ có {used} phiên chung trong cửa sổ {sessions} phiên được yêu cầu"
+            )
+        if dates_missing:
+            warn.append(
+                "một số nến không có ngày nên đã bị loại khỏi cửa sổ, không đoán ngày"
+            )
+        first_date = common[-(used + 1)].isoformat()
+        last_date = common[-1].isoformat()
+        return await cache_store(
+            "series_stats",
+            fp,
+            TTL_SECONDS["overview"],
+            {
+                "rows": rows,
+                "inputs": {
+                    "window": sessions,
+                    "sessions": used,
+                    "first_date": first_date,
+                    "last_date": last_date,
+                    "adjusted": "vnstock default (not controlled by this tool)",
+                    "benchmark": bench,
+                    "dates_missing": dates_missing,
+                },
+                "as_of": last_date,
+                "method": (
+                    "close-to-close daily returns over the common dates; total return "
+                    "compounds the window; vol annualised with 252 sessions; relative "
+                    "strength = symbol total return - benchmark total return"
+                ),
+            },
+            source="computed-local",
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
+        )
+
     return [
         {"name": "quant_risk"},
         {"name": "quant_factors"},
@@ -501,4 +766,5 @@ def register_quant_stats_tools(server: FastMCP) -> list[dict[str, Any]]:
         {"name": "seasonality"},
         {"name": "portfolio_optimize"},
         {"name": "event_study"},
+        {"name": "series_stats"},
     ]

@@ -18,38 +18,32 @@ def _parse_day(label: str) -> Any:
         return None
 
 
-def _calendar_map(n: int) -> list[Any]:
-    """Business-day walkback ending today (fallback when candles carry no dates)."""
-    import datetime
-
-    days: list[Any] = []
-    day = datetime.date.today()
-    while len(days) < max(n, 1):
-        if day.weekday() < 5:
-            days.append(day)
-        day -= datetime.timedelta(days=1)
-    return list(reversed(days))
-
-
 def _dated_closes(candles: list[dict[str, Any]]) -> tuple[list[Any], list[float], bool]:
-    """Return (dates, closes, walked): ISO dates when present, else walkback mapping."""
+    """Return (dates, closes, dates_missing): ``None`` marks a bar with no date.
+
+    Dates are never invented (#137): a day-only label stays undated, and the
+    third value says so, so a calendar filter can refuse instead of silently
+    matching every bar. One undated bar no longer relabels the whole series.
+    """
     closes = [float(c["c"]) for c in candles if c.get("c")]
-    parsed = [_parse_day(str(c.get("t", ""))) for c in candles if c.get("c")]
-    if all(d is not None for d in parsed) and parsed:
-        return parsed, closes, False
-    return _calendar_map(len(closes)), closes, True
+    dates = [_parse_day(str(c.get("t", ""))) for c in candles if c.get("c")]
+    return dates, closes, any(d is None for d in dates)
 
 
 def _align_returns(
     series: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[Any], dict[str, list[float]], bool]:
-    """Inner-join daily closes on date; returns (dates, {symbol: returns})."""
+    """Inner-join daily closes on date; returns (dates, {symbol: returns}, missing).
+
+    Undated bars are dropped rather than given a guessed business day, and the
+    flag tells the caller that the joined window is shorter than the raw feed.
+    """
     dated: dict[str, dict[Any, float]] = {}
-    walked = False
+    dates_missing = False
     for sym, candles in series.items():
-        dates, closes, w = _dated_closes(candles)
-        walked = walked or w
-        dated[sym] = dict(zip(dates, closes, strict=True))
+        dates, closes, missing = _dated_closes(candles)
+        dates_missing = dates_missing or missing
+        dated[sym] = {d: c for d, c in zip(dates, closes, strict=True) if d is not None}
     common = sorted(set.intersection(*(set(d) for d in dated.values()))) if dated else []
     aligned: dict[str, list[float]] = {}
     for sym, mapping in dated.items():
@@ -58,7 +52,7 @@ def _align_returns(
             (closes[i] - closes[i - 1]) / closes[i - 1] if closes[i - 1] else 0.0
             for i in range(1, len(closes))
         ]
-    return common, aligned, walked
+    return common, aligned, dates_missing
 
 
 def _rsi_series(closes: list[float], period: int = 14) -> list[float | None]:
@@ -84,8 +78,6 @@ def _rsi_series(closes: list[float], period: int = 14) -> list[float | None]:
 
 def _yf_closes(symbol: str) -> tuple[list[Any], list[float]]:
     """Yahoo daily closes + dates for non-VN condition assets (oil, gold...)."""
-    import datetime
-
     try:
         import yfinance as yf
     except ImportError as exc:
@@ -93,11 +85,14 @@ def _yf_closes(symbol: str) -> tuple[list[Any], list[float]]:
     try:
         df = yf.Ticker(symbol).history(period="2y", auto_adjust=True)
         closes = [float(x) for x in df["Close"].tolist()]
-        dates = [d.date() if hasattr(d, "date") else datetime.date.today() for d in df.index]
+        dates = [d.date() if hasattr(d, "date") else _parse_day(str(d)) for d in df.index]
     except Exception as exc:
         raise ProviderUnavailable(f"yfinance history failed for {symbol}") from exc
     if len(closes) < 30:
         raise ProviderBadData(f"too few yfinance bars for {symbol}")
+    if any(d is None for d in dates):
+        # #137: an index without observation dates must not fall back to today.
+        raise ProviderBadData(f"yfinance history for {symbol} carries no usable dates")
     return dates, closes
 
 
@@ -112,7 +107,13 @@ def _condition_gate(
     import datetime as _dt
     import statistics
 
-    cmap = dict(zip(cond_dates, cond_closes, strict=False))
+    # #137: undated condition bars carry no calendar position — drop them instead
+    # of letting a ``None`` key match an undated stock bar.
+    cmap = {
+        d: c
+        for d, c in zip(cond_dates, cond_closes, strict=False)
+        if d is not None
+    }
     lb = max(int(lookback), 2)
 
     def _value_on(d: Any) -> Any:
@@ -163,7 +164,6 @@ def _run_strategy(
     quarters: list[int] | None = None,
     cond_ok: list[bool] | None = None,
     opens: list[float] | None = None,
-    dates_inferred: bool = False,
 ) -> dict[str, Any]:
     """Long-only engine: buy_hold | sma_cross | momentum | rsi_meanrev.
 
@@ -172,6 +172,8 @@ def _run_strategy(
     positions). rsi_meanrev: long when RSI14 < rsi_low, flat when RSI14 > rsi_high.
     cond_ok: optional per-bar entries-allowed flags from a condition asset.
     Missing cond_ok data blocks entry (F05b: missing can never authorize a trade).
+    An undated bar can never satisfy a calendar filter (#137) — allowing it would
+    turn the filter into a silent no-op; such bars are counted and reported.
 
     Fill convention (F05a, user-approved): a decision at close[i-1] fills at
     open[i] (next-bar-open) and the position accrues open-to-open until its exit
@@ -189,6 +191,7 @@ def _run_strategy(
     month_set = {int(m) for m in (months or []) if 1 <= int(m) <= 12} or None
     quarter_set = {int(q) for q in (quarters or []) if 1 <= int(q) <= 4} or None
     gated = bool(month_set or quarter_set)
+    undated_blocked = 0
 
     def _bar_month(i: int) -> int | None:
         if not dates or i >= len(dates):
@@ -212,12 +215,15 @@ def _run_strategy(
         return None
 
     def _allowed(i: int) -> bool:
+        nonlocal undated_blocked
         if not gated:
             base = True
         else:
             m = _bar_month(i)
             if m is None:
-                base = True  # undated bars never block
+                # #137: an undated bar can never satisfy a calendar filter.
+                undated_blocked += 1
+                base = False
             elif month_set is not None and m not in month_set:
                 base = False
             elif quarter_set is not None and (m - 1) // 3 + 1 not in quarter_set:
@@ -344,10 +350,8 @@ def _run_strategy(
 
     wins = sum(1 for p in pnls if p > 0)
     # Historical backtests deliberately contain old data: stale here describes
-    # missing/invalid/inferred observation dates, not the age of the sample.
-    stale = dates_inferred or dates is None or len(dates) < n or any(
-        _parse_day(str(d)) is None for d in (dates or [])
-    )
+    # missing/invalid observation dates, not the age of the sample.
+    stale = dates is None or len(dates) < n or any(d is None for d in dates)
     out: dict[str, Any] = {
         "trades": trades,
         "net_return": round(equity - 1, 4),
@@ -356,12 +360,18 @@ def _run_strategy(
         "bars": n,
         "stale": stale,
         "fill": fill_mode,
-        "date_basis": "inferred" if dates_inferred else "observed" if not stale else "missing",
+        "date_basis": "observed" if not stale else "missing",
         "cost_basis": "bps per side at actual fills; final mark is not liquidation",
     }
     if stale:
-        out["stale_note"] = "stale: observation dates are missing, invalid or inferred"
+        out["stale_note"] = "stale: observation dates are missing or invalid (never inferred)"
     if gated:
         out["month_filtered"] = True
         out["note"] = "entries only in selected months/quarters; exits always allowed"
+        if undated_blocked:
+            out["undated_bars_blocked"] = undated_blocked
+            out["note"] += (
+                f"; {undated_blocked} bars carry no observation date and never enter "
+                "(a calendar filter cannot be checked without dates)"
+            )
     return out

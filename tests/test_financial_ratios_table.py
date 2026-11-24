@@ -35,7 +35,8 @@ def _table(period: str) -> dict[str, Any]:
     """Provider-shaped ratio table built from the recorded fixture rows."""
     rows = RATIOS[period]
     cols = [c for c in rows[0] if c not in ("item", "item_id")]
-    ordered = sorted(cols, key=lambda c: (int(str(c)[:4]), int(str(c)[6:7] or 0)), reverse=True)
+    # provider contract since #140: oldest → newest, plus the explicit latest label
+    ordered = sorted(cols, key=lambda c: (int(str(c)[:4]), int(str(c)[6:7] or 0)))
     ratios = [
         {
             "item_id": r["item_id"],
@@ -54,6 +55,8 @@ def _table(period: str) -> dict[str, Any]:
         "period": period,
         "frequency": "annual" if period == "year" else "quarterly",
         "periods": ordered,
+        "latest_period": ordered[-1],
+        "period_order": "oldest_to_newest",
         "ratios": ratios,
         "discarded_period_labels": [],
     }
@@ -75,7 +78,8 @@ async def test_financial_ratios_returns_the_series_for_the_period(monkeypatch):
     env = await _tool("financial_ratios")(symbol="FPT", set="roe", period="year")
     data = env["data"]
     assert calls == [("FPT", "year")]
-    assert data["periods"] == ["2025", "2024", "2023", "2022"]
+    assert data["periods"] == ["2022", "2023", "2024", "2025"]
+    assert data["latest_period"] == "2025"
     assert [r["item_id"] for r in data["ratios"]] == ["roe", "roe_trailling"]
     assert data["ratios"][0]["values"]["2025"] == 28.3
     # A computed 0 is a value (fa computes it from statements) — never nulled.
@@ -150,6 +154,7 @@ async def test_peer_compare_keeps_zero_values(monkeypatch):
             "symbol": symbol.upper(),
             "period": period,
             "periods": ["2025"],
+            "latest_period": "2025",
             "ratios": [{"item_id": "roe", "item": "ROE", "values": {"2025": 0.0}}],
         }
 

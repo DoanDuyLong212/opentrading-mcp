@@ -22,6 +22,7 @@ from opentrading_mcp.failures import VENDOR_DISABLED_CODES
 from opentrading_mcp.providers.circuit import guarded
 from opentrading_mcp.providers.errors import ProviderBadData, ProviderUnavailable
 from opentrading_mcp.units import INDEX_SYMBOLS
+from opentrading_mcp.vn_time import vn_today
 
 # Gen-6 source chains (first non-empty frame wins). The owner stopped using the
 # fhsc and fmp keys on 2026-11-08, so ssi is primary and dnse the fallback;
@@ -372,8 +373,9 @@ def quote_history(symbol: str, days: int = 365, interval: str = "1D") -> list[di
         span = span * 7 + 40
     elif iv == "1M":
         span = span * 31 + 60
-    end = date.today().isoformat()
-    start = (date.today() - timedelta(days=span)).isoformat()
+    today = vn_today()
+    end = today.isoformat()
+    start = (today - timedelta(days=span)).isoformat()
     frame = _fetch_frame(
         _candle_fetchers(symbol, start=start, end=end, interval=iv),
         f"candles {symbol}",

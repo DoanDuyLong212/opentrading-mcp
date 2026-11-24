@@ -27,6 +27,7 @@ from opentrading_mcp.tools.shared import (
     price_ttl,
     run_blocking,
 )
+from opentrading_mcp.vn_time import vn_today
 
 
 def _fnum(val: Any) -> float | None:
@@ -144,8 +145,8 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         """Shareholder and institutional holder tables. Use for ownership reads.
 
         region: 'world' (yfinance) or 'vn' — VN shareholder tables have NO source
-        (fhsc was the only one and was discontinued): answers unavailable no_source
-        without a provider round-trip (#148).
+        (fhsc was the only one and was discontinued): answers unavailable with
+        reason not_configured ("no source") without a provider round-trip (#148).
         kind: 'major'|'institutional'|'mutualfund'|'all' (world only;
         vn returns shareholders for any kind).
         """
@@ -270,7 +271,7 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
         def _vn(iso: str) -> str:
             return datetime.date.fromisoformat(iso).strftime("%d/%m/%Y")
 
-        today = datetime.date.today()
+        today = vn_today()
         try:
             frm = (
                 _vn(from_date)
@@ -425,7 +426,7 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             try:
                 today = datetime.datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
             except Exception:
-                today = datetime.date.today()
+                today = vn_today()
             cut = today - datetime.timedelta(days=days_n)
             cutoff = cut.isoformat()
             kept: list[dict[str, Any]] = []
@@ -574,7 +575,7 @@ def register_corp_tools(server: FastMCP) -> list[dict[str, Any]]:
             spot = closes[-1]
         if fut is None:
             try:
-                week_ago = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
+                week_ago = (vn_today() - datetime.timedelta(days=7)).isoformat()
                 bars = await run_blocking(
                     functools.partial(
                         dnse_p.ohlc_history, "VN30F1M", "derivative", 15, week_ago, 500

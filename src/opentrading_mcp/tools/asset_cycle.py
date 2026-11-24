@@ -14,7 +14,7 @@ import functools
 import json
 import time
 import urllib.request
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -31,6 +31,7 @@ from opentrading_mcp.tools.shared import (
 from opentrading_mcp.tools.shared import (
     run_blocking as _run_blocking,
 )
+from opentrading_mcp.vn_time import vn_today
 
 
 async def run_blocking(fn, tool, timeout_secs=60.0):
@@ -255,7 +256,7 @@ def register_asset_cycle_tools(server: FastMCP) -> list[dict[str, Any]]:
 
 async def refresh_vn_assets() -> dict[str, Any]:
     """Each asset in its own transaction, then the recompute in one (also used by the CLI)."""
-    today = date.today().isoformat()
+    today = vn_today().isoformat()
     status: list[dict[str, Any]] = []
     for asset in VN_ASSETS:
         try:
@@ -271,7 +272,7 @@ async def refresh_vn_assets() -> dict[str, Any]:
 
 
 async def refresh_global_assets() -> dict[str, Any]:
-    today = date.today().isoformat()
+    today = vn_today().isoformat()
     status: list[dict[str, Any]] = []
     for sym in G_ETFS:
         try:
@@ -347,9 +348,9 @@ def _vn_finalize(conn: Any) -> dict[str, Any]:
                      round(float((seg > 0).mean()) * 100, 1), len(seg)))
         cur.execute("INSERT INTO vn_asset_meta(key,value) VALUES('as_of',%s)"
                     " ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
-                    (date.today().isoformat(),))
+                    (vn_today().isoformat(),))
     return {"range": [str(px.index.min().date()), str(px.index.max().date())],
-            "as_of": date.today().isoformat()}
+            "as_of": vn_today().isoformat()}
 
 
 def _g_finalize(conn: Any) -> dict[str, Any]:
@@ -442,6 +443,6 @@ def _g_finalize(conn: Any) -> dict[str, Any]:
                             " ON CONFLICT DO NOTHING", (i, j, round(float(v) * 100, 1), regime))
         cur.execute("INSERT INTO g_asset_meta(key,value) VALUES('as_of',%s)"
                     " ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
-                    (date.today().isoformat(),))
+                    (vn_today().isoformat(),))
     return {"range": [str(px.index.min().date()), str(px.index.max().date())],
-            "as_of": date.today().isoformat()}
+            "as_of": vn_today().isoformat()}

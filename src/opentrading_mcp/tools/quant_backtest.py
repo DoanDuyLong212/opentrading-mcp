@@ -188,7 +188,8 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         (đang tăng trong condition_lookback nến). Mã VN qua vnstock, khác qua
         lịch ngày yfinance.
         """
-        fp = (f"v2|{symbol}|{strategy}|{fast}|{slow}|{cost_bps}|{rsi_low}|{rsi_high}|"
+        # v3: dates are never inferred; missing bar dates block calendar entries (#137).
+        fp = (f"v3|{symbol}|{strategy}|{fast}|{slow}|{cost_bps}|{rsi_low}|{rsi_high}|"
               f"{months}|{quarters}|{condition_symbol}|{condition_rule}|{condition_lookback}")
         hit = await cache_lookup("backtest_strategies", fp)
         if hit is not None:
@@ -215,7 +216,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 warnings=[str(exc)],
                 availability="unavailable",
             )
-        dates, closes, _walked = _dated_closes(candles)
+        dates, closes, dates_missing = _dated_closes(candles)
         opens = [c.get("o") for c in candles if c["c"]]
         cond_ok: list[bool] | None = None
         cond_warn: list[str] = []
@@ -237,7 +238,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                     "backtest_strategies",
                     timeout_secs=60.0,
                 )
-                cd, cc, _ = _dated_closes(cc_candles)
+                cd, cc, _cond_missing = _dated_closes(cc_candles)
             except (ProviderUnavailable, ProviderBadData):
                 try:
                     cd, cc = await run_blocking(
@@ -252,7 +253,16 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                         warnings=[f"condition asset {csym} unavailable: {exc2}"],
                         availability="unavailable",
                     )
-            assert cd is not None and cc is not None
+            if cd is None or all(d is None for d in cd):
+                return make_envelope(
+                    {"tool": "backtest_strategies"},
+                    source="unavailable",
+                    warnings=[
+                        f"condition asset {csym} has no observation dates; it cannot be "
+                        "aligned to the stock series without inventing a calendar"
+                    ],
+                    availability="unavailable",
+                )
             cond_ok = _condition_gate(dates, cd, cc, rule, condition_lookback)
             cond_warn.append(
                 f"condition-gated on {csym} ({rule}/{condition_lookback}); exits always allowed"
@@ -270,7 +280,6 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             quarters=quarters,
             cond_ok=cond_ok,
             opens=opens,
-            dates_inferred=_walked,
         )
         out: dict[str, Any] = {
             "symbol": symbol.upper(),
@@ -296,10 +305,17 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "month-filtered: entries only in "
                 f"months={months} quarters={quarters}; exits always allowed"
             )
+        if dates_missing:
+            undated = sum(1 for d in dates if d is None)
+            warn.append(
+                f"{undated} of {len(dates)} bars carry no observation date; dates are "
+                "never inferred, so calendar filters skip those bars"
+            )
         warn.extend(cond_warn)
         return await cache_store(
             "backtest_strategies", fp, TTL_SECONDS["hour"],
             out, source="computed-local", warnings=warn,
+            availability="partial" if dates_missing else None,
         )
 
     @server.tool(annotations=READ_ONLY)
@@ -318,7 +334,8 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
         fast_range/slow_range: candidate bars (product capped at 30 combos).
         rsi_meanrev allowed (fixed 30/70 thresholds). months/quarters passthrough.
         """
-        fp = f"v2|{symbol}|{strategy}|{fast_range}|{slow_range}|{cost_bps}|{months}|{quarters}"
+        # v3: dates are never inferred; missing bar dates block calendar entries (#137).
+        fp = f"v3|{symbol}|{strategy}|{fast_range}|{slow_range}|{cost_bps}|{months}|{quarters}"
         hit = await cache_lookup("param_sweep", fp)
         if hit is not None:
             return hit
@@ -349,7 +366,7 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
             )
         closes = [c["c"] for c in candles if c["c"]]
         opens = [c.get("o") for c in candles if c["c"]]
-        dates, _, walked = _dated_closes(candles)
+        dates, _, dates_missing = _dated_closes(candles)
         ranked = []
         for f, s in combos:
             res = _run_strategy(
@@ -362,10 +379,16 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 months=months,
                 quarters=quarters,
                 opens=opens,
-                dates_inferred=walked,
             )
             ranked.append({"fast": f, "slow": s, **res})
         ranked.sort(key=lambda r: r["net_return"], reverse=True)
+        warn: list[str] = []
+        if dates_missing:
+            undated = sum(1 for d in dates if d is None)
+            warn.append(
+                f"{undated} of {len(dates)} bars carry no observation date; dates are "
+                "never inferred, so calendar filters skip those bars"
+            )
         return await cache_store(
             "param_sweep",
             fp,
@@ -378,6 +401,8 @@ def register_quant_backtest_tools(server: FastMCP) -> list[dict[str, Any]]:
                 "quarters": quarters,
                 "ranked": ranked,
             },
+            warnings=warn or None,
+            availability="partial" if dates_missing else None,
             source="computed-local",
         )
 
